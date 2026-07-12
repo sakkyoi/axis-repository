@@ -1,0 +1,15 @@
+name = "axis-repository"
+main = "src/index.ts"
+compatibility_date = "2026-07-12"
+
+[[r2_buckets]]
+binding = "AXIS_OBJECTS"
+bucket_name = "axis-repository"
+
+[[durable_objects.bindings]]
+name = "AXIS_ADMIN"
+class_name = "AxisAdminDO"
+
+[[migrations]]
+tag = "initial"
+new_sqlite_classes = ["AxisAdminDO"]
