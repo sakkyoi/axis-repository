@@ -21,7 +21,22 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/core: {}
+
+  packages/runtime-cloudflare:
+    dependencies:
+      '@axis-repository/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20241218.0
+        version: 4.20260702.1
+
 packages:
+
+  '@cloudflare/workers-types@4.20260702.1':
+    resolution: {integrity: sha512-mOhf5TUEB1m2vPrxtqoIGfz0fUC9xyxRDx5gWHy5s+OCo6dcV+g7wI1R7gYCMFohhqF/2y2xeKVwMwCJjfn/WA==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -838,6 +853,8 @@ packages:
     hasBin: true
 
 snapshots:
+
+  '@cloudflare/workers-types@4.20260702.1': {}
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true
