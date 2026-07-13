@@ -16,6 +16,11 @@ export interface RandomId {
   create(prefix: string): string;
 }
 
+export interface SecretHasher {
+  hash(secret: string): Promise<string>;
+  verify(secret: string, hash: string): Promise<boolean>;
+}
+
 export interface UploadBroker {
   createUploadTarget(input: {
     sessionId: string;

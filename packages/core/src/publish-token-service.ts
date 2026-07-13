@@ -1,0 +1,96 @@
+import type { PublishTokenRecord, TokenPrincipal } from "./domain";
+import { ForbiddenError, UnauthorizedError, ValidationError } from "./errors";
+import type { Clock, RandomId, SecretHasher, StateStore } from "./ports";
+
+export interface CreatePublishTokenInput {
+  name: string;
+  permissions: string[];
+  repositories: string[];
+  ecosystemScopes: Record<string, unknown>;
+  expiresAt?: string;
+}
+
+export interface CreatePublishTokenResult {
+  record: PublishTokenRecord;
+  secret: string;
+}
+
+export interface PublishTokenServiceOptions {
+  state: StateStore;
+  clock: Clock;
+  randomId: RandomId;
+  hasher: SecretHasher;
+}
+
+export class PublishTokenService {
+  constructor(private readonly options: PublishTokenServiceOptions) {}
+
+  async create(input: CreatePublishTokenInput): Promise<CreatePublishTokenResult> {
+    const name = input.name.trim();
+    if (!name) {
+      throw new ValidationError("Publish token name is required");
+    }
+    if (await this.options.state.publishTokens.getByName(name)) {
+      throw new ValidationError(`Publish token already exists: ${name}`);
+    }
+    if (!input.permissions.includes("publish")) {
+      throw new ValidationError("Publish token must include publish permission");
+    }
+    if (input.repositories.length === 0) {
+      throw new ValidationError("Publish token must be scoped to at least one repository");
+    }
+
+    const tokenId = this.options.randomId.create("ptok");
+    const secret = `axis_publish_${this.options.randomId.create("tok")}`;
+    const record: PublishTokenRecord = {
+      id: tokenId,
+      name,
+      tokenHash: await this.options.hasher.hash(secret),
+      permissions: [...input.permissions],
+      repositories: [...input.repositories],
+      ecosystemScopes: input.ecosystemScopes,
+      createdAt: this.options.clock.now().toISOString(),
+      ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt }),
+    };
+    await this.options.state.publishTokens.save(record);
+    return { record, secret };
+  }
+
+  async list(): Promise<PublishTokenRecord[]> {
+    return this.options.state.publishTokens.list();
+  }
+
+  async revoke(name: string): Promise<PublishTokenRecord> {
+    const record = await this.options.state.publishTokens.getByName(name);
+    if (!record) {
+      throw new UnauthorizedError();
+    }
+    const revoked: PublishTokenRecord = {
+      ...record,
+      revokedAt: this.options.clock.now().toISOString(),
+    };
+    await this.options.state.publishTokens.save(revoked);
+    return revoked;
+  }
+
+  async verify(secret: string): Promise<TokenPrincipal> {
+    const records = await this.options.state.publishTokens.list();
+    for (const record of records) {
+      if (!(await this.options.hasher.verify(secret, record.tokenHash))) continue;
+      if (record.revokedAt) {
+        throw new ForbiddenError("Publish token has been revoked");
+      }
+      if (record.expiresAt && Date.parse(record.expiresAt) <= this.options.clock.now().getTime()) {
+        throw new ForbiddenError("Publish token has expired");
+      }
+      return {
+        tokenId: record.id,
+        name: record.name,
+        permissions: record.permissions,
+        repositories: record.repositories,
+        ecosystemScopes: record.ecosystemScopes,
+      };
+    }
+    throw new UnauthorizedError();
+  }
+}
