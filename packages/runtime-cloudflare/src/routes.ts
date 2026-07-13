@@ -1,4 +1,5 @@
 import { AxisError, NotFoundError } from "@axis-repository/core";
+import type { AppDependencies } from "./dev-dependencies";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;
@@ -24,7 +25,7 @@ export function errorResponse(error: unknown): Response {
   );
 }
 
-export async function dispatch(request: Request): Promise<Response> {
+export async function dispatch(request: Request, _dependencies: AppDependencies): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
     return jsonResponse({ ok: true, service: "axis-repository" });
