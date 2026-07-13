@@ -50,6 +50,15 @@ function requiredStringValue(value: unknown, label: string): string {
   return value;
 }
 
+function optionalStringField(body: Record<string, unknown>, key: string): string | undefined {
+  const value = body[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") {
+    throw new ValidationError(`${key} must be a string`);
+  }
+  return value;
+}
+
 function parseArtifact(value: unknown, index: number): PublishArtifactRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new ValidationError(`artifacts[${index}] must be an object`);
@@ -59,6 +68,9 @@ function parseArtifact(value: unknown, index: number): PublishArtifactRequest {
   const filename = requiredStringValue(artifact.filename, `artifacts[${index}].filename`);
   const sha256 = requiredStringValue(artifact.sha256, `artifacts[${index}].sha256`);
   const contentType = requiredStringValue(artifact.contentType, `artifacts[${index}].contentType`);
+  if (!/^[a-fA-F0-9]{64}$/.test(sha256)) {
+    throw new ValidationError(`artifacts[${index}].sha256 must be a 64-character hex digest`);
+  }
   if (typeof size !== "number" || !Number.isFinite(size) || size < 0) {
     throw new ValidationError(`artifacts[${index}].size must be a finite non-negative number`);
   }
@@ -112,11 +124,13 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     if (request.method === "POST") {
       const body = await readJsonObject(request);
+      const expiresAt = optionalStringField(body, "expiresAt");
       const result = await dependencies.publishTokenService.create({
         name: stringField(body, "name"),
         repositories: stringArrayField(body, "repositories"),
         permissions: stringArrayField(body, "permissions"),
         ecosystemScopes: optionalObjectField(body, "ecosystemScopes") ?? {},
+        ...(expiresAt === undefined ? {} : { expiresAt }),
       });
       return jsonResponse(
         {

@@ -212,6 +212,59 @@ describe("Cloudflare runtime routes", () => {
     expect(listBody.publishTokens[0]).not.toHaveProperty("tokenHash");
   });
 
+  it("creates a publish token with an expiration", async () => {
+    const app = createApp();
+    const expiresAt = "2030-01-01T00:00:00.000Z";
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+          expiresAt,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      token: { expiresAt },
+    });
+  });
+
+  it("rejects invalid publish token expirations", async () => {
+    const app = createApp();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+          expiresAt: "not-a-date",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "Publish token expiresAt must be a valid date" },
+    });
+  });
+
   it("rejects malformed publish session artifacts", async () => {
     const app = createApp();
 
@@ -261,6 +314,66 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: { code: "validation_error", message: "artifacts[0].filename is required" },
+    });
+  });
+
+  it("rejects publish session artifacts with invalid sha256 digests", async () => {
+    const app = createApp();
+
+    await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+      }),
+    );
+
+    const tokenResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+        }),
+      }),
+    );
+    const tokenBody = (await tokenResponse.json()) as { secret: string };
+
+    const response = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [
+            {
+              filename: "myapp_1.2.3_amd64.deb",
+              size: 1234,
+              sha256: "not-a-digest",
+              contentType: "application/vnd.debian.binary-package",
+              metadata: {},
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "artifacts[0].sha256 must be a 64-character hex digest" },
     });
   });
 });
