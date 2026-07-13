@@ -110,4 +110,70 @@ describe("Cloudflare runtime routes", () => {
       error: { code: "validation_error", message: "visibility must be private or public" },
     });
   });
+
+  it("creates a publish token and starts a publish session", async () => {
+    const app = createApp();
+
+    await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+      }),
+    );
+
+    const tokenResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+        }),
+      }),
+    );
+
+    expect(tokenResponse.status).toBe(201);
+    const tokenBody = (await tokenResponse.json()) as { secret: string };
+    expect(tokenBody.secret).toMatch(/^axis_publish_/);
+
+    const sessionResponse = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [
+            {
+              filename: "myapp_1.2.3_amd64.deb",
+              size: 1234,
+              sha256: "a".repeat(64),
+              contentType: "application/vnd.debian.binary-package",
+              metadata: {},
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(sessionResponse.status).toBe(201);
+    await expect(sessionResponse.json()).resolves.toMatchObject({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      status: "created",
+      uploads: [{ filename: "myapp_1.2.3_amd64.deb", method: "PUT" }],
+    });
+  });
 });
