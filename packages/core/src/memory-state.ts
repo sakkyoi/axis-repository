@@ -44,6 +44,16 @@ export class MemoryStateStore implements StateStore {
       );
     },
     save: async (token: PublishTokenRecord): Promise<void> => {
+      const existingToken = this.publishTokenById.get(token.id);
+      if (existingToken && existingToken.name !== token.name) {
+        this.publishTokenIdByName.delete(existingToken.name);
+      }
+
+      const existingTokenIdForName = this.publishTokenIdByName.get(token.name);
+      if (existingTokenIdForName && existingTokenIdForName !== token.id) {
+        this.publishTokenById.delete(existingTokenIdForName);
+      }
+
       this.publishTokenById.set(token.id, token);
       this.publishTokenIdByName.set(token.name, token.id);
     },
