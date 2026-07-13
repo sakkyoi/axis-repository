@@ -2,6 +2,19 @@ import type { PublishTokenRecord, TokenPrincipal } from "./domain";
 import { ForbiddenError, UnauthorizedError, ValidationError } from "./errors";
 import type { Clock, RandomId, SecretHasher, StateStore } from "./ports";
 
+function cloneRecord(input: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(input)) as Record<string, unknown>;
+}
+
+function copyRecord(record: PublishTokenRecord): PublishTokenRecord {
+  return {
+    ...record,
+    permissions: [...record.permissions],
+    repositories: [...record.repositories],
+    ecosystemScopes: cloneRecord(record.ecosystemScopes),
+  };
+}
+
 export interface CreatePublishTokenInput {
   name: string;
   permissions: string[];
@@ -39,6 +52,9 @@ export class PublishTokenService {
     if (input.repositories.length === 0) {
       throw new ValidationError("Publish token must be scoped to at least one repository");
     }
+    if (input.expiresAt !== undefined && !Number.isFinite(Date.parse(input.expiresAt))) {
+      throw new ValidationError("Publish token expiresAt must be a valid date");
+    }
 
     const tokenId = this.options.randomId.create("ptok");
     const secret = `axis_publish_${this.options.randomId.create("tok")}`;
@@ -48,16 +64,17 @@ export class PublishTokenService {
       tokenHash: await this.options.hasher.hash(secret),
       permissions: [...input.permissions],
       repositories: [...input.repositories],
-      ecosystemScopes: input.ecosystemScopes,
+      ecosystemScopes: cloneRecord(input.ecosystemScopes),
       createdAt: this.options.clock.now().toISOString(),
       ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt }),
     };
     await this.options.state.publishTokens.save(record);
-    return { record, secret };
+    return { record: copyRecord(record), secret };
   }
 
   async list(): Promise<PublishTokenRecord[]> {
-    return this.options.state.publishTokens.list();
+    const records = await this.options.state.publishTokens.list();
+    return records.map(copyRecord);
   }
 
   async revoke(name: string): Promise<PublishTokenRecord> {
@@ -70,7 +87,7 @@ export class PublishTokenService {
       revokedAt: this.options.clock.now().toISOString(),
     };
     await this.options.state.publishTokens.save(revoked);
-    return revoked;
+    return copyRecord(revoked);
   }
 
   async verify(secret: string): Promise<TokenPrincipal> {
@@ -86,9 +103,9 @@ export class PublishTokenService {
       return {
         tokenId: record.id,
         name: record.name,
-        permissions: record.permissions,
-        repositories: record.repositories,
-        ecosystemScopes: record.ecosystemScopes,
+        permissions: [...record.permissions],
+        repositories: [...record.repositories],
+        ecosystemScopes: cloneRecord(record.ecosystemScopes),
       };
     }
     throw new UnauthorizedError();

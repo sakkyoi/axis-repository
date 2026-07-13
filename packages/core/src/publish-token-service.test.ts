@@ -4,6 +4,7 @@ import {
   MemoryStateStore,
   PublishTokenService,
   UnauthorizedError,
+  ValidationError,
   type Clock,
   type RandomId,
   type SecretHasher,
@@ -57,6 +58,51 @@ describe("PublishTokenService", () => {
     });
 
     await expect(service.verify("axis_publish_missing")).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("rejects invalid expiresAt values", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+
+    await expect(
+      service.create({
+        name: "github-actions",
+        repositories: ["debian-internal"],
+        permissions: ["publish"],
+        ecosystemScopes: {},
+        expiresAt: "not-a-date",
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("does not let verified principals mutate stored token scope", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+    const result = await service.create({
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+    });
+
+    const principal = await service.verify(result.secret);
+    principal.permissions.push("admin");
+    principal.repositories.push("production");
+    (principal.ecosystemScopes.apt as { allowedPackages: string[] }).allowedPackages.push("other");
+
+    await expect(service.verify(result.secret)).resolves.toMatchObject({
+      permissions: ["publish"],
+      repositories: ["debian-internal"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+    });
   });
 
   it("rejects revoked tokens", async () => {
