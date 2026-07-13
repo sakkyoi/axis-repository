@@ -176,4 +176,91 @@ describe("Cloudflare runtime routes", () => {
       uploads: [{ filename: "myapp_1.2.3_amd64.deb", method: "PUT" }],
     });
   });
+
+  it("does not expose publish token hashes when listing publish tokens", async () => {
+    const app = createApp();
+
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+        }),
+      }),
+    );
+
+    expect(createResponse.status).toBe(201);
+    const createBody = (await createResponse.json()) as { token: Record<string, unknown> };
+    expect(createBody.token).not.toHaveProperty("tokenHash");
+
+    const listResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(listResponse.status).toBe(200);
+    const listBody = (await listResponse.json()) as { publishTokens: Array<Record<string, unknown>> };
+    expect(listBody.publishTokens).toHaveLength(1);
+    expect(listBody.publishTokens[0]).not.toHaveProperty("tokenHash");
+  });
+
+  it("rejects malformed publish session artifacts", async () => {
+    const app = createApp();
+
+    await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+      }),
+    );
+
+    const tokenResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+        }),
+      }),
+    );
+    const tokenBody = (await tokenResponse.json()) as { secret: string };
+
+    const response = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [{}],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "artifacts[0].filename is required" },
+    });
+  });
 });

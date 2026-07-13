@@ -1,4 +1,10 @@
-import { AxisError, NotFoundError, ValidationError } from "@axis-repository/core";
+import {
+  AxisError,
+  NotFoundError,
+  ValidationError,
+  type PublishArtifactRequest,
+  type PublishTokenRecord,
+} from "@axis-repository/core";
 import type { AppDependencies } from "./dev-dependencies";
 import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "./http";
 
@@ -32,6 +38,51 @@ function repositoryVisibility(body: Record<string, unknown>): "private" | "publi
   throw new ValidationError("visibility must be private or public");
 }
 
+function publicPublishToken(record: PublishTokenRecord): Omit<PublishTokenRecord, "tokenHash"> {
+  const { tokenHash, ...publicRecord } = record;
+  return publicRecord;
+}
+
+function requiredStringValue(value: unknown, label: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new ValidationError(`${label} is required`);
+  }
+  return value;
+}
+
+function parseArtifact(value: unknown, index: number): PublishArtifactRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError(`artifacts[${index}] must be an object`);
+  }
+  const artifact = value as Record<string, unknown>;
+  const size = artifact.size;
+  const filename = requiredStringValue(artifact.filename, `artifacts[${index}].filename`);
+  const sha256 = requiredStringValue(artifact.sha256, `artifacts[${index}].sha256`);
+  const contentType = requiredStringValue(artifact.contentType, `artifacts[${index}].contentType`);
+  if (typeof size !== "number" || !Number.isFinite(size) || size < 0) {
+    throw new ValidationError(`artifacts[${index}].size must be a finite non-negative number`);
+  }
+  const metadata = artifact.metadata ?? {};
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    throw new ValidationError(`artifacts[${index}].metadata must be an object`);
+  }
+  return {
+    filename,
+    size,
+    sha256,
+    contentType,
+    metadata: metadata as Record<string, unknown>,
+  };
+}
+
+function parseArtifacts(body: Record<string, unknown>): PublishArtifactRequest[] {
+  const artifacts = body.artifacts;
+  if (!Array.isArray(artifacts) || artifacts.length === 0) {
+    throw new ValidationError("artifacts must be a non-empty array");
+  }
+  return artifacts.map((artifact, index) => parseArtifact(artifact, index));
+}
+
 export async function dispatch(request: Request, dependencies: AppDependencies): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
@@ -56,7 +107,8 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (url.pathname === "/admin/publish-tokens") {
     requireAdmin(request, dependencies.adminToken);
     if (request.method === "GET") {
-      return jsonResponse({ publishTokens: await dependencies.publishTokenService.list() });
+      const publishTokens = await dependencies.publishTokenService.list();
+      return jsonResponse({ publishTokens: publishTokens.map(publicPublishToken) });
     }
     if (request.method === "POST") {
       const body = await readJsonObject(request);
@@ -68,7 +120,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       });
       return jsonResponse(
         {
-          token: { ...result.record, tokenHash: undefined },
+          token: publicPublishToken(result.record),
           secret: result.secret,
         },
         { status: 201 },
@@ -79,15 +131,12 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const secret = requireBearer(request);
     const principal = await dependencies.publishTokenService.verify(secret);
     const body = await readJsonObject(request);
-    const artifacts = body.artifacts;
-    if (!Array.isArray(artifacts)) {
-      throw new ValidationError("artifacts must be an array");
-    }
+    const artifacts = parseArtifacts(body);
     const session = await dependencies.publishSessionService.create({
       repositoryName: stringField(body, "repositoryName"),
       ecosystem: stringField(body, "ecosystem"),
       principal,
-      artifacts: artifacts as never,
+      artifacts,
     });
     return jsonResponse(session, { status: 201 });
   }
