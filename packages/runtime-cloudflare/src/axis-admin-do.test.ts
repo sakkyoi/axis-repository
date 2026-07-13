@@ -28,7 +28,13 @@ class FakeDurableStorage implements DurableStorage {
   }
 }
 
-function createObject(env: Partial<AxisEnv> = {}) {
+type TestAxisEnv = {
+  AXIS_ADMIN?: DurableObjectNamespace | undefined;
+  ADMIN_TOKEN?: string | undefined;
+  TOKEN_HASH_PEPPER?: string | undefined;
+};
+
+function createObject(env: TestAxisEnv = {}) {
   return new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, {
     ADMIN_TOKEN: "admin",
     TOKEN_HASH_PEPPER: "pepper",
@@ -37,6 +43,24 @@ function createObject(env: Partial<AxisEnv> = {}) {
 }
 
 describe("AxisAdminDO", () => {
+  it("requires an admin token", () => {
+    expect(() => createObject({ ADMIN_TOKEN: undefined })).toThrow(
+      "ADMIN_TOKEN is required for AxisAdminDO",
+    );
+    expect(() => createObject({ ADMIN_TOKEN: "" })).toThrow(
+      "ADMIN_TOKEN is required for AxisAdminDO",
+    );
+  });
+
+  it("requires a token hash pepper", () => {
+    expect(() => createObject({ TOKEN_HASH_PEPPER: undefined })).toThrow(
+      "TOKEN_HASH_PEPPER is required for AxisAdminDO",
+    );
+    expect(() => createObject({ TOKEN_HASH_PEPPER: "" })).toThrow(
+      "TOKEN_HASH_PEPPER is required for AxisAdminDO",
+    );
+  });
+
   it("persists repository state across requests", async () => {
     const object = createObject();
 

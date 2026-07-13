@@ -41,14 +41,21 @@ export function createDurableObjectDependencies(
   storage: DurableStorage,
   env: AxisEnv,
 ): AppDependencies {
+  if (!env.ADMIN_TOKEN) {
+    throw new Error("ADMIN_TOKEN is required for AxisAdminDO");
+  }
+  if (!env.TOKEN_HASH_PEPPER) {
+    throw new Error("TOKEN_HASH_PEPPER is required for AxisAdminDO");
+  }
+
   const state = new DurableStateStore(storage);
   const clock: Clock = { now: () => new Date() };
   const randomId = new WebCryptoRandomId();
-  const hasher = new Sha256SecretHasher(env.TOKEN_HASH_PEPPER ?? "");
+  const hasher = new Sha256SecretHasher(env.TOKEN_HASH_PEPPER);
   const uploadBroker = createFakeUploadBroker();
 
   return {
-    adminToken: env.ADMIN_TOKEN ?? "dev-admin-token",
+    adminToken: env.ADMIN_TOKEN,
     repositoryService: new RepositoryService({ state, clock, randomId }),
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
     publishSessionService: new PublishSessionService({ state, uploadBroker, clock, randomId }),
