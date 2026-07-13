@@ -20,6 +20,18 @@ export interface TokenPrincipal {
   ecosystemScopes: Record<string, unknown>;
 }
 
+export interface PublishTokenRecord {
+  id: string;
+  name: string;
+  tokenHash: string;
+  permissions: string[];
+  repositories: string[];
+  ecosystemScopes: Record<string, unknown>;
+  createdAt: string;
+  expiresAt?: string;
+  revokedAt?: string;
+}
+
 export interface PublishArtifactRequest {
   filename: string;
   size: number;

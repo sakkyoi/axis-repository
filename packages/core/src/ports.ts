@@ -1,5 +1,6 @@
 import type {
   PublishSession,
+  PublishTokenRecord,
   UploadedObject,
   UploadTarget,
   Repository,
@@ -33,12 +34,20 @@ export interface UploadBroker {
 
 export interface RepositoryStore {
   getByName(name: string): Promise<Repository | null>;
+  list(): Promise<Repository[]>;
   save(repository: Repository): Promise<void>;
 }
 
 export interface PublishSessionStore {
   get(id: string): Promise<PublishSession | null>;
   save(session: PublishSession): Promise<void>;
+}
+
+export interface PublishTokenStore {
+  getById(id: string): Promise<PublishTokenRecord | null>;
+  getByName(name: string): Promise<PublishTokenRecord | null>;
+  list(): Promise<PublishTokenRecord[]>;
+  save(token: PublishTokenRecord): Promise<void>;
 }
 
 export interface TokenVerifier {
@@ -48,4 +57,5 @@ export interface TokenVerifier {
 export interface StateStore {
   repositories: RepositoryStore;
   publishSessions: PublishSessionStore;
+  publishTokens: PublishTokenStore;
 }
