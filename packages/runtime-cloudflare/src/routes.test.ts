@@ -87,4 +87,27 @@ describe("Cloudflare runtime routes", () => {
       error: { code: "unauthorized", message: "Unauthorized" },
     });
   });
+
+  it("rejects invalid repository visibility", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-internal",
+          ecosystem: "apt",
+          visibility: "invalid",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "visibility must be private or public" },
+    });
+  });
 });

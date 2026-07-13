@@ -1,4 +1,4 @@
-import { AxisError, NotFoundError } from "@axis-repository/core";
+import { AxisError, NotFoundError, ValidationError } from "@axis-repository/core";
 import type { AppDependencies } from "./dev-dependencies";
 import { optionalObjectField, readJsonObject, requireAdmin, stringField } from "./http";
 
@@ -26,6 +26,12 @@ export function errorResponse(error: unknown): Response {
   );
 }
 
+function repositoryVisibility(body: Record<string, unknown>): "private" | "public" {
+  if (body.visibility === undefined) return "private";
+  if (body.visibility === "private" || body.visibility === "public") return body.visibility;
+  throw new ValidationError("visibility must be private or public");
+}
+
 export async function dispatch(request: Request, dependencies: AppDependencies): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
@@ -41,7 +47,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       const repository = await dependencies.repositoryService.create({
         name: stringField(body, "name"),
         ecosystem: stringField(body, "ecosystem"),
-        visibility: body.visibility === "public" ? "public" : "private",
+        visibility: repositoryVisibility(body),
         config: optionalObjectField(body, "config") ?? {},
       });
       return jsonResponse(repository, { status: 201 });
