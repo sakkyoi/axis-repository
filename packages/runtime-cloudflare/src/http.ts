@@ -1,4 +1,4 @@
-import { UnauthorizedError, ValidationError, parseBearerToken } from "@axis-repository/core";
+import { UnauthorizedError, ValidationError, parseBearerToken, timingSafeEqualText } from "@axis-repository/core";
 
 export async function readJsonObject(request: Request): Promise<Record<string, unknown>> {
   let value: unknown;
@@ -19,7 +19,7 @@ export function requireBearer(request: Request): string {
 
 export function requireAdmin(request: Request, adminToken: string): void {
   const token = requireBearer(request);
-  if (token !== adminToken) {
+  if (!timingSafeEqualText(token, adminToken)) {
     throw new UnauthorizedError();
   }
 }

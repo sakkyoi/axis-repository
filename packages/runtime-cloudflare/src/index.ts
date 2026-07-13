@@ -1,7 +1,9 @@
 import { createApp } from "./app";
 
+const app = createApp();
+
 export default {
   fetch(request: Request): Promise<Response> {
-    return createApp().fetch(request);
+    return app.fetch(request);
   },
 };
