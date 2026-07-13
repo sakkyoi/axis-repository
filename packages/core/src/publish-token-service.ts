@@ -97,8 +97,14 @@ export class PublishTokenService {
       if (record.revokedAt) {
         throw new ForbiddenError("Publish token has been revoked");
       }
-      if (record.expiresAt && Date.parse(record.expiresAt) <= this.options.clock.now().getTime()) {
-        throw new ForbiddenError("Publish token has expired");
+      if (record.expiresAt) {
+        const expiresAt = Date.parse(record.expiresAt);
+        if (!Number.isFinite(expiresAt)) {
+          throw new ForbiddenError("Publish token has invalid expiration");
+        }
+        if (expiresAt <= this.options.clock.now().getTime()) {
+          throw new ForbiddenError("Publish token has expired");
+        }
       }
       return {
         tokenId: record.id,

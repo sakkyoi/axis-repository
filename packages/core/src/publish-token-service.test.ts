@@ -79,6 +79,28 @@ describe("PublishTokenService", () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it("rejects persisted tokens with invalid expiresAt values", async () => {
+    const state = new MemoryStateStore();
+    await state.publishTokens.save({
+      id: "ptok_corrupt",
+      name: "github-actions",
+      tokenHash: "hash:axis_publish_corrupt",
+      permissions: ["publish"],
+      repositories: ["debian-internal"],
+      ecosystemScopes: {},
+      createdAt: "2026-07-13T00:00:00.000Z",
+      expiresAt: "not-a-date",
+    });
+    const service = new PublishTokenService({
+      state,
+      clock,
+      randomId,
+      hasher,
+    });
+
+    await expect(service.verify("axis_publish_corrupt")).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
   it("does not let verified principals mutate stored token scope", async () => {
     const service = new PublishTokenService({
       state: new MemoryStateStore(),
