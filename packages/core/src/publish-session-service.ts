@@ -3,6 +3,7 @@ import type {
   PublishArtifactRequest,
   PublishSession,
   TokenPrincipal,
+  UploadedObject,
 } from "./domain";
 import { ForbiddenError, NotFoundError, ValidationError } from "./errors";
 import type { Clock, RandomId, StateStore, UploadBroker } from "./ports";
@@ -12,6 +13,12 @@ export interface CreatePublishSessionInput {
   ecosystem: Ecosystem;
   principal: TokenPrincipal;
   artifacts: PublishArtifactRequest[];
+}
+
+export interface VerifyPublishUploadInput {
+  sessionId: string;
+  uploadId: string;
+  principal: TokenPrincipal;
 }
 
 export interface PublishSessionServiceOptions {
@@ -70,6 +77,7 @@ export class PublishSessionService {
       ecosystem: repository.ecosystem,
       status: "created",
       requestedBy: input.principal,
+      artifacts: input.artifacts,
       uploads,
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
@@ -77,5 +85,37 @@ export class PublishSessionService {
 
     await this.options.state.publishSessions.save(session);
     return session;
+  }
+
+  async verifyUpload(input: VerifyPublishUploadInput): Promise<UploadedObject> {
+    const session = await this.options.state.publishSessions.get(input.sessionId);
+    if (!session) {
+      throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
+    }
+    if (session.status !== "created") {
+      throw new ValidationError(`Publish session is not open: ${session.status}`);
+    }
+    if (new Date(session.expiresAt).getTime() <= this.options.clock.now().getTime()) {
+      throw new ValidationError("Publish session has expired");
+    }
+    if (!input.principal.permissions.includes("publish")) {
+      throw new ForbiddenError("Publish permission is required");
+    }
+    if (!input.principal.repositories.includes(session.repositoryName)) {
+      throw new ForbiddenError(`Token is not scoped to repository: ${session.repositoryName}`);
+    }
+
+    const uploadIndex = session.uploads.findIndex((upload) => upload.uploadId === input.uploadId);
+    if (uploadIndex === -1) {
+      throw new NotFoundError(`Upload not found: ${input.uploadId}`);
+    }
+
+    const target = session.uploads[uploadIndex];
+    const expected = session.artifacts[uploadIndex];
+    if (!target || !expected) {
+      throw new ValidationError(`Upload is not paired with an artifact: ${input.uploadId}`);
+    }
+
+    return this.options.uploadBroker.verifyUpload({ target, expected });
   }
 }

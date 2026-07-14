@@ -4,7 +4,9 @@ import {
   MemoryStateStore,
   NotFoundError,
   PublishSessionService,
+  ValidationError,
   type Clock,
+  type PublishArtifactRequest,
   type RandomId,
   type TokenPrincipal,
   type UploadBroker,
@@ -12,6 +14,10 @@ import {
 
 const clock: Clock = {
   now: () => new Date("2026-07-12T00:00:00.000Z"),
+};
+
+const expiredClock: Clock = {
+  now: () => new Date("2026-07-12T00:30:00.000Z"),
 };
 
 const randomId: RandomId = {
@@ -26,6 +32,14 @@ const principal: TokenPrincipal = {
   ecosystemScopes: {},
 };
 
+const artifact: PublishArtifactRequest = {
+  filename: "myapp_1.2.3_amd64.deb",
+  size: 1234,
+  sha256: "a".repeat(64),
+  contentType: "application/vnd.debian.binary-package",
+  metadata: {},
+};
+
 const uploadBroker: UploadBroker = {
   createUploadTarget: async ({ sessionId, uploadId, artifact, expiresAt }) => ({
     uploadId,
@@ -33,7 +47,11 @@ const uploadBroker: UploadBroker = {
     objectKey: `_staging/uploads/${sessionId}/${uploadId}/${artifact.filename}`,
     method: "PUT",
     url: `https://uploads.example/${uploadId}`,
-    headers: { "content-type": artifact.contentType },
+    headers: {
+      "content-type": artifact.contentType,
+      "x-amz-meta-axis-sha256": artifact.sha256,
+      "x-amz-meta-axis-upload-id": uploadId,
+    },
     expiresAt: expiresAt.toISOString(),
   }),
   verifyUpload: async ({ target, expected }) => ({
@@ -45,39 +63,125 @@ const uploadBroker: UploadBroker = {
   abortUpload: async () => {},
 };
 
+async function createStateWithRepository(): Promise<MemoryStateStore> {
+  const state = new MemoryStateStore();
+  await state.repositories.save({
+    id: "repo_1",
+    name: "debian-internal",
+    ecosystem: "apt",
+    visibility: "private",
+    config: {},
+    createdAt: "2026-07-12T00:00:00.000Z",
+    updatedAt: "2026-07-12T00:00:00.000Z",
+  });
+  return state;
+}
+
 describe("PublishSessionService", () => {
-  it("creates a publish session with upload targets", async () => {
-    const state = new MemoryStateStore();
-    await state.repositories.save({
-      id: "repo_1",
-      name: "debian-internal",
-      ecosystem: "apt",
-      visibility: "private",
-      config: {},
-      createdAt: "2026-07-12T00:00:00.000Z",
-      updatedAt: "2026-07-12T00:00:00.000Z",
-    });
+  it("creates a publish session with upload targets and artifacts", async () => {
+    const state = await createStateWithRepository();
     const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
 
     const session = await service.create({
       repositoryName: "debian-internal",
       ecosystem: "apt",
       principal,
-      artifacts: [
-        {
-          filename: "myapp_1.2.3_amd64.deb",
-          size: 1234,
-          sha256: "a".repeat(64),
-          contentType: "application/vnd.debian.binary-package",
-          metadata: {},
-        },
-      ],
+      artifacts: [artifact],
     });
 
     expect(session.id).toBe("pub_fixed");
     expect(session.uploads).toHaveLength(1);
     expect(session.uploads[0]?.url).toBe("https://uploads.example/upl_fixed");
+    expect(session.artifacts).toEqual([artifact]);
     expect(await state.publishSessions.get("pub_fixed")).toEqual(session);
+  });
+
+  it("verifies an uploaded object for a created session", async () => {
+    const state = await createStateWithRepository();
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+
+    await expect(
+      service.verifyUpload({
+        sessionId: "pub_fixed",
+        uploadId: "upl_fixed",
+        principal,
+      }),
+    ).resolves.toEqual({
+      uploadId: "upl_fixed",
+      objectKey: "_staging/uploads/pub_fixed/upl_fixed/myapp_1.2.3_amd64.deb",
+      size: 1234,
+      sha256: "a".repeat(64),
+    });
+  });
+
+  it("rejects upload verification when the token is not scoped to the repository", async () => {
+    const state = await createStateWithRepository();
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+
+    await expect(
+      service.verifyUpload({
+        sessionId: "pub_fixed",
+        uploadId: "upl_fixed",
+        principal: { ...principal, repositories: ["other"] },
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("rejects upload verification for expired sessions", async () => {
+    const state = await createStateWithRepository();
+    const createService = new PublishSessionService({ state, uploadBroker, clock, randomId });
+    await createService.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+
+    const verifyService = new PublishSessionService({
+      state,
+      uploadBroker,
+      clock: expiredClock,
+      randomId,
+    });
+
+    await expect(
+      verifyService.verifyUpload({
+        sessionId: "pub_fixed",
+        uploadId: "upl_fixed",
+        principal,
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("rejects upload verification for unknown uploads", async () => {
+    const state = await createStateWithRepository();
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+
+    await expect(
+      service.verifyUpload({
+        sessionId: "pub_fixed",
+        uploadId: "missing",
+        principal,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("rejects publish when token is not scoped to repository", async () => {

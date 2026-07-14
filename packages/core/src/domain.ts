@@ -46,6 +46,7 @@ export interface PublishSession {
   ecosystem: Ecosystem;
   status: "created" | "completed" | "aborted" | "expired";
   requestedBy: TokenPrincipal;
+  artifacts: PublishArtifactRequest[];
   uploads: UploadTarget[];
   createdAt: string;
   expiresAt: string;
