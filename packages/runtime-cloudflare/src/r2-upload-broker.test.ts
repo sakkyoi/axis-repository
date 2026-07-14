@@ -86,6 +86,19 @@ describe("R2PresignedUploadBroker", () => {
     expect(target.expiresAt).toBe("2026-07-14T00:01:00.000Z");
   });
 
+  it("rejects expired upload target expiry before signing", async () => {
+    const { broker } = createBroker();
+
+    await expect(
+      broker.createUploadTarget({
+        sessionId: "pub_1",
+        uploadId: "upl_1",
+        artifact,
+        expiresAt: new Date("2026-07-14T00:00:00.000Z"),
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
   it("verifies an uploaded R2 object", async () => {
     const { bucket, broker } = createBroker();
     bucket.objects.set("_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb", {

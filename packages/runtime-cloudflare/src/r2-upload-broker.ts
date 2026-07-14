@@ -49,6 +49,9 @@ export class R2PresignedUploadBroker implements UploadBroker {
     expiresAt: Date;
   }): Promise<UploadTarget> {
     const now = this.now();
+    if (input.expiresAt.getTime() <= now.getTime()) {
+      throw new ValidationError("Upload target expiry has passed");
+    }
     const ttlSeconds = this.getUploadTtlSeconds(now, input.expiresAt);
     const effectiveExpiresAt = new Date(now.getTime() + ttlSeconds * 1000);
     const objectKey = `_staging/uploads/${input.sessionId}/${input.uploadId}/${input.artifact.filename}`;
