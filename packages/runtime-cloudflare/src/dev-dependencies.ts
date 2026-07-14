@@ -6,8 +6,8 @@ import {
   type Clock,
   type RandomId,
   type SecretHasher,
-  type UploadBroker,
 } from "@axis-repository/core";
+import MemoryUploadBroker from "./memory-upload-broker";
 
 export interface AppDependencies {
   adminToken: string;
@@ -28,28 +28,7 @@ export function createDevDependencies(adminToken = "dev-admin-token"): AppDepend
     hash: async (secret: string): Promise<string> => `dev:${secret}`,
     verify: async (secret: string, hash: string): Promise<boolean> => hash === `dev:${secret}`,
   };
-  const uploadBroker: UploadBroker = {
-    createUploadTarget: async ({ sessionId, uploadId, artifact, expiresAt }) => ({
-      uploadId,
-      filename: artifact.filename,
-      objectKey: `_staging/uploads/${sessionId}/${uploadId}/${artifact.filename}`,
-      method: "PUT",
-      url: `https://uploads.local/${sessionId}/${uploadId}`,
-      headers: {
-        "content-type": artifact.contentType,
-        "x-amz-meta-axis-sha256": artifact.sha256,
-        "x-amz-meta-axis-upload-id": uploadId,
-      },
-      expiresAt: expiresAt.toISOString(),
-    }),
-    verifyUpload: async ({ target, expected }) => ({
-      uploadId: target.uploadId,
-      objectKey: target.objectKey,
-      size: expected.size,
-      sha256: expected.sha256,
-    }),
-    abortUpload: async () => {},
-  };
+  const uploadBroker = new MemoryUploadBroker();
 
   return {
     adminToken,
