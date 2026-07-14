@@ -77,6 +77,7 @@ describe("DurableStateStore", () => {
         repositories: ["debian-internal"],
         ecosystemScopes: {},
       },
+      artifacts: [],
       uploads: [],
       createdAt: "2026-07-14T00:00:00.000Z",
       expiresAt: "2026-07-14T00:15:00.000Z",

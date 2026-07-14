@@ -93,6 +93,8 @@ describe("PublishSessionService", () => {
     expect(session.uploads).toHaveLength(1);
     expect(session.uploads[0]?.url).toBe("https://uploads.example/upl_fixed");
     expect(session.artifacts).toEqual([artifact]);
+    expect(session.artifacts[0]).not.toBe(artifact);
+    expect(session.artifacts[0]?.metadata).not.toBe(artifact.metadata);
     expect(await state.publishSessions.get("pub_fixed")).toEqual(session);
   });
 

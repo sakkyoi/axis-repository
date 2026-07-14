@@ -77,7 +77,10 @@ export class PublishSessionService {
       ecosystem: repository.ecosystem,
       status: "created",
       requestedBy: input.principal,
-      artifacts: input.artifacts,
+      artifacts: input.artifacts.map((artifact) => ({
+        ...artifact,
+        metadata: { ...artifact.metadata },
+      })),
       uploads,
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
