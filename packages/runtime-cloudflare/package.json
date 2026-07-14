@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@axis-repository/core": "workspace:*"
+    "@axis-repository/core": "workspace:*",
+    "aws4fetch": "^1.0.20"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0"
