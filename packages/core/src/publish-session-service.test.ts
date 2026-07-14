@@ -136,6 +136,48 @@ describe("PublishSessionService", () => {
     });
   });
 
+  it("snapshots nested artifact metadata before awaited work", async () => {
+    const state = await createStateWithRepository();
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+    const input = {
+      repositoryName: "debian-internal",
+      ecosystem: "apt" as const,
+      principal,
+      artifacts: [
+        {
+          ...artifact,
+          metadata: {
+            checks: ["lint", "sign"],
+            package: {
+              maintainer: "release@example.com",
+              tags: ["stable"],
+            },
+          },
+        },
+      ],
+    };
+
+    const promise = service.create(input);
+    const metadata = input.artifacts[0]?.metadata;
+    if (!metadata || !("package" in metadata)) {
+      throw new Error("Expected nested package metadata");
+    }
+    (metadata.package as { maintainer: string; tags: string[] }).maintainer = "tampered@example.com";
+    (metadata.package as { maintainer: string; tags: string[] }).tags.push("tampered");
+
+    await promise;
+
+    const stored = await state.publishSessions.get("pub_fixed");
+
+    expect(stored?.artifacts[0]?.metadata).toEqual({
+      checks: ["lint", "sign"],
+      package: {
+        maintainer: "release@example.com",
+        tags: ["stable"],
+      },
+    });
+  });
+
   it("verifies an uploaded object for a created session", async () => {
     const state = await createStateWithRepository();
     const service = new PublishSessionService({ state, uploadBroker, clock, randomId });

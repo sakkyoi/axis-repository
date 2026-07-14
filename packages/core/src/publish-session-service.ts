@@ -59,6 +59,11 @@ export class PublishSessionService {
   }
 
   async create(input: CreatePublishSessionInput): Promise<PublishSession> {
+    const artifacts = input.artifacts.map((artifact) => ({
+      ...artifact,
+      metadata: cloneMetadataRecord(artifact.metadata),
+    }));
+
     const repository = await this.options.state.repositories.getByName(input.repositoryName);
     if (!repository) {
       throw new NotFoundError(`Repository not found: ${input.repositoryName}`);
@@ -72,7 +77,7 @@ export class PublishSessionService {
     if (!input.principal.repositories.includes(repository.name)) {
       throw new ForbiddenError(`Token is not scoped to repository: ${repository.name}`);
     }
-    if (input.artifacts.length === 0) {
+    if (artifacts.length === 0) {
       throw new ValidationError("At least one artifact is required");
     }
 
@@ -81,7 +86,7 @@ export class PublishSessionService {
     const sessionId = this.options.randomId.create("pub");
     const uploads = [];
 
-    for (const artifact of input.artifacts) {
+    for (const artifact of artifacts) {
       const uploadId = this.options.randomId.create("upl");
       uploads.push(
         await this.options.uploadBroker.createUploadTarget({
@@ -99,10 +104,7 @@ export class PublishSessionService {
       ecosystem: repository.ecosystem,
       status: "created",
       requestedBy: input.principal,
-      artifacts: input.artifacts.map((artifact) => ({
-        ...artifact,
-        metadata: cloneMetadataRecord(artifact.metadata),
-      })),
+      artifacts,
       uploads,
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
