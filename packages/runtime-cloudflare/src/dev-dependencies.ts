@@ -35,7 +35,11 @@ export function createDevDependencies(adminToken = "dev-admin-token"): AppDepend
       objectKey: `_staging/uploads/${sessionId}/${uploadId}/${artifact.filename}`,
       method: "PUT",
       url: `https://uploads.local/${sessionId}/${uploadId}`,
-      headers: { "content-type": artifact.contentType },
+      headers: {
+        "content-type": artifact.contentType,
+        "x-amz-meta-axis-sha256": artifact.sha256,
+        "x-amz-meta-axis-upload-id": uploadId,
+      },
       expiresAt: expiresAt.toISOString(),
     }),
     verifyUpload: async ({ target, expected }) => ({
