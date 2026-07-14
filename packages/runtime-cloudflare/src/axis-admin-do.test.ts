@@ -44,6 +44,7 @@ type TestAxisEnv = {
   R2_ACCESS_KEY_ID?: string | undefined;
   R2_SECRET_ACCESS_KEY?: string | undefined;
   UPLOAD_URL_TTL_SECONDS?: string | undefined;
+  UPLOAD_BACKEND?: string | undefined;
 };
 
 function createObject(env: TestAxisEnv = {}) {
@@ -96,6 +97,61 @@ describe("AxisAdminDO", () => {
     );
     expect(() => createObject({ R2_SECRET_ACCESS_KEY: undefined })).toThrow(
       "R2_SECRET_ACCESS_KEY is required for AxisAdminDO",
+    );
+  });
+
+  it("uses r2 upload backend by default", () => {
+    expect(() => createObject({ R2_ACCOUNT_ID: undefined })).toThrow(
+      "R2_ACCOUNT_ID is required for AxisAdminDO",
+    );
+  });
+
+  it("uses r2 upload backend when explicitly configured", () => {
+    expect(() => createObject({ UPLOAD_BACKEND: "r2", R2_ACCESS_KEY_ID: undefined })).toThrow(
+      "R2_ACCESS_KEY_ID is required for AxisAdminDO",
+    );
+  });
+
+  it("uses memory upload backend without R2 env", async () => {
+    const object = createObject({
+      UPLOAD_BACKEND: "memory",
+      AXIS_OBJECTS: undefined,
+      ADMIN_TOKEN: "test-admin-token",
+      R2_ACCOUNT_ID: undefined,
+      R2_BUCKET_NAME: undefined,
+      R2_ACCESS_KEY_ID: undefined,
+      R2_SECRET_ACCESS_KEY: undefined,
+    });
+
+    const response = await object.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+  });
+
+  it("still requires admin token for memory backend", () => {
+    expect(() => createObject({ UPLOAD_BACKEND: "memory", ADMIN_TOKEN: undefined })).toThrow(
+      "ADMIN_TOKEN is required for AxisAdminDO",
+    );
+  });
+
+  it("still requires token hash pepper for memory backend", () => {
+    expect(() => createObject({ UPLOAD_BACKEND: "memory", TOKEN_HASH_PEPPER: undefined })).toThrow(
+      "TOKEN_HASH_PEPPER is required for AxisAdminDO",
+    );
+  });
+
+  it("rejects invalid upload backend values", () => {
+    expect(() => createObject({ UPLOAD_BACKEND: "disk" })).toThrow(
+      "UPLOAD_BACKEND must be one of: r2, memory",
     );
   });
 
