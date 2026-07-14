@@ -18,16 +18,21 @@ class FakeR2Bucket implements R2BucketLike {
   }
 }
 
-function createBroker(bucket = new FakeR2Bucket()) {
+function createBroker(bucket = new FakeR2Bucket(), uploadUrlTtlSeconds?: number) {
+  const options = {
+    bucket,
+    accountId: "account123",
+    bucketName: "axis-repository",
+    accessKeyId: "access",
+    secretAccessKey: "secret",
+    now: () => new Date("2026-07-14T00:00:00.000Z"),
+  };
+
   return {
     bucket,
     broker: new R2PresignedUploadBroker({
-      bucket,
-      accountId: "account123",
-      bucketName: "axis-repository",
-      accessKeyId: "access",
-      secretAccessKey: "secret",
-      now: () => new Date("2026-07-14T00:00:00.000Z"),
+      ...options,
+      ...(uploadUrlTtlSeconds === undefined ? {} : { uploadUrlTtlSeconds }),
     }),
   };
 }
@@ -60,7 +65,33 @@ describe("R2PresignedUploadBroker", () => {
     expect(url.pathname).toBe("/axis-repository/_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb");
     expect(url.searchParams.get("X-Amz-Algorithm")).toBe("AWS4-HMAC-SHA256");
     expect(url.searchParams.get("X-Amz-Expires")).toBe("900");
-    expect(url.searchParams.get("X-Amz-SignedHeaders")).toContain("content-type");
+    const signedHeaders = url.searchParams.get("X-Amz-SignedHeaders")?.split(";") ?? [];
+    expect(signedHeaders).toEqual(
+      expect.arrayContaining(["content-type", "x-amz-meta-axis-sha256", "x-amz-meta-axis-upload-id"]),
+    );
+  });
+
+  it("encodes signed URL path segments without changing the logical object key", async () => {
+    const { broker } = createBroker();
+    const unsafeArtifact = {
+      ...artifact,
+      filename: "my app?bad#frag/../pkg.deb",
+    };
+
+    const target = await broker.createUploadTarget({
+      sessionId: "pub_1",
+      uploadId: "upl_1",
+      artifact: unsafeArtifact,
+      expiresAt: new Date("2026-07-14T00:15:00.000Z"),
+    });
+
+    expect(target.objectKey).toBe("_staging/uploads/pub_1/upl_1/my app?bad#frag/../pkg.deb");
+
+    const url = new URL(target.url);
+    expect(url.searchParams.has("bad")).toBe(false);
+    expect(url.hash).toBe("");
+    expect(url.pathname).toContain("my%20app%3Fbad%23frag%2F..%2Fpkg.deb");
+    expect(url.pathname).toMatch(/^\/axis-repository\/_staging\/uploads\/pub_1\/upl_1\//);
   });
 
   it("caps signed URL expiry with configured ttl", async () => {
@@ -97,6 +128,19 @@ describe("R2PresignedUploadBroker", () => {
         expiresAt: new Date("2026-07-14T00:00:00.000Z"),
       }),
     ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])("rejects invalid upload URL ttl %s", async (ttl) => {
+    const { broker } = createBroker(new FakeR2Bucket(), ttl);
+
+    await expect(
+      broker.createUploadTarget({
+        sessionId: "pub_1",
+        uploadId: "upl_1",
+        artifact,
+        expiresAt: new Date("2026-07-14T00:15:00.000Z"),
+      }),
+    ).rejects.toThrow(new ValidationError("UPLOAD_URL_TTL_SECONDS must be a positive integer"));
   });
 
   it("verifies an uploaded R2 object", async () => {

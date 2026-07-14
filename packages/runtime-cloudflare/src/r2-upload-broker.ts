@@ -55,12 +55,22 @@ export class R2PresignedUploadBroker implements UploadBroker {
     const ttlSeconds = this.getUploadTtlSeconds(now, input.expiresAt);
     const effectiveExpiresAt = new Date(now.getTime() + ttlSeconds * 1000);
     const objectKey = `_staging/uploads/${input.sessionId}/${input.uploadId}/${input.artifact.filename}`;
+    const signedPath = [
+      this.bucketName,
+      "_staging",
+      "uploads",
+      input.sessionId,
+      input.uploadId,
+      input.artifact.filename,
+    ]
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
     const headers = {
       "content-type": input.artifact.contentType,
       "x-amz-meta-axis-sha256": input.artifact.sha256,
       "x-amz-meta-axis-upload-id": input.uploadId,
     };
-    const url = new URL(`https://${this.accountId}.r2.cloudflarestorage.com/${this.bucketName}/${objectKey}`);
+    const url = new URL(`https://${this.accountId}.r2.cloudflarestorage.com/${signedPath}`);
     url.searchParams.set("X-Amz-Expires", String(ttlSeconds));
 
     const signed = await this.aws.sign(url, {
@@ -113,6 +123,13 @@ export class R2PresignedUploadBroker implements UploadBroker {
     const remainingSeconds = Math.max(0, Math.floor((sessionExpiresAt.getTime() - now.getTime()) / 1000));
     if (this.uploadUrlTtlSeconds === undefined) {
       return remainingSeconds;
+    }
+    if (
+      !Number.isFinite(this.uploadUrlTtlSeconds) ||
+      !Number.isInteger(this.uploadUrlTtlSeconds) ||
+      this.uploadUrlTtlSeconds <= 0
+    ) {
+      throw new ValidationError("UPLOAD_URL_TTL_SECONDS must be a positive integer");
     }
     return Math.min(remainingSeconds, this.uploadUrlTtlSeconds);
   }
