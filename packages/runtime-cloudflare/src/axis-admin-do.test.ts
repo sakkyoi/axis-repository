@@ -106,6 +106,12 @@ describe("AxisAdminDO", () => {
     );
   });
 
+  it("uses r2 upload backend when configured as an empty string", () => {
+    expect(() => createObject({ UPLOAD_BACKEND: "", R2_BUCKET_NAME: undefined })).toThrow(
+      "R2_BUCKET_NAME is required for AxisAdminDO",
+    );
+  });
+
   it("uses r2 upload backend when explicitly configured", () => {
     expect(() => createObject({ UPLOAD_BACKEND: "r2", R2_ACCESS_KEY_ID: undefined })).toThrow(
       "R2_ACCESS_KEY_ID is required for AxisAdminDO",
