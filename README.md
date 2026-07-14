@@ -18,17 +18,37 @@ Copy the example Wrangler configuration:
 cp packages/runtime-cloudflare/wrangler.example.toml packages/runtime-cloudflare/wrangler.toml
 ```
 
-For the Durable Object-backed local worker, `ADMIN_TOKEN` and `TOKEN_HASH_PEPPER` must be non-empty. Use Wrangler secrets for deploys, or local dev vars according to your Wrangler workflow. Do not commit secrets or a committed secrets file.
+For the Durable Object-backed local worker, local Wrangler variables belong in
+`packages/runtime-cloudflare/.dev.vars`. This file contains local secrets and
+must not be committed.
 
-For presigned R2 uploads, the Durable Object-backed worker also needs:
+For pure local development without R2, use memory upload mode:
 
 ```text
-AXIS_OBJECTS
-R2_ACCOUNT_ID
-R2_BUCKET_NAME
-R2_ACCESS_KEY_ID
-R2_SECRET_ACCESS_KEY
+ADMIN_TOKEN=admin-local-token
+TOKEN_HASH_PEPPER=local-dev-pepper
+UPLOAD_BACKEND=memory
 ```
+
+Warning: `UPLOAD_BACKEND=memory` is only for local development. It does not
+store uploaded bytes, and upload verification only echoes/uses the publish
+session's expected artifact metadata. Do not use it as a deployed artifact
+storage backend.
+
+For real R2 uploads in local development, use R2 upload mode:
+
+```text
+ADMIN_TOKEN=admin-local-token
+TOKEN_HASH_PEPPER=local-dev-pepper
+UPLOAD_BACKEND=r2
+R2_ACCOUNT_ID=<account-id>
+R2_BUCKET_NAME=axis-repository
+R2_ACCESS_KEY_ID=<r2-access-key-id>
+R2_SECRET_ACCESS_KEY=<r2-secret-access-key>
+UPLOAD_URL_TTL_SECONDS=900
+```
+
+When `UPLOAD_BACKEND` is unset, Axis uses `r2`.
 
 After creating a publish session, upload each artifact with the returned
 `PUT` URL and headers:
