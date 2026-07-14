@@ -154,5 +154,22 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     });
     return jsonResponse(session, { status: 201 });
   }
+  const verifyUploadMatch = url.pathname.match(
+    /^\/api\/publish-sessions\/([^/]+)\/uploads\/([^/]+)\/verify$/,
+  );
+  if (verifyUploadMatch && request.method === "POST") {
+    const [, sessionId, uploadId] = verifyUploadMatch;
+    if (!sessionId || !uploadId) {
+      throw new NotFoundError();
+    }
+    const secret = requireBearer(request);
+    const principal = await dependencies.publishTokenService.verify(secret);
+    const upload = await dependencies.publishSessionService.verifyUpload({
+      sessionId,
+      uploadId,
+      principal,
+    });
+    return jsonResponse({ upload });
+  }
   throw new NotFoundError();
 }

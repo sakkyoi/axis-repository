@@ -177,6 +177,88 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("verifies an uploaded artifact for a publish session", async () => {
+    const app = createApp();
+
+    await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+      }),
+    );
+
+    const tokenResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+        }),
+      }),
+    );
+    const tokenBody = (await tokenResponse.json()) as { secret: string };
+
+    const sessionResponse = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [
+            {
+              filename: "myapp_1.2.3_amd64.deb",
+              size: 1234,
+              sha256: "a".repeat(64),
+              contentType: "application/vnd.debian.binary-package",
+              metadata: {},
+            },
+          ],
+        }),
+      }),
+    );
+    const session = (await sessionResponse.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string; objectKey: string }>;
+    };
+
+    const uploadId = session.uploads[0]?.uploadId;
+    expect(uploadId).toBeTruthy();
+
+    const verifyResponse = await app.fetch(
+      new Request(
+        `https://axis.example/api/publish-sessions/${session.id}/uploads/${uploadId}/verify`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${tokenBody.secret}` },
+        },
+      ),
+    );
+
+    expect(verifyResponse.status).toBe(200);
+    await expect(verifyResponse.json()).resolves.toEqual({
+      upload: {
+        uploadId,
+        objectKey: session.uploads[0]?.objectKey,
+        size: 1234,
+        sha256: "a".repeat(64),
+      },
+    });
+  });
+
   it("does not expose publish token hashes when listing publish tokens", async () => {
     const app = createApp();
 
