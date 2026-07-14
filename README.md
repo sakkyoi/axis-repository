@@ -50,8 +50,37 @@ UPLOAD_URL_TTL_SECONDS=900
 
 When `UPLOAD_BACKEND` is unset, Axis uses `r2`.
 
-After creating a publish session, upload each artifact with the returned
-`PUT` URL and headers:
+Start the local worker after choosing one of the `.dev.vars` blocks above:
+
+```bash
+pnpm dlx wrangler@latest dev --config packages/runtime-cloudflare/wrangler.toml --local
+```
+
+The `--local` flag keeps Worker bindings local. This is sufficient for
+`UPLOAD_BACKEND=memory`. With `UPLOAD_BACKEND=r2`, Axis signs presigned `PUT`
+URLs for real R2 using the `R2_*` credentials above, so end-to-end verification
+requires the Worker `AXIS_OBJECTS` binding to read the same R2 bucket that
+receives the upload. If Wrangler provides local R2 bindings, `verify` may not
+see the real uploaded object.
+
+Create a repository with an explicit local admin token:
+
+```bash
+curl -X POST http://localhost:8787/admin/repositories \
+  -H "Authorization: Bearer admin-local-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"debian-internal","ecosystem":"apt"}'
+```
+
+After creating a publish token and publish session, continue according to the
+selected upload backend.
+
+For `UPLOAD_BACKEND=memory`, the returned upload URL is synthetic. Do not `PUT`
+artifact bytes to it; `verify` uses the publish session's expected metadata and
+does not read uploaded bytes.
+
+For `UPLOAD_BACKEND=r2`, upload each artifact with the returned `PUT` URL and
+headers:
 
 ```bash
 curl -X PUT "<presigned-url>" \
@@ -66,21 +95,6 @@ Then verify the uploaded object:
 ```bash
 curl -X POST "http://localhost:8787/api/publish-sessions/<session-id>/uploads/<upload-id>/verify" \
   -H "Authorization: Bearer <publish-token>"
-```
-
-Start the local worker:
-
-```bash
-pnpm dlx wrangler@latest dev --config packages/runtime-cloudflare/wrangler.toml --local
-```
-
-Create a repository with an explicit local admin token:
-
-```bash
-curl -X POST http://localhost:8787/admin/repositories \
-  -H "Authorization: Bearer admin-local-token" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"debian-internal","ecosystem":"apt"}'
 ```
 
 `packages/runtime-cloudflare/wrangler.toml` is local-only and should not be committed.
