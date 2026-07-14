@@ -47,17 +47,33 @@ class FakeDurableStorage implements DurableStorage {
   }
 }
 
+class FakeR2Bucket {
+  async head(): Promise<null> {
+    return null;
+  }
+}
+
 describe("worker entrypoint", () => {
   it("proxies API requests to the configured AxisAdminDO", async () => {
     const object = new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, {
+      AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
       ADMIN_TOKEN: "admin",
       TOKEN_HASH_PEPPER: "pepper",
+      R2_ACCOUNT_ID: "account123",
+      R2_BUCKET_NAME: "axis-repository",
+      R2_ACCESS_KEY_ID: "access",
+      R2_SECRET_ACCESS_KEY: "secret",
     });
     const namespace = new FakeNamespace(object);
     const env = {
       AXIS_ADMIN: namespace,
+      AXIS_OBJECTS: new FakeR2Bucket(),
       ADMIN_TOKEN: "admin",
       TOKEN_HASH_PEPPER: "pepper",
+      R2_ACCOUNT_ID: "account123",
+      R2_BUCKET_NAME: "axis-repository",
+      R2_ACCESS_KEY_ID: "access",
+      R2_SECRET_ACCESS_KEY: "secret",
     } as unknown as AxisEnv;
 
     const response = await worker.fetch(
