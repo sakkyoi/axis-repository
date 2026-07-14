@@ -98,6 +98,44 @@ describe("PublishSessionService", () => {
     expect(await state.publishSessions.get("pub_fixed")).toEqual(session);
   });
 
+  it("stores nested artifact metadata independently from caller mutations", async () => {
+    const state = await createStateWithRepository();
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+    const nestedMetadata = {
+      checks: ["lint", "sign"],
+      package: {
+        maintainer: "release@example.com",
+        tags: ["stable"],
+      },
+    };
+
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [
+        {
+          ...artifact,
+          metadata: nestedMetadata,
+        },
+      ],
+    });
+
+    nestedMetadata.checks.push("tampered");
+    nestedMetadata.package.maintainer = "tampered@example.com";
+    nestedMetadata.package.tags.push("tampered");
+
+    const stored = await state.publishSessions.get("pub_fixed");
+
+    expect(stored?.artifacts[0]?.metadata).toEqual({
+      checks: ["lint", "sign"],
+      package: {
+        maintainer: "release@example.com",
+        tags: ["stable"],
+      },
+    });
+  });
+
   it("verifies an uploaded object for a created session", async () => {
     const state = await createStateWithRepository();
     const service = new PublishSessionService({ state, uploadBroker, clock, randomId });

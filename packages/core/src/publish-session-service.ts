@@ -29,6 +29,28 @@ export interface PublishSessionServiceOptions {
   ttlSeconds?: number;
 }
 
+function cloneMetadataValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(cloneMetadataValue);
+  }
+  if (isPlainRecord(value)) {
+    return cloneMetadataRecord(value);
+  }
+  return value;
+}
+
+function cloneMetadataRecord(metadata: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(metadata).map(([key, value]) => [key, cloneMetadataValue(value)]));
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
 export class PublishSessionService {
   private readonly ttlSeconds: number;
 
@@ -79,7 +101,7 @@ export class PublishSessionService {
       requestedBy: input.principal,
       artifacts: input.artifacts.map((artifact) => ({
         ...artifact,
-        metadata: { ...artifact.metadata },
+        metadata: cloneMetadataRecord(artifact.metadata),
       })),
       uploads,
       createdAt: now.toISOString(),
