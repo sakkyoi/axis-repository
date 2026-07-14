@@ -121,6 +121,9 @@ export class R2PresignedUploadBroker implements UploadBroker {
 
   private getUploadTtlSeconds(now: Date, sessionExpiresAt: Date): number {
     const remainingSeconds = Math.max(0, Math.floor((sessionExpiresAt.getTime() - now.getTime()) / 1000));
+    if (remainingSeconds < 1) {
+      throw new ValidationError("Upload target expiry has passed");
+    }
     if (this.uploadUrlTtlSeconds === undefined) {
       return remainingSeconds;
     }

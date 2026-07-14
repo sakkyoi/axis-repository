@@ -130,6 +130,19 @@ describe("R2PresignedUploadBroker", () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it("rejects upload target expiry with less than one effective second remaining", async () => {
+    const { broker } = createBroker();
+
+    await expect(
+      broker.createUploadTarget({
+        sessionId: "pub_1",
+        uploadId: "upl_1",
+        artifact,
+        expiresAt: new Date("2026-07-14T00:00:00.999Z"),
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])("rejects invalid upload URL ttl %s", async (ttl) => {
     const { broker } = createBroker(new FakeR2Bucket(), ttl);
 
