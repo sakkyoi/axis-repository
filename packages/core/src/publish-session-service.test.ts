@@ -533,6 +533,98 @@ describe("PublishSessionService", () => {
     });
   });
 
+  it("finalizes using the latest verified upload after re-verification", async () => {
+    const backingState = await createStateWithRepository();
+    const { publisher, calls } = createPublisher();
+    let verifyCalls = 0;
+    const reverifyUploadBroker: UploadBroker = {
+      ...uploadBroker,
+      verifyUpload: async ({ target, expected }) => {
+        verifyCalls += 1;
+        return {
+          uploadId: target.uploadId,
+          objectKey: verifyCalls === 1 ? target.objectKey : `${target.objectKey}.rev2`,
+          size: expected.size,
+          sha256: expected.sha256,
+        };
+      },
+    };
+    const setupService = new PublishSessionService({
+      state: backingState,
+      uploadBroker: reverifyUploadBroker,
+      artifactPublisher: publisher,
+      clock,
+      randomId,
+    });
+    await setupService.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await setupService.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    let reverified = false;
+    const reverifyService = new PublishSessionService({
+      state: backingState,
+      uploadBroker: reverifyUploadBroker,
+      artifactPublisher: publisher,
+      clock,
+      randomId,
+    });
+    const state: StateStore = {
+      repositories: {
+        ...backingState.repositories,
+        getByName: async (name: string) => {
+          if (!reverified) {
+            reverified = true;
+            await reverifyService.verifyUpload({
+              sessionId: "pub_fixed",
+              uploadId: "upl_fixed",
+              principal,
+            });
+          }
+          return backingState.repositories.getByName(name);
+        },
+      },
+      publishTokens: backingState.publishTokens,
+      publishSessions: backingState.publishSessions,
+    };
+    const service = new PublishSessionService({
+      state,
+      uploadBroker: reverifyUploadBroker,
+      artifactPublisher: publisher,
+      clock,
+      randomId,
+    });
+
+    await expect(
+      service.finalize({
+        sessionId: "pub_fixed",
+        principal,
+      }),
+    ).resolves.toMatchObject({
+      session: { status: "finalized" },
+    });
+
+    const latestObjectKey = "_staging/uploads/pub_fixed/upl_fixed/myapp_1.2.3_amd64.deb.rev2";
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.artifacts[0]?.verified.objectKey).toBe(latestObjectKey);
+    await expect(backingState.publishSessions.get("pub_fixed")).resolves.toMatchObject({
+      status: "finalized",
+      verifiedUploads: [
+        expect.objectContaining({
+          uploadId: "upl_fixed",
+          objectKey: latestObjectKey,
+        }),
+      ],
+    });
+  });
+
   it("rejects stale upload verification without reopening a finalized session", async () => {
     const state = await createStateWithRepository();
     const { publisher } = createPublisher();

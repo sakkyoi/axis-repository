@@ -238,9 +238,22 @@ export class PublishSessionService {
       throw new ValidationError("Artifact publisher is not configured");
     }
 
-    const verifiedUploads = verifiedUploadsFor(session);
-    const artifacts = session.uploads.map((upload, index) => {
-      const artifact = session.artifacts[index];
+    const finalizingSession = await this.options.state.publishSessions.update(session.id, (current) => {
+      if (current.status !== "ready") {
+        throw new ValidationError(`Publish session is not ready: ${current.status}`);
+      }
+      return {
+        ...current,
+        status: "finalizing",
+      };
+    });
+    if (!finalizingSession) {
+      throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
+    }
+
+    const verifiedUploads = verifiedUploadsFor(finalizingSession);
+    const artifacts = finalizingSession.uploads.map((upload, index) => {
+      const artifact = finalizingSession.artifacts[index];
       const verifiedUpload = verifiedUploads.find((candidate) => candidate.uploadId === upload.uploadId);
       if (!artifact || !verifiedUpload) {
         throw new ValidationError("All uploads must be verified before finalize");
@@ -251,20 +264,6 @@ export class PublishSessionService {
         verified: verifiedUpload,
       };
     });
-
-    const finalizingSession: PublishSession = {
-      ...session,
-      status: "finalizing",
-    };
-    const claimed = await this.options.state.publishSessions.compareAndSetStatus(
-      session.id,
-      "ready",
-      finalizingSession,
-    );
-    if (!claimed) {
-      const latestSession = await this.options.state.publishSessions.get(session.id);
-      throw new ValidationError(`Publish session is not ready: ${latestSession?.status ?? "missing"}`);
-    }
 
     let result: PublishResult;
     try {
