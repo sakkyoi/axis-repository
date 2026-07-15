@@ -1,6 +1,10 @@
 import type { PublishSession, PublishTokenRecord, Repository } from "./domain";
 import type { StateStore } from "./ports";
 
+function clonePublishSession(session: PublishSession): PublishSession {
+  return JSON.parse(JSON.stringify(session)) as PublishSession;
+}
+
 export class MemoryStateStore implements StateStore {
   private readonly repositoryByName = new Map<string, Repository>();
   private readonly publishSessionById = new Map<string, PublishSession>();
@@ -27,6 +31,18 @@ export class MemoryStateStore implements StateStore {
     },
     save: async (session: PublishSession): Promise<void> => {
       this.publishSessionById.set(session.id, session);
+    },
+    update: async (
+      id: string,
+      updater: (current: PublishSession) => PublishSession,
+    ): Promise<PublishSession | null> => {
+      const current = this.publishSessionById.get(id);
+      if (!current) {
+        return null;
+      }
+      const updated = updater(clonePublishSession(current));
+      this.publishSessionById.set(id, updated);
+      return updated;
     },
     compareAndSetStatus: async (
       id: string,

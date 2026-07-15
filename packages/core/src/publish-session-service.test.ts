@@ -291,6 +291,79 @@ describe("PublishSessionService", () => {
     expect(second.session.verifiedUploads).toEqual([first.upload, second.upload]);
   });
 
+  it("merges concurrent upload verification results from the latest stored session", async () => {
+    const state = await createStateWithRepository();
+    let uploadCount = 0;
+    const sequentialRandomId: RandomId = {
+      create: (prefix: string) => {
+        if (prefix === "pub") {
+          return "pub_fixed";
+        }
+        if (prefix === "upl") {
+          uploadCount += 1;
+          return `upl_${uploadCount}`;
+        }
+        return `${prefix}_fixed`;
+      },
+    };
+    let enteredVerify = 0;
+    const bothVerifyCallsEntered = deferred();
+    const releaseVerifyCalls = deferred();
+    const blockingUploadBroker: UploadBroker = {
+      ...uploadBroker,
+      verifyUpload: async ({ target, expected }) => {
+        enteredVerify += 1;
+        if (enteredVerify === 2) {
+          bothVerifyCallsEntered.resolve();
+        }
+        await releaseVerifyCalls.promise;
+        return uploadBroker.verifyUpload({ target, expected });
+      },
+    };
+    const service = new PublishSessionService({
+      state,
+      uploadBroker: blockingUploadBroker,
+      clock,
+      randomId: sequentialRandomId,
+    });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [
+        artifact,
+        {
+          ...artifact,
+          filename: "myapp-dbgsym_1.2.3_amd64.deb",
+          sha256: "b".repeat(64),
+        },
+      ],
+    });
+
+    const firstVerify = service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_1",
+      principal,
+    });
+    const secondVerify = service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_2",
+      principal,
+    });
+    await bothVerifyCallsEntered.promise;
+
+    releaseVerifyCalls.resolve();
+    const [first, second] = await Promise.all([firstVerify, secondVerify]);
+    const stored = await state.publishSessions.get("pub_fixed");
+
+    expect(first.upload.uploadId).toBe("upl_1");
+    expect(second.upload.uploadId).toBe("upl_2");
+    expect(stored?.status).toBe("ready");
+    expect(stored?.verifiedUploads).toEqual([first.upload, second.upload]);
+    expect(first.session.verifiedUploads).toContainEqual(first.upload);
+    expect(second.session.verifiedUploads).toContainEqual(second.upload);
+  });
+
   it("replaces an existing verified upload record when re-verifying", async () => {
     const state = await createStateWithRepository();
     const service = new PublishSessionService({ state, uploadBroker, clock, randomId });

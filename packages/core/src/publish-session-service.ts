@@ -76,18 +76,6 @@ function normalizeOpenStatus(status: PublishSession["status"] | "created"): Publ
   return status === "created" ? "pending_uploads" : status;
 }
 
-function isPublishSessionStatus(status: string): status is PublishSession["status"] {
-  return (
-    status === "pending_uploads" ||
-    status === "ready" ||
-    status === "finalizing" ||
-    status === "finalized" ||
-    status === "failed" ||
-    status === "aborted" ||
-    status === "expired"
-  );
-}
-
 function allUploadsVerified(session: PublishSession, verifiedUploads: VerifiedUpload[]): boolean {
   return session.uploads.every((upload) =>
     verifiedUploads.some((verifiedUpload) => verifiedUpload.uploadId === upload.uploadId),
@@ -197,29 +185,26 @@ export class PublishSessionService {
       ...uploaded,
       verifiedAt: this.options.clock.now().toISOString(),
     };
-    const verifiedUploads = [
-      ...verifiedUploadsFor(session).filter((verifiedUpload) => verifiedUpload.uploadId !== upload.uploadId),
-      upload,
-    ];
-    const updatedSession: PublishSession = {
-      ...session,
-      status: allUploadsVerified(session, verifiedUploads) ? "ready" : "pending_uploads",
-      verifiedUploads,
-    };
 
-    const storedStatus = session.status as PublishSession["status"] | "created";
-    if (isPublishSessionStatus(storedStatus)) {
-      const saved = await this.options.state.publishSessions.compareAndSetStatus(
-        session.id,
-        storedStatus,
-        updatedSession,
+    const updatedSession = await this.options.state.publishSessions.update(session.id, (current) => {
+      const currentOpenStatus = normalizeOpenStatus(
+        current.status as PublishSession["status"] | "created",
       );
-      if (!saved) {
-        const latestSession = await this.options.state.publishSessions.get(session.id);
-        throw new ValidationError(`Publish session is not open: ${latestSession?.status ?? "missing"}`);
+      if (currentOpenStatus !== "pending_uploads" && currentOpenStatus !== "ready") {
+        throw new ValidationError(`Publish session is not open: ${current.status}`);
       }
-    } else {
-      await this.options.state.publishSessions.save(updatedSession);
+      const verifiedUploads = [
+        ...verifiedUploadsFor(current).filter((verifiedUpload) => verifiedUpload.uploadId !== upload.uploadId),
+        upload,
+      ];
+      return {
+        ...current,
+        status: allUploadsVerified(current, verifiedUploads) ? "ready" : "pending_uploads",
+        verifiedUploads,
+      };
+    });
+    if (!updatedSession) {
+      throw new NotFoundError(`Publish session not found: ${session.id}`);
     }
 
     return {

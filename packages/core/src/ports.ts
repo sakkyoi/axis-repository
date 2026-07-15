@@ -56,6 +56,10 @@ export interface RepositoryStore {
 export interface PublishSessionStore {
   get(id: string): Promise<PublishSession | null>;
   save(session: PublishSession): Promise<void>;
+  update(
+    id: string,
+    updater: (current: PublishSession) => PublishSession,
+  ): Promise<PublishSession | null>;
   compareAndSetStatus(
     id: string,
     expectedStatus: PublishSession["status"],

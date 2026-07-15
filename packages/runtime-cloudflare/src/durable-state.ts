@@ -17,6 +17,10 @@ const sessionKey = (id: string) => `publish-session:${id}`;
 const tokenKey = (id: string) => `publish-token:${id}`;
 const tokenNameKey = (name: string) => `publish-token-name:${name}`;
 
+function clonePublishSession(session: PublishSession): PublishSession {
+  return JSON.parse(JSON.stringify(session)) as PublishSession;
+}
+
 export class DurableStateStore implements StateStore {
   private sessionMutation = Promise.resolve();
 
@@ -52,6 +56,20 @@ export class DurableStateStore implements StateStore {
     },
     save: async (session: PublishSession): Promise<void> => {
       await this.storage.put(sessionKey(session.id), session);
+    },
+    update: async (
+      id: string,
+      updater: (current: PublishSession) => PublishSession,
+    ): Promise<PublishSession | null> => {
+      return this.withSessionMutation(async () => {
+        const current = (await this.storage.get<PublishSession>(sessionKey(id))) ?? null;
+        if (!current) {
+          return null;
+        }
+        const updated = updater(clonePublishSession(current));
+        await this.storage.put(sessionKey(id), updated);
+        return updated;
+      });
     },
     compareAndSetStatus: async (
       id: string,

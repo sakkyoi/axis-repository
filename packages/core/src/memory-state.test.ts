@@ -102,4 +102,34 @@ describe("MemoryStateStore", () => {
     await expect(state.publishSessions.get("pub_1")).resolves.toEqual(original);
     await expect(state.publishSessions.get("pub_2")).resolves.toBeNull();
   });
+
+  it("updates publish sessions from the latest value and does not save when the updater throws", async () => {
+    const state = new MemoryStateStore();
+    await state.publishSessions.save(session({ status: "pending_uploads" }));
+
+    await state.publishSessions.save(session({ status: "ready" }));
+    const updated = await state.publishSessions.update("pub_1", (current) => ({
+      ...current,
+      status: "finalizing",
+    }));
+
+    expect(updated).toEqual(session({ status: "finalizing" }));
+    await expect(state.publishSessions.get("pub_1")).resolves.toEqual(
+      session({ status: "finalizing" }),
+    );
+
+    await expect(
+      state.publishSessions.update("pub_1", (current) => {
+        current.status = "failed";
+        current.failure = {
+          message: "partial",
+          failedAt: "2026-07-12T00:00:00.000Z",
+        };
+        throw new Error(`stop before saving ${current.status}`);
+      }),
+    ).rejects.toThrow("stop before saving failed");
+    await expect(state.publishSessions.get("pub_1")).resolves.toEqual(
+      session({ status: "finalizing" }),
+    );
+  });
 });

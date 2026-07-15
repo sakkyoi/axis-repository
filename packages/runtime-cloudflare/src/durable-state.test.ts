@@ -136,6 +136,36 @@ describe("DurableStateStore", () => {
     await expect(state.publishSessions.get("pub_2")).resolves.toBeNull();
   });
 
+  it("updates publish sessions from the latest value and does not save when the updater throws", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    await state.publishSessions.save(publishSession({ status: "pending_uploads" }));
+
+    await state.publishSessions.save(publishSession({ status: "ready" }));
+    const updated = await state.publishSessions.update("pub_1", (current) => ({
+      ...current,
+      status: "finalizing",
+    }));
+
+    expect(updated).toEqual(publishSession({ status: "finalizing" }));
+    await expect(state.publishSessions.get("pub_1")).resolves.toEqual(
+      publishSession({ status: "finalizing" }),
+    );
+
+    await expect(
+      state.publishSessions.update("pub_1", (current) => {
+        current.status = "failed";
+        current.failure = {
+          message: "partial",
+          failedAt: "2026-07-14T00:00:00.000Z",
+        };
+        throw new Error(`stop before saving ${current.status}`);
+      }),
+    ).rejects.toThrow("stop before saving failed");
+    await expect(state.publishSessions.get("pub_1")).resolves.toEqual(
+      publishSession({ status: "finalizing" }),
+    );
+  });
+
   it("keeps publish token name and id indexes consistent", async () => {
     const state = new DurableStateStore(new FakeDurableStorage());
     const original: PublishTokenRecord = {
