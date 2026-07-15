@@ -6,6 +6,8 @@ import type {
   Repository,
   TokenPrincipal,
   PublishArtifactRequest,
+  PublishArtifactsInput,
+  PublishResult,
 } from "./domain";
 
 export interface Clock {
@@ -35,6 +37,14 @@ export interface UploadBroker {
   }): Promise<UploadedObject>;
 
   abortUpload(input: { target: UploadTarget }): Promise<void>;
+}
+
+export interface ArtifactPublisher {
+  publish(input: PublishArtifactsInput): Promise<PublishResult>;
+}
+
+export interface RepositoryObjectStore {
+  putJson(key: string, value: unknown): Promise<void>;
 }
 
 export interface RepositoryStore {

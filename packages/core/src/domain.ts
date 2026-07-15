@@ -61,7 +61,7 @@ export interface PublishSession {
   createdAt: string;
   expiresAt: string;
   finalizedAt?: string;
-  failure?: string;
+  failure?: PublishFailure;
   publishResult?: PublishResult;
 }
 
@@ -87,18 +87,18 @@ export interface VerifiedUpload extends UploadedObject {
 }
 
 export interface PublishedObject {
-  artifact: PublishArtifactRequest;
-  upload: VerifiedUpload;
-  objectKey: string;
-  size: number;
-  sha256: string;
+  key: string;
+  contentType: string;
 }
 
 export interface PublishResult {
-  repositoryName: string;
-  ecosystem: Ecosystem;
   objects: PublishedObject[];
   publishedAt: string;
+}
+
+export interface PublishFailure {
+  message: string;
+  failedAt: string;
 }
 
 export interface PublishedArtifactInput {
@@ -107,6 +107,7 @@ export interface PublishedArtifactInput {
 }
 
 export interface PublishArtifactsInput {
+  repository: Repository;
   session: PublishSession;
   artifacts: PublishedArtifactInput[];
 }

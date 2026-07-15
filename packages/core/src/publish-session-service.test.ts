@@ -6,6 +6,7 @@ import {
   PublishSessionService,
   ValidationError,
   type Clock,
+  type ArtifactPublisher,
   type PublishArtifactRequest,
   type RandomId,
   type TokenPrincipal,
@@ -62,6 +63,27 @@ const uploadBroker: UploadBroker = {
   }),
   abortUpload: async () => {},
 };
+
+function createPublisher(): { publisher: ArtifactPublisher; calls: Parameters<ArtifactPublisher["publish"]>[0][] } {
+  const calls: Parameters<ArtifactPublisher["publish"]>[0][] = [];
+  return {
+    calls,
+    publisher: {
+      publish: async (input) => {
+        calls.push(input);
+        return {
+          publishedAt: "2026-07-12T00:00:00.000Z",
+          objects: [
+            {
+              key: `repositories/${input.repository.name}/publishes/${input.session.id}.json`,
+              contentType: "application/json; charset=utf-8",
+            },
+          ],
+        };
+      },
+    },
+  };
+}
 
 async function createStateWithRepository(): Promise<MemoryStateStore> {
   const state = new MemoryStateStore();
@@ -348,6 +370,147 @@ describe("PublishSessionService", () => {
         principal,
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("rejects finalize before every upload is verified", async () => {
+    const state = await createStateWithRepository();
+    const { publisher } = createPublisher();
+    const service = new PublishSessionService({ state, uploadBroker, artifactPublisher: publisher, clock, randomId });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+
+    await expect(
+      service.finalize({
+        sessionId: "pub_fixed",
+        principal,
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("finalizes a ready session and stores the publish result", async () => {
+    const state = await createStateWithRepository();
+    const { publisher, calls } = createPublisher();
+    const service = new PublishSessionService({ state, uploadBroker, artifactPublisher: publisher, clock, randomId });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    const result = await service.finalize({
+      sessionId: "pub_fixed",
+      principal,
+    });
+
+    const expectedPublishResult = {
+      publishedAt: "2026-07-12T00:00:00.000Z",
+      objects: [
+        {
+          key: "repositories/debian-internal/publishes/pub_fixed.json",
+          contentType: "application/json; charset=utf-8",
+        },
+      ],
+    };
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      repository: { name: "debian-internal" },
+      session: { id: "pub_fixed", status: "finalizing" },
+      artifacts: [
+        {
+          artifact,
+          upload: {
+            uploadId: "upl_fixed",
+            objectKey: "_staging/uploads/pub_fixed/upl_fixed/myapp_1.2.3_amd64.deb",
+            size: 1234,
+            sha256: "a".repeat(64),
+            verifiedAt: "2026-07-12T00:00:00.000Z",
+          },
+        },
+      ],
+    });
+    expect(result.result).toEqual(expectedPublishResult);
+    expect(result.session.status).toBe("finalized");
+    expect(result.session.finalizedAt).toBe("2026-07-12T00:00:00.000Z");
+    expect(result.session.publishResult).toEqual(expectedPublishResult);
+    await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
+      status: "finalized",
+      finalizedAt: "2026-07-12T00:00:00.000Z",
+      publishResult: expectedPublishResult,
+    });
+  });
+
+  it("marks the session failed when the publisher throws", async () => {
+    const state = await createStateWithRepository();
+    const service = new PublishSessionService({
+      state,
+      uploadBroker,
+      artifactPublisher: {
+        publish: async () => {
+          throw new Error("write failed");
+        },
+      },
+      clock,
+      randomId,
+    });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    await expect(
+      service.finalize({
+        sessionId: "pub_fixed",
+        principal,
+      }),
+    ).rejects.toThrow("write failed");
+    await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
+      status: "failed",
+      failure: {
+        message: "write failed",
+        failedAt: "2026-07-12T00:00:00.000Z",
+      },
+    });
+  });
+
+  it("rejects finalize when the token is not scoped to the repository", async () => {
+    const state = await createStateWithRepository();
+    const { publisher } = createPublisher();
+    const service = new PublishSessionService({ state, uploadBroker, artifactPublisher: publisher, clock, randomId });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    await expect(
+      service.finalize({
+        sessionId: "pub_fixed",
+        principal: { ...principal, repositories: ["other"] },
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("rejects publish when token is not scoped to repository", async () => {

@@ -1,12 +1,13 @@
 import type {
   Ecosystem,
   PublishArtifactRequest,
+  PublishResult,
   PublishSession,
   TokenPrincipal,
   VerifiedUpload,
 } from "./domain";
 import { ForbiddenError, NotFoundError, ValidationError } from "./errors";
-import type { Clock, RandomId, StateStore, UploadBroker } from "./ports";
+import type { ArtifactPublisher, Clock, RandomId, StateStore, UploadBroker } from "./ports";
 
 export interface CreatePublishSessionInput {
   repositoryName: string;
@@ -26,9 +27,20 @@ export interface VerifyPublishUploadResult {
   session: PublishSession;
 }
 
+export interface FinalizePublishSessionInput {
+  sessionId: string;
+  principal: TokenPrincipal;
+}
+
+export interface FinalizePublishSessionResult {
+  session: PublishSession;
+  result: PublishResult;
+}
+
 export interface PublishSessionServiceOptions {
   state: StateStore;
   uploadBroker: UploadBroker;
+  artifactPublisher?: ArtifactPublisher;
   clock: Clock;
   randomId: RandomId;
   ttlSeconds?: number;
@@ -68,6 +80,10 @@ function allUploadsVerified(session: PublishSession, verifiedUploads: VerifiedUp
   return session.uploads.every((upload) =>
     verifiedUploads.some((verifiedUpload) => verifiedUpload.uploadId === upload.uploadId),
   );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export class PublishSessionService {
@@ -185,5 +201,81 @@ export class PublishSessionService {
       upload,
       session: updatedSession,
     };
+  }
+
+  async finalize(input: FinalizePublishSessionInput): Promise<FinalizePublishSessionResult> {
+    const session = await this.options.state.publishSessions.get(input.sessionId);
+    if (!session) {
+      throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
+    }
+    if (!input.principal.permissions.includes("publish")) {
+      throw new ForbiddenError("Publish permission is required");
+    }
+    if (!input.principal.repositories.includes(session.repositoryName)) {
+      throw new ForbiddenError(`Token is not scoped to repository: ${session.repositoryName}`);
+    }
+    if (session.status !== "ready") {
+      throw new ValidationError(`Publish session is not ready: ${session.status}`);
+    }
+
+    const repository = await this.options.state.repositories.getByName(session.repositoryName);
+    if (!repository) {
+      throw new NotFoundError(`Repository not found: ${session.repositoryName}`);
+    }
+
+    const artifactPublisher = this.options.artifactPublisher;
+    if (!artifactPublisher) {
+      throw new ValidationError("Artifact publisher is not configured");
+    }
+
+    const verifiedUploads = verifiedUploadsFor(session);
+    const artifacts = session.uploads.map((upload, index) => {
+      const artifact = session.artifacts[index];
+      const verifiedUpload = verifiedUploads.find((candidate) => candidate.uploadId === upload.uploadId);
+      if (!artifact || !verifiedUpload) {
+        throw new ValidationError("All uploads must be verified before finalize");
+      }
+      return {
+        artifact,
+        upload: verifiedUpload,
+      };
+    });
+
+    const finalizingSession: PublishSession = {
+      ...session,
+      status: "finalizing",
+    };
+    await this.options.state.publishSessions.save(finalizingSession);
+
+    try {
+      const result = await artifactPublisher.publish({
+        repository,
+        session: finalizingSession,
+        artifacts,
+      });
+      const finalizedSession: PublishSession = {
+        ...finalizingSession,
+        status: "finalized",
+        finalizedAt: this.options.clock.now().toISOString(),
+        publishResult: result,
+      };
+      await this.options.state.publishSessions.save(finalizedSession);
+
+      return {
+        session: finalizedSession,
+        result,
+      };
+    } catch (error) {
+      const failedSession: PublishSession = {
+        ...finalizingSession,
+        status: "failed",
+        failure: {
+          message: errorMessage(error),
+          failedAt: this.options.clock.now().toISOString(),
+        },
+      };
+      await this.options.state.publishSessions.save(failedSession);
+      throw error;
+    }
   }
 }
