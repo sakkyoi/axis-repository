@@ -42,6 +42,26 @@ const repository: Repository = {
   updatedAt: "2026-07-14T00:00:00.000Z",
 };
 
+const publishSession = (overrides: Partial<PublishSession>): PublishSession => ({
+  id: "pub_1",
+  repositoryName: "debian-internal",
+  ecosystem: "apt",
+  status: "ready",
+  requestedBy: {
+    tokenId: "ptok_1",
+    name: "ci",
+    permissions: ["publish"],
+    repositories: ["debian-internal"],
+    ecosystemScopes: {},
+  },
+  artifacts: [],
+  uploads: [],
+  verifiedUploads: [],
+  createdAt: "2026-07-14T00:00:00.000Z",
+  expiresAt: "2026-07-14T00:15:00.000Z",
+  ...overrides,
+});
+
 describe("DurableStateStore", () => {
   it("persists repositories by name and lists them sorted", async () => {
     const storage = new FakeDurableStorage();
@@ -65,28 +85,38 @@ describe("DurableStateStore", () => {
 
   it("persists publish sessions by id", async () => {
     const state = new DurableStateStore(new FakeDurableStorage());
-    const session: PublishSession = {
-      id: "pub_1",
-      repositoryName: "debian-internal",
-      ecosystem: "apt",
-      status: "pending_uploads",
-      requestedBy: {
-        tokenId: "ptok_1",
-        name: "ci",
-        permissions: ["publish"],
-        repositories: ["debian-internal"],
-        ecosystemScopes: {},
-      },
-      artifacts: [],
-      uploads: [],
-      verifiedUploads: [],
-      createdAt: "2026-07-14T00:00:00.000Z",
-      expiresAt: "2026-07-14T00:15:00.000Z",
-    };
+    const session = publishSession({ status: "pending_uploads" });
 
     await state.publishSessions.save(session);
 
     await expect(state.publishSessions.get("pub_1")).resolves.toEqual(session);
+  });
+
+  it("compare-and-sets publish session status only when the expected status matches", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    await state.publishSessions.save(publishSession({ status: "ready" }));
+
+    await expect(
+      state.publishSessions.compareAndSetStatus(
+        "pub_1",
+        "ready",
+        publishSession({ status: "finalizing" }),
+      ),
+    ).resolves.toBe(true);
+    await expect(state.publishSessions.get("pub_1")).resolves.toMatchObject({
+      status: "finalizing",
+    });
+
+    await expect(
+      state.publishSessions.compareAndSetStatus(
+        "pub_1",
+        "ready",
+        publishSession({ status: "finalized" }),
+      ),
+    ).resolves.toBe(false);
+    await expect(state.publishSessions.get("pub_1")).resolves.toMatchObject({
+      status: "finalizing",
+    });
   });
 
   it("keeps publish token name and id indexes consistent", async () => {

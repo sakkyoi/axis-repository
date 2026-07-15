@@ -103,7 +103,8 @@ export interface PublishFailure {
 
 export interface PublishedArtifactInput {
   artifact: PublishArtifactRequest;
-  upload: VerifiedUpload;
+  upload: UploadTarget;
+  verified: VerifiedUpload;
 }
 
 export interface PublishArtifactsInput {

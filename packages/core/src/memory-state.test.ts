@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryStateStore, type PublishTokenRecord } from "./index";
+import { MemoryStateStore, type PublishSession, type PublishTokenRecord } from "./index";
 
 const token = (overrides: Partial<PublishTokenRecord>): PublishTokenRecord => ({
   id: "tok_1",
@@ -9,6 +9,26 @@ const token = (overrides: Partial<PublishTokenRecord>): PublishTokenRecord => ({
   repositories: ["debian-internal"],
   ecosystemScopes: {},
   createdAt: "2026-07-12T00:00:00.000Z",
+  ...overrides,
+});
+
+const session = (overrides: Partial<PublishSession>): PublishSession => ({
+  id: "pub_1",
+  repositoryName: "debian-internal",
+  ecosystem: "apt",
+  status: "ready",
+  requestedBy: {
+    tokenId: "tok_1",
+    name: "publish-token",
+    permissions: ["publish"],
+    repositories: ["debian-internal"],
+    ecosystemScopes: {},
+  },
+  artifacts: [],
+  uploads: [],
+  verifiedUploads: [],
+  createdAt: "2026-07-12T00:00:00.000Z",
+  expiresAt: "2026-07-12T00:15:00.000Z",
   ...overrides,
 });
 
@@ -37,5 +57,32 @@ describe("MemoryStateStore", () => {
       token({ id: "tok_2", name: "shared-name" }),
     );
     expect(await state.publishTokens.list()).toEqual([token({ id: "tok_2", name: "shared-name" })]);
+  });
+
+  it("compare-and-sets publish session status only when the expected status matches", async () => {
+    const state = new MemoryStateStore();
+    await state.publishSessions.save(session({ status: "ready" }));
+
+    await expect(
+      state.publishSessions.compareAndSetStatus(
+        "pub_1",
+        "ready",
+        session({ status: "finalizing" }),
+      ),
+    ).resolves.toBe(true);
+    await expect(state.publishSessions.get("pub_1")).resolves.toMatchObject({
+      status: "finalizing",
+    });
+
+    await expect(
+      state.publishSessions.compareAndSetStatus(
+        "pub_1",
+        "ready",
+        session({ status: "finalized" }),
+      ),
+    ).resolves.toBe(false);
+    await expect(state.publishSessions.get("pub_1")).resolves.toMatchObject({
+      status: "finalizing",
+    });
   });
 });

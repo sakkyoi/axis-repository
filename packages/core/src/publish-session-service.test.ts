@@ -8,7 +8,9 @@ import {
   type Clock,
   type ArtifactPublisher,
   type PublishArtifactRequest,
+  type PublishSession,
   type RandomId,
+  type StateStore,
   type TokenPrincipal,
   type UploadBroker,
 } from "./index";
@@ -428,13 +430,14 @@ describe("PublishSessionService", () => {
       artifacts: [
         {
           artifact,
-          upload: {
+          upload: expect.objectContaining({
             uploadId: "upl_fixed",
-            objectKey: "_staging/uploads/pub_fixed/upl_fixed/myapp_1.2.3_amd64.deb",
-            size: 1234,
-            sha256: "a".repeat(64),
+            method: "PUT",
+          }),
+          verified: expect.objectContaining({
+            uploadId: "upl_fixed",
             verifiedAt: "2026-07-12T00:00:00.000Z",
-          },
+          }),
         },
       ],
     });
@@ -487,6 +490,135 @@ describe("PublishSessionService", () => {
         failedAt: "2026-07-12T00:00:00.000Z",
       },
     });
+  });
+
+  it("allows only one concurrent finalize call to claim a ready session", async () => {
+    const backingState = await createStateWithRepository();
+    let finalizingSaveCalls = 0;
+    let releaseFinalizingSaves!: () => void;
+    const finalizingSaveBlocker = new Promise<void>((resolve) => {
+      releaseFinalizingSaves = resolve;
+    });
+    const state: StateStore = {
+      repositories: backingState.repositories,
+      publishTokens: backingState.publishTokens,
+      publishSessions: {
+        ...backingState.publishSessions,
+        save: async (session: PublishSession) => {
+          if (session.status === "finalizing") {
+            finalizingSaveCalls += 1;
+            await finalizingSaveBlocker;
+          }
+          await backingState.publishSessions.save(session);
+        },
+      },
+    };
+    const result = {
+      publishedAt: "2026-07-12T00:00:00.000Z",
+      objects: [
+        {
+          key: "repositories/debian-internal/publishes/pub_fixed.json",
+          contentType: "application/json; charset=utf-8",
+        },
+      ],
+    };
+    let publishCalls = 0;
+    let release!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const service = new PublishSessionService({
+      state,
+      uploadBroker,
+      artifactPublisher: {
+        publish: async () => {
+          publishCalls += 1;
+          await blocker;
+          return result;
+        },
+      },
+      clock,
+      randomId,
+    });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    const firstFinalize = service.finalize({
+      sessionId: "pub_fixed",
+      principal,
+    });
+    for (let attempt = 0; attempt < 10 && publishCalls === 0 && finalizingSaveCalls === 0; attempt += 1) {
+      await Promise.resolve();
+    }
+    expect(publishCalls + finalizingSaveCalls).toBeGreaterThan(0);
+
+    const secondFinalize = service.finalize({
+      sessionId: "pub_fixed",
+      principal,
+    });
+    for (let attempt = 0; attempt < 10 && finalizingSaveCalls === 1; attempt += 1) {
+      await Promise.resolve();
+    }
+    releaseFinalizingSaves();
+
+    const secondFinalizeExpectation = expect(secondFinalize).rejects.toBeInstanceOf(ValidationError);
+    release();
+    await secondFinalizeExpectation;
+    await expect(firstFinalize).resolves.toMatchObject({
+      result,
+      session: { status: "finalized" },
+    });
+    expect(publishCalls).toBe(1);
+  });
+
+  it("surfaces finalized session save failures without marking the session failed", async () => {
+    const backingState = await createStateWithRepository();
+    const state: StateStore = {
+      repositories: backingState.repositories,
+      publishTokens: backingState.publishTokens,
+      publishSessions: {
+        ...backingState.publishSessions,
+        save: async (session: PublishSession) => {
+          if (session.status === "finalized") {
+            throw new Error("finalized save failed");
+          }
+          await backingState.publishSessions.save(session);
+        },
+      },
+    };
+    const { publisher } = createPublisher();
+    const service = new PublishSessionService({ state, uploadBroker, artifactPublisher: publisher, clock, randomId });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    await expect(
+      service.finalize({
+        sessionId: "pub_fixed",
+        principal,
+      }),
+    ).rejects.toThrow("finalized save failed");
+
+    const stored = await backingState.publishSessions.get("pub_fixed");
+    expect(stored?.status).toBe("finalizing");
+    expect(stored?.failure).toBeUndefined();
   });
 
   it("rejects finalize when the token is not scoped to the repository", async () => {

@@ -18,7 +18,18 @@ const tokenKey = (id: string) => `publish-token:${id}`;
 const tokenNameKey = (name: string) => `publish-token-name:${name}`;
 
 export class DurableStateStore implements StateStore {
+  private sessionMutation = Promise.resolve();
+
   constructor(private readonly storage: DurableStorage) {}
+
+  private async withSessionMutation<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.sessionMutation.then(fn, fn);
+    this.sessionMutation = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
 
   readonly repositories = {
     getByName: async (name: string): Promise<Repository | null> => {
@@ -41,6 +52,20 @@ export class DurableStateStore implements StateStore {
     },
     save: async (session: PublishSession): Promise<void> => {
       await this.storage.put(sessionKey(session.id), session);
+    },
+    compareAndSetStatus: async (
+      id: string,
+      expectedStatus: PublishSession["status"],
+      session: PublishSession,
+    ): Promise<boolean> => {
+      return this.withSessionMutation(async () => {
+        const current = (await this.storage.get<PublishSession>(sessionKey(id))) ?? null;
+        if (!current || current.status !== expectedStatus) {
+          return false;
+        }
+        await this.storage.put(sessionKey(session.id), session);
+        return true;
+      });
     },
   };
 

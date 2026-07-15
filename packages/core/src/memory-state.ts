@@ -28,6 +28,18 @@ export class MemoryStateStore implements StateStore {
     save: async (session: PublishSession): Promise<void> => {
       this.publishSessionById.set(session.id, session);
     },
+    compareAndSetStatus: async (
+      id: string,
+      expectedStatus: PublishSession["status"],
+      session: PublishSession,
+    ): Promise<boolean> => {
+      const current = this.publishSessionById.get(id);
+      if (!current || current.status !== expectedStatus) {
+        return false;
+      }
+      this.publishSessionById.set(session.id, session);
+      return true;
+    },
   };
 
   readonly publishTokens = {

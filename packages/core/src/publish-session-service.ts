@@ -237,7 +237,8 @@ export class PublishSessionService {
       }
       return {
         artifact,
-        upload: verifiedUpload,
+        upload,
+        verified: verifiedUpload,
       };
     });
 
@@ -245,26 +246,23 @@ export class PublishSessionService {
       ...session,
       status: "finalizing",
     };
-    await this.options.state.publishSessions.save(finalizingSession);
+    const claimed = await this.options.state.publishSessions.compareAndSetStatus(
+      session.id,
+      "ready",
+      finalizingSession,
+    );
+    if (!claimed) {
+      const latestSession = await this.options.state.publishSessions.get(session.id);
+      throw new ValidationError(`Publish session is not ready: ${latestSession?.status ?? "missing"}`);
+    }
 
+    let result: PublishResult;
     try {
-      const result = await artifactPublisher.publish({
+      result = await artifactPublisher.publish({
         repository,
         session: finalizingSession,
         artifacts,
       });
-      const finalizedSession: PublishSession = {
-        ...finalizingSession,
-        status: "finalized",
-        finalizedAt: this.options.clock.now().toISOString(),
-        publishResult: result,
-      };
-      await this.options.state.publishSessions.save(finalizedSession);
-
-      return {
-        session: finalizedSession,
-        result,
-      };
     } catch (error) {
       const failedSession: PublishSession = {
         ...finalizingSession,
@@ -274,8 +272,25 @@ export class PublishSessionService {
           failedAt: this.options.clock.now().toISOString(),
         },
       };
-      await this.options.state.publishSessions.save(failedSession);
+      try {
+        await this.options.state.publishSessions.save(failedSession);
+      } catch {
+        // Preserve the publisher failure as the primary error.
+      }
       throw error;
     }
+
+    const finalizedSession: PublishSession = {
+      ...finalizingSession,
+      status: "finalized",
+      finalizedAt: this.options.clock.now().toISOString(),
+      publishResult: result,
+    };
+    await this.options.state.publishSessions.save(finalizedSession);
+
+    return {
+      session: finalizedSession,
+      result,
+    };
   }
 }
