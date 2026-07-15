@@ -87,6 +87,14 @@ function createPublisher(): { publisher: ArtifactPublisher; calls: Parameters<Ar
   };
 }
 
+function deferred<T = void>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void } {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
 async function createStateWithRepository(): Promise<MemoryStateStore> {
   const state = new MemoryStateStore();
   await state.repositories.save({
@@ -449,6 +457,72 @@ describe("PublishSessionService", () => {
       status: "finalized",
       finalizedAt: "2026-07-12T00:00:00.000Z",
       publishResult: expectedPublishResult,
+    });
+  });
+
+  it("rejects stale upload verification without reopening a finalized session", async () => {
+    const state = await createStateWithRepository();
+    const { publisher } = createPublisher();
+    const verifyEntered = deferred();
+    const releaseVerify = deferred();
+    const blockingUploadBroker: UploadBroker = {
+      ...uploadBroker,
+      verifyUpload: async ({ target, expected }) => {
+        verifyEntered.resolve();
+        await releaseVerify.promise;
+        return uploadBroker.verifyUpload({ target, expected });
+      },
+    };
+    const setupService = new PublishSessionService({ state, uploadBroker, artifactPublisher: publisher, clock, randomId });
+    await setupService.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await setupService.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+    const service = new PublishSessionService({
+      state,
+      uploadBroker: blockingUploadBroker,
+      artifactPublisher: publisher,
+      clock,
+      randomId,
+    });
+
+    const staleVerify = service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+    await verifyEntered.promise;
+    await expect(
+      service.finalize({
+        sessionId: "pub_fixed",
+        principal,
+      }),
+    ).resolves.toMatchObject({
+      session: { status: "finalized" },
+    });
+
+    releaseVerify.resolve();
+
+    await expect(staleVerify).rejects.toThrow(
+      new ValidationError("Publish session is not open: finalized"),
+    );
+    await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
+      status: "finalized",
+      publishResult: {
+        objects: [
+          {
+            key: "repositories/debian-internal/publishes/pub_fixed.json",
+            contentType: "application/json; charset=utf-8",
+          },
+        ],
+      },
     });
   });
 

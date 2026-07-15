@@ -33,11 +33,14 @@ export class MemoryStateStore implements StateStore {
       expectedStatus: PublishSession["status"],
       session: PublishSession,
     ): Promise<boolean> => {
+      if (session.id !== id) {
+        return false;
+      }
       const current = this.publishSessionById.get(id);
       if (!current || current.status !== expectedStatus) {
         return false;
       }
-      this.publishSessionById.set(session.id, session);
+      this.publishSessionById.set(id, session);
       return true;
     },
   };

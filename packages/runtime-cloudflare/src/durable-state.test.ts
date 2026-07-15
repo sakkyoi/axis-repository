@@ -119,6 +119,23 @@ describe("DurableStateStore", () => {
     });
   });
 
+  it("does not compare-and-set a publish session with a mismatched replacement id", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    const original = publishSession({ status: "ready" });
+    await state.publishSessions.save(original);
+
+    await expect(
+      state.publishSessions.compareAndSetStatus(
+        "pub_1",
+        "ready",
+        publishSession({ id: "pub_2", status: "finalizing" }),
+      ),
+    ).resolves.toBe(false);
+
+    await expect(state.publishSessions.get("pub_1")).resolves.toEqual(original);
+    await expect(state.publishSessions.get("pub_2")).resolves.toBeNull();
+  });
+
   it("keeps publish token name and id indexes consistent", async () => {
     const state = new DurableStateStore(new FakeDurableStorage());
     const original: PublishTokenRecord = {

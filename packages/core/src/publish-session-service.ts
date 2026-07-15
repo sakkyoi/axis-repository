@@ -76,6 +76,18 @@ function normalizeOpenStatus(status: PublishSession["status"] | "created"): Publ
   return status === "created" ? "pending_uploads" : status;
 }
 
+function isPublishSessionStatus(status: string): status is PublishSession["status"] {
+  return (
+    status === "pending_uploads" ||
+    status === "ready" ||
+    status === "finalizing" ||
+    status === "finalized" ||
+    status === "failed" ||
+    status === "aborted" ||
+    status === "expired"
+  );
+}
+
 function allUploadsVerified(session: PublishSession, verifiedUploads: VerifiedUpload[]): boolean {
   return session.uploads.every((upload) =>
     verifiedUploads.some((verifiedUpload) => verifiedUpload.uploadId === upload.uploadId),
@@ -195,7 +207,20 @@ export class PublishSessionService {
       verifiedUploads,
     };
 
-    await this.options.state.publishSessions.save(updatedSession);
+    const storedStatus = session.status as PublishSession["status"] | "created";
+    if (isPublishSessionStatus(storedStatus)) {
+      const saved = await this.options.state.publishSessions.compareAndSetStatus(
+        session.id,
+        storedStatus,
+        updatedSession,
+      );
+      if (!saved) {
+        const latestSession = await this.options.state.publishSessions.get(session.id);
+        throw new ValidationError(`Publish session is not open: ${latestSession?.status ?? "missing"}`);
+      }
+    } else {
+      await this.options.state.publishSessions.save(updatedSession);
+    }
 
     return {
       upload,
