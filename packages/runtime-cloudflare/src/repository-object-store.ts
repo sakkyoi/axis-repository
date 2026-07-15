@@ -14,7 +14,7 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
   readonly objects: Array<{ key: string; value: unknown }> = [];
 
   async putJson(key: string, value: unknown): Promise<void> {
-    this.objects.push({ key, value });
+    this.objects.push({ key, value: JSON.parse(JSON.stringify(value)) });
   }
 }
 

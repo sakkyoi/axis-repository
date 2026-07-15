@@ -1,7 +1,18 @@
-import type { PublishArtifactsInput } from "@axis-repository/core";
+import type { PublishArtifactsInput, RepositoryObjectStore } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
 import { GenericManifestPublisher } from "./generic-manifest-publisher";
 import { JSON_CONTENT_TYPE, MemoryRepositoryObjectStore } from "./repository-object-store";
+
+class FailingPublishObjectStore implements RepositoryObjectStore {
+  readonly keys: string[] = [];
+
+  async putJson(key: string): Promise<void> {
+    this.keys.push(key);
+    if (key.includes("/publishes/")) {
+      throw new Error("publish write failed");
+    }
+  }
+}
 
 describe("GenericManifestPublisher", () => {
   it("writes immutable and latest repository manifests", async () => {
@@ -106,5 +117,43 @@ describe("GenericManifestPublisher", () => {
         value: manifest,
       },
     ]);
+  });
+
+  it("does not write latest manifest when immutable publish manifest fails", async () => {
+    const objectStore = new FailingPublishObjectStore();
+    const publisher = new GenericManifestPublisher({ objectStore });
+    const input: PublishArtifactsInput = {
+      repository: {
+        id: "repo_1",
+        name: "debian-internal",
+        ecosystem: "apt",
+        visibility: "private",
+        config: {},
+        createdAt: "2026-07-12T00:00:00.000Z",
+        updatedAt: "2026-07-12T00:00:00.000Z",
+      },
+      session: {
+        id: "pub_1",
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        status: "finalizing",
+        requestedBy: {
+          tokenId: "tok_1",
+          name: "ci",
+          permissions: ["publish"],
+          repositories: ["debian-internal"],
+          ecosystemScopes: {},
+        },
+        artifacts: [],
+        uploads: [],
+        verifiedUploads: [],
+        createdAt: "2026-07-12T00:00:00.000Z",
+        expiresAt: "2026-07-12T01:00:00.000Z",
+      },
+      artifacts: [],
+    };
+
+    await expect(publisher.publish(input)).rejects.toThrow("publish write failed");
+    expect(objectStore.keys).toEqual(["repositories/debian-internal/publishes/pub_1.json"]);
   });
 });

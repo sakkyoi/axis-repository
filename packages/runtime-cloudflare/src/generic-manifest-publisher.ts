@@ -36,18 +36,21 @@ export class GenericManifestPublisher implements ArtifactPublisher {
         metadata: artifact.metadata,
       })),
     };
+    const publishKey = `repositories/${input.repository.name}/publishes/${input.session.id}.json`;
+    const latestKey = `repositories/${input.repository.name}/latest.json`;
     const objects = [
       {
-        key: `repositories/${input.repository.name}/publishes/${input.session.id}.json`,
+        key: publishKey,
         contentType: JSON_CONTENT_TYPE,
       },
       {
-        key: `repositories/${input.repository.name}/latest.json`,
+        key: latestKey,
         contentType: JSON_CONTENT_TYPE,
       },
     ];
 
-    await Promise.all(objects.map((object) => this.objectStore.putJson(object.key, manifest)));
+    await this.objectStore.putJson(publishKey, manifest);
+    await this.objectStore.putJson(latestKey, manifest);
 
     return {
       objects,

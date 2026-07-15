@@ -32,6 +32,16 @@ describe("MemoryRepositoryObjectStore", () => {
       },
     ]);
   });
+
+  it("snapshots JSON objects when they are written", async () => {
+    const store = new MemoryRepositoryObjectStore();
+    const value = { nested: { ok: true } };
+
+    await store.putJson("key.json", value);
+    value.nested.ok = false;
+
+    expect(store.objects[0]?.value).toEqual({ nested: { ok: true } });
+  });
 });
 
 describe("R2RepositoryObjectStore", () => {
