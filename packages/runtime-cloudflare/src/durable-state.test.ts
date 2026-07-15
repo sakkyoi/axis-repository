@@ -69,7 +69,7 @@ describe("DurableStateStore", () => {
       id: "pub_1",
       repositoryName: "debian-internal",
       ecosystem: "apt",
-      status: "created",
+      status: "pending_uploads",
       requestedBy: {
         tokenId: "ptok_1",
         name: "ci",
@@ -79,6 +79,7 @@ describe("DurableStateStore", () => {
       },
       artifacts: [],
       uploads: [],
+      verifiedUploads: [],
       createdAt: "2026-07-14T00:00:00.000Z",
       expiresAt: "2026-07-14T00:15:00.000Z",
     };
