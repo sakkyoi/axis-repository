@@ -172,7 +172,8 @@ describe("Cloudflare runtime routes", () => {
     await expect(sessionResponse.json()).resolves.toMatchObject({
       repositoryName: "debian-internal",
       ecosystem: "apt",
-      status: "created",
+      status: "pending_uploads",
+      verifiedUploads: [],
       uploads: [{ filename: "myapp_1.2.3_amd64.deb", method: "PUT" }],
     });
   });
@@ -255,7 +256,18 @@ describe("Cloudflare runtime routes", () => {
         objectKey: session.uploads[0]?.objectKey,
         size: 1234,
         sha256: "a".repeat(64),
+        verifiedAt: expect.any(String),
       },
+      session: expect.objectContaining({
+        id: session.id,
+        status: "ready",
+        verifiedUploads: [
+          expect.objectContaining({
+            uploadId,
+            sha256: "a".repeat(64),
+          }),
+        ],
+      }),
     });
   });
 

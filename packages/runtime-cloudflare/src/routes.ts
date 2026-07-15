@@ -164,12 +164,12 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     const secret = requireBearer(request);
     const principal = await dependencies.publishTokenService.verify(secret);
-    const upload = await dependencies.publishSessionService.verifyUpload({
+    const result = await dependencies.publishSessionService.verifyUpload({
       sessionId,
       uploadId,
       principal,
     });
-    return jsonResponse({ upload });
+    return jsonResponse(result);
   }
   throw new NotFoundError();
 }
