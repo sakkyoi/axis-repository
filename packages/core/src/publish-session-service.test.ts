@@ -95,6 +95,8 @@ describe("PublishSessionService", () => {
     expect(session.artifacts).toEqual([artifact]);
     expect(session.artifacts[0]).not.toBe(artifact);
     expect(session.artifacts[0]?.metadata).not.toBe(artifact.metadata);
+    expect(session.status).toBe("pending_uploads");
+    expect(session.verifiedUploads).toEqual([]);
     expect(await state.publishSessions.get("pub_fixed")).toEqual(session);
   });
 
@@ -178,7 +180,7 @@ describe("PublishSessionService", () => {
     });
   });
 
-  it("verifies an uploaded object for a created session", async () => {
+  it("persists verified uploads and marks the session ready when all uploads are verified", async () => {
     const state = await createStateWithRepository();
     const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
     await service.create({
@@ -188,18 +190,100 @@ describe("PublishSessionService", () => {
       artifacts: [artifact],
     });
 
-    await expect(
-      service.verifyUpload({
-        sessionId: "pub_fixed",
-        uploadId: "upl_fixed",
-        principal,
-      }),
-    ).resolves.toEqual({
+    const result = await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    expect(result.upload).toEqual({
       uploadId: "upl_fixed",
       objectKey: "_staging/uploads/pub_fixed/upl_fixed/myapp_1.2.3_amd64.deb",
       size: 1234,
       sha256: "a".repeat(64),
+      verifiedAt: "2026-07-12T00:00:00.000Z",
     });
+    expect(result.session.status).toBe("ready");
+    expect(result.session.verifiedUploads).toEqual([result.upload]);
+    await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
+      status: "ready",
+      verifiedUploads: [result.upload],
+    });
+  });
+
+  it("keeps a session pending until every upload is verified", async () => {
+    const state = await createStateWithRepository();
+    let uploadCount = 0;
+    const sequentialRandomId: RandomId = {
+      create: (prefix: string) => {
+        if (prefix === "pub") {
+          return "pub_fixed";
+        }
+        if (prefix === "upl") {
+          uploadCount += 1;
+          return `upl_${uploadCount}`;
+        }
+        return `${prefix}_fixed`;
+      },
+    };
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId: sequentialRandomId });
+
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [
+        artifact,
+        {
+          ...artifact,
+          filename: "myapp-dbgsym_1.2.3_amd64.deb",
+          sha256: "b".repeat(64),
+        },
+      ],
+    });
+
+    const first = await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_1",
+      principal,
+    });
+    expect(first.session.status).toBe("pending_uploads");
+    expect(first.session.verifiedUploads).toEqual([first.upload]);
+
+    const second = await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_2",
+      principal,
+    });
+    expect(second.session.status).toBe("ready");
+    expect(second.session.verifiedUploads).toEqual([first.upload, second.upload]);
+  });
+
+  it("replaces an existing verified upload record when re-verifying", async () => {
+    const state = await createStateWithRepository();
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+
+    await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+    await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    const stored = await state.publishSessions.get("pub_fixed");
+
+    expect(stored?.verifiedUploads).toHaveLength(1);
+    expect(stored?.verifiedUploads[0]?.uploadId).toBe("upl_fixed");
   });
 
   it("rejects upload verification when the token is not scoped to the repository", async () => {

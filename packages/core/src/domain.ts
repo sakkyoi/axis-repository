@@ -40,16 +40,29 @@ export interface PublishArtifactRequest {
   metadata: Record<string, unknown>;
 }
 
+export type PublishSessionStatus =
+  | "pending_uploads"
+  | "ready"
+  | "finalizing"
+  | "finalized"
+  | "failed"
+  | "aborted"
+  | "expired";
+
 export interface PublishSession {
   id: string;
   repositoryName: string;
   ecosystem: Ecosystem;
-  status: "created" | "completed" | "aborted" | "expired";
+  status: PublishSessionStatus;
   requestedBy: TokenPrincipal;
   artifacts: PublishArtifactRequest[];
   uploads: UploadTarget[];
+  verifiedUploads: VerifiedUpload[];
   createdAt: string;
   expiresAt: string;
+  finalizedAt?: string;
+  failure?: string;
+  publishResult?: PublishResult;
 }
 
 export interface UploadTarget {
@@ -67,4 +80,33 @@ export interface UploadedObject {
   objectKey: string;
   size: number;
   sha256: string;
+}
+
+export interface VerifiedUpload extends UploadedObject {
+  verifiedAt: string;
+}
+
+export interface PublishedObject {
+  artifact: PublishArtifactRequest;
+  upload: VerifiedUpload;
+  objectKey: string;
+  size: number;
+  sha256: string;
+}
+
+export interface PublishResult {
+  repositoryName: string;
+  ecosystem: Ecosystem;
+  objects: PublishedObject[];
+  publishedAt: string;
+}
+
+export interface PublishedArtifactInput {
+  artifact: PublishArtifactRequest;
+  upload: VerifiedUpload;
+}
+
+export interface PublishArtifactsInput {
+  session: PublishSession;
+  artifacts: PublishedArtifactInput[];
 }

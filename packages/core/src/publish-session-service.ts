@@ -3,7 +3,7 @@ import type {
   PublishArtifactRequest,
   PublishSession,
   TokenPrincipal,
-  UploadedObject,
+  VerifiedUpload,
 } from "./domain";
 import { ForbiddenError, NotFoundError, ValidationError } from "./errors";
 import type { Clock, RandomId, StateStore, UploadBroker } from "./ports";
@@ -19,6 +19,11 @@ export interface VerifyPublishUploadInput {
   sessionId: string;
   uploadId: string;
   principal: TokenPrincipal;
+}
+
+export interface VerifyPublishUploadResult {
+  upload: VerifiedUpload;
+  session: PublishSession;
 }
 
 export interface PublishSessionServiceOptions {
@@ -49,6 +54,20 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   }
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function verifiedUploadsFor(session: PublishSession): VerifiedUpload[] {
+  return session.verifiedUploads ?? [];
+}
+
+function normalizeOpenStatus(status: PublishSession["status"] | "created"): PublishSession["status"] {
+  return status === "created" ? "pending_uploads" : status;
+}
+
+function allUploadsVerified(session: PublishSession, verifiedUploads: VerifiedUpload[]): boolean {
+  return session.uploads.every((upload) =>
+    verifiedUploads.some((verifiedUpload) => verifiedUpload.uploadId === upload.uploadId),
+  );
 }
 
 export class PublishSessionService {
@@ -102,10 +121,11 @@ export class PublishSessionService {
       id: sessionId,
       repositoryName: repository.name,
       ecosystem: repository.ecosystem,
-      status: "created",
+      status: "pending_uploads",
       requestedBy: input.principal,
       artifacts,
       uploads,
+      verifiedUploads: [],
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
     };
@@ -114,12 +134,13 @@ export class PublishSessionService {
     return session;
   }
 
-  async verifyUpload(input: VerifyPublishUploadInput): Promise<UploadedObject> {
+  async verifyUpload(input: VerifyPublishUploadInput): Promise<VerifyPublishUploadResult> {
     const session = await this.options.state.publishSessions.get(input.sessionId);
     if (!session) {
       throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
     }
-    if (session.status !== "created") {
+    const openStatus = normalizeOpenStatus(session.status);
+    if (openStatus !== "pending_uploads" && openStatus !== "ready") {
       throw new ValidationError(`Publish session is not open: ${session.status}`);
     }
     if (new Date(session.expiresAt).getTime() <= this.options.clock.now().getTime()) {
@@ -143,6 +164,26 @@ export class PublishSessionService {
       throw new ValidationError(`Upload is not paired with an artifact: ${input.uploadId}`);
     }
 
-    return this.options.uploadBroker.verifyUpload({ target, expected });
+    const uploaded = await this.options.uploadBroker.verifyUpload({ target, expected });
+    const upload: VerifiedUpload = {
+      ...uploaded,
+      verifiedAt: this.options.clock.now().toISOString(),
+    };
+    const verifiedUploads = [
+      ...verifiedUploadsFor(session).filter((verifiedUpload) => verifiedUpload.uploadId !== upload.uploadId),
+      upload,
+    ];
+    const updatedSession: PublishSession = {
+      ...session,
+      status: allUploadsVerified(session, verifiedUploads) ? "ready" : "pending_uploads",
+      verifiedUploads,
+    };
+
+    await this.options.state.publishSessions.save(updatedSession);
+
+    return {
+      upload,
+      session: updatedSession,
+    };
   }
 }
