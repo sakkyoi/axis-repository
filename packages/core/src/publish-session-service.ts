@@ -312,7 +312,7 @@ export class PublishSessionService {
         },
       };
       try {
-        await this.options.state.publishSessions.save(failedSession);
+        await this.saveTerminalSession(finalizingSession, failedSession);
       } catch {
         // Preserve the publisher failure as the primary error.
       }
@@ -325,7 +325,7 @@ export class PublishSessionService {
       finalizedAt: this.options.clock.now().toISOString(),
       publishResult: result,
     };
-    await this.options.state.publishSessions.save(finalizedSession);
+    await this.saveTerminalSession(finalizingSession, finalizedSession);
 
     return {
       session: finalizedSession,
@@ -339,5 +339,20 @@ export class PublishSessionService {
     }
     const retryAfterMs = this.finalizingRetryAfterSeconds * 1000;
     return now.getTime() - new Date(session.finalizingStartedAt).getTime() >= retryAfterMs;
+  }
+
+  private async saveTerminalSession(
+    finalizingSession: PublishSession,
+    terminalSession: PublishSession,
+  ): Promise<void> {
+    await this.options.state.publishSessions.update(finalizingSession.id, (current) => {
+      if (
+        current.status !== "finalizing" ||
+        current.finalizingStartedAt !== finalizingSession.finalizingStartedAt
+      ) {
+        throw new ValidationError("Publish session finalizing lease has changed");
+      }
+      return terminalSession;
+    });
   }
 }

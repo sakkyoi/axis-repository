@@ -922,12 +922,18 @@ describe("PublishSessionService", () => {
       publishTokens: backingState.publishTokens,
       publishSessions: {
         ...backingState.publishSessions,
-        save: async (session: PublishSession) => {
-          if (session.status === "finalized" && failFinalizedSave) {
+        update: async (id, updater) => {
+          const current = await backingState.publishSessions.get(id);
+          if (!current) {
+            return null;
+          }
+          const updated = updater(current);
+          if (updated.status === "finalized" && failFinalizedSave) {
             failFinalizedSave = false;
             throw new Error("finalized save failed");
           }
-          await backingState.publishSessions.save(session);
+          await backingState.publishSessions.save(updated);
+          return updated;
         },
       },
     };
@@ -991,6 +997,84 @@ describe("PublishSessionService", () => {
     expect(finalized?.publishStartedAt).toBe("2026-07-12T00:00:00.000Z");
     expect(finalized?.finalizingStartedAt).toBe("2026-07-12T00:02:00.000Z");
     expect(finalized?.failure).toBeUndefined();
+  });
+
+  it("rejects stale terminal saves after another finalize retry reclaims the lease", async () => {
+    const state = await createStateWithRepository();
+    const firstPublishEntered = deferred();
+    const releaseFirstPublish = deferred();
+    let publishCalls = 0;
+    const publisher: ArtifactPublisher = {
+      publish: async (input) => {
+        publishCalls += 1;
+        if (publishCalls === 1) {
+          firstPublishEntered.resolve();
+          await releaseFirstPublish.promise;
+        }
+        return {
+          publishedAt: input.session.publishStartedAt ?? "missing",
+          objects: [
+            {
+              key: `repositories/${input.repository.name}/publishes/${input.session.id}.json`,
+              contentType: "application/json; charset=utf-8",
+            },
+          ],
+        };
+      },
+    };
+    const service = new PublishSessionService({
+      state,
+      uploadBroker,
+      artifactPublisher: publisher,
+      clock,
+      randomId,
+    });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    const firstFinalize = service.finalize({
+      sessionId: "pub_fixed",
+      principal,
+    });
+    await firstPublishEntered.promise;
+
+    const retryService = new PublishSessionService({
+      state,
+      uploadBroker,
+      artifactPublisher: publisher,
+      clock: staleFinalizingClock,
+      randomId,
+    });
+    await expect(
+      retryService.finalize({
+        sessionId: "pub_fixed",
+        principal,
+      }),
+    ).resolves.toMatchObject({
+      session: {
+        status: "finalized",
+        finalizingStartedAt: "2026-07-12T00:02:00.000Z",
+      },
+    });
+
+    releaseFirstPublish.resolve();
+    await expect(firstFinalize).rejects.toThrow(
+      new ValidationError("Publish session finalizing lease has changed"),
+    );
+    expect(publishCalls).toBe(2);
+    await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
+      status: "finalized",
+      finalizingStartedAt: "2026-07-12T00:02:00.000Z",
+    });
   });
 
   it("rejects finalize when the token is not scoped to the repository", async () => {
