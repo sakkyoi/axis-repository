@@ -108,9 +108,9 @@ This phase writes generic publish manifests such as:
 
 ```text
 repositories/<repository-name>/publishes/<session-id>.json
-repositories/<repository-name>/latest.json
 ```
 
-Format-specific repository indexes for apt, PyPI, and npm are future publishers.
+Format-specific repository indexes and repository heads for apt, PyPI, and npm
+are future publishers.
 
 `packages/runtime-cloudflare/wrangler.toml` is local-only and should not be committed.

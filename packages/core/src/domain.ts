@@ -60,6 +60,7 @@ export interface PublishSession {
   verifiedUploads: VerifiedUpload[];
   createdAt: string;
   expiresAt: string;
+  finalizingStartedAt?: string;
   finalizedAt?: string;
   failure?: PublishFailure;
   publishResult?: PublishResult;

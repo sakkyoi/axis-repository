@@ -23,6 +23,10 @@ const expiredClock: Clock = {
   now: () => new Date("2026-07-12T00:30:00.000Z"),
 };
 
+const staleFinalizingClock: Clock = {
+  now: () => new Date("2026-07-12T00:02:00.000Z"),
+};
+
 const randomId: RandomId = {
   create: (prefix: string) => `${prefix}_fixed`,
 };
@@ -497,6 +501,48 @@ describe("PublishSessionService", () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it("rejects finalize for expired ready sessions", async () => {
+    const state = await createStateWithRepository();
+    const { publisher, calls } = createPublisher();
+    const createService = new PublishSessionService({
+      state,
+      uploadBroker,
+      artifactPublisher: publisher,
+      clock,
+      randomId,
+    });
+    await createService.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await createService.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    const expiredService = new PublishSessionService({
+      state,
+      uploadBroker,
+      artifactPublisher: publisher,
+      clock: expiredClock,
+      randomId,
+    });
+
+    await expect(
+      expiredService.finalize({
+        sessionId: "pub_fixed",
+        principal,
+      }),
+    ).rejects.toThrow(new ValidationError("Publish session has expired"));
+    expect(calls).toHaveLength(0);
+    await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
+      status: "ready",
+    });
+  });
+
   it("rejects finalize for legacy completed sessions", async () => {
     const state = await createStateWithRepository();
     const { publisher } = createPublisher();
@@ -567,10 +613,12 @@ describe("PublishSessionService", () => {
     });
     expect(result.result).toEqual(expectedPublishResult);
     expect(result.session.status).toBe("finalized");
+    expect(result.session.finalizingStartedAt).toBe("2026-07-12T00:00:00.000Z");
     expect(result.session.finalizedAt).toBe("2026-07-12T00:00:00.000Z");
     expect(result.session.publishResult).toEqual(expectedPublishResult);
     await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
       status: "finalized",
+      finalizingStartedAt: "2026-07-12T00:00:00.000Z",
       finalizedAt: "2026-07-12T00:00:00.000Z",
       publishResult: expectedPublishResult,
     });
@@ -852,7 +900,9 @@ describe("PublishSessionService", () => {
     }
     releaseFinalizingSaves();
 
-    const secondFinalizeExpectation = expect(secondFinalize).rejects.toBeInstanceOf(ValidationError);
+    const secondFinalizeExpectation = expect(secondFinalize).rejects.toThrow(
+      new ValidationError("Publish session is already finalizing"),
+    );
     release();
     await secondFinalizeExpectation;
     await expect(firstFinalize).resolves.toMatchObject({
@@ -862,22 +912,24 @@ describe("PublishSessionService", () => {
     expect(publishCalls).toBe(1);
   });
 
-  it("surfaces finalized session save failures without marking the session failed", async () => {
+  it("retries finalizing sessions after a finalized session save failure", async () => {
     const backingState = await createStateWithRepository();
+    let failFinalizedSave = true;
     const state: StateStore = {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
       publishSessions: {
         ...backingState.publishSessions,
         save: async (session: PublishSession) => {
-          if (session.status === "finalized") {
+          if (session.status === "finalized" && failFinalizedSave) {
+            failFinalizedSave = false;
             throw new Error("finalized save failed");
           }
           await backingState.publishSessions.save(session);
         },
       },
     };
-    const { publisher } = createPublisher();
+    const { publisher, calls } = createPublisher();
     const service = new PublishSessionService({ state, uploadBroker, artifactPublisher: publisher, clock, randomId });
     await service.create({
       repositoryName: "debian-internal",
@@ -901,6 +953,35 @@ describe("PublishSessionService", () => {
     const stored = await backingState.publishSessions.get("pub_fixed");
     expect(stored?.status).toBe("finalizing");
     expect(stored?.failure).toBeUndefined();
+
+    await expect(
+      new PublishSessionService({
+        state,
+        uploadBroker,
+        artifactPublisher: publisher,
+        clock: staleFinalizingClock,
+        randomId,
+      }).finalize({
+        sessionId: "pub_fixed",
+        principal,
+      }),
+    ).resolves.toMatchObject({
+      session: {
+        status: "finalized",
+        publishResult: {
+          objects: [
+            {
+              key: "repositories/debian-internal/publishes/pub_fixed.json",
+              contentType: "application/json; charset=utf-8",
+            },
+          ],
+        },
+      },
+    });
+    expect(calls).toHaveLength(2);
+    const finalized = await backingState.publishSessions.get("pub_fixed");
+    expect(finalized?.status).toBe("finalized");
+    expect(finalized?.failure).toBeUndefined();
   });
 
   it("rejects finalize when the token is not scoped to the repository", async () => {

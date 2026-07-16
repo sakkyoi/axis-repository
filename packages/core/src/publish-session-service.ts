@@ -44,6 +44,7 @@ export interface PublishSessionServiceOptions {
   clock: Clock;
   randomId: RandomId;
   ttlSeconds?: number;
+  finalizingRetryAfterSeconds?: number;
 }
 
 function cloneMetadataValue(value: unknown): unknown {
@@ -86,11 +87,17 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isExpired(session: PublishSession, now: Date): boolean {
+  return new Date(session.expiresAt).getTime() <= now.getTime();
+}
+
 export class PublishSessionService {
   private readonly ttlSeconds: number;
+  private readonly finalizingRetryAfterSeconds: number;
 
   constructor(private readonly options: PublishSessionServiceOptions) {
     this.ttlSeconds = options.ttlSeconds ?? 15 * 60;
+    this.finalizingRetryAfterSeconds = options.finalizingRetryAfterSeconds ?? 60;
   }
 
   async create(input: CreatePublishSessionInput): Promise<PublishSession> {
@@ -159,7 +166,7 @@ export class PublishSessionService {
     if (openStatus !== "pending_uploads" && openStatus !== "ready") {
       throw new ValidationError(`Publish session is not open: ${session.status}`);
     }
-    if (new Date(session.expiresAt).getTime() <= this.options.clock.now().getTime()) {
+    if (isExpired(session, this.options.clock.now())) {
       throw new ValidationError("Publish session has expired");
     }
     if (!input.principal.permissions.includes("publish")) {
@@ -224,8 +231,15 @@ export class PublishSessionService {
     if (!input.principal.repositories.includes(session.repositoryName)) {
       throw new ForbiddenError(`Token is not scoped to repository: ${session.repositoryName}`);
     }
-    if (session.status !== "ready") {
+    if (session.status !== "ready" && session.status !== "finalizing") {
       throw new ValidationError(`Publish session is not ready: ${session.status}`);
+    }
+    const now = this.options.clock.now();
+    if (session.status === "ready" && isExpired(session, now)) {
+      throw new ValidationError("Publish session has expired");
+    }
+    if (session.status === "finalizing" && !this.canRetryFinalizing(session, now)) {
+      throw new ValidationError("Publish session is already finalizing");
     }
 
     const repository = await this.options.state.repositories.getByName(session.repositoryName);
@@ -239,12 +253,26 @@ export class PublishSessionService {
     }
 
     const finalizingSession = await this.options.state.publishSessions.update(session.id, (current) => {
+      const claimTime = this.options.clock.now();
+      if (current.status === "finalizing") {
+        if (!this.canRetryFinalizing(current, claimTime)) {
+          throw new ValidationError("Publish session is already finalizing");
+        }
+        return {
+          ...current,
+          finalizingStartedAt: claimTime.toISOString(),
+        };
+      }
       if (current.status !== "ready") {
         throw new ValidationError(`Publish session is not ready: ${current.status}`);
+      }
+      if (isExpired(current, claimTime)) {
+        throw new ValidationError("Publish session has expired");
       }
       return {
         ...current,
         status: "finalizing",
+        finalizingStartedAt: claimTime.toISOString(),
       };
     });
     if (!finalizingSession) {
@@ -301,5 +329,13 @@ export class PublishSessionService {
       session: finalizedSession,
       result,
     };
+  }
+
+  private canRetryFinalizing(session: PublishSession, now: Date): boolean {
+    if (!session.finalizingStartedAt) {
+      return true;
+    }
+    const retryAfterMs = this.finalizingRetryAfterSeconds * 1000;
+    return now.getTime() - new Date(session.finalizingStartedAt).getTime() >= retryAfterMs;
   }
 }

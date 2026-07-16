@@ -15,7 +15,7 @@ class FailingPublishObjectStore implements RepositoryObjectStore {
 }
 
 describe("GenericManifestPublisher", () => {
-  it("writes immutable and latest repository manifests", async () => {
+  it("writes an immutable repository publish manifest", async () => {
     const objectStore = new MemoryRepositoryObjectStore();
     const publisher = new GenericManifestPublisher({
       objectStore,
@@ -101,10 +101,6 @@ describe("GenericManifestPublisher", () => {
           key: "repositories/debian-internal/publishes/pub_1.json",
           contentType: JSON_CONTENT_TYPE,
         },
-        {
-          key: "repositories/debian-internal/latest.json",
-          contentType: JSON_CONTENT_TYPE,
-        },
       ],
     });
     expect(objectStore.objects).toEqual([
@@ -112,14 +108,10 @@ describe("GenericManifestPublisher", () => {
         key: "repositories/debian-internal/publishes/pub_1.json",
         value: manifest,
       },
-      {
-        key: "repositories/debian-internal/latest.json",
-        value: manifest,
-      },
     ]);
   });
 
-  it("does not write latest manifest when immutable publish manifest fails", async () => {
+  it("surfaces immutable publish manifest write failures", async () => {
     const objectStore = new FailingPublishObjectStore();
     const publisher = new GenericManifestPublisher({ objectStore });
     const input: PublishArtifactsInput = {

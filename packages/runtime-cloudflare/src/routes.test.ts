@@ -364,14 +364,12 @@ describe("Cloudflare runtime routes", () => {
         publishResult: {
           objects: [
             { key: `repositories/debian-internal/publishes/${session.id}.json` },
-            { key: "repositories/debian-internal/latest.json" },
           ],
         },
       },
       result: {
         objects: [
           { key: `repositories/debian-internal/publishes/${session.id}.json` },
-          { key: "repositories/debian-internal/latest.json" },
         ],
       },
     });

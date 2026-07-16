@@ -40,6 +40,10 @@ export interface UploadBroker {
 }
 
 export interface ArtifactPublisher {
+  /**
+   * Publishers must be idempotent for the same publish session so a
+   * finalizing session can be retried after state-save failures.
+   */
   publish(input: PublishArtifactsInput): Promise<PublishResult>;
 }
 
