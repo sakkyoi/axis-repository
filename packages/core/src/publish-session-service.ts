@@ -261,6 +261,7 @@ export class PublishSessionService {
         return {
           ...current,
           finalizingStartedAt: claimTime.toISOString(),
+          publishStartedAt: current.publishStartedAt ?? claimTime.toISOString(),
         };
       }
       if (current.status !== "ready") {
@@ -273,6 +274,7 @@ export class PublishSessionService {
         ...current,
         status: "finalizing",
         finalizingStartedAt: claimTime.toISOString(),
+        publishStartedAt: current.publishStartedAt ?? claimTime.toISOString(),
       };
     });
     if (!finalizingSession) {

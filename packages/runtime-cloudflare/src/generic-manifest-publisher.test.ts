@@ -48,6 +48,8 @@ describe("GenericManifestPublisher", () => {
         verifiedUploads: [],
         createdAt: "2026-07-12T00:00:00.000Z",
         expiresAt: "2026-07-12T01:00:00.000Z",
+        publishStartedAt: "2026-07-12T00:00:45.000Z",
+        finalizingStartedAt: "2026-07-12T00:01:00.000Z",
       },
       artifacts: [
         {
@@ -81,7 +83,7 @@ describe("GenericManifestPublisher", () => {
       repository: "debian-internal",
       ecosystem: "apt",
       sessionId: "pub_1",
-      publishedAt: "2026-07-12T00:01:00.000Z",
+      publishedAt: "2026-07-12T00:00:45.000Z",
       artifacts: [
         {
           filename: "myapp_1.2.3_amd64.deb",
@@ -95,7 +97,7 @@ describe("GenericManifestPublisher", () => {
     };
 
     await expect(publisher.publish(input)).resolves.toEqual({
-      publishedAt: "2026-07-12T00:01:00.000Z",
+      publishedAt: "2026-07-12T00:00:45.000Z",
       objects: [
         {
           key: "repositories/debian-internal/publishes/pub_1.json",
@@ -147,5 +149,78 @@ describe("GenericManifestPublisher", () => {
 
     await expect(publisher.publish(input)).rejects.toThrow("publish write failed");
     expect(objectStore.keys).toEqual(["repositories/debian-internal/publishes/pub_1.json"]);
+  });
+
+  it("uses the stable publish start time across retry leases", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    const publisher = new GenericManifestPublisher({
+      objectStore,
+      now: () => new Date("2026-07-12T00:05:00.000Z"),
+    });
+    const baseInput: PublishArtifactsInput = {
+      repository: {
+        id: "repo_1",
+        name: "debian-internal",
+        ecosystem: "apt",
+        visibility: "private",
+        config: {},
+        createdAt: "2026-07-12T00:00:00.000Z",
+        updatedAt: "2026-07-12T00:00:00.000Z",
+      },
+      session: {
+        id: "pub_1",
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        status: "finalizing",
+        requestedBy: {
+          tokenId: "tok_1",
+          name: "ci",
+          permissions: ["publish"],
+          repositories: ["debian-internal"],
+          ecosystemScopes: {},
+        },
+        artifacts: [],
+        uploads: [],
+        verifiedUploads: [],
+        createdAt: "2026-07-12T00:00:00.000Z",
+        expiresAt: "2026-07-12T01:00:00.000Z",
+        publishStartedAt: "2026-07-12T00:00:30.000Z",
+        finalizingStartedAt: "2026-07-12T00:01:00.000Z",
+      },
+      artifacts: [],
+    };
+
+    const first = await publisher.publish(baseInput);
+    const second = await publisher.publish({
+      ...baseInput,
+      session: {
+        ...baseInput.session,
+        finalizingStartedAt: "2026-07-12T00:03:00.000Z",
+      },
+    });
+
+    expect(first).toEqual(second);
+    expect(objectStore.objects).toEqual([
+      {
+        key: "repositories/debian-internal/publishes/pub_1.json",
+        value: {
+          repository: "debian-internal",
+          ecosystem: "apt",
+          sessionId: "pub_1",
+          publishedAt: "2026-07-12T00:00:30.000Z",
+          artifacts: [],
+        },
+      },
+      {
+        key: "repositories/debian-internal/publishes/pub_1.json",
+        value: {
+          repository: "debian-internal",
+          ecosystem: "apt",
+          sessionId: "pub_1",
+          publishedAt: "2026-07-12T00:00:30.000Z",
+          artifacts: [],
+        },
+      },
+    ]);
   });
 });

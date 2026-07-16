@@ -21,7 +21,7 @@ export class GenericManifestPublisher implements ArtifactPublisher {
   }
 
   async publish(input: PublishArtifactsInput): Promise<PublishResult> {
-    const publishedAt = this.now().toISOString();
+    const publishedAt = input.session.publishStartedAt ?? input.session.finalizingStartedAt ?? this.now().toISOString();
     const manifest = {
       repository: input.repository.name,
       ecosystem: input.repository.ecosystem,

@@ -613,11 +613,13 @@ describe("PublishSessionService", () => {
     });
     expect(result.result).toEqual(expectedPublishResult);
     expect(result.session.status).toBe("finalized");
+    expect(result.session.publishStartedAt).toBe("2026-07-12T00:00:00.000Z");
     expect(result.session.finalizingStartedAt).toBe("2026-07-12T00:00:00.000Z");
     expect(result.session.finalizedAt).toBe("2026-07-12T00:00:00.000Z");
     expect(result.session.publishResult).toEqual(expectedPublishResult);
     await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
       status: "finalized",
+      publishStartedAt: "2026-07-12T00:00:00.000Z",
       finalizingStartedAt: "2026-07-12T00:00:00.000Z",
       finalizedAt: "2026-07-12T00:00:00.000Z",
       publishResult: expectedPublishResult,
@@ -952,6 +954,7 @@ describe("PublishSessionService", () => {
 
     const stored = await backingState.publishSessions.get("pub_fixed");
     expect(stored?.status).toBe("finalizing");
+    expect(stored?.publishStartedAt).toBe("2026-07-12T00:00:00.000Z");
     expect(stored?.failure).toBeUndefined();
 
     await expect(
@@ -979,8 +982,14 @@ describe("PublishSessionService", () => {
       },
     });
     expect(calls).toHaveLength(2);
+    expect(calls[0]?.session.publishStartedAt).toBe("2026-07-12T00:00:00.000Z");
+    expect(calls[1]?.session.publishStartedAt).toBe("2026-07-12T00:00:00.000Z");
+    expect(calls[0]?.session.finalizingStartedAt).toBe("2026-07-12T00:00:00.000Z");
+    expect(calls[1]?.session.finalizingStartedAt).toBe("2026-07-12T00:02:00.000Z");
     const finalized = await backingState.publishSessions.get("pub_fixed");
     expect(finalized?.status).toBe("finalized");
+    expect(finalized?.publishStartedAt).toBe("2026-07-12T00:00:00.000Z");
+    expect(finalized?.finalizingStartedAt).toBe("2026-07-12T00:02:00.000Z");
     expect(finalized?.failure).toBeUndefined();
   });
 
