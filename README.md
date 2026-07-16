@@ -97,4 +97,20 @@ curl -X POST "http://localhost:8787/api/publish-sessions/<session-id>/uploads/<u
   -H "Authorization: Bearer <publish-token>"
 ```
 
+After every artifact in the session is verified, finalize the publish session:
+
+```bash
+curl -X POST "http://localhost:8787/api/publish-sessions/<session-id>/finalize" \
+  -H "Authorization: Bearer <publish-token>"
+```
+
+This phase writes generic publish manifests such as:
+
+```text
+repositories/<repository-name>/publishes/<session-id>.json
+repositories/<repository-name>/latest.json
+```
+
+Format-specific repository indexes for apt, PyPI, and npm are future publishers.
+
 `packages/runtime-cloudflare/wrangler.toml` is local-only and should not be committed.
