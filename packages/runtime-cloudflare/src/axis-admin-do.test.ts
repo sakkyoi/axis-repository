@@ -143,6 +143,112 @@ describe("AxisAdminDO", () => {
     expect(response.status).toBe(201);
   });
 
+  it("finalizes publish sessions with memory backend without R2 env", async () => {
+    const object = createObject({
+      UPLOAD_BACKEND: "memory",
+      AXIS_OBJECTS: undefined,
+      ADMIN_TOKEN: "test-admin-token",
+      R2_ACCOUNT_ID: undefined,
+      R2_BUCKET_NAME: undefined,
+      R2_ACCESS_KEY_ID: undefined,
+      R2_SECRET_ACCESS_KEY: undefined,
+    });
+
+    const createRepository = await object.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+      }),
+    );
+    expect(createRepository.status).toBe(201);
+
+    const createToken = await object.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+        }),
+      }),
+    );
+    expect(createToken.status).toBe(201);
+    const tokenBody = (await createToken.json()) as { secret: string };
+
+    const createSession = await object.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [
+            {
+              filename: "myapp_1.2.3_amd64.deb",
+              size: 1234,
+              sha256: "a".repeat(64),
+              contentType: "application/vnd.debian.binary-package",
+              metadata: {},
+            },
+          ],
+        }),
+      }),
+    );
+    expect(createSession.status).toBe(201);
+    const session = (await createSession.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string }>;
+    };
+    const upload = session.uploads[0];
+    if (!upload) {
+      throw new Error("Expected publish session to include an upload target");
+    }
+
+    const verify = await object.fetch(
+      new Request(
+        `https://axis.example/api/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${tokenBody.secret}` },
+        },
+      ),
+    );
+    expect(verify.status).toBe(200);
+
+    const finalize = await object.fetch(
+      new Request(`https://axis.example/api/publish-sessions/${session.id}/finalize`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${tokenBody.secret}` },
+      }),
+    );
+
+    expect(finalize.status).toBe(200);
+    await expect(finalize.json()).resolves.toMatchObject({
+      session: {
+        id: session.id,
+        status: "finalized",
+      },
+      result: {
+        objects: [
+          { key: `repositories/debian-internal/publishes/${session.id}.json` },
+          { key: "repositories/debian-internal/latest.json" },
+        ],
+      },
+    });
+  });
+
   it("still requires admin token for memory backend", () => {
     expect(() => createObject({ UPLOAD_BACKEND: "memory", ADMIN_TOKEN: undefined })).toThrow(
       "ADMIN_TOKEN is required for AxisAdminDO",

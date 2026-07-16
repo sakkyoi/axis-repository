@@ -171,5 +171,19 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     });
     return jsonResponse(result);
   }
+  const finalizeMatch = url.pathname.match(/^\/api\/publish-sessions\/([^/]+)\/finalize$/);
+  if (finalizeMatch && request.method === "POST") {
+    const [, sessionId] = finalizeMatch;
+    if (!sessionId) {
+      throw new NotFoundError();
+    }
+    const secret = requireBearer(request);
+    const principal = await dependencies.publishTokenService.verify(secret);
+    const result = await dependencies.publishSessionService.finalize({
+      sessionId,
+      principal,
+    });
+    return jsonResponse(result);
+  }
   throw new NotFoundError();
 }

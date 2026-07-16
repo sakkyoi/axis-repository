@@ -7,7 +7,9 @@ import {
   type RandomId,
   type SecretHasher,
 } from "@axis-repository/core";
+import { GenericManifestPublisher } from "./generic-manifest-publisher";
 import MemoryUploadBroker from "./memory-upload-broker";
+import { MemoryRepositoryObjectStore } from "./repository-object-store";
 
 export interface AppDependencies {
   adminToken: string;
@@ -29,11 +31,19 @@ export function createDevDependencies(adminToken = "dev-admin-token"): AppDepend
     verify: async (secret: string, hash: string): Promise<boolean> => hash === `dev:${secret}`,
   };
   const uploadBroker = new MemoryUploadBroker();
+  const objectStore = new MemoryRepositoryObjectStore();
+  const artifactPublisher = new GenericManifestPublisher({ objectStore });
 
   return {
     adminToken,
     repositoryService: new RepositoryService({ state, clock, randomId }),
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
-    publishSessionService: new PublishSessionService({ state, uploadBroker, clock, randomId }),
+    publishSessionService: new PublishSessionService({
+      state,
+      uploadBroker,
+      artifactPublisher,
+      clock,
+      randomId,
+    }),
   };
 }

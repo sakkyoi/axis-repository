@@ -6,6 +6,65 @@ afterEach(() => {
   vi.resetModules();
 });
 
+async function createPublishSession(app: ReturnType<typeof createApp>) {
+  await app.fetch(
+    new Request("https://axis.example/admin/repositories", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+    }),
+  );
+
+  const tokenResponse = await app.fetch(
+    new Request("https://axis.example/admin/publish-tokens", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "github-actions",
+        repositories: ["debian-internal"],
+        permissions: ["publish"],
+        ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      }),
+    }),
+  );
+  const tokenBody = (await tokenResponse.json()) as { secret: string };
+
+  const sessionResponse = await app.fetch(
+    new Request("https://axis.example/api/publish-sessions", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${tokenBody.secret}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [
+          {
+            filename: "myapp_1.2.3_amd64.deb",
+            size: 1234,
+            sha256: "a".repeat(64),
+            contentType: "application/vnd.debian.binary-package",
+            metadata: {},
+          },
+        ],
+      }),
+    }),
+  );
+  const session = (await sessionResponse.json()) as {
+    id: string;
+    uploads: Array<{ uploadId: string; objectKey: string }>;
+  };
+
+  return { token: tokenBody.secret, session };
+}
+
 describe("Cloudflare runtime routes", () => {
   it("responds to health checks", async () => {
     const app = createApp();
@@ -268,6 +327,86 @@ describe("Cloudflare runtime routes", () => {
           }),
         ],
       }),
+    });
+  });
+
+  it("finalizes a verified publish session", async () => {
+    const app = createApp();
+    const { token, session } = await createPublishSession(app);
+    const upload = session.uploads[0];
+    if (!upload) {
+      throw new Error("Expected publish session to include an upload target");
+    }
+
+    const verifyResponse = await app.fetch(
+      new Request(
+        `https://axis.example/api/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}` },
+        },
+      ),
+    );
+    expect(verifyResponse.status).toBe(200);
+
+    const finalizeResponse = await app.fetch(
+      new Request(`https://axis.example/api/publish-sessions/${session.id}/finalize`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+
+    expect(finalizeResponse.status).toBe(200);
+    await expect(finalizeResponse.json()).resolves.toMatchObject({
+      session: {
+        id: session.id,
+        status: "finalized",
+        publishResult: {
+          objects: [
+            { key: `repositories/debian-internal/publishes/${session.id}.json` },
+            { key: "repositories/debian-internal/latest.json" },
+          ],
+        },
+      },
+      result: {
+        objects: [
+          { key: `repositories/debian-internal/publishes/${session.id}.json` },
+          { key: "repositories/debian-internal/latest.json" },
+        ],
+      },
+    });
+  });
+
+  it("rejects finalizing before uploads are verified", async () => {
+    const app = createApp();
+    const { token, session } = await createPublishSession(app);
+
+    const response = await app.fetch(
+      new Request(`https://axis.example/api/publish-sessions/${session.id}/finalize`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "validation_error" },
+    });
+  });
+
+  it("rejects finalizing without a bearer token", async () => {
+    const app = createApp();
+    const { session } = await createPublishSession(app);
+
+    const response = await app.fetch(
+      new Request(`https://axis.example/api/publish-sessions/${session.id}/finalize`, {
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "unauthorized", message: "Unauthorized" },
     });
   });
 

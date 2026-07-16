@@ -8,8 +8,10 @@ import { createApp } from "./app";
 import { WebCryptoRandomId, Sha256SecretHasher } from "./crypto";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
 import type { AppDependencies } from "./dev-dependencies";
+import { GenericManifestPublisher } from "./generic-manifest-publisher";
 import { MemoryUploadBroker } from "./memory-upload-broker";
 import { R2PresignedUploadBroker } from "./r2-upload-broker";
+import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "./repository-object-store";
 
 export interface AxisEnv {
   AXIS_ADMIN?: DurableObjectNamespace;
@@ -86,12 +88,22 @@ export function createDurableObjectDependencies(
       secretAccessKey: requiredEnv(env.R2_SECRET_ACCESS_KEY, "R2_SECRET_ACCESS_KEY"),
       ...(uploadUrlTtlSeconds === undefined ? {} : { uploadUrlTtlSeconds }),
     });
+  const objectStore = uploadBackend === "memory"
+    ? new MemoryRepositoryObjectStore()
+    : new R2RepositoryObjectStore(requiredR2Bucket(env.AXIS_OBJECTS));
+  const artifactPublisher = new GenericManifestPublisher({ objectStore });
 
   return {
     adminToken: env.ADMIN_TOKEN,
     repositoryService: new RepositoryService({ state, clock, randomId }),
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
-    publishSessionService: new PublishSessionService({ state, uploadBroker, clock, randomId }),
+    publishSessionService: new PublishSessionService({
+      state,
+      uploadBroker,
+      artifactPublisher,
+      clock,
+      randomId,
+    }),
   };
 }
 
