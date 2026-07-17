@@ -248,6 +248,106 @@ describe("AxisAdminDO", () => {
     });
   });
 
+  it("fails closed when finalizing an unregistered ecosystem with memory backend", async () => {
+    const object = createObject({
+      UPLOAD_BACKEND: "memory",
+      AXIS_OBJECTS: undefined,
+      ADMIN_TOKEN: "test-admin-token",
+      R2_ACCOUNT_ID: undefined,
+      R2_BUCKET_NAME: undefined,
+      R2_ACCESS_KEY_ID: undefined,
+      R2_SECRET_ACCESS_KEY: undefined,
+    });
+
+    const createRepository = await object.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "python-internal", ecosystem: "pypi" }),
+      }),
+    );
+    expect(createRepository.status).toBe(201);
+
+    const createToken = await object.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["python-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+        }),
+      }),
+    );
+    expect(createToken.status).toBe(201);
+    const tokenBody = (await createToken.json()) as { secret: string };
+
+    const createSession = await object.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "python-internal",
+          ecosystem: "pypi",
+          artifacts: [
+            {
+              filename: "example-1.0.0.tar.gz",
+              size: 1234,
+              sha256: "b".repeat(64),
+              contentType: "application/gzip",
+              metadata: {},
+            },
+          ],
+        }),
+      }),
+    );
+    expect(createSession.status).toBe(201);
+    const session = (await createSession.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string }>;
+    };
+    const upload = session.uploads[0];
+    if (!upload) {
+      throw new Error("Expected publish session to include an upload target");
+    }
+
+    const verify = await object.fetch(
+      new Request(
+        `https://axis.example/api/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${tokenBody.secret}` },
+        },
+      ),
+    );
+    expect(verify.status).toBe(200);
+
+    const finalize = await object.fetch(
+      new Request(`https://axis.example/api/publish-sessions/${session.id}/finalize`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${tokenBody.secret}` },
+      }),
+    );
+
+    expect(finalize.status).toBe(400);
+    await expect(finalize.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Artifact publisher is not configured for ecosystem: pypi",
+      },
+    });
+  });
+
   it("still requires admin token for memory backend", () => {
     expect(() => createObject({ UPLOAD_BACKEND: "memory", ADMIN_TOKEN: undefined })).toThrow(
       "ADMIN_TOKEN is required for AxisAdminDO",

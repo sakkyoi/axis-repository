@@ -5,6 +5,7 @@ import {
   type Clock,
 } from "@axis-repository/core";
 import { createApp } from "./app";
+import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
 import { WebCryptoRandomId, Sha256SecretHasher } from "./crypto";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
 import type { AppDependencies } from "./dev-dependencies";
@@ -91,7 +92,15 @@ export function createDurableObjectDependencies(
   const objectStore = uploadBackend === "memory"
     ? new MemoryRepositoryObjectStore()
     : new R2RepositoryObjectStore(requiredR2Bucket(env.AXIS_OBJECTS));
-  const artifactPublisher = new GenericManifestPublisher({ objectStore });
+  const genericManifestPublisher = new GenericManifestPublisher({ objectStore });
+  const artifactPublisher = new ArtifactPublisherRegistry();
+  artifactPublisher.register({
+    ecosystem: "apt",
+    name: "generic-manifest",
+    version: "0.0.0",
+    capabilities: ["generic-manifest"],
+    publisher: genericManifestPublisher,
+  });
 
   return {
     adminToken: env.ADMIN_TOKEN,
