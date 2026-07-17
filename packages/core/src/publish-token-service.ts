@@ -7,11 +7,13 @@ function cloneRecord(input: Record<string, unknown>): Record<string, unknown> {
 }
 
 function copyRecord(record: PublishTokenRecord): PublishTokenRecord {
+  const signingKeyIds = record.signingKeyIds ?? [];
   return {
     ...record,
     permissions: [...record.permissions],
     repositories: [...record.repositories],
     ecosystemScopes: cloneRecord(record.ecosystemScopes),
+    signingKeyIds: [...signingKeyIds],
   };
 }
 
@@ -20,6 +22,7 @@ export interface CreatePublishTokenInput {
   permissions: string[];
   repositories: string[];
   ecosystemScopes: Record<string, unknown>;
+  signingKeyIds?: string[];
   expiresAt?: string;
 }
 
@@ -65,6 +68,7 @@ export class PublishTokenService {
       permissions: [...input.permissions],
       repositories: [...input.repositories],
       ecosystemScopes: cloneRecord(input.ecosystemScopes),
+      signingKeyIds: [...(input.signingKeyIds ?? [])],
       createdAt: this.options.clock.now().toISOString(),
       ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt }),
     };
@@ -112,6 +116,7 @@ export class PublishTokenService {
         permissions: [...record.permissions],
         repositories: [...record.repositories],
         ecosystemScopes: cloneRecord(record.ecosystemScopes),
+        signingKeyIds: [...(record.signingKeyIds ?? [])],
       };
     }
     throw new UnauthorizedError();

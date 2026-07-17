@@ -560,6 +560,84 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("creates a publish token with signing key scopes", async () => {
+    const app = createApp();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+          signingKeyIds: ["signing_key_prod"],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      token: { signingKeyIds: ["signing_key_prod"] },
+    });
+  });
+
+  it("creates a publish token with an explicit empty signing key scope", async () => {
+    const app = createApp();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+          signingKeyIds: [],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      token: { signingKeyIds: [] },
+    });
+  });
+
+  it("rejects publish token signing key scopes with non-string values", async () => {
+    const app = createApp();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+          signingKeyIds: ["signing_key_prod", 123],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "signingKeyIds must be an array of strings" },
+    });
+  });
+
   it("rejects invalid publish token expirations", async () => {
     const app = createApp();
 

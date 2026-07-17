@@ -1,6 +1,7 @@
 import type {
   PublishSession,
   PublishTokenRecord,
+  SigningKeyRecord,
   UploadedObject,
   UploadTarget,
   Repository,
@@ -49,6 +50,9 @@ export interface ArtifactPublisher {
 
 export interface RepositoryObjectStore {
   putJson(key: string, value: unknown): Promise<void>;
+  putText(key: string, value: string, contentType: string): Promise<void>;
+  putBytes(key: string, value: Uint8Array, contentType: string): Promise<void>;
+  copyObject(sourceKey: string, destinationKey: string, contentType?: string): Promise<void>;
 }
 
 export interface RepositoryStore {
@@ -78,6 +82,13 @@ export interface PublishTokenStore {
   save(token: PublishTokenRecord): Promise<void>;
 }
 
+export interface SigningKeyStore {
+  getById(id: string): Promise<SigningKeyRecord | null>;
+  getByName(name: string): Promise<SigningKeyRecord | null>;
+  list(): Promise<SigningKeyRecord[]>;
+  save(record: SigningKeyRecord): Promise<void>;
+}
+
 export interface TokenVerifier {
   verifyPublishToken(token: string): Promise<TokenPrincipal | null>;
 }
@@ -86,4 +97,5 @@ export interface StateStore {
   repositories: RepositoryStore;
   publishSessions: PublishSessionStore;
   publishTokens: PublishTokenStore;
+  signingKeys: SigningKeyStore;
 }

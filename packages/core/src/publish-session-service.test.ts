@@ -37,6 +37,7 @@ const principal: TokenPrincipal = {
   permissions: ["publish"],
   repositories: ["debian-internal"],
   ecosystemScopes: {},
+  signingKeyIds: [],
 };
 
 const artifact: PublishArtifactRequest = {
@@ -686,6 +687,7 @@ describe("PublishSessionService", () => {
       },
       publishTokens: backingState.publishTokens,
       publishSessions: backingState.publishSessions,
+      signingKeys: backingState.signingKeys,
     };
     const service = new PublishSessionService({
       state,
@@ -834,6 +836,7 @@ describe("PublishSessionService", () => {
     const state: StateStore = {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
+      signingKeys: backingState.signingKeys,
       publishSessions: {
         ...backingState.publishSessions,
         save: async (session: PublishSession) => {
@@ -920,6 +923,7 @@ describe("PublishSessionService", () => {
     const state: StateStore = {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
+      signingKeys: backingState.signingKeys,
       publishSessions: {
         ...backingState.publishSessions,
         update: async (id, updater) => {

@@ -25,6 +25,7 @@ function publishInput(ecosystem: string): PublishArtifactsInput {
         permissions: ["publish"],
         repositories: [`${ecosystem}-internal`],
         ecosystemScopes: {},
+        signingKeyIds: [],
       },
       artifacts: [],
       uploads: [],

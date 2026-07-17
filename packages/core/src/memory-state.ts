@@ -1,4 +1,4 @@
-import type { PublishSession, PublishTokenRecord, Repository } from "./domain";
+import type { PublishSession, PublishTokenRecord, Repository, SigningKeyRecord } from "./domain";
 import type { StateStore } from "./ports";
 
 function clonePublishSession(session: PublishSession): PublishSession {
@@ -10,6 +10,8 @@ export class MemoryStateStore implements StateStore {
   private readonly publishSessionById = new Map<string, PublishSession>();
   private readonly publishTokenById = new Map<string, PublishTokenRecord>();
   private readonly publishTokenIdByName = new Map<string, string>();
+  private readonly signingKeyById = new Map<string, SigningKeyRecord>();
+  private readonly signingKeyIdByName = new Map<string, string>();
 
   readonly repositories = {
     getByName: async (name: string): Promise<Repository | null> => {
@@ -87,6 +89,35 @@ export class MemoryStateStore implements StateStore {
 
       this.publishTokenById.set(token.id, token);
       this.publishTokenIdByName.set(token.name, token.id);
+    },
+  };
+
+  readonly signingKeys = {
+    getById: async (id: string): Promise<SigningKeyRecord | null> => {
+      return this.signingKeyById.get(id) ?? null;
+    },
+    getByName: async (name: string): Promise<SigningKeyRecord | null> => {
+      const id = this.signingKeyIdByName.get(name);
+      return id ? this.signingKeyById.get(id) ?? null : null;
+    },
+    list: async (): Promise<SigningKeyRecord[]> => {
+      return [...this.signingKeyById.values()].sort((left, right) =>
+        left.name.localeCompare(right.name),
+      );
+    },
+    save: async (record: SigningKeyRecord): Promise<void> => {
+      const existing = this.signingKeyById.get(record.id);
+      if (existing && existing.name !== record.name) {
+        this.signingKeyIdByName.delete(existing.name);
+      }
+
+      const existingIdForName = this.signingKeyIdByName.get(record.name);
+      if (existingIdForName && existingIdForName !== record.id) {
+        this.signingKeyById.delete(existingIdForName);
+      }
+
+      this.signingKeyById.set(record.id, record);
+      this.signingKeyIdByName.set(record.name, record.id);
     },
   };
 }

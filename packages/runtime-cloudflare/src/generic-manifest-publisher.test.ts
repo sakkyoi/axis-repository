@@ -12,6 +12,18 @@ class FailingPublishObjectStore implements RepositoryObjectStore {
       throw new Error("publish write failed");
     }
   }
+
+  async putText(key: string): Promise<void> {
+    this.keys.push(key);
+  }
+
+  async putBytes(key: string): Promise<void> {
+    this.keys.push(key);
+  }
+
+  async copyObject(sourceKey: string, destinationKey: string): Promise<void> {
+    this.keys.push(`${sourceKey}->${destinationKey}`);
+  }
 }
 
 describe("GenericManifestPublisher", () => {
@@ -42,6 +54,7 @@ describe("GenericManifestPublisher", () => {
           permissions: ["publish"],
           repositories: ["debian-internal"],
           ecosystemScopes: {},
+          signingKeyIds: [],
         },
         artifacts: [],
         uploads: [],
@@ -137,6 +150,7 @@ describe("GenericManifestPublisher", () => {
           permissions: ["publish"],
           repositories: ["debian-internal"],
           ecosystemScopes: {},
+          signingKeyIds: [],
         },
         artifacts: [],
         uploads: [],
@@ -178,6 +192,7 @@ describe("GenericManifestPublisher", () => {
           permissions: ["publish"],
           repositories: ["debian-internal"],
           ecosystemScopes: {},
+          signingKeyIds: [],
         },
         artifacts: [],
         uploads: [],

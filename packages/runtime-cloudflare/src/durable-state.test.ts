@@ -3,6 +3,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  SigningKeyRecord,
 } from "@axis-repository/core";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
 
@@ -53,12 +54,33 @@ const publishSession = (overrides: Partial<PublishSession>): PublishSession => (
     permissions: ["publish"],
     repositories: ["debian-internal"],
     ecosystemScopes: {},
+    signingKeyIds: [],
   },
   artifacts: [],
   uploads: [],
   verifiedUploads: [],
   createdAt: "2026-07-14T00:00:00.000Z",
   expiresAt: "2026-07-14T00:15:00.000Z",
+  ...overrides,
+});
+
+const signingKey = (overrides: Partial<SigningKeyRecord> = {}): SigningKeyRecord => ({
+  id: "signing_key_1",
+  name: "debian-prod",
+  publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----",
+  encryptedPrivateKeyArmored: {
+    algorithm: "AES-GCM",
+    iv: "iv",
+    ciphertext: "private",
+  },
+  encryptedPassphrase: {
+    algorithm: "AES-GCM",
+    iv: "iv2",
+    ciphertext: "passphrase",
+  },
+  fingerprint: "A".repeat(40),
+  keyId: "B".repeat(16),
+  createdAt: "2026-07-18T00:00:00.000Z",
   ...overrides,
 });
 
@@ -175,6 +197,7 @@ describe("DurableStateStore", () => {
       permissions: ["publish"],
       repositories: ["debian-internal"],
       ecosystemScopes: {},
+      signingKeyIds: [],
       createdAt: "2026-07-14T00:00:00.000Z",
     };
 
@@ -184,6 +207,34 @@ describe("DurableStateStore", () => {
     await expect(state.publishTokens.getByName("old-name")).resolves.toBeNull();
     await expect(state.publishTokens.getByName("new-name")).resolves.toMatchObject({
       id: "ptok_1",
+    });
+  });
+
+  it("persists signing keys by id and name and lists them sorted", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    await state.signingKeys.save(signingKey({ id: "signing_key_2", name: "zeta" }));
+    await state.signingKeys.save(signingKey({ id: "signing_key_1", name: "alpha" }));
+
+    await expect(state.signingKeys.getById("signing_key_1")).resolves.toMatchObject({
+      name: "alpha",
+    });
+    await expect(state.signingKeys.getByName("zeta")).resolves.toMatchObject({
+      id: "signing_key_2",
+    });
+    await expect(state.signingKeys.list()).resolves.toMatchObject([
+      { name: "alpha" },
+      { name: "zeta" },
+    ]);
+  });
+
+  it("keeps signing key name and id indexes consistent when a name changes", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    await state.signingKeys.save(signingKey({ id: "signing_key_1", name: "old-name" }));
+    await state.signingKeys.save(signingKey({ id: "signing_key_1", name: "new-name" }));
+
+    await expect(state.signingKeys.getByName("old-name")).resolves.toBeNull();
+    await expect(state.signingKeys.getByName("new-name")).resolves.toMatchObject({
+      id: "signing_key_1",
     });
   });
 });

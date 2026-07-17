@@ -12,12 +12,31 @@ export interface Repository {
   updatedAt: string;
 }
 
+export interface EncryptedSecret {
+  algorithm: "AES-GCM";
+  iv: string;
+  ciphertext: string;
+}
+
+export interface SigningKeyRecord {
+  id: string;
+  name: string;
+  publicKeyArmored: string;
+  encryptedPrivateKeyArmored: EncryptedSecret;
+  encryptedPassphrase: EncryptedSecret;
+  fingerprint: string;
+  keyId: string;
+  createdAt: string;
+  revokedAt?: string;
+}
+
 export interface TokenPrincipal {
   tokenId: string;
   name: string;
   permissions: string[];
   repositories: string[];
   ecosystemScopes: Record<string, unknown>;
+  signingKeyIds: string[];
 }
 
 export interface PublishTokenRecord {
@@ -27,6 +46,7 @@ export interface PublishTokenRecord {
   permissions: string[];
   repositories: string[];
   ecosystemScopes: Record<string, unknown>;
+  signingKeyIds: string[];
   createdAt: string;
   expiresAt?: string;
   revokedAt?: string;

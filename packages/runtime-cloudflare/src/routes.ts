@@ -59,6 +59,15 @@ function optionalStringField(body: Record<string, unknown>, key: string): string
   return value;
 }
 
+function optionalStringArrayField(body: Record<string, unknown>, key: string): string[] | undefined {
+  const value = body[key];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
+    throw new ValidationError(`${key} must be an array of strings`);
+  }
+  return [...value];
+}
+
 function parseArtifact(value: unknown, index: number): PublishArtifactRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new ValidationError(`artifacts[${index}] must be an object`);
@@ -125,12 +134,14 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     if (request.method === "POST") {
       const body = await readJsonObject(request);
       const expiresAt = optionalStringField(body, "expiresAt");
+      const signingKeyIds = optionalStringArrayField(body, "signingKeyIds");
       const result = await dependencies.publishTokenService.create({
         name: stringField(body, "name"),
         repositories: stringArrayField(body, "repositories"),
         permissions: stringArrayField(body, "permissions"),
         ecosystemScopes: optionalObjectField(body, "ecosystemScopes") ?? {},
         ...(expiresAt === undefined ? {} : { expiresAt }),
+        ...(signingKeyIds === undefined ? {} : { signingKeyIds }),
       });
       return jsonResponse(
         {
