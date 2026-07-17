@@ -7,6 +7,7 @@ import {
   type RandomId,
   type SecretHasher,
 } from "@axis-repository/core";
+import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
 import { GenericManifestPublisher } from "./generic-manifest-publisher";
 import MemoryUploadBroker from "./memory-upload-broker";
 import { MemoryRepositoryObjectStore } from "./repository-object-store";
@@ -32,7 +33,15 @@ export function createDevDependencies(adminToken = "dev-admin-token"): AppDepend
   };
   const uploadBroker = new MemoryUploadBroker();
   const objectStore = new MemoryRepositoryObjectStore();
-  const artifactPublisher = new GenericManifestPublisher({ objectStore });
+  const genericManifestPublisher = new GenericManifestPublisher({ objectStore });
+  const artifactPublisher = new ArtifactPublisherRegistry();
+  artifactPublisher.register({
+    ecosystem: "apt",
+    name: "generic-manifest",
+    version: "0.0.0",
+    capabilities: ["generic-manifest"],
+    publisher: genericManifestPublisher,
+  });
 
   return {
     adminToken,

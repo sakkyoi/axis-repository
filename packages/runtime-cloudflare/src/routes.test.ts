@@ -375,6 +375,96 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("fails closed when finalizing a repository with no registered publisher", async () => {
+    const app = createApp();
+
+    await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "python-internal", ecosystem: "pypi" }),
+      }),
+    );
+
+    const tokenResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["python-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+        }),
+      }),
+    );
+    const tokenBody = (await tokenResponse.json()) as { secret: string };
+
+    const sessionResponse = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "python-internal",
+          ecosystem: "pypi",
+          artifacts: [
+            {
+              filename: "example-1.0.0.tar.gz",
+              size: 1234,
+              sha256: "b".repeat(64),
+              contentType: "application/gzip",
+              metadata: {},
+            },
+          ],
+        }),
+      }),
+    );
+    expect(sessionResponse.status).toBe(201);
+    const session = (await sessionResponse.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string }>;
+    };
+    const upload = session.uploads[0];
+    if (!upload) {
+      throw new Error("Expected publish session to include an upload target");
+    }
+
+    const verifyResponse = await app.fetch(
+      new Request(
+        `https://axis.example/api/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${tokenBody.secret}` },
+        },
+      ),
+    );
+    expect(verifyResponse.status).toBe(200);
+
+    const finalizeResponse = await app.fetch(
+      new Request(`https://axis.example/api/publish-sessions/${session.id}/finalize`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${tokenBody.secret}` },
+      }),
+    );
+
+    expect(finalizeResponse.status).toBe(400);
+    await expect(finalizeResponse.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Artifact publisher is not configured for ecosystem: pypi",
+      },
+    });
+  });
+
   it("rejects finalizing before uploads are verified", async () => {
     const app = createApp();
     const { token, session } = await createPublishSession(app);
