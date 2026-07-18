@@ -48,9 +48,21 @@ export interface ArtifactPublisher {
   publish(input: PublishArtifactsInput): Promise<PublishResult>;
 }
 
+export interface RepositoryObjectRange {
+  offset: number;
+  length: number;
+}
+
+export interface RepositoryObjectReadOptions {
+  range?: RepositoryObjectRange;
+}
+
 export interface RepositoryObject {
   body: string | Uint8Array | ReadableStream;
   contentType?: string;
+  contentLength?: number;
+  etag?: string;
+  range?: RepositoryObjectRange;
 }
 
 export interface RepositoryObjectStore {
@@ -58,7 +70,7 @@ export interface RepositoryObjectStore {
   putText(key: string, value: string, contentType: string): Promise<void>;
   putBytes(key: string, value: Uint8Array, contentType: string): Promise<void>;
   copyObject(sourceKey: string, destinationKey: string, contentType?: string): Promise<void>;
-  getObject(key: string): Promise<RepositoryObject | null>;
+  getObject(key: string, options?: RepositoryObjectReadOptions): Promise<RepositoryObject | null>;
 }
 
 export interface RepositoryStore {

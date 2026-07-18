@@ -1,4 +1,8 @@
-import type { RepositoryObject, RepositoryObjectStore } from "@axis-repository/core";
+import type {
+  RepositoryObject,
+  RepositoryObjectReadOptions,
+  RepositoryObjectStore,
+} from "@axis-repository/core";
 
 export const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
@@ -51,20 +55,27 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
     });
   }
 
-  async getObject(key: string): Promise<RepositoryObject | null> {
+  async getObject(
+    key: string,
+    options?: RepositoryObjectReadOptions,
+  ): Promise<RepositoryObject | null> {
     const source = [...this.objects].reverse().find((object) => object.key === key);
     if (!source) {
       return null;
     }
-    if (source.contentType === undefined && typeof source.value !== "string" && !(source.value instanceof Uint8Array)) {
-      return {
-        body: JSON.stringify(source.value),
-        contentType: JSON_CONTENT_TYPE,
-      };
-    }
+
+    const fullObject = memoryObjectValue(source.value, source.contentType);
+    const bytes = bytesFromBody(fullObject.body);
+    const rangedBody = options?.range
+      ? bodyFromBytes(bytes.slice(options.range.offset, options.range.offset + options.range.length), fullObject.body)
+      : cloneObjectValue(fullObject.body) as string | Uint8Array;
+
     return {
-      body: cloneObjectValue(source.value) as string | Uint8Array,
-      ...(source.contentType !== undefined ? { contentType: source.contentType } : {}),
+      body: rangedBody,
+      contentType: fullObject.contentType,
+      contentLength: bytes.byteLength,
+      etag: await etagForBytes(bytes),
+      ...(options?.range ? { range: options.range } : {}),
     };
   }
 }
@@ -107,7 +118,10 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
     });
   }
 
-  async getObject(key: string): Promise<RepositoryObject | null> {
+  async getObject(
+    key: string,
+    _options?: RepositoryObjectReadOptions,
+  ): Promise<RepositoryObject | null> {
     const source = await this.bucket.get(key);
     if (!source) {
       return null;
@@ -129,4 +143,39 @@ function cloneObjectValue(value: unknown): unknown {
     return value;
   }
   return JSON.parse(JSON.stringify(value)) as unknown;
+}
+
+function memoryObjectValue(
+  value: unknown,
+  contentType: string | undefined,
+): { body: string | Uint8Array; contentType: string } {
+  if (contentType === undefined && typeof value !== "string" && !(value instanceof Uint8Array)) {
+    return {
+      body: JSON.stringify(value),
+      contentType: JSON_CONTENT_TYPE,
+    };
+  }
+  return {
+    body: cloneObjectValue(value) as string | Uint8Array,
+    contentType: contentType ?? "application/octet-stream",
+  };
+}
+
+function bytesFromBody(body: string | Uint8Array): Uint8Array {
+  if (typeof body === "string") {
+    return new TextEncoder().encode(body);
+  }
+  return new Uint8Array(body);
+}
+
+function bodyFromBytes(bytes: Uint8Array, sourceBody: string | Uint8Array): string | Uint8Array {
+  if (typeof sourceBody === "string") {
+    return new TextDecoder().decode(bytes);
+  }
+  return bytes;
+}
+
+async function etagForBytes(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return `"${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}"`;
 }

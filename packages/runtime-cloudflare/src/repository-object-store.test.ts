@@ -119,10 +119,32 @@ describe("MemoryRepositoryObjectStore", () => {
 
     await store.putJson("repositories/debian/latest.json", { repository: "debian" });
 
-    await expect(store.getObject("repositories/debian/latest.json")).resolves.toEqual({
+    const object = await store.getObject("repositories/debian/latest.json");
+
+    expect(object).toMatchObject({
       body: JSON.stringify({ repository: "debian" }),
       contentType: JSON_CONTENT_TYPE,
+      contentLength: 23,
     });
+    expect(object?.etag).toMatch(/^"[a-f0-9]{64}"$/);
+  });
+
+  it("reads memory objects with length and deterministic etag metadata", async () => {
+    const store = new MemoryRepositoryObjectStore();
+    await store.putText(
+      "repositories/debian/dists/noble/InRelease",
+      "signed release",
+      "text/plain",
+    );
+
+    const object = await store.getObject("repositories/debian/dists/noble/InRelease");
+
+    expect(object).toMatchObject({
+      body: "signed release",
+      contentType: "text/plain",
+      contentLength: 14,
+    });
+    expect(object?.etag).toMatch(/^"[a-f0-9]{64}"$/);
   });
 
   it("captures text objects with content metadata", async () => {
@@ -199,10 +221,12 @@ describe("MemoryRepositoryObjectStore", () => {
 
     const object = await store.getObject("repositories/debian/dists/noble/Release");
 
-    expect(object).toEqual({
+    expect(object).toMatchObject({
       body: "new",
       contentType: "text/plain; charset=utf-8",
+      contentLength: 3,
     });
+    expect(object?.etag).toMatch(/^"[a-f0-9]{64}"$/);
   });
 
   it("reads memory byte objects as immutable snapshots", async () => {
@@ -217,9 +241,31 @@ describe("MemoryRepositoryObjectStore", () => {
 
     const object = await store.getObject("repositories/debian/pool/main/app.deb");
 
-    expect(object).toEqual({
+    expect(object).toMatchObject({
       body: new Uint8Array([1, 2, 3]),
       contentType: "application/vnd.debian.binary-package",
+      contentLength: 3,
+    });
+    expect(object?.etag).toMatch(/^"[a-f0-9]{64}"$/);
+  });
+
+  it("reads byte ranges from memory objects", async () => {
+    const store = new MemoryRepositoryObjectStore();
+    await store.putText(
+      "repositories/debian/pool/main/app.deb",
+      "0123456789",
+      "application/vnd.debian.binary-package",
+    );
+
+    const object = await store.getObject("repositories/debian/pool/main/app.deb", {
+      range: { offset: 2, length: 4 },
+    });
+
+    expect(object).toMatchObject({
+      body: "2345",
+      contentType: "application/vnd.debian.binary-package",
+      contentLength: 10,
+      range: { offset: 2, length: 4 },
     });
   });
 
