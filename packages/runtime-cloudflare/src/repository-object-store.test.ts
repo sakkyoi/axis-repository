@@ -3,10 +3,10 @@ import {
   JSON_CONTENT_TYPE,
   MemoryRepositoryObjectStore,
   R2RepositoryObjectStore,
-  type R2JsonBucket,
+  type R2ObjectBucket,
 } from "./repository-object-store";
 
-class FakeR2Bucket implements R2JsonBucket {
+class FakeR2Bucket implements R2ObjectBucket {
   readonly puts: Array<{
     key: string;
     value: string | Uint8Array | ReadableStream;
@@ -191,6 +191,46 @@ describe("R2RepositoryObjectStore", () => {
         options: {
           httpMetadata: {
             contentType: JSON_CONTENT_TYPE,
+          },
+        },
+      },
+    ]);
+  });
+
+  it("writes text with content metadata", async () => {
+    const bucket = new FakeR2Bucket();
+    const store = new R2RepositoryObjectStore(bucket);
+
+    await store.putText("dists/noble/Release", "Origin: Axis\n", "text/plain");
+
+    expect(bucket.puts).toEqual([
+      {
+        key: "dists/noble/Release",
+        value: "Origin: Axis\n",
+        options: {
+          httpMetadata: {
+            contentType: "text/plain",
+          },
+        },
+      },
+    ]);
+  });
+
+  it("writes bytes with content metadata and snapshots byte input", async () => {
+    const bucket = new FakeR2Bucket();
+    const store = new R2RepositoryObjectStore(bucket);
+    const bytes = new Uint8Array([1, 2, 3]);
+
+    await store.putBytes("pool/pkg.deb", bytes, "application/vnd.debian.binary-package");
+    bytes[0] = 9;
+
+    expect(bucket.puts).toEqual([
+      {
+        key: "pool/pkg.deb",
+        value: new Uint8Array([1, 2, 3]),
+        options: {
+          httpMetadata: {
+            contentType: "application/vnd.debian.binary-package",
           },
         },
       },

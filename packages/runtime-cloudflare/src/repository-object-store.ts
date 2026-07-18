@@ -8,7 +8,7 @@ export interface R2ReadableObject {
   arrayBuffer(): Promise<ArrayBuffer>;
 }
 
-export interface R2JsonBucket {
+export interface R2ObjectBucket {
   get(key: string): Promise<R2ReadableObject | null>;
   put(
     key: string,
@@ -53,7 +53,7 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
 }
 
 export class R2RepositoryObjectStore implements RepositoryObjectStore {
-  constructor(private readonly bucket: R2JsonBucket) {}
+  constructor(private readonly bucket: R2ObjectBucket) {}
 
   async putJson(key: string, value: unknown): Promise<void> {
     await this.bucket.put(key, JSON.stringify(value), {
@@ -68,7 +68,7 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
   }
 
   async putBytes(key: string, value: Uint8Array, contentType: string): Promise<void> {
-    await this.bucket.put(key, value, {
+    await this.bucket.put(key, new Uint8Array(value), {
       httpMetadata: { contentType },
     });
   }
