@@ -13,28 +13,37 @@ class FakeR2Bucket implements R2ObjectBucket {
     value: string | Uint8Array | ReadableStream;
     options?: { httpMetadata?: { contentType?: string } };
   }> = [];
+  readonly getCalls: Array<{
+    key: string;
+    options?: { range?: { offset: number; length: number } };
+  }> = [];
   failArrayBufferReads = false;
 
-  async get(key: string): Promise<R2ReadableObject | null> {
+  async get(
+    key: string,
+    options?: { range?: { offset: number; length: number } },
+  ): Promise<R2ReadableObject | null> {
+    this.getCalls.push(options === undefined ? { key } : { key, options });
     const object = [...this.puts].reverse().find((put) => put.key === key);
     if (!object) {
       return null;
     }
+    const bytes = await bytesFromStoredValue(object.value);
+    const bodyBytes = options?.range
+      ? bytes.slice(options.range.offset, options.range.offset + options.range.length)
+      : bytes;
 
     return {
       ...(object.options?.httpMetadata ? { httpMetadata: object.options.httpMetadata } : {}),
-      body: streamFromStoredValue(object.value),
+      etag: `fake-${bytes.byteLength}`,
+      httpEtag: `"fake-${bytes.byteLength}"`,
+      size: bytes.byteLength,
+      body: streamFromBytes(bodyBytes),
       arrayBuffer: async () => {
         if (this.failArrayBufferReads) {
           throw new Error("arrayBuffer should not be used");
         }
-        if (typeof object.value === "string") {
-          return arrayBufferFromBytes(new TextEncoder().encode(object.value));
-        }
-        if (object.value instanceof ReadableStream) {
-          return arrayBufferFromBytes(await readStream(object.value));
-        }
-        return arrayBufferFromBytes(object.value);
+        return arrayBufferFromBytes(bodyBytes);
       },
     };
   }
@@ -59,12 +68,26 @@ function streamFromStoredValue(value: string | Uint8Array | ReadableStream): Rea
     return value;
   }
   const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  return streamFromBytes(bytes);
+}
+
+function streamFromBytes(bytes: Uint8Array): ReadableStream {
   return new ReadableStream({
     start(controller) {
       controller.enqueue(bytes);
       controller.close();
     },
   });
+}
+
+async function bytesFromStoredValue(value: string | Uint8Array | ReadableStream): Promise<Uint8Array> {
+  if (typeof value === "string") {
+    return new TextEncoder().encode(value);
+  }
+  if (value instanceof ReadableStream) {
+    return readStream(value);
+  }
+  return new Uint8Array(value);
 }
 
 async function readStream(stream: ReadableStream): Promise<Uint8Array> {
@@ -408,6 +431,34 @@ describe("R2RepositoryObjectStore", () => {
     );
   });
 
+  it("reads ranged objects from R2 with metadata", async () => {
+    const bucket = new FakeR2Bucket();
+    await bucket.put(
+      "repositories/debian/pool/main/app.deb",
+      new TextEncoder().encode("0123456789"),
+      {
+        httpMetadata: { contentType: "application/vnd.debian.binary-package" },
+      },
+    );
+    const store = new R2RepositoryObjectStore(bucket);
+
+    const object = await store.getObject("repositories/debian/pool/main/app.deb", {
+      range: { offset: 3, length: 4 },
+    });
+
+    expect(object).toMatchObject({
+      contentType: "application/vnd.debian.binary-package",
+      contentLength: 10,
+      etag: "\"fake-10\"",
+      range: { offset: 3, length: 4 },
+    });
+    await expect(new Response(object?.body).text()).resolves.toBe("3456");
+    expect(bucket.getCalls.at(-1)).toMatchObject({
+      key: "repositories/debian/pool/main/app.deb",
+      options: { range: { offset: 3, length: 4 } },
+    });
+  });
+
   it("falls back to R2 arrayBuffer when no body stream exists", async () => {
     const bucket = new FakeR2Bucket();
     const store = new R2RepositoryObjectStore(bucket);
@@ -428,9 +479,11 @@ describe("R2RepositoryObjectStore", () => {
 
     const object = await store.getObject("repositories/debian/dists/noble/Release");
 
-    expect(object).toEqual({
+    expect(object).toMatchObject({
       body: new TextEncoder().encode("release"),
       contentType: "text/plain; charset=utf-8",
+      contentLength: 7,
+      etag: "\"fake-7\"",
     });
   });
 

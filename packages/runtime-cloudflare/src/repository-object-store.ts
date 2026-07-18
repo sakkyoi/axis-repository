@@ -8,12 +8,15 @@ export const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
 export interface R2ReadableObject {
   httpMetadata?: { contentType?: string };
+  etag?: string;
+  httpEtag?: string;
+  size?: number;
   body?: ReadableStream;
   arrayBuffer(): Promise<ArrayBuffer>;
 }
 
 export interface R2ObjectBucket {
-  get(key: string): Promise<R2ReadableObject | null>;
+  get(key: string, options?: RepositoryObjectReadOptions): Promise<R2ReadableObject | null>;
   put(
     key: string,
     value: string | Uint8Array | ReadableStream,
@@ -120,9 +123,9 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
 
   async getObject(
     key: string,
-    _options?: RepositoryObjectReadOptions,
+    options?: RepositoryObjectReadOptions,
   ): Promise<RepositoryObject | null> {
-    const source = await this.bucket.get(key);
+    const source = await this.bucket.get(key, options);
     if (!source) {
       return null;
     }
@@ -131,6 +134,9 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
       ...(source.httpMetadata?.contentType !== undefined
         ? { contentType: source.httpMetadata.contentType }
         : {}),
+      ...(source.size !== undefined ? { contentLength: source.size } : {}),
+      ...(source.httpEtag !== undefined ? { etag: source.httpEtag } : {}),
+      ...(options?.range ? { range: options.range } : {}),
     };
   }
 }
