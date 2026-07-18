@@ -307,7 +307,7 @@ describe("AxisAdminDO", () => {
         body: JSON.stringify({
           name: "github-actions",
           repositories: ["debian-internal"],
-          permissions: ["publish"],
+          permissions: ["read", "publish"],
           ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
           signingKeyIds: [signingKey.id],
         }),
@@ -420,6 +420,16 @@ describe("AxisAdminDO", () => {
       .toContain("-----BEGIN PGP SIGNED MESSAGE-----");
     expect(readBucketText(bucket, "repositories/debian-internal/dists/noble/Release.gpg"))
       .toContain("-----BEGIN PGP SIGNATURE-----");
+
+    const read = await object.fetch(
+      new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease", {
+        headers: { authorization: `Bearer ${tokenBody.secret}` },
+      }),
+    );
+
+    expect(read.status).toBe(200);
+    expect(read.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    await expect(read.text()).resolves.toContain("-----BEGIN PGP SIGNED MESSAGE-----");
   });
 
   it("fails closed when finalizing an unregistered ecosystem with memory backend", async () => {
