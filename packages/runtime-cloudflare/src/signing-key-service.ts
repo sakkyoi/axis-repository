@@ -1,0 +1,115 @@
+import {
+  NotFoundError,
+  ValidationError,
+  type Clock,
+  type RandomId,
+  type SigningKeyRecord,
+  type StateStore,
+} from "@axis-repository/core";
+import { decryptKey, readPrivateKey } from "openpgp";
+import type { SecretEncryption } from "./secret-encryption";
+
+export interface PublicSigningKey {
+  id: string;
+  name: string;
+  publicKeyArmored: string;
+  fingerprint: string;
+  keyId: string;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export interface ActivePrivateSigningKey {
+  id: string;
+  privateKeyArmored: string;
+  passphrase: string;
+  fingerprint: string;
+  keyId: string;
+}
+
+export class SigningKeyService {
+  constructor(
+    private readonly options: {
+      state: StateStore;
+      clock: Clock;
+      randomId: RandomId;
+      encryption: SecretEncryption;
+    },
+  ) {}
+
+  async create(input: { name: string; privateKeyArmored: string; passphrase: string }): Promise<PublicSigningKey> {
+    const name = input.name.trim();
+    if (!name) throw new ValidationError("Signing key name is required");
+    if (await this.options.state.signingKeys.getByName(name)) {
+      throw new ValidationError(`Signing key already exists: ${name}`);
+    }
+
+    const privateKey = await this.readAndDecryptPrivateKey(input.privateKeyArmored, input.passphrase);
+    const fingerprint = privateKey.getFingerprint().toUpperCase();
+    if ((await this.options.state.signingKeys.list()).some((record) => record.fingerprint === fingerprint)) {
+      throw new ValidationError(`Signing key already exists with fingerprint: ${fingerprint}`);
+    }
+
+    const publicKeyArmored = privateKey.toPublic().armor();
+    const record: SigningKeyRecord = {
+      id: this.options.randomId.create("signing_key"),
+      name,
+      publicKeyArmored,
+      encryptedPrivateKeyArmored: await this.options.encryption.encrypt(input.privateKeyArmored),
+      encryptedPassphrase: await this.options.encryption.encrypt(input.passphrase),
+      fingerprint,
+      keyId: privateKey.getKeyID().toHex().toUpperCase(),
+      createdAt: this.options.clock.now().toISOString(),
+    };
+    await this.options.state.signingKeys.save(record);
+    return this.toPublic(record);
+  }
+
+  async list(): Promise<PublicSigningKey[]> {
+    return (await this.options.state.signingKeys.list()).map((record) => this.toPublic(record));
+  }
+
+  async revoke(id: string): Promise<PublicSigningKey> {
+    const record = await this.options.state.signingKeys.getById(id);
+    if (!record) throw new NotFoundError();
+    if (record.revokedAt) return this.toPublic(record);
+
+    const revoked: SigningKeyRecord = { ...record, revokedAt: this.options.clock.now().toISOString() };
+    await this.options.state.signingKeys.save(revoked);
+    return this.toPublic(revoked);
+  }
+
+  async getActivePrivateKey(id: string): Promise<ActivePrivateSigningKey> {
+    const record = await this.options.state.signingKeys.getById(id);
+    if (!record) throw new NotFoundError();
+    if (record.revokedAt) throw new ValidationError("Signing key has been revoked");
+    return {
+      id: record.id,
+      privateKeyArmored: await this.options.encryption.decrypt(record.encryptedPrivateKeyArmored),
+      passphrase: await this.options.encryption.decrypt(record.encryptedPassphrase),
+      fingerprint: record.fingerprint,
+      keyId: record.keyId,
+    };
+  }
+
+  private async readAndDecryptPrivateKey(privateKeyArmored: string, passphrase: string) {
+    try {
+      const privateKey = await readPrivateKey({ armoredKey: privateKeyArmored });
+      return await decryptKey({ privateKey, passphrase });
+    } catch {
+      throw new ValidationError("Signing key private key or passphrase is invalid");
+    }
+  }
+
+  private toPublic(record: SigningKeyRecord): PublicSigningKey {
+    return {
+      id: record.id,
+      name: record.name,
+      publicKeyArmored: record.publicKeyArmored,
+      fingerprint: record.fingerprint,
+      keyId: record.keyId,
+      createdAt: record.createdAt,
+      revokedAt: record.revokedAt ?? null,
+    };
+  }
+}

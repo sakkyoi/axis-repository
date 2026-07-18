@@ -31,6 +31,9 @@ importers:
       aws4fetch:
         specifier: ^1.0.20
         version: 1.0.20
+      openpgp:
+        specifier: ^6.3.1
+        version: 6.3.1
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20241218.0
@@ -644,6 +647,15 @@ packages:
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
     engines: {node: '>=0.10.0'}
+
+  openpgp@6.3.1:
+    resolution: {integrity: sha512-7oSPvmlKPojxFoyelT5DWPIAVmqWZh4qU/5pO6bdoShEtRpCw9Sye9IXUQj6EFM3XpgGssqccAr705YtTcLNQw==}
+    engines: {node: '>= 18.0.0', typescript: '>= 5.0.0'}
+    peerDependencies:
+      '@openpgp/web-stream-tools': ~0.3.0
+    peerDependenciesMeta:
+      '@openpgp/web-stream-tools':
+        optional: true
 
   pathe@1.1.2:
     resolution: {integrity: sha512-whLdWMYL2TwI08hn8/ZqAbrVemu0LNaNNJZX73O6qaIdCTfXutsLhMkjdENX0qhsQ9uIimo4/aQOmXkoon2nDQ==}
@@ -1293,6 +1305,8 @@ snapshots:
   nanoid@3.3.16: {}
 
   object-assign@4.1.1: {}
+
+  openpgp@6.3.1: {}
 
   pathe@1.1.2: {}
 
