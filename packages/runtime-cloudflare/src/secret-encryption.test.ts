@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { SecretEncryption } from "./secret-encryption";
 
+function replaceFirstBase64UrlCharacter(value: string): string {
+  const replacement = value.startsWith("A") ? "B" : "A";
+  return `${replacement}${value.slice(1)}`;
+}
+
 describe("SecretEncryption", () => {
   it("requires a non-empty encryption secret", () => {
     expect(() => new SecretEncryption("   ")).toThrow(
@@ -73,7 +78,7 @@ describe("SecretEncryption", () => {
     await expect(
       encryption.decrypt({
         ...encrypted,
-        ciphertext: `${encrypted.ciphertext.slice(0, -1)}A`,
+        ciphertext: replaceFirstBase64UrlCharacter(encrypted.ciphertext),
       }),
     ).rejects.toThrow();
   });
