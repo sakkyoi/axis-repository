@@ -11,15 +11,21 @@ import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
 import { GenericManifestPublisher } from "./generic-manifest-publisher";
 import MemoryUploadBroker from "./memory-upload-broker";
 import { MemoryRepositoryObjectStore } from "./repository-object-store";
+import { SecretEncryption } from "./secret-encryption";
+import { SigningKeyService } from "./signing-key-service";
 
 export interface AppDependencies {
   adminToken: string;
   repositoryService: RepositoryService;
   publishTokenService: PublishTokenService;
   publishSessionService: PublishSessionService;
+  signingKeyService: SigningKeyService;
 }
 
-export function createDevDependencies(adminToken = "dev-admin-token"): AppDependencies {
+export function createDevDependencies(
+  adminToken = "dev-admin-token",
+  signingKeyEncryptionSecret = "dev-signing-key-encryption-secret",
+): AppDependencies {
   const state = new MemoryStateStore();
   const clock: Clock = { now: () => new Date() };
   const randomId: RandomId = {
@@ -53,6 +59,12 @@ export function createDevDependencies(adminToken = "dev-admin-token"): AppDepend
       artifactPublisher,
       clock,
       randomId,
+    }),
+    signingKeyService: new SigningKeyService({
+      state,
+      clock,
+      randomId,
+      encryption: new SecretEncryption(signingKeyEncryptionSecret),
     }),
   };
 }

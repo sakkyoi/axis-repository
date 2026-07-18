@@ -152,6 +152,37 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       );
     }
   }
+  if (url.pathname === "/admin/signing-keys") {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method === "GET") {
+      return jsonResponse({
+        signingKeys: await dependencies.signingKeyService.list(),
+      });
+    }
+    if (request.method === "POST") {
+      const body = await readJsonObject(request);
+      const key = await dependencies.signingKeyService.create({
+        name: stringField(body, "name"),
+        privateKeyArmored: stringField(body, "privateKeyArmored"),
+        passphrase: stringField(body, "passphrase"),
+      });
+      return jsonResponse(key, { status: 201 });
+    }
+  }
+  const revokeSigningKeyMatch = url.pathname.match(
+    /^\/admin\/signing-keys\/([^/]+)\/revoke$/,
+  );
+  if (revokeSigningKeyMatch) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method !== "POST") {
+      throw new NotFoundError();
+    }
+    const [, id] = revokeSigningKeyMatch;
+    if (!id) {
+      throw new NotFoundError();
+    }
+    return jsonResponse(await dependencies.signingKeyService.revoke(id));
+  }
   if (url.pathname === "/api/publish-sessions" && request.method === "POST") {
     const secret = requireBearer(request);
     const principal = await dependencies.publishTokenService.verify(secret);

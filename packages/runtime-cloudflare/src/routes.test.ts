@@ -586,6 +586,89 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("creates, lists, and revokes signing keys through admin routes", async () => {
+    const { generateKey } = await import("openpgp");
+    const key = await generateKey({
+      type: "ecc",
+      curve: "curve25519Legacy",
+      userIDs: [{ name: "Axis Test", email: "axis@example.test" }],
+      passphrase: "correct-passphrase",
+    });
+    const app = createApp();
+
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/signing-keys", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-prod",
+          privateKeyArmored: key.privateKey,
+          passphrase: "correct-passphrase",
+        }),
+      }),
+    );
+
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as {
+      id: string;
+      privateKeyArmored?: string;
+      passphrase?: string;
+    };
+    expect(created.id).toMatch(/^signing_key_/);
+    expect(created).not.toHaveProperty("privateKeyArmored");
+    expect(created).not.toHaveProperty("passphrase");
+    expect(created).not.toHaveProperty("encryptedPrivateKeyArmored");
+    expect(created).not.toHaveProperty("encryptedPassphrase");
+
+    const listResponse = await app.fetch(
+      new Request("https://axis.example/admin/signing-keys", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(listResponse.status).toBe(200);
+    const listBody = (await listResponse.json()) as { signingKeys: Array<Record<string, unknown>> };
+    expect(listBody).toMatchObject({
+      signingKeys: [{ name: "debian-prod", revokedAt: null }],
+    });
+    expect(listBody.signingKeys[0]).not.toHaveProperty("privateKeyArmored");
+    expect(listBody.signingKeys[0]).not.toHaveProperty("passphrase");
+    expect(listBody.signingKeys[0]).not.toHaveProperty("encryptedPrivateKeyArmored");
+    expect(listBody.signingKeys[0]).not.toHaveProperty("encryptedPassphrase");
+
+    const revokeResponse = await app.fetch(
+      new Request(`https://axis.example/admin/signing-keys/${created.id}/revoke`, {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(revokeResponse.status).toBe(200);
+    const revoked = (await revokeResponse.json()) as Record<string, unknown>;
+    expect(revoked).toMatchObject({
+      id: created.id,
+      revokedAt: expect.any(String),
+    });
+    expect(revoked).not.toHaveProperty("privateKeyArmored");
+    expect(revoked).not.toHaveProperty("passphrase");
+    expect(revoked).not.toHaveProperty("encryptedPrivateKeyArmored");
+    expect(revoked).not.toHaveProperty("encryptedPassphrase");
+  });
+
+  it("requires admin auth for signing key revoke paths before method dispatch", async () => {
+    const app = createApp();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/signing-keys/signing_key_missing/revoke"),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "unauthorized", message: "Unauthorized" },
+    });
+  });
+
   it("creates a publish token with an explicit empty signing key scope", async () => {
     const app = createApp();
 

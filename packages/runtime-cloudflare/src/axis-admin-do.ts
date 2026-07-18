@@ -13,12 +13,15 @@ import { GenericManifestPublisher } from "./generic-manifest-publisher";
 import { MemoryUploadBroker } from "./memory-upload-broker";
 import { R2PresignedUploadBroker } from "./r2-upload-broker";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "./repository-object-store";
+import { SecretEncryption } from "./secret-encryption";
+import { SigningKeyService } from "./signing-key-service";
 
 export interface AxisEnv {
   AXIS_ADMIN?: DurableObjectNamespace;
   AXIS_OBJECTS?: R2Bucket;
   ADMIN_TOKEN?: string;
   TOKEN_HASH_PEPPER?: string;
+  SIGNING_KEY_ENCRYPTION_SECRET?: string;
   R2_ACCOUNT_ID?: string;
   R2_BUCKET_NAME?: string;
   R2_ACCESS_KEY_ID?: string;
@@ -72,11 +75,15 @@ export function createDurableObjectDependencies(
   if (!env.TOKEN_HASH_PEPPER) {
     throw new Error("TOKEN_HASH_PEPPER is required for AxisAdminDO");
   }
+  if (!env.SIGNING_KEY_ENCRYPTION_SECRET) {
+    throw new Error("SIGNING_KEY_ENCRYPTION_SECRET is required for AxisAdminDO");
+  }
 
   const state = new DurableStateStore(storage);
   const clock: Clock = { now: () => new Date() };
   const randomId = new WebCryptoRandomId();
   const hasher = new Sha256SecretHasher(env.TOKEN_HASH_PEPPER);
+  const encryption = new SecretEncryption(env.SIGNING_KEY_ENCRYPTION_SECRET);
   const uploadUrlTtlSeconds = optionalPositiveInteger(env.UPLOAD_URL_TTL_SECONDS, "UPLOAD_URL_TTL_SECONDS");
   const uploadBackend = parseUploadBackend(env.UPLOAD_BACKEND);
   const uploadBroker = uploadBackend === "memory"
@@ -112,6 +119,12 @@ export function createDurableObjectDependencies(
       artifactPublisher,
       clock,
       randomId,
+    }),
+    signingKeyService: new SigningKeyService({
+      state,
+      clock,
+      randomId,
+      encryption,
     }),
   };
 }

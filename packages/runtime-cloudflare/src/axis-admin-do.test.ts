@@ -39,6 +39,7 @@ type TestAxisEnv = {
   AXIS_OBJECTS?: R2Bucket | undefined;
   ADMIN_TOKEN?: string | undefined;
   TOKEN_HASH_PEPPER?: string | undefined;
+  SIGNING_KEY_ENCRYPTION_SECRET?: string | undefined;
   R2_ACCOUNT_ID?: string | undefined;
   R2_BUCKET_NAME?: string | undefined;
   R2_ACCESS_KEY_ID?: string | undefined;
@@ -52,6 +53,7 @@ function createObject(env: TestAxisEnv = {}) {
     AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
     ADMIN_TOKEN: "admin",
     TOKEN_HASH_PEPPER: "pepper",
+    SIGNING_KEY_ENCRYPTION_SECRET: "signing-secret",
     R2_ACCOUNT_ID: "account123",
     R2_BUCKET_NAME: "axis-repository",
     R2_ACCESS_KEY_ID: "access",
@@ -76,6 +78,15 @@ describe("AxisAdminDO", () => {
     );
     expect(() => createObject({ TOKEN_HASH_PEPPER: "" })).toThrow(
       "TOKEN_HASH_PEPPER is required for AxisAdminDO",
+    );
+  });
+
+  it("requires a signing key encryption secret", () => {
+    expect(() => createObject({ SIGNING_KEY_ENCRYPTION_SECRET: undefined })).toThrow(
+      "SIGNING_KEY_ENCRYPTION_SECRET is required for AxisAdminDO",
+    );
+    expect(() => createObject({ SIGNING_KEY_ENCRYPTION_SECRET: "" })).toThrow(
+      "SIGNING_KEY_ENCRYPTION_SECRET is required for AxisAdminDO",
     );
   });
 
