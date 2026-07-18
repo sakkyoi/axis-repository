@@ -49,20 +49,12 @@ class FakeR2Bucket {
     });
   }
 
-  async head(key: string): Promise<{ size: number; customMetadata?: Record<string, string> } | null> {
-    const object = this.objects.get(key);
-    if (!object) {
-      return null;
-    }
-    return {
-      size: object.value instanceof Uint8Array ? object.value.byteLength : new TextEncoder().encode(object.value).byteLength,
-      ...(object.customMetadata ? { customMetadata: object.customMetadata } : {}),
-    };
-  }
-
-  async get(key: string): Promise<{
+  async head(key: string): Promise<{
     httpMetadata?: { contentType?: string };
-    arrayBuffer(): Promise<ArrayBuffer>;
+    etag?: string;
+    httpEtag?: string;
+    size: number;
+    customMetadata?: Record<string, string>;
   } | null> {
     const object = this.objects.get(key);
     if (!object) {
@@ -71,7 +63,34 @@ class FakeR2Bucket {
     const bytes = object.value instanceof Uint8Array ? object.value : new TextEncoder().encode(object.value);
     return {
       ...(object.contentType ? { httpMetadata: { contentType: object.contentType } } : {}),
-      arrayBuffer: async () => toArrayBuffer(bytes),
+      etag: `fake-${bytes.byteLength}`,
+      httpEtag: `"fake-${bytes.byteLength}"`,
+      size: bytes.byteLength,
+      ...(object.customMetadata ? { customMetadata: object.customMetadata } : {}),
+    };
+  }
+
+  async get(key: string, options?: { range?: { offset: number; length: number } }): Promise<{
+    httpMetadata?: { contentType?: string };
+    etag?: string;
+    httpEtag?: string;
+    size?: number;
+    arrayBuffer(): Promise<ArrayBuffer>;
+  } | null> {
+    const object = this.objects.get(key);
+    if (!object) {
+      return null;
+    }
+    const bytes = object.value instanceof Uint8Array ? object.value : new TextEncoder().encode(object.value);
+    const bodyBytes = options?.range
+      ? bytes.slice(options.range.offset, options.range.offset + options.range.length)
+      : bytes;
+    return {
+      ...(object.contentType ? { httpMetadata: { contentType: object.contentType } } : {}),
+      etag: `fake-${bytes.byteLength}`,
+      httpEtag: `"fake-${bytes.byteLength}"`,
+      size: bytes.byteLength,
+      arrayBuffer: async () => toArrayBuffer(bodyBytes),
     };
   }
 
@@ -430,6 +449,21 @@ describe("AxisAdminDO", () => {
     expect(read.status).toBe(200);
     expect(read.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     await expect(read.text()).resolves.toContain("-----BEGIN PGP SIGNED MESSAGE-----");
+
+    const rangedRead = await object.fetch(
+      new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease", {
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          range: "bytes=0-9",
+        },
+      }),
+    );
+
+    expect(rangedRead.status).toBe(206);
+    expect(rangedRead.headers.get("content-range")).toMatch(/^bytes 0-9\/\d+$/);
+    expect(rangedRead.headers.get("content-length")).toBe("10");
+    expect(rangedRead.headers.get("etag")).toBeTruthy();
+    await expect(rangedRead.text()).resolves.toBe("-----BEGIN");
   });
 
   it("fails closed when finalizing an unregistered ecosystem with memory backend", async () => {
