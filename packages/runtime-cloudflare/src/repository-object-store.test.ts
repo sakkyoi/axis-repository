@@ -19,6 +19,21 @@ class FakeR2Bucket implements R2ObjectBucket {
   }> = [];
   failArrayBufferReads = false;
 
+  async head(key: string): Promise<R2ReadableObject | null> {
+    const object = [...this.puts].reverse().find((put) => put.key === key);
+    if (!object) {
+      return null;
+    }
+    const bytes = await bytesFromStoredValue(object.value);
+    return {
+      ...(object.options?.httpMetadata ? { httpMetadata: object.options.httpMetadata } : {}),
+      etag: `fake-${bytes.byteLength}`,
+      httpEtag: `"fake-${bytes.byteLength}"`,
+      size: bytes.byteLength,
+      arrayBuffer: async () => arrayBufferFromBytes(bytes),
+    };
+  }
+
   async get(
     key: string,
     options?: { range?: { offset: number; length: number } },
@@ -456,6 +471,24 @@ describe("R2RepositoryObjectStore", () => {
     expect(bucket.getCalls.at(-1)).toMatchObject({
       key: "repositories/debian/pool/main/app.deb",
       options: { range: { offset: 3, length: 4 } },
+    });
+  });
+
+  it("reads R2 object heads with HTTP-safe etag metadata", async () => {
+    const bucket = new FakeR2Bucket();
+    await bucket.put(
+      "repositories/debian/dists/noble/InRelease",
+      "signed release",
+      { httpMetadata: { contentType: "text/plain" } },
+    );
+    const store = new R2RepositoryObjectStore(bucket);
+
+    const metadata = await store.headObject("repositories/debian/dists/noble/InRelease");
+
+    expect(metadata).toEqual({
+      contentType: "text/plain",
+      contentLength: 14,
+      etag: "\"fake-14\"",
     });
   });
 

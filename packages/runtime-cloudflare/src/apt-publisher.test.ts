@@ -60,6 +60,10 @@ class RecordingObjectStore implements RepositoryObjectStore {
   async getObject(): Promise<null> {
     return null;
   }
+
+  async headObject(): Promise<null> {
+    return null;
+  }
 }
 
 function publishInput(signingKeyIds = ["signing_key_prod"]): PublishArtifactsInput {

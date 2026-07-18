@@ -295,6 +295,225 @@ describe("Cloudflare runtime routes", () => {
     await expect(response.text()).resolves.toBe("signed release");
   });
 
+  it("serves public repository objects with production HTTP headers", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/dists/noble/InRelease",
+      "signed release",
+      "text/plain; charset=utf-8",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/dists/noble/InRelease"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(response.headers.get("content-length")).toBe("14");
+    expect(response.headers.get("accept-ranges")).toBe("bytes");
+    expect(response.headers.get("etag")).toMatch(/^"[a-f0-9]{64}"$/);
+    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+    await expect(response.text()).resolves.toBe("signed release");
+  });
+
+  it("serves HEAD requests for public repository objects without a body", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/dists/noble/InRelease",
+      "signed release",
+      "text/plain",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/dists/noble/InRelease", {
+        method: "HEAD",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/plain");
+    expect(response.headers.get("content-length")).toBe("14");
+    expect(response.headers.get("accept-ranges")).toBe("bytes");
+    expect(response.headers.get("etag")).toMatch(/^"[a-f0-9]{64}"$/);
+    await expect(response.text()).resolves.toBe("");
+  });
+
+  it("ignores Range headers on HEAD repository object requests", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/dists/noble/InRelease",
+      "signed release",
+      "text/plain",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/dists/noble/InRelease", {
+        method: "HEAD",
+        headers: { range: "bytes=0-0" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-range")).toBeNull();
+    expect(response.headers.get("content-length")).toBe("14");
+    await expect(response.text()).resolves.toBe("");
+  });
+
+  it("serves bounded byte ranges for repository objects", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/pool/main/app.deb",
+      "0123456789",
+      "application/vnd.debian.binary-package",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/pool/main/app.deb", {
+        headers: { range: "bytes=2-5" },
+      }),
+    );
+
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe("bytes 2-5/10");
+    expect(response.headers.get("content-length")).toBe("4");
+    expect(response.headers.get("accept-ranges")).toBe("bytes");
+    await expect(response.text()).resolves.toBe("2345");
+  });
+
+  it("serves suffix byte ranges for repository objects", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/pool/main/app.deb",
+      "0123456789",
+      "application/vnd.debian.binary-package",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/pool/main/app.deb", {
+        headers: { range: "bytes=-4" },
+      }),
+    );
+
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe("bytes 6-9/10");
+    expect(response.headers.get("content-length")).toBe("4");
+    await expect(response.text()).resolves.toBe("6789");
+  });
+
+  it("serves open-ended byte ranges for repository objects", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/pool/main/app.deb",
+      "0123456789",
+      "application/vnd.debian.binary-package",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/pool/main/app.deb", {
+        headers: { range: "bytes=6-" },
+      }),
+    );
+
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe("bytes 6-9/10");
+    expect(response.headers.get("content-length")).toBe("4");
+    await expect(response.text()).resolves.toBe("6789");
+  });
+
+  it("rejects unsatisfiable and multi-range repository object requests", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/pool/main/app.deb",
+      "0123456789",
+      "application/vnd.debian.binary-package",
+    );
+
+    const unsatisfiable = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/pool/main/app.deb", {
+        headers: { range: "bytes=10-20" },
+      }),
+    );
+    const multiRange = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/pool/main/app.deb", {
+        headers: { range: "bytes=0-1,3-4" },
+      }),
+    );
+
+    expect(unsatisfiable.status).toBe(416);
+    expect(unsatisfiable.headers.get("content-range")).toBe("bytes */10");
+    await expect(unsatisfiable.text()).resolves.toBe("");
+    expect(multiRange.status).toBe(416);
+    expect(multiRange.headers.get("content-range")).toBe("bytes */10");
+    await expect(multiRange.text()).resolves.toBe("");
+  });
+
+  it("rejects suffix ranges on empty repository objects", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/pool/main/empty.deb",
+      "",
+      "application/vnd.debian.binary-package",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/pool/main/empty.deb", {
+        headers: { range: "bytes=-1" },
+      }),
+    );
+
+    expect(response.status).toBe(416);
+    expect(response.headers.get("content-range")).toBe("bytes */0");
+    await expect(response.text()).resolves.toBe("");
+  });
+
   it("requires a bearer token for private repository reads", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
@@ -407,6 +626,51 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/plain");
     await expect(response.text()).resolves.toBe("signed release");
+  });
+
+  it("serves private HEAD and ranged reads with read-token auth and private cache headers", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    const token = await createToken(app, {
+      name: "reader",
+      repositories: ["debian-private"],
+      permissions: ["read"],
+      ecosystemScopes: {},
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-private/pool/main/app.deb",
+      "0123456789",
+      "application/vnd.debian.binary-package",
+    );
+
+    const head = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/pool/main/app.deb", {
+        method: "HEAD",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+    const range = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/pool/main/app.deb", {
+        headers: {
+          authorization: `Bearer ${token}`,
+          range: "bytes=1-3",
+        },
+      }),
+    );
+
+    expect(head.status).toBe(200);
+    expect(head.headers.get("cache-control")).toBe("private, no-store");
+    expect(head.headers.get("content-length")).toBe("10");
+    await expect(head.text()).resolves.toBe("");
+    expect(range.status).toBe(206);
+    expect(range.headers.get("cache-control")).toBe("private, no-store");
+    expect(range.headers.get("content-range")).toBe("bytes 1-3/10");
+    await expect(range.text()).resolves.toBe("123");
   });
 
   it("returns not found when a repository object does not exist", async () => {

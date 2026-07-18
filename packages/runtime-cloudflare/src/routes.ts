@@ -7,6 +7,8 @@ import {
   type PublishTokenRecord,
   type Repository,
   type RepositoryObject,
+  type RepositoryObjectMetadata,
+  type RepositoryObjectRange,
 } from "@axis-repository/core";
 import type { AppDependencies } from "./dev-dependencies";
 import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "./http";
@@ -107,11 +109,121 @@ function parseArtifacts(body: Record<string, unknown>): PublishArtifactRequest[]
   return artifacts.map((artifact, index) => parseArtifact(artifact, index));
 }
 
-function objectResponse(object: RepositoryObject): Response {
-  return new Response(object.body, {
-    headers: {
-      ...(object.contentType ? { "content-type": object.contentType } : {}),
-    },
+interface ParsedRange {
+  range: RepositoryObjectRange;
+  end: number;
+}
+
+function repositoryCacheControl(repository: Repository): string {
+  return repository.visibility === "public" ? "public, max-age=300" : "private, no-store";
+}
+
+function parseRangeHeader(rangeHeader: string | null, contentLength: number | undefined): ParsedRange | null {
+  if (!rangeHeader) {
+    return null;
+  }
+  if (
+    contentLength === undefined
+    || contentLength <= 0
+    || !rangeHeader.startsWith("bytes=")
+    || rangeHeader.includes(",")
+  ) {
+    return null;
+  }
+
+  const spec = rangeHeader.slice("bytes=".length);
+  const match = spec.match(/^(\d*)-(\d*)$/);
+  if (!match) {
+    return null;
+  }
+  const [, startText, endText] = match;
+  if (startText === "" && endText === "") {
+    return null;
+  }
+
+  if (startText === "") {
+    const suffixLength = Number(endText);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+      return null;
+    }
+    const length = Math.min(suffixLength, contentLength);
+    const offset = contentLength - length;
+    return { range: { offset, length }, end: contentLength - 1 };
+  }
+
+  const start = Number(startText);
+  const requestedEnd = endText === "" ? contentLength - 1 : Number(endText);
+  if (
+    !Number.isSafeInteger(start)
+    || !Number.isSafeInteger(requestedEnd)
+    || start < 0
+    || requestedEnd < start
+    || start >= contentLength
+  ) {
+    return null;
+  }
+  const end = Math.min(requestedEnd, contentLength - 1);
+  return { range: { offset: start, length: end - start + 1 }, end };
+}
+
+function objectHeaders(input: {
+  metadata: RepositoryObjectMetadata;
+  contentLength?: number;
+  cacheControl: string;
+  range?: ParsedRange;
+}): Headers {
+  const headers = new Headers();
+  if (input.metadata.contentType) {
+    headers.set("content-type", input.metadata.contentType);
+  }
+  if (input.contentLength !== undefined) {
+    headers.set("content-length", String(input.contentLength));
+  }
+  if (input.metadata.contentLength !== undefined) {
+    headers.set("accept-ranges", "bytes");
+  }
+  if (input.metadata.etag) {
+    headers.set("etag", input.metadata.etag);
+  }
+  headers.set("cache-control", input.cacheControl);
+  if (input.range && input.metadata.contentLength !== undefined) {
+    headers.set(
+      "content-range",
+      `bytes ${input.range.range.offset}-${input.range.end}/${input.metadata.contentLength}`,
+    );
+  }
+  return headers;
+}
+
+function rangeNotSatisfiableResponse(metadata: RepositoryObjectMetadata, cacheControl: string): Response {
+  const headers = new Headers();
+  if (metadata.contentLength !== undefined) {
+    headers.set("content-range", `bytes */${metadata.contentLength}`);
+    headers.set("accept-ranges", "bytes");
+  }
+  if (metadata.etag) {
+    headers.set("etag", metadata.etag);
+  }
+  headers.set("cache-control", cacheControl);
+  return new Response(null, { status: 416, headers });
+}
+
+function objectResponse(input: {
+  method: "GET" | "HEAD";
+  object: RepositoryObject | null;
+  metadata: RepositoryObjectMetadata;
+  cacheControl: string;
+  range?: ParsedRange;
+}): Response {
+  const responseLength = input.range?.range.length ?? input.metadata.contentLength;
+  return new Response(input.method === "HEAD" ? null : input.object?.body ?? null, {
+    status: input.range ? 206 : 200,
+    headers: objectHeaders({
+      metadata: input.metadata,
+      cacheControl: input.cacheControl,
+      ...(responseLength !== undefined ? { contentLength: responseLength } : {}),
+      ...(input.range ? { range: input.range } : {}),
+    }),
   });
 }
 
@@ -298,17 +410,37 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     return jsonResponse(result);
   }
   const repositoryObjectPath = parseRepositoryObjectPath(request.url);
-  if (repositoryObjectPath && request.method === "GET") {
+  if (repositoryObjectPath && (request.method === "GET" || request.method === "HEAD")) {
     const { repositoryName, relativePath } = repositoryObjectPath;
     const repository = await dependencies.repositoryService.getByName(repositoryName);
     await authorizeRepositoryRead(request, dependencies, repository);
-    const object = await dependencies.repositoryObjectStore.getObject(
-      `repositories/${repositoryName}/${relativePath}`,
-    );
-    if (!object) {
+    const objectKey = `repositories/${repositoryName}/${relativePath}`;
+    const metadata = await dependencies.repositoryObjectStore.headObject(objectKey);
+    if (!metadata) {
       throw new NotFoundError();
     }
-    return objectResponse(object);
+    const cacheControl = repositoryCacheControl(repository);
+    const rangeHeader = request.method === "GET" ? request.headers.get("range") : null;
+    const parsedRange = parseRangeHeader(rangeHeader, metadata.contentLength);
+    if (rangeHeader && !parsedRange) {
+      return rangeNotSatisfiableResponse(metadata, cacheControl);
+    }
+    const object = request.method === "HEAD"
+      ? null
+      : await dependencies.repositoryObjectStore.getObject(
+        objectKey,
+        parsedRange ? { range: parsedRange.range } : undefined,
+      );
+    if (request.method === "GET" && !object) {
+      throw new NotFoundError();
+    }
+    return objectResponse({
+      method: request.method,
+      object,
+      metadata,
+      cacheControl,
+      ...(parsedRange ? { range: parsedRange } : {}),
+    });
   }
   throw new NotFoundError();
 }

@@ -57,6 +57,12 @@ export interface RepositoryObjectReadOptions {
   range?: RepositoryObjectRange;
 }
 
+export interface RepositoryObjectMetadata {
+  contentType?: string;
+  contentLength?: number;
+  etag?: string;
+}
+
 export interface RepositoryObject {
   body: string | Uint8Array | ReadableStream;
   contentType?: string;
@@ -70,6 +76,7 @@ export interface RepositoryObjectStore {
   putText(key: string, value: string, contentType: string): Promise<void>;
   putBytes(key: string, value: Uint8Array, contentType: string): Promise<void>;
   copyObject(sourceKey: string, destinationKey: string, contentType?: string): Promise<void>;
+  headObject(key: string): Promise<RepositoryObjectMetadata | null>;
   getObject(key: string, options?: RepositoryObjectReadOptions): Promise<RepositoryObject | null>;
 }
 

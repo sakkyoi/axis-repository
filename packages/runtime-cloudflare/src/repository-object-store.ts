@@ -1,5 +1,6 @@
 import type {
   RepositoryObject,
+  RepositoryObjectMetadata,
   RepositoryObjectReadOptions,
   RepositoryObjectStore,
 } from "@axis-repository/core";
@@ -15,7 +16,15 @@ export interface R2ReadableObject {
   arrayBuffer(): Promise<ArrayBuffer>;
 }
 
+export interface R2HeadObject {
+  httpMetadata?: { contentType?: string };
+  etag?: string;
+  httpEtag?: string;
+  size?: number;
+}
+
 export interface R2ObjectBucket {
+  head(key: string): Promise<R2HeadObject | null>;
   get(key: string, options?: RepositoryObjectReadOptions): Promise<R2ReadableObject | null>;
   put(
     key: string,
@@ -67,6 +76,7 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
       return null;
     }
 
+    const metadata = await memoryObjectMetadata(source.value, source.contentType);
     const fullObject = memoryObjectValue(source.value, source.contentType);
     const bytes = bytesFromBody(fullObject.body);
     const rangedBody = options?.range
@@ -75,11 +85,17 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
 
     return {
       body: rangedBody,
-      contentType: fullObject.contentType,
-      contentLength: bytes.byteLength,
-      etag: await etagForBytes(bytes),
+      ...metadata,
       ...(options?.range ? { range: options.range } : {}),
     };
+  }
+
+  async headObject(key: string): Promise<RepositoryObjectMetadata | null> {
+    const source = [...this.objects].reverse().find((object) => object.key === key);
+    if (!source) {
+      return null;
+    }
+    return memoryObjectMetadata(source.value, source.contentType);
   }
 }
 
@@ -139,6 +155,20 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
       ...(options?.range ? { range: options.range } : {}),
     };
   }
+
+  async headObject(key: string): Promise<RepositoryObjectMetadata | null> {
+    const source = await this.bucket.head(key);
+    if (!source) {
+      return null;
+    }
+    return {
+      ...(source.httpMetadata?.contentType !== undefined
+        ? { contentType: source.httpMetadata.contentType }
+        : {}),
+      ...(source.size !== undefined ? { contentLength: source.size } : {}),
+      ...(source.httpEtag !== undefined ? { etag: source.httpEtag } : {}),
+    };
+  }
 }
 
 function cloneObjectValue(value: unknown): unknown {
@@ -164,6 +194,19 @@ function memoryObjectValue(
   return {
     body: cloneObjectValue(value) as string | Uint8Array,
     contentType: contentType ?? "application/octet-stream",
+  };
+}
+
+async function memoryObjectMetadata(
+  value: unknown,
+  contentType: string | undefined,
+): Promise<RepositoryObjectMetadata> {
+  const fullObject = memoryObjectValue(value, contentType);
+  const bytes = bytesFromBody(fullObject.body);
+  return {
+    contentType: fullObject.contentType,
+    contentLength: bytes.byteLength,
+    etag: await etagForBytes(bytes),
   };
 }
 
