@@ -289,6 +289,70 @@ describe("PublishTokenService", () => {
     });
   });
 
+  it("creates and verifies read-only tokens with repository scope", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+
+    const result = await service.create({
+      name: "apt-reader",
+      repositories: ["debian-internal"],
+      permissions: ["read"],
+      ecosystemScopes: {},
+    });
+
+    expect(result.secret).toBe("axis_publish_tok_fixed");
+    expect(result.record.permissions).toEqual(["read"]);
+    await expect(service.verify(result.secret)).resolves.toMatchObject({
+      tokenId: "ptok_fixed",
+      name: "apt-reader",
+      repositories: ["debian-internal"],
+      permissions: ["read"],
+    });
+  });
+
+  it("creates and verifies tokens with both read and publish permissions", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+
+    const result = await service.create({
+      name: "ci-token",
+      repositories: ["debian-internal"],
+      permissions: ["read", "publish"],
+      ecosystemScopes: {},
+    });
+
+    await expect(service.verify(result.secret)).resolves.toMatchObject({
+      repositories: ["debian-internal"],
+      permissions: ["read", "publish"],
+    });
+  });
+
+  it("rejects tokens without permissions", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+
+    await expect(
+      service.create({
+        name: "empty",
+        repositories: ["debian-internal"],
+        permissions: [],
+        ecosystemScopes: {},
+      }),
+    ).rejects.toThrow("Publish token must include at least one permission");
+  });
+
   it("rejects revoked tokens", async () => {
     const service = new PublishTokenService({
       state: new MemoryStateStore(),

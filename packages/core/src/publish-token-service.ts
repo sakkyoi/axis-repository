@@ -49,8 +49,8 @@ export class PublishTokenService {
     if (await this.options.state.publishTokens.getByName(name)) {
       throw new ValidationError(`Publish token already exists: ${name}`);
     }
-    if (!input.permissions.includes("publish")) {
-      throw new ValidationError("Publish token must include publish permission");
+    if (input.permissions.length === 0) {
+      throw new ValidationError("Publish token must include at least one permission");
     }
     if (input.repositories.length === 0) {
       throw new ValidationError("Publish token must be scoped to at least one repository");
