@@ -1,9 +1,12 @@
 import {
   AxisError,
+  ForbiddenError,
   NotFoundError,
   ValidationError,
   type PublishArtifactRequest,
   type PublishTokenRecord,
+  type Repository,
+  type RepositoryObject,
 } from "@axis-repository/core";
 import type { AppDependencies } from "./dev-dependencies";
 import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "./http";
@@ -102,6 +105,73 @@ function parseArtifacts(body: Record<string, unknown>): PublishArtifactRequest[]
     throw new ValidationError("artifacts must be a non-empty array");
   }
   return artifacts.map((artifact, index) => parseArtifact(artifact, index));
+}
+
+function objectResponse(object: RepositoryObject): Response {
+  return new Response(object.body, {
+    headers: {
+      ...(object.contentType ? { "content-type": object.contentType } : {}),
+    },
+  });
+}
+
+function rawPathname(requestUrl: string): string {
+  const withoutOrigin = requestUrl.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]+/i, "");
+  const path = withoutOrigin.split(/[?#]/, 1)[0] ?? "";
+  return path || "/";
+}
+
+function decodePathSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    throw new NotFoundError();
+  }
+}
+
+const SERVABLE_REPOSITORY_ROOTS = new Set(["dists", "pool"]);
+
+function parseRepositoryObjectPath(requestUrl: string): { repositoryName: string; relativePath: string } | null {
+  const rawPath = rawPathname(requestUrl);
+  const prefix = "/repositories/";
+  if (!rawPath.startsWith(prefix)) {
+    return null;
+  }
+  const rawRest = rawPath.slice(prefix.length);
+  const rawSegments = rawRest.split("/");
+  if (rawSegments.length < 2) {
+    return null;
+  }
+  const decodedSegments = rawSegments.map(decodePathSegment);
+  if (decodedSegments.some((segment) => !segment || segment === "." || segment === "..")) {
+    throw new NotFoundError();
+  }
+  const [repositoryName, ...relativeSegments] = decodedSegments;
+  if (!repositoryName || relativeSegments.length === 0) {
+    return null;
+  }
+  if (!SERVABLE_REPOSITORY_ROOTS.has(relativeSegments[0]!)) {
+    throw new NotFoundError();
+  }
+  return {
+    repositoryName,
+    relativePath: relativeSegments.join("/"),
+  };
+}
+
+async function authorizeRepositoryRead(
+  request: Request,
+  dependencies: AppDependencies,
+  repository: Repository,
+): Promise<void> {
+  if (repository.visibility === "public") {
+    return;
+  }
+  const secret = requireBearer(request);
+  const principal = await dependencies.publishTokenService.verify(secret);
+  if (!principal.repositories.includes(repository.name) || !principal.permissions.includes("read")) {
+    throw new ForbiddenError();
+  }
 }
 
 export async function dispatch(request: Request, dependencies: AppDependencies): Promise<Response> {
@@ -226,6 +296,19 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       principal,
     });
     return jsonResponse(result);
+  }
+  const repositoryObjectPath = parseRepositoryObjectPath(request.url);
+  if (repositoryObjectPath && request.method === "GET") {
+    const { repositoryName, relativePath } = repositoryObjectPath;
+    const repository = await dependencies.repositoryService.getByName(repositoryName);
+    await authorizeRepositoryRead(request, dependencies, repository);
+    const object = await dependencies.repositoryObjectStore.getObject(
+      `repositories/${repositoryName}/${relativePath}`,
+    );
+    if (!object) {
+      throw new NotFoundError();
+    }
+    return objectResponse(object);
   }
   throw new NotFoundError();
 }

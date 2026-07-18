@@ -137,6 +137,36 @@ function readStoredText(store: MemoryRepositoryObjectStore, key: string): string
   return object.value;
 }
 
+async function createRepository(app: ReturnType<typeof createApp>, body: Record<string, unknown>) {
+  const response = await app.fetch(
+    new Request("https://axis.example/admin/repositories", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }),
+  );
+  expect(response.status).toBe(201);
+}
+
+async function createToken(app: ReturnType<typeof createApp>, body: Record<string, unknown>): Promise<string> {
+  const response = await app.fetch(
+    new Request("https://axis.example/admin/publish-tokens", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }),
+  );
+  expect(response.status).toBe(201);
+  const result = (await response.json()) as { secret: string };
+  return result.secret;
+}
+
 describe("Cloudflare runtime routes", () => {
   it("responds to health checks", async () => {
     const app = createApp();
@@ -239,6 +269,186 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: { code: "validation_error", message: "visibility must be private or public" },
+    });
+  });
+
+  it("serves public repository objects without a token", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/dists/noble/InRelease",
+      "signed release",
+      "text/plain; charset=utf-8",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/dists/noble/InRelease"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    await expect(response.text()).resolves.toBe("signed release");
+  });
+
+  it("requires a bearer token for private repository reads", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-private/dists/noble/InRelease",
+      "signed release",
+      "text/plain",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/dists/noble/InRelease"),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "unauthorized", message: "Unauthorized" },
+    });
+  });
+
+  it("rejects private repository reads without read permission", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    const token = await createToken(app, {
+      name: "publisher",
+      repositories: ["debian-private"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/dists/noble/InRelease", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "forbidden", message: "Forbidden" },
+    });
+  });
+
+  it("rejects private repository reads for tokens scoped to another repository", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    await createRepository(app, {
+      name: "other-repo",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    const token = await createToken(app, {
+      name: "reader",
+      repositories: ["other-repo"],
+      permissions: ["read"],
+      ecosystemScopes: {},
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/dists/noble/InRelease", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "forbidden", message: "Forbidden" },
+    });
+  });
+
+  it("serves private repository objects with a read token", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    const token = await createToken(app, {
+      name: "reader",
+      repositories: ["debian-private"],
+      permissions: ["read"],
+      ecosystemScopes: {},
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-private/dists/noble/InRelease",
+      "signed release",
+      "text/plain",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/dists/noble/InRelease", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/plain");
+    await expect(response.text()).resolves.toBe("signed release");
+  });
+
+  it("returns not found when a repository object does not exist", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/dists/noble/Missing"),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "not_found", message: "Not Found" },
+    });
+  });
+
+  it("rejects repository object paths with traversal segments", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/secret",
+      "secret",
+      "text/plain",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/dists/%2e%2e/secret"),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "not_found", message: "Not Found" },
     });
   });
 

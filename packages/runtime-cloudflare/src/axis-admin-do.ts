@@ -132,6 +132,7 @@ export function createDurableObjectDependencies(
       randomId,
     }),
     signingKeyService,
+    repositoryObjectStore: objectStore,
   };
 }
 

@@ -5,6 +5,7 @@ import {
   RepositoryService,
   type Clock,
   type RandomId,
+  type RepositoryObjectStore,
   type SecretHasher,
 } from "@axis-repository/core";
 import { AptPublisher } from "./apt-publisher";
@@ -21,6 +22,7 @@ export interface AppDependencies {
   publishTokenService: PublishTokenService;
   publishSessionService: PublishSessionService;
   signingKeyService: SigningKeyService;
+  repositoryObjectStore: RepositoryObjectStore;
 }
 
 export interface DevDependencyHarness {
@@ -85,6 +87,7 @@ export function createDevDependencyHarness(
         randomId,
       }),
       signingKeyService,
+      repositoryObjectStore: objectStore,
     },
     repositoryObjectStore: objectStore,
   };
