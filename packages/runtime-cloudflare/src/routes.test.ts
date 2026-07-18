@@ -1,22 +1,64 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
+import { createDevDependencyHarness } from "./dev-dependencies";
+import type { MemoryRepositoryObjectStore } from "./repository-object-store";
 
 afterEach(() => {
   vi.doUnmock("./app");
   vi.resetModules();
 });
 
-async function createPublishSession(app: ReturnType<typeof createApp>) {
-  await app.fetch(
+async function createPublishSession(
+  app: ReturnType<typeof createApp>,
+  repositoryObjectStore?: MemoryRepositoryObjectStore,
+) {
+  const { generateKey } = await import("openpgp");
+  const key = await generateKey({
+    type: "ecc",
+    curve: "curve25519Legacy",
+    userIDs: [{ name: "Axis Test", email: "axis@example.test" }],
+    passphrase: "correct-passphrase",
+  });
+
+  const signingKeyResponse = await app.fetch(
+    new Request("https://axis.example/admin/signing-keys", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "debian-prod",
+        privateKeyArmored: key.privateKey,
+        passphrase: "correct-passphrase",
+      }),
+    }),
+  );
+  expect(signingKeyResponse.status).toBe(201);
+  const signingKey = (await signingKeyResponse.json()) as { id: string };
+
+  const repositoryResponse = await app.fetch(
     new Request("https://axis.example/admin/repositories", {
       method: "POST",
       headers: {
         authorization: "Bearer dev-admin-token",
         "content-type": "application/json",
       },
-      body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+      body: JSON.stringify({
+        name: "debian-internal",
+        ecosystem: "apt",
+        config: {
+          apt: {
+            codename: "noble",
+            components: ["main"],
+            architectures: ["amd64"],
+            signingKeyId: signingKey.id,
+          },
+        },
+      }),
     }),
   );
+  expect(repositoryResponse.status).toBe(201);
 
   const tokenResponse = await app.fetch(
     new Request("https://axis.example/admin/publish-tokens", {
@@ -30,9 +72,11 @@ async function createPublishSession(app: ReturnType<typeof createApp>) {
         repositories: ["debian-internal"],
         permissions: ["publish"],
         ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+        signingKeyIds: [signingKey.id],
       }),
     }),
   );
+  expect(tokenResponse.status).toBe(201);
   const tokenBody = (await tokenResponse.json()) as { secret: string };
 
   const sessionResponse = await app.fetch(
@@ -51,18 +95,46 @@ async function createPublishSession(app: ReturnType<typeof createApp>) {
             size: 1234,
             sha256: "a".repeat(64),
             contentType: "application/vnd.debian.binary-package",
-            metadata: {},
+            metadata: {
+              package: "myapp",
+              version: "1.2.3",
+              architecture: "amd64",
+              component: "main",
+              description: "Example package",
+              maintainer: "Release Team <release@example.com>",
+            },
           },
         ],
       }),
     }),
   );
+  expect(sessionResponse.status).toBe(201);
   const session = (await sessionResponse.json()) as {
     id: string;
     uploads: Array<{ uploadId: string; objectKey: string }>;
   };
+  if (repositoryObjectStore) {
+    for (const upload of session.uploads) {
+      await repositoryObjectStore.putBytes(
+        upload.objectKey,
+        new Uint8Array(1234),
+        "application/vnd.debian.binary-package",
+      );
+    }
+  }
 
   return { token: tokenBody.secret, session };
+}
+
+function readStoredText(store: MemoryRepositoryObjectStore, key: string): string {
+  const object = [...store.objects].reverse().find((candidate) => candidate.key === key);
+  if (!object) {
+    throw new Error(`Expected stored object: ${key}`);
+  }
+  if (typeof object.value !== "string") {
+    throw new Error(`Expected stored text object: ${key}`);
+  }
+  return object.value;
 }
 
 describe("Cloudflare runtime routes", () => {
@@ -331,8 +403,9 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("finalizes a verified publish session", async () => {
-    const app = createApp();
-    const { token, session } = await createPublishSession(app);
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const { token, session } = await createPublishSession(app, harness.repositoryObjectStore);
     const upload = session.uploads[0];
     if (!upload) {
       throw new Error("Expected publish session to include an upload target");
@@ -363,14 +436,150 @@ describe("Cloudflare runtime routes", () => {
         status: "finalized",
         publishResult: {
           objects: [
-            { key: `repositories/debian-internal/publishes/${session.id}.json` },
+            { key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" },
+            { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages" },
+            { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz" },
+            { key: "repositories/debian-internal/dists/noble/Release" },
+            { key: "repositories/debian-internal/dists/noble/InRelease" },
+            { key: "repositories/debian-internal/dists/noble/Release.gpg" },
           ],
         },
       },
-      result: {
-        objects: [
-          { key: `repositories/debian-internal/publishes/${session.id}.json` },
-        ],
+    });
+    expect(readStoredText(harness.repositoryObjectStore, "repositories/debian-internal/dists/noble/main/binary-amd64/Packages"))
+      .toContain("Filename: pool/main/myapp/myapp_1.2.3_amd64.deb");
+    expect(readStoredText(harness.repositoryObjectStore, "repositories/debian-internal/dists/noble/Release"))
+      .toContain("main/binary-amd64/Packages");
+    expect(readStoredText(harness.repositoryObjectStore, "repositories/debian-internal/dists/noble/InRelease"))
+      .toContain("-----BEGIN PGP SIGNED MESSAGE-----");
+    expect(readStoredText(harness.repositoryObjectStore, "repositories/debian-internal/dists/noble/Release.gpg"))
+      .toContain("-----BEGIN PGP SIGNATURE-----");
+  });
+
+  it("fails closed when finalizing APT without matching signing key scope", async () => {
+    const { generateKey } = await import("openpgp");
+    const key = await generateKey({
+      type: "ecc",
+      curve: "curve25519Legacy",
+      userIDs: [{ name: "Axis Test", email: "axis@example.test" }],
+      passphrase: "correct-passphrase",
+    });
+    const app = createApp();
+
+    const signingKeyResponse = await app.fetch(
+      new Request("https://axis.example/admin/signing-keys", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-prod",
+          privateKeyArmored: key.privateKey,
+          passphrase: "correct-passphrase",
+        }),
+      }),
+    );
+    const signingKey = (await signingKeyResponse.json()) as { id: string };
+
+    await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-internal",
+          ecosystem: "apt",
+          config: {
+            apt: {
+              codename: "noble",
+              components: ["main"],
+              architectures: ["amd64"],
+              signingKeyId: signingKey.id,
+            },
+          },
+        }),
+      }),
+    );
+
+    const tokenResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+          signingKeyIds: [],
+        }),
+      }),
+    );
+    const tokenBody = (await tokenResponse.json()) as { secret: string };
+
+    const sessionResponse = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [
+            {
+              filename: "myapp_1.2.3_amd64.deb",
+              size: 1234,
+              sha256: "a".repeat(64),
+              contentType: "application/vnd.debian.binary-package",
+              metadata: {
+                package: "myapp",
+                version: "1.2.3",
+                architecture: "amd64",
+                component: "main",
+                description: "Example package",
+                maintainer: "Release Team <release@example.com>",
+              },
+            },
+          ],
+        }),
+      }),
+    );
+    const session = (await sessionResponse.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string }>;
+    };
+    const upload = session.uploads[0]!;
+
+    const verifyResponse = await app.fetch(
+      new Request(
+        `https://axis.example/api/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${tokenBody.secret}` },
+        },
+      ),
+    );
+    expect(verifyResponse.status).toBe(200);
+
+    const finalizeResponse = await app.fetch(
+      new Request(`https://axis.example/api/publish-sessions/${session.id}/finalize`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${tokenBody.secret}` },
+      }),
+    );
+
+    expect(finalizeResponse.status).toBe(400);
+    await expect(finalizeResponse.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Publish token is not scoped to the repository signing key",
       },
     });
   });

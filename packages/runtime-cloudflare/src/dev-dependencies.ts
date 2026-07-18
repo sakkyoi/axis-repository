@@ -7,9 +7,10 @@ import {
   type RandomId,
   type SecretHasher,
 } from "@axis-repository/core";
+import { AptPublisher } from "./apt-publisher";
 import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
-import { GenericManifestPublisher } from "./generic-manifest-publisher";
 import MemoryUploadBroker from "./memory-upload-broker";
+import { OpenPgpSigner } from "./openpgp-signer";
 import { MemoryRepositoryObjectStore } from "./repository-object-store";
 import { SecretEncryption } from "./secret-encryption";
 import { SigningKeyService } from "./signing-key-service";
@@ -22,10 +23,22 @@ export interface AppDependencies {
   signingKeyService: SigningKeyService;
 }
 
+export interface DevDependencyHarness {
+  dependencies: AppDependencies;
+  repositoryObjectStore: MemoryRepositoryObjectStore;
+}
+
 export function createDevDependencies(
   adminToken = "dev-admin-token",
   signingKeyEncryptionSecret = "dev-signing-key-encryption-secret",
 ): AppDependencies {
+  return createDevDependencyHarness(adminToken, signingKeyEncryptionSecret).dependencies;
+}
+
+export function createDevDependencyHarness(
+  adminToken = "dev-admin-token",
+  signingKeyEncryptionSecret = "dev-signing-key-encryption-secret",
+): DevDependencyHarness {
   const state = new MemoryStateStore();
   const clock: Clock = { now: () => new Date() };
   const randomId: RandomId = {
@@ -39,32 +52,40 @@ export function createDevDependencies(
   };
   const uploadBroker = new MemoryUploadBroker();
   const objectStore = new MemoryRepositoryObjectStore();
-  const genericManifestPublisher = new GenericManifestPublisher({ objectStore });
+  const signingKeyService = new SigningKeyService({
+    state,
+    clock,
+    randomId,
+    encryption: new SecretEncryption(signingKeyEncryptionSecret),
+  });
+  const aptPublisher = new AptPublisher({
+    objectStore,
+    signingKeyService,
+    signer: new OpenPgpSigner(),
+  });
   const artifactPublisher = new ArtifactPublisherRegistry();
   artifactPublisher.register({
     ecosystem: "apt",
-    name: "generic-manifest",
-    version: "0.0.0",
-    capabilities: ["generic-manifest"],
-    publisher: genericManifestPublisher,
+    name: "apt-signed",
+    version: "0.1.0",
+    capabilities: ["apt", "signed-release", "pool-copy"],
+    publisher: aptPublisher,
   });
 
   return {
-    adminToken,
-    repositoryService: new RepositoryService({ state, clock, randomId }),
-    publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
-    publishSessionService: new PublishSessionService({
-      state,
-      uploadBroker,
-      artifactPublisher,
-      clock,
-      randomId,
-    }),
-    signingKeyService: new SigningKeyService({
-      state,
-      clock,
-      randomId,
-      encryption: new SecretEncryption(signingKeyEncryptionSecret),
-    }),
+    dependencies: {
+      adminToken,
+      repositoryService: new RepositoryService({ state, clock, randomId }),
+      publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
+      publishSessionService: new PublishSessionService({
+        state,
+        uploadBroker,
+        artifactPublisher,
+        clock,
+        randomId,
+      }),
+      signingKeyService,
+    },
+    repositoryObjectStore: objectStore,
   };
 }

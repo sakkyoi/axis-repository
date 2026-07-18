@@ -29,9 +29,98 @@ class FakeDurableStorage implements DurableStorage {
 }
 
 class FakeR2Bucket {
-  async head(): Promise<null> {
-    return null;
+  readonly objects = new Map<string, {
+    value: string | Uint8Array;
+    contentType?: string;
+    customMetadata?: Record<string, string>;
+  }>();
+
+  seedUpload(key: string, value: Uint8Array, options: { contentType: string; size: number; sha256: string; uploadId: string }) {
+    if (value.byteLength !== options.size) {
+      throw new Error(`Seeded upload size mismatch for ${key}`);
+    }
+    this.objects.set(key, {
+      value: new Uint8Array(value),
+      contentType: options.contentType,
+      customMetadata: {
+        "axis-sha256": options.sha256,
+        "axis-upload-id": options.uploadId,
+      },
+    });
   }
+
+  async head(key: string): Promise<{ size: number; customMetadata?: Record<string, string> } | null> {
+    const object = this.objects.get(key);
+    if (!object) {
+      return null;
+    }
+    return {
+      size: object.value instanceof Uint8Array ? object.value.byteLength : new TextEncoder().encode(object.value).byteLength,
+      ...(object.customMetadata ? { customMetadata: object.customMetadata } : {}),
+    };
+  }
+
+  async get(key: string): Promise<{
+    httpMetadata?: { contentType?: string };
+    arrayBuffer(): Promise<ArrayBuffer>;
+  } | null> {
+    const object = this.objects.get(key);
+    if (!object) {
+      return null;
+    }
+    const bytes = object.value instanceof Uint8Array ? object.value : new TextEncoder().encode(object.value);
+    return {
+      ...(object.contentType ? { httpMetadata: { contentType: object.contentType } } : {}),
+      arrayBuffer: async () => toArrayBuffer(bytes),
+    };
+  }
+
+  async put(
+    key: string,
+    value: string | Uint8Array | ReadableStream,
+    options?: { httpMetadata?: { contentType?: string } },
+  ): Promise<void> {
+    if (value instanceof ReadableStream) {
+      const response = new Response(value);
+      this.objects.set(key, {
+        value: new Uint8Array(await response.arrayBuffer()),
+        ...(options?.httpMetadata?.contentType ? { contentType: options.httpMetadata.contentType } : {}),
+      });
+      return;
+    }
+    this.objects.set(key, {
+      value: typeof value === "string" ? value : new Uint8Array(value),
+      ...(options?.httpMetadata?.contentType ? { contentType: options.httpMetadata.contentType } : {}),
+    });
+  }
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  return copy;
+}
+
+function readBucketText(bucket: FakeR2Bucket, key: string): string {
+  const object = bucket.objects.get(key);
+  if (!object) {
+    throw new Error(`Expected stored R2 object: ${key}`);
+  }
+  if (typeof object.value !== "string") {
+    throw new Error(`Expected stored R2 text object: ${key}`);
+  }
+  return object.value;
+}
+
+function readBucketBytes(bucket: FakeR2Bucket, key: string): Uint8Array {
+  const object = bucket.objects.get(key);
+  if (!object) {
+    throw new Error(`Expected stored R2 object: ${key}`);
+  }
+  if (!(object.value instanceof Uint8Array)) {
+    throw new Error(`Expected stored R2 byte object: ${key}`);
+  }
+  return object.value;
 }
 
 type TestAxisEnv = {
@@ -53,7 +142,7 @@ function createObject(env: TestAxisEnv = {}) {
     AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
     ADMIN_TOKEN: "admin",
     TOKEN_HASH_PEPPER: "pepper",
-    SIGNING_KEY_ENCRYPTION_SECRET: "signing-secret",
+    SIGNING_KEY_ENCRYPTION_SECRET: "local-signing-secret",
     R2_ACCOUNT_ID: "account123",
     R2_BUCKET_NAME: "axis-repository",
     R2_ACCESS_KEY_ID: "access",
@@ -154,16 +243,36 @@ describe("AxisAdminDO", () => {
     expect(response.status).toBe(201);
   });
 
-  it("finalizes publish sessions with memory backend without R2 env", async () => {
-    const object = createObject({
-      UPLOAD_BACKEND: "memory",
-      AXIS_OBJECTS: undefined,
-      ADMIN_TOKEN: "test-admin-token",
-      R2_ACCOUNT_ID: undefined,
-      R2_BUCKET_NAME: undefined,
-      R2_ACCESS_KEY_ID: undefined,
-      R2_SECRET_ACCESS_KEY: undefined,
+  it("finalizes publish sessions through the Durable Object R2 path", async () => {
+    const { generateKey } = await import("openpgp");
+    const key = await generateKey({
+      type: "ecc",
+      curve: "curve25519Legacy",
+      userIDs: [{ name: "Axis Test", email: "axis@example.test" }],
+      passphrase: "correct-passphrase",
     });
+    const bucket = new FakeR2Bucket();
+    const object = createObject({
+      AXIS_OBJECTS: bucket as unknown as R2Bucket,
+      ADMIN_TOKEN: "test-admin-token",
+    });
+
+    const createSigningKey = await object.fetch(
+      new Request("https://axis.example/admin/signing-keys", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-prod",
+          privateKeyArmored: key.privateKey,
+          passphrase: "correct-passphrase",
+        }),
+      }),
+    );
+    expect(createSigningKey.status).toBe(201);
+    const signingKey = (await createSigningKey.json()) as { id: string };
 
     const createRepository = await object.fetch(
       new Request("https://axis.example/admin/repositories", {
@@ -172,7 +281,18 @@ describe("AxisAdminDO", () => {
           authorization: "Bearer test-admin-token",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+        body: JSON.stringify({
+          name: "debian-internal",
+          ecosystem: "apt",
+          config: {
+            apt: {
+              codename: "noble",
+              components: ["main"],
+              architectures: ["amd64"],
+              signingKeyId: signingKey.id,
+            },
+          },
+        }),
       }),
     );
     expect(createRepository.status).toBe(201);
@@ -189,6 +309,7 @@ describe("AxisAdminDO", () => {
           repositories: ["debian-internal"],
           permissions: ["publish"],
           ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+          signingKeyIds: [signingKey.id],
         }),
       }),
     );
@@ -211,7 +332,14 @@ describe("AxisAdminDO", () => {
               size: 1234,
               sha256: "a".repeat(64),
               contentType: "application/vnd.debian.binary-package",
-              metadata: {},
+              metadata: {
+                package: "myapp",
+                version: "1.2.3",
+                architecture: "amd64",
+                component: "main",
+                description: "Example package",
+                maintainer: "Release Team <release@example.com>",
+              },
             },
           ],
         }),
@@ -220,12 +348,22 @@ describe("AxisAdminDO", () => {
     expect(createSession.status).toBe(201);
     const session = (await createSession.json()) as {
       id: string;
-      uploads: Array<{ uploadId: string }>;
+      uploads: Array<{ uploadId: string; objectKey: string }>;
     };
     const upload = session.uploads[0];
     if (!upload) {
       throw new Error("Expected publish session to include an upload target");
     }
+    bucket.seedUpload(
+      upload.objectKey,
+      new Uint8Array(1234),
+      {
+        contentType: "application/vnd.debian.binary-package",
+        size: 1234,
+        sha256: "a".repeat(64),
+        uploadId: upload.uploadId,
+      },
+    );
 
     const verify = await object.fetch(
       new Request(
@@ -250,13 +388,38 @@ describe("AxisAdminDO", () => {
       session: {
         id: session.id,
         status: "finalized",
+        publishResult: {
+          objects: [
+            { key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" },
+            { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages" },
+            { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz" },
+            { key: "repositories/debian-internal/dists/noble/Release" },
+            { key: "repositories/debian-internal/dists/noble/InRelease" },
+            { key: "repositories/debian-internal/dists/noble/Release.gpg" },
+          ],
+        },
       },
       result: {
         objects: [
-          { key: `repositories/debian-internal/publishes/${session.id}.json` },
+          { key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" },
+          { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages" },
+          { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz" },
+          { key: "repositories/debian-internal/dists/noble/Release" },
+          { key: "repositories/debian-internal/dists/noble/InRelease" },
+          { key: "repositories/debian-internal/dists/noble/Release.gpg" },
         ],
       },
     });
+    expect(readBucketBytes(bucket, "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb"))
+      .toHaveLength(1234);
+    expect(readBucketText(bucket, "repositories/debian-internal/dists/noble/main/binary-amd64/Packages"))
+      .toContain("Filename: pool/main/myapp/myapp_1.2.3_amd64.deb");
+    expect(readBucketText(bucket, "repositories/debian-internal/dists/noble/Release"))
+      .toContain("main/binary-amd64/Packages");
+    expect(readBucketText(bucket, "repositories/debian-internal/dists/noble/InRelease"))
+      .toContain("-----BEGIN PGP SIGNED MESSAGE-----");
+    expect(readBucketText(bucket, "repositories/debian-internal/dists/noble/Release.gpg"))
+      .toContain("-----BEGIN PGP SIGNATURE-----");
   });
 
   it("fails closed when finalizing an unregistered ecosystem with memory backend", async () => {

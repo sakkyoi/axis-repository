@@ -5,12 +5,13 @@ import {
   type Clock,
 } from "@axis-repository/core";
 import { createApp } from "./app";
+import { AptPublisher } from "./apt-publisher";
 import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
 import { WebCryptoRandomId, Sha256SecretHasher } from "./crypto";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
 import type { AppDependencies } from "./dev-dependencies";
-import { GenericManifestPublisher } from "./generic-manifest-publisher";
 import { MemoryUploadBroker } from "./memory-upload-broker";
+import { OpenPgpSigner } from "./openpgp-signer";
 import { R2PresignedUploadBroker } from "./r2-upload-broker";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "./repository-object-store";
 import { SecretEncryption } from "./secret-encryption";
@@ -84,6 +85,12 @@ export function createDurableObjectDependencies(
   const randomId = new WebCryptoRandomId();
   const hasher = new Sha256SecretHasher(env.TOKEN_HASH_PEPPER);
   const encryption = new SecretEncryption(env.SIGNING_KEY_ENCRYPTION_SECRET);
+  const signingKeyService = new SigningKeyService({
+    state,
+    clock,
+    randomId,
+    encryption,
+  });
   const uploadUrlTtlSeconds = optionalPositiveInteger(env.UPLOAD_URL_TTL_SECONDS, "UPLOAD_URL_TTL_SECONDS");
   const uploadBackend = parseUploadBackend(env.UPLOAD_BACKEND);
   const uploadBroker = uploadBackend === "memory"
@@ -99,14 +106,18 @@ export function createDurableObjectDependencies(
   const objectStore = uploadBackend === "memory"
     ? new MemoryRepositoryObjectStore()
     : new R2RepositoryObjectStore(requiredR2Bucket(env.AXIS_OBJECTS));
-  const genericManifestPublisher = new GenericManifestPublisher({ objectStore });
+  const aptPublisher = new AptPublisher({
+    objectStore,
+    signingKeyService,
+    signer: new OpenPgpSigner(),
+  });
   const artifactPublisher = new ArtifactPublisherRegistry();
   artifactPublisher.register({
     ecosystem: "apt",
-    name: "generic-manifest",
-    version: "0.0.0",
-    capabilities: ["generic-manifest"],
-    publisher: genericManifestPublisher,
+    name: "apt-signed",
+    version: "0.1.0",
+    capabilities: ["apt", "signed-release", "pool-copy"],
+    publisher: aptPublisher,
   });
 
   return {
@@ -120,12 +131,7 @@ export function createDurableObjectDependencies(
       clock,
       randomId,
     }),
-    signingKeyService: new SigningKeyService({
-      state,
-      clock,
-      randomId,
-      encryption,
-    }),
+    signingKeyService,
   };
 }
 
