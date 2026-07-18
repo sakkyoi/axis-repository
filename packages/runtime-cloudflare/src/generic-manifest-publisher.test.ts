@@ -24,6 +24,10 @@ class FailingPublishObjectStore implements RepositoryObjectStore {
   async copyObject(sourceKey: string, destinationKey: string): Promise<void> {
     this.keys.push(`${sourceKey}->${destinationKey}`);
   }
+
+  async getObject(): Promise<null> {
+    return null;
+  }
 }
 
 describe("GenericManifestPublisher", () => {

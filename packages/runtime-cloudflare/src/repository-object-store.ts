@@ -1,4 +1,4 @@
-import type { RepositoryObjectStore } from "@axis-repository/core";
+import type { RepositoryObject, RepositoryObjectStore } from "@axis-repository/core";
 
 export const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
@@ -47,8 +47,25 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
       value: cloneObjectValue(source.value),
       ...(contentType ?? source.contentType
         ? { contentType: contentType ?? source.contentType }
-        : {}),
+      : {}),
     });
+  }
+
+  async getObject(key: string): Promise<RepositoryObject | null> {
+    const source = [...this.objects].reverse().find((object) => object.key === key);
+    if (!source) {
+      return null;
+    }
+    if (source.contentType === undefined && typeof source.value !== "string" && !(source.value instanceof Uint8Array)) {
+      return {
+        body: JSON.stringify(source.value),
+        contentType: JSON_CONTENT_TYPE,
+      };
+    }
+    return {
+      body: cloneObjectValue(source.value) as string | Uint8Array,
+      ...(source.contentType !== undefined ? { contentType: source.contentType } : {}),
+    };
   }
 }
 
@@ -86,8 +103,21 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
     const copiedContentType = contentType ?? source.httpMetadata?.contentType;
     const value = source.body ?? new Uint8Array(await source.arrayBuffer());
     await this.bucket.put(destinationKey, value, {
-      ...(copiedContentType ? { httpMetadata: { contentType: copiedContentType } } : {}),
+      ...(copiedContentType !== undefined ? { httpMetadata: { contentType: copiedContentType } } : {}),
     });
+  }
+
+  async getObject(key: string): Promise<RepositoryObject | null> {
+    const source = await this.bucket.get(key);
+    if (!source) {
+      return null;
+    }
+    return {
+      body: source.body ?? new Uint8Array(await source.arrayBuffer()),
+      ...(source.httpMetadata?.contentType !== undefined
+        ? { contentType: source.httpMetadata.contentType }
+        : {}),
+    };
   }
 }
 

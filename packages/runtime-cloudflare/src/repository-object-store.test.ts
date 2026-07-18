@@ -4,6 +4,7 @@ import {
   MemoryRepositoryObjectStore,
   R2RepositoryObjectStore,
   type R2ObjectBucket,
+  type R2ReadableObject,
 } from "./repository-object-store";
 
 class FakeR2Bucket implements R2ObjectBucket {
@@ -14,7 +15,7 @@ class FakeR2Bucket implements R2ObjectBucket {
   }> = [];
   failArrayBufferReads = false;
 
-  async get(key: string) {
+  async get(key: string): Promise<R2ReadableObject | null> {
     const object = [...this.puts].reverse().find((put) => put.key === key);
     if (!object) {
       return null;
@@ -113,6 +114,17 @@ describe("MemoryRepositoryObjectStore", () => {
     expect(store.objects[0]?.value).toEqual({ nested: { ok: true } });
   });
 
+  it("reads memory JSON objects as serialized JSON with content metadata", async () => {
+    const store = new MemoryRepositoryObjectStore();
+
+    await store.putJson("repositories/debian/latest.json", { repository: "debian" });
+
+    await expect(store.getObject("repositories/debian/latest.json")).resolves.toEqual({
+      body: JSON.stringify({ repository: "debian" }),
+      contentType: JSON_CONTENT_TYPE,
+    });
+  });
+
   it("captures text objects with content metadata", async () => {
     const store = new MemoryRepositoryObjectStore();
 
@@ -174,6 +186,47 @@ describe("MemoryRepositoryObjectStore", () => {
       value: "Origin: Axis\n",
       contentType: "text/x-debian-control",
     });
+  });
+
+  it("reads the latest memory text object with content metadata", async () => {
+    const store = new MemoryRepositoryObjectStore();
+    await store.putText("repositories/debian/dists/noble/Release", "old", "text/plain");
+    await store.putText(
+      "repositories/debian/dists/noble/Release",
+      "new",
+      "text/plain; charset=utf-8",
+    );
+
+    const object = await store.getObject("repositories/debian/dists/noble/Release");
+
+    expect(object).toEqual({
+      body: "new",
+      contentType: "text/plain; charset=utf-8",
+    });
+  });
+
+  it("reads memory byte objects as immutable snapshots", async () => {
+    const store = new MemoryRepositoryObjectStore();
+    const bytes = new Uint8Array([1, 2, 3]);
+    await store.putBytes(
+      "repositories/debian/pool/main/app.deb",
+      bytes,
+      "application/vnd.debian.binary-package",
+    );
+    bytes[0] = 9;
+
+    const object = await store.getObject("repositories/debian/pool/main/app.deb");
+
+    expect(object).toEqual({
+      body: new Uint8Array([1, 2, 3]),
+      contentType: "application/vnd.debian.binary-package",
+    });
+  });
+
+  it("returns null for missing memory objects", async () => {
+    const store = new MemoryRepositoryObjectStore();
+
+    await expect(store.getObject("repositories/debian/missing")).resolves.toBeNull();
   });
 });
 
@@ -289,5 +342,55 @@ describe("R2RepositoryObjectStore", () => {
     await expect(store.copyObject("missing", "destination")).rejects.toThrow(
       "Object not found: missing",
     );
+  });
+
+  it("reads R2 objects preserving content type and stream body", async () => {
+    const bucket = new FakeR2Bucket();
+    bucket.failArrayBufferReads = true;
+    const store = new R2RepositoryObjectStore(bucket);
+    await store.putBytes(
+      "repositories/debian/pool/main/app.deb",
+      new Uint8Array([1, 2, 3]),
+      "application/vnd.debian.binary-package",
+    );
+
+    const object = await store.getObject("repositories/debian/pool/main/app.deb");
+
+    expect(object?.contentType).toBe("application/vnd.debian.binary-package");
+    await expect(readStream(object?.body as ReadableStream)).resolves.toEqual(
+      new Uint8Array([1, 2, 3]),
+    );
+  });
+
+  it("falls back to R2 arrayBuffer when no body stream exists", async () => {
+    const bucket = new FakeR2Bucket();
+    const store = new R2RepositoryObjectStore(bucket);
+    await store.putText(
+      "repositories/debian/dists/noble/Release",
+      "release",
+      "text/plain; charset=utf-8",
+    );
+    const originalGet = bucket.get.bind(bucket);
+    bucket.get = async (key: string) => {
+      const object = await originalGet(key);
+      if (!object) {
+        return null;
+      }
+      const { body: _body, ...withoutBody } = object;
+      return withoutBody;
+    };
+
+    const object = await store.getObject("repositories/debian/dists/noble/Release");
+
+    expect(object).toEqual({
+      body: new TextEncoder().encode("release"),
+      contentType: "text/plain; charset=utf-8",
+    });
+  });
+
+  it("returns null for missing R2 objects", async () => {
+    const store = new R2RepositoryObjectStore(new FakeR2Bucket());
+
+    await expect(store.getObject("repositories/debian/missing")).resolves.toBeNull();
   });
 });

@@ -48,11 +48,17 @@ export interface ArtifactPublisher {
   publish(input: PublishArtifactsInput): Promise<PublishResult>;
 }
 
+export interface RepositoryObject {
+  body: string | Uint8Array | ReadableStream;
+  contentType?: string;
+}
+
 export interface RepositoryObjectStore {
   putJson(key: string, value: unknown): Promise<void>;
   putText(key: string, value: string, contentType: string): Promise<void>;
   putBytes(key: string, value: Uint8Array, contentType: string): Promise<void>;
   copyObject(sourceKey: string, destinationKey: string, contentType?: string): Promise<void>;
+  getObject(key: string): Promise<RepositoryObject | null>;
 }
 
 export interface RepositoryStore {
