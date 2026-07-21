@@ -252,6 +252,9 @@ function adminUiAssetResponse(asset: AdminUiAsset): Response {
 function adminUiResponse(pathname: string): Response | null {
   if (
     pathname === "/health"
+    || pathname === "/admin"
+    || pathname === "/api"
+    || pathname === "/repositories"
     || pathname.startsWith("/admin/")
     || pathname.startsWith("/api/")
     || pathname.startsWith("/repositories/")

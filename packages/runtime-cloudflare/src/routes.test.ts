@@ -242,13 +242,33 @@ describe("Cloudflare runtime routes", () => {
   it("serves admin UI assets without taking over API routes", async () => {
     const app = createApp();
 
-    const asset = await app.fetch(new Request("https://axis.example/assets/index.js"));
+    const shell = await app.fetch(new Request("https://axis.example/"));
+    const shellHtml = await shell.text();
+    const assetPath = shellHtml.match(/src="([^"]+\.js)"/)?.[1];
+    expect(assetPath).toMatch(/^\/assets\/index-.+\.js$/);
+
+    const asset = await app.fetch(new Request(`https://axis.example${assetPath}`));
     const api = await app.fetch(new Request("https://axis.example/admin/repositories"));
 
     expect(asset.status).toBe(200);
     expect(asset.headers.get("content-type")).toBe("application/javascript; charset=utf-8");
-    await expect(asset.text()).resolves.toContain("Axis Repository");
+    await expect(asset.text()).resolves.toContain("createRoot");
     expect(api.status).toBe(401);
+  });
+
+  it("does not serve the admin UI shell for reserved namespace roots", async () => {
+    const app = createApp();
+
+    const admin = await app.fetch(new Request("https://axis.example/admin"));
+    const api = await app.fetch(new Request("https://axis.example/api"));
+    const repositories = await app.fetch(new Request("https://axis.example/repositories"));
+
+    expect(admin.status).toBe(404);
+    expect(api.status).toBe(404);
+    expect(repositories.status).toBe(404);
+    expect(admin.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    expect(api.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    expect(repositories.headers.get("content-type")).toBe("application/json; charset=utf-8");
   });
 
   it("reuses the default app across worker fetches", async () => {

@@ -63,12 +63,11 @@ export const aptSourceInfoSchema = z.object({
 
 export const installInstructionsSchema = z.object({
   repository: z.string(),
-  ecosystem: z.literal("apt"),
   visibility: repositoryVisibilitySchema,
   keyUrl: z.string(),
-  source: aptSourceInfoSchema,
   keyringPath: z.string(),
   sourceListPath: z.string(),
+  sourceLine: z.string(),
   authConfPath: z.string().optional(),
   authConfTemplate: z.string().optional(),
   commands: z.array(z.string()),

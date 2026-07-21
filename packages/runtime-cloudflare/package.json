@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
+    "build": "node scripts/generate-admin-ui-assets.mjs && tsup src/index.ts --format esm --dts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -15,6 +15,7 @@
     "openpgp": "^6.3.1"
   },
   "devDependencies": {
+    "@axis-repository/admin-ui": "workspace:*",
     "@cloudflare/workers-types": "^4.20241218.0"
   }
 }

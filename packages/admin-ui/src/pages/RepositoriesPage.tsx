@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Save } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -67,6 +67,12 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
   const [configError, setConfigError] = useState("");
   const updateRepository = useUpdateRepository();
   const install = useAptInstallInstructions(repository.name, repository.ecosystem === "apt");
+
+  useEffect(() => {
+    setVisibility(repository.visibility);
+    setConfig(asJson(repository.config));
+    setConfigError("");
+  }, [repository]);
 
   async function save() {
     let parsedConfig: Record<string, unknown>;

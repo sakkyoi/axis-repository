@@ -1,34 +1,25 @@
+import { adminUiAssetEntries } from "./admin-ui-assets.generated";
+
 export interface AdminUiAsset {
-  body: string;
+  body: BodyInit;
   contentType: string;
 }
 
-export const adminUiAssets = new Map<string, AdminUiAsset>([
-  [
-    "/",
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+export const adminUiAssets = new Map<string, AdminUiAsset>(
+  adminUiAssetEntries.map(([path, asset]) => [
+    path,
     {
-      contentType: "text/html; charset=utf-8",
-      body: [
-        "<!doctype html>",
-        '<html lang="en">',
-        "<head>",
-        '<meta charset="UTF-8" />',
-        '<meta name="viewport" content="width=device-width, initial-scale=1.0" />',
-        "<title>Axis Repository</title>",
-        "</head>",
-        "<body>",
-        '<div id="root"></div>',
-        '<script type="module" src="/assets/index.js"></script>',
-        "</body>",
-        "</html>",
-      ].join(""),
+      contentType: asset.contentType,
+      body: base64ToBytes(asset.bodyBase64),
     },
-  ],
-  [
-    "/assets/index.js",
-    {
-      contentType: "application/javascript; charset=utf-8",
-      body: 'document.getElementById("root").textContent = "Axis Repository";',
-    },
-  ],
-]);
+  ]),
+);
