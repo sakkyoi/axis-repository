@@ -14,7 +14,7 @@ import {
 } from "@axis-repository/core";
 import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "./apt-client";
 import { parseAptRepositoryConfig } from "./apt-metadata";
-import { adminUiAssets, type AdminUiAsset } from "./admin-ui-assets";
+import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "./admin-ui-assets";
 import type { AppDependencies } from "./dev-dependencies";
 import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "./http";
 
@@ -239,12 +239,11 @@ function objectResponse(input: {
 }
 
 function adminUiAssetResponse(asset: AdminUiAsset): Response {
-  return new Response(asset.body, {
+  const isHtml = asset.contentType.startsWith("text/html");
+  return new Response(isHtml ? injectAdminUiRuntimeConfig(asset.body, { apiBaseUrl: "" }) : asset.body, {
     headers: {
       "content-type": asset.contentType,
-      "cache-control": asset.contentType.startsWith("text/html")
-        ? "no-store"
-        : "public, max-age=31536000, immutable",
+      "cache-control": isHtml ? "no-store" : "public, max-age=31536000, immutable",
     },
   });
 }

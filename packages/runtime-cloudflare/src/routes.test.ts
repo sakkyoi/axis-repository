@@ -236,7 +236,10 @@ describe("Cloudflare runtime routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
-    await expect(response.text()).resolves.toContain('<div id="root">');
+    const html = await response.text();
+    expect(html).toContain('<div id="root">');
+    expect(html).toContain("window.__AXIS_ADMIN_CONFIG__");
+    expect(html.indexOf("window.__AXIS_ADMIN_CONFIG__")).toBeLessThan(html.indexOf('src="/assets/'));
   });
 
   it("serves admin UI assets without taking over API routes", async () => {
