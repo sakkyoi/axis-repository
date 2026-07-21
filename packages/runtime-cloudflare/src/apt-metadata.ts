@@ -1,4 +1,9 @@
-import { ValidationError, type PublishArtifactsInput, type Repository } from "@axis-repository/core";
+import {
+  ValidationError,
+  type PublishArtifactRequest,
+  type PublishArtifactsInput,
+  type Repository,
+} from "@axis-repository/core";
 
 export interface AptRepositoryConfig {
   codename: string;
@@ -36,6 +41,17 @@ export interface AptRepositoryMetadata {
   release: string;
 }
 
+interface ValidatedAptArtifact {
+  artifact: PublishArtifactRequest;
+  packageName: string;
+  version: string;
+  architecture: string;
+  component: string;
+  description: string;
+  maintainer: string;
+  filename: string;
+}
+
 const textEncoder = new TextEncoder();
 const optionalDebianFields = [
   ["section", "Section"],
@@ -66,51 +82,39 @@ export function parseAptRepositoryConfig(repository: Repository): AptRepositoryC
   };
 }
 
+export function validateAptPublishArtifacts(input: {
+  repository: Repository;
+  artifacts: PublishArtifactRequest[];
+}): void {
+  validateAptArtifacts(input);
+}
+
 export async function buildAptRepositoryMetadata(input: PublishArtifactsInput): Promise<AptRepositoryMetadata> {
   const config = parseAptRepositoryConfig(input.repository);
   const repositoryName = validatePathSegment(input.repository.name, "repository name");
   const releasePath = `repositories/${repositoryName}/dists/${config.codename}/Release`;
   const stanzasByIndex = new Map<string, { component: string; architecture: string; stanzas: string[] }>();
   const poolCopies: AptPoolCopy[] = [];
+  const validatedArtifacts = validateAptArtifacts({
+    repository: input.repository,
+    artifacts: input.artifacts.map((publishedArtifact) => publishedArtifact.artifact),
+  });
 
-  for (const publishedArtifact of input.artifacts) {
-    const metadata = publishedArtifact.artifact.metadata;
-    const packageName = requiredArtifactString(metadata, "package");
-    const version = requiredArtifactString(metadata, "version");
-    const architecture = requiredArtifactString(metadata, "architecture");
-    const component = requiredArtifactString(metadata, "component");
-    const description = requiredArtifactString(metadata, "description");
-    const maintainer = requiredArtifactString(metadata, "maintainer");
-    const filename = validateArtifactFilename(publishedArtifact.artifact.filename);
-
-    validateControlField(packageName, "artifact metadata package");
-    validateControlField(version, "artifact metadata version");
-    validateControlField(architecture, "artifact metadata architecture");
-    validateControlField(component, "artifact metadata component");
-    validateControlField(description, "artifact metadata description");
-    validateControlField(maintainer, "artifact metadata maintainer");
-    validatePathSegment(packageName, "artifact metadata package");
-    validatePathSegment(component, "artifact metadata component");
-    if (architecture !== "all") {
-      validatePathSegment(architecture, "artifact metadata architecture");
+  for (const [index, publishedArtifact] of input.artifacts.entries()) {
+    const validated = validatedArtifacts[index];
+    if (!validated) {
+      throw new ValidationError("APT artifact validation mismatch");
     }
-    validateOptionalControlFields(metadata);
+    const metadata = validated.artifact.metadata;
 
-    if (!config.components.includes(component)) {
-      throw new ValidationError("artifact metadata component is not configured for this repository");
-    }
-    if (architecture !== "all" && !config.architectures.includes(architecture)) {
-      throw new ValidationError("artifact metadata architecture is not configured for this repository");
-    }
-
-    const relativeFilename = `pool/${component}/${packageName}/${filename}`;
+    const relativeFilename = `pool/${validated.component}/${validated.packageName}/${validated.filename}`;
     const packageStanza = buildPackageStanza({
       metadata,
-      packageName,
-      version,
-      architecture,
-      maintainer,
-      description,
+      packageName: validated.packageName,
+      version: validated.version,
+      architecture: validated.architecture,
+      maintainer: validated.maintainer,
+      description: validated.description,
       filename: relativeFilename,
       size: publishedArtifact.verified.size,
       sha256: publishedArtifact.verified.sha256,
@@ -119,13 +123,17 @@ export async function buildAptRepositoryMetadata(input: PublishArtifactsInput): 
     poolCopies.push({
       sourceKey: publishedArtifact.verified.objectKey,
       destinationKey: `repositories/${repositoryName}/${relativeFilename}`,
-      contentType: publishedArtifact.artifact.contentType,
+      contentType: validated.artifact.contentType,
     });
 
-    const targetArchitectures = architecture === "all" ? config.architectures : [architecture];
+    const targetArchitectures = validated.architecture === "all" ? config.architectures : [validated.architecture];
     for (const targetArchitecture of targetArchitectures) {
-      const indexKey = `${component}\0${targetArchitecture}`;
-      const index = stanzasByIndex.get(indexKey) ?? { component, architecture: targetArchitecture, stanzas: [] };
+      const indexKey = `${validated.component}\0${targetArchitecture}`;
+      const index = stanzasByIndex.get(indexKey) ?? {
+        component: validated.component,
+        architecture: targetArchitecture,
+        stanzas: [],
+      };
       index.stanzas.push(packageStanza);
       stanzasByIndex.set(indexKey, index);
     }
@@ -157,6 +165,54 @@ export async function buildAptRepositoryMetadata(input: PublishArtifactsInput): 
     packagesGz: firstIndex?.packagesGz ?? await gzip(new Uint8Array()),
     release,
   };
+}
+
+function validateAptArtifacts(input: {
+  repository: Repository;
+  artifacts: PublishArtifactRequest[];
+}): ValidatedAptArtifact[] {
+  const config = parseAptRepositoryConfig(input.repository);
+  return input.artifacts.map((artifact) => {
+    const metadata = artifact.metadata;
+    const packageName = requiredArtifactString(metadata, "package");
+    const version = requiredArtifactString(metadata, "version");
+    const architecture = requiredArtifactString(metadata, "architecture");
+    const component = requiredArtifactString(metadata, "component");
+    const description = requiredArtifactString(metadata, "description");
+    const maintainer = requiredArtifactString(metadata, "maintainer");
+    const filename = validateArtifactFilename(artifact.filename);
+
+    validateControlField(packageName, "artifact metadata package");
+    validateControlField(version, "artifact metadata version");
+    validateControlField(architecture, "artifact metadata architecture");
+    validateControlField(component, "artifact metadata component");
+    validateControlField(description, "artifact metadata description");
+    validateControlField(maintainer, "artifact metadata maintainer");
+    validatePathSegment(packageName, "artifact metadata package");
+    validatePathSegment(component, "artifact metadata component");
+    if (architecture !== "all") {
+      validatePathSegment(architecture, "artifact metadata architecture");
+    }
+    validateOptionalControlFields(metadata);
+
+    if (!config.components.includes(component)) {
+      throw new ValidationError("artifact metadata component is not configured for this repository");
+    }
+    if (architecture !== "all" && !config.architectures.includes(architecture)) {
+      throw new ValidationError("artifact metadata architecture is not configured for this repository");
+    }
+
+    return {
+      artifact,
+      packageName,
+      version,
+      architecture,
+      component,
+      description,
+      maintainer,
+      filename,
+    };
+  });
 }
 
 function readRecord(value: unknown): Record<string, unknown> {

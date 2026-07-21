@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError, type PublishArtifactsInput } from "@axis-repository/core";
-import { buildAptRepositoryMetadata, parseAptRepositoryConfig } from "./apt-metadata";
+import { buildAptRepositoryMetadata, parseAptRepositoryConfig, validateAptPublishArtifacts } from "./apt-metadata";
 
 const textDecoder = new TextDecoder();
 
@@ -105,6 +105,26 @@ describe("APT metadata", () => {
       architectures: ["amd64"],
       signingKeyId: "signing_key_prod",
     });
+  });
+
+  it("validates APT publish artifact requests before uploads are verified", () => {
+    const valid = input();
+    expect(() =>
+      validateAptPublishArtifacts({
+        repository: valid.repository,
+        artifacts: valid.artifacts.map((published) => published.artifact),
+      }),
+    ).not.toThrow();
+
+    const missing = input();
+    delete missing.artifacts[0]!.artifact.metadata.package;
+
+    expect(() =>
+      validateAptPublishArtifacts({
+        repository: missing.repository,
+        artifacts: missing.artifacts.map((published) => published.artifact),
+      }),
+    ).toThrow("artifact metadata package is required");
   });
 
   it("rejects invalid repository config with exact messages", () => {
