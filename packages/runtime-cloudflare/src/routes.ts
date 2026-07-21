@@ -10,6 +10,8 @@ import {
   type RepositoryObjectMetadata,
   type RepositoryObjectRange,
 } from "@axis-repository/core";
+import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "./apt-client";
+import { parseAptRepositoryConfig } from "./apt-metadata";
 import type { AppDependencies } from "./dev-dependencies";
 import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "./http";
 
@@ -266,6 +268,56 @@ function parseRepositoryObjectPath(requestUrl: string): { repositoryName: string
   };
 }
 
+type AptHelperAction = "key.gpg" | "source" | "install";
+
+function parseAptHelperPath(requestUrl: string): { repositoryName: string; action: AptHelperAction } | null {
+  const rawPath = rawPathname(requestUrl);
+  const prefix = "/repositories/";
+  if (!rawPath.startsWith(prefix)) {
+    return null;
+  }
+  const rawSegments = rawPath.slice(prefix.length).split("/");
+  if (rawSegments.length !== 3 || rawSegments[1] !== "apt") {
+    return null;
+  }
+  const [rawRepositoryName, , rawAction] = rawSegments;
+  if (!rawRepositoryName || !rawAction) {
+    throw new NotFoundError();
+  }
+  const repositoryName = decodePathSegment(rawRepositoryName);
+  const action = decodePathSegment(rawAction);
+  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
+    throw new NotFoundError();
+  }
+  if (action !== "key.gpg" && action !== "source" && action !== "install") {
+    return null;
+  }
+  return { repositoryName, action };
+}
+
+function assertAptRepository(repository: Repository): void {
+  if (repository.ecosystem !== "apt") {
+    throw new NotFoundError();
+  }
+}
+
+function aptClientRepositoryInfo(repository: Repository): AptClientRepositoryInfo {
+  const config = parseAptRepositoryConfig(repository);
+  return {
+    name: repository.name,
+    visibility: repository.visibility,
+    codename: config.codename,
+    components: config.components,
+  };
+}
+
+function aptPublicKeyResponse(publicKeyArmored: string, repository: Repository): Response {
+  const headers = new Headers();
+  headers.set("content-type", "application/pgp-keys");
+  headers.set("cache-control", repositoryCacheControl(repository));
+  return new Response(publicKeyArmored, { headers });
+}
+
 function ensureRepositoryPathIsServable(
   dependencies: AppDependencies,
   repository: Repository,
@@ -414,6 +466,23 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       principal,
     });
     return jsonResponse(result);
+  }
+  const aptHelperPath = parseAptHelperPath(request.url);
+  if (aptHelperPath && request.method === "GET") {
+    const repository = await dependencies.repositoryService.getByName(aptHelperPath.repositoryName);
+    assertAptRepository(repository);
+    await authorizeRepositoryRead(request, dependencies, repository);
+    const repositoryInfo = aptClientRepositoryInfo(repository);
+
+    if (aptHelperPath.action === "key.gpg") {
+      const config = parseAptRepositoryConfig(repository);
+      const key = await dependencies.signingKeyService.getPublicKey(config.signingKeyId);
+      return aptPublicKeyResponse(key.publicKeyArmored, repository);
+    }
+    if (aptHelperPath.action === "source") {
+      return jsonResponse(buildAptSourceInfo({ origin: url.origin, repository: repositoryInfo }));
+    }
+    return jsonResponse(buildAptInstallInfo({ origin: url.origin, repository: repositoryInfo }));
   }
   const repositoryObjectPath = parseRepositoryObjectPath(request.url);
   if (repositoryObjectPath && (request.method === "GET" || request.method === "HEAD")) {

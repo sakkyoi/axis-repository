@@ -79,6 +79,12 @@ export class SigningKeyService {
     return this.toPublic(revoked);
   }
 
+  async getPublicKey(id: string): Promise<PublicSigningKey> {
+    const record = await this.options.state.signingKeys.getById(id);
+    if (!record) throw new NotFoundError();
+    return this.toPublic(record);
+  }
+
   async getActivePrivateKey(id: string): Promise<ActivePrivateSigningKey> {
     const record = await this.options.state.signingKeys.getById(id);
     if (!record) throw new NotFoundError();

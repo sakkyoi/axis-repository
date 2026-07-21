@@ -181,6 +181,36 @@ async function createToken(app: ReturnType<typeof createApp>, body: Record<strin
   return result.secret;
 }
 
+async function createSigningKey(app: ReturnType<typeof createApp>): Promise<{ id: string; publicKeyArmored: string }> {
+  const { generateKey } = await import("openpgp");
+  const key = await generateKey({
+    type: "ecc",
+    curve: "curve25519Legacy",
+    userIDs: [{ name: "Axis Test", email: "axis@example.test" }],
+    passphrase: "correct-passphrase",
+  });
+  const response = await app.fetch(
+    new Request("https://axis.example/admin/signing-keys", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: `debian-prod-${crypto.randomUUID()}`,
+        privateKeyArmored: key.privateKey,
+        passphrase: "correct-passphrase",
+      }),
+    }),
+  );
+  expect(response.status).toBe(201);
+  return (await response.json()) as { id: string; publicKeyArmored: string };
+}
+
+function basicAuth(secret: string, username = "axis"): string {
+  return `Basic ${btoa(`${username}:${secret}`)}`;
+}
+
 describe("Cloudflare runtime routes", () => {
   it("responds to health checks", async () => {
     const app = createApp();
@@ -338,6 +368,168 @@ describe("Cloudflare runtime routes", () => {
     await expect(response.json()).resolves.toEqual({
       error: { code: "validation_error", message: "config.apt.signingKeyId is required" },
     });
+  });
+
+  it("serves the apt repository signing public key", async () => {
+    const app = createApp();
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+      config: validAptConfig(signingKey.id),
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/apt/key.gpg"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/pgp-keys");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+    await expect(response.text()).resolves.toBe(signingKey.publicKeyArmored);
+  });
+
+  it("requires read auth for private apt signing keys", async () => {
+    const app = createApp();
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+      config: validAptConfig(signingKey.id),
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/apt/key.gpg"),
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("returns apt source information using the request origin", async () => {
+    const app = createApp();
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+      config: {
+        apt: {
+          codename: "noble",
+          components: ["main", "contrib"],
+          architectures: ["amd64"],
+          signingKeyId: signingKey.id,
+        },
+      },
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/apt/source"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      repository: "debian-public",
+      ecosystem: "apt",
+      baseUrl: "https://axis.example/repositories/debian-public",
+      codename: "noble",
+      components: ["main", "contrib"],
+      keyringPath: "/usr/share/keyrings/axis-debian-public.gpg",
+      sourceLine:
+        "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
+    });
+  });
+
+  it("returns public apt install instructions", async () => {
+    const app = createApp();
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+      config: validAptConfig(signingKey.id),
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/apt/install"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      repository: "debian-public",
+      visibility: "public",
+      keyUrl: "https://axis.example/repositories/debian-public/apt/key.gpg",
+      sourceListPath: "/etc/apt/sources.list.d/axis-debian-public.list",
+      commands: [
+        "curl -fsSL https://axis.example/repositories/debian-public/apt/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/axis-debian-public.gpg",
+        "echo 'deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main' | sudo tee /etc/apt/sources.list.d/axis-debian-public.list",
+        "sudo apt update",
+      ],
+    });
+  });
+
+  it("returns private apt install auth template without exposing the token secret", async () => {
+    const app = createApp();
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+      config: validAptConfig(signingKey.id),
+    });
+    const token = await createToken(app, {
+      name: "reader",
+      repositories: ["debian-private"],
+      permissions: ["read"],
+      ecosystemScopes: {},
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/apt/install", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+    const body = await response.json() as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      repository: "debian-private",
+      visibility: "private",
+      authConfPath: "/etc/apt/auth.conf.d/axis-debian-private.conf",
+      authConfTemplate: "machine axis.example\nlogin axis\npassword <READ_TOKEN>\n",
+    });
+    expect(JSON.stringify(body)).not.toContain(token);
+  });
+
+  it("rejects apt helper routes for non-apt repositories", async () => {
+    const harness = createDevDependencyHarness();
+    harness.dependencies.artifactPublisherRegistry.register({
+      ecosystem: "pypi",
+      name: "pypi-simple",
+      version: "0.1.0",
+      capabilities: ["serve:simple"],
+      publisher: {
+        publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }),
+      },
+      canServeRepositoryPath: ({ relativePath }) =>
+        relativePath === "simple" || relativePath.startsWith("simple/"),
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
+    });
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-public",
+      ecosystem: "pypi",
+      visibility: "public",
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/apt/source"),
+    );
+
+    expect(response.status).toBe(404);
   });
 
   it("serves public repository objects without a token", async () => {
