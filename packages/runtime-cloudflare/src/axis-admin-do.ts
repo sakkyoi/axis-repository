@@ -6,7 +6,7 @@ import {
 } from "@axis-repository/core";
 import { createApp } from "./app";
 import { AptPublisher } from "./apt-publisher";
-import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
+import { ArtifactPublisherRegistry, createPrefixServingPredicate } from "./artifact-publisher-registry";
 import { WebCryptoRandomId, Sha256SecretHasher } from "./crypto";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
 import type { AppDependencies } from "./dev-dependencies";
@@ -116,8 +116,9 @@ export function createDurableObjectDependencies(
     ecosystem: "apt",
     name: "apt-signed",
     version: "0.1.0",
-    capabilities: ["apt", "signed-release", "pool-copy"],
+    capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
     publisher: aptPublisher,
+    canServeRepositoryPath: createPrefixServingPredicate(["dists", "pool"]),
   });
 
   return {
@@ -133,6 +134,7 @@ export function createDurableObjectDependencies(
     }),
     signingKeyService,
     repositoryObjectStore: objectStore,
+    artifactPublisherRegistry: artifactPublisher,
   };
 }
 

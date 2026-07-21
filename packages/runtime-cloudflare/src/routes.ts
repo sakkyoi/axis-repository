@@ -241,8 +241,6 @@ function decodePathSegment(segment: string): string {
   }
 }
 
-const SERVABLE_REPOSITORY_ROOTS = new Set(["dists", "pool"]);
-
 function parseRepositoryObjectPath(requestUrl: string): { repositoryName: string; relativePath: string } | null {
   const rawPath = rawPathname(requestUrl);
   const prefix = "/repositories/";
@@ -262,13 +260,21 @@ function parseRepositoryObjectPath(requestUrl: string): { repositoryName: string
   if (!repositoryName || relativeSegments.length === 0) {
     return null;
   }
-  if (!SERVABLE_REPOSITORY_ROOTS.has(relativeSegments[0]!)) {
-    throw new NotFoundError();
-  }
   return {
     repositoryName,
     relativePath: relativeSegments.join("/"),
   };
+}
+
+function ensureRepositoryPathIsServable(
+  dependencies: AppDependencies,
+  repository: Repository,
+  relativePath: string,
+): void {
+  const plugin = dependencies.artifactPublisherRegistry.getPlugin(repository.ecosystem);
+  if (!plugin?.canServeRepositoryPath({ relativePath })) {
+    throw new NotFoundError();
+  }
 }
 
 async function authorizeRepositoryRead(
@@ -413,6 +419,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (repositoryObjectPath && (request.method === "GET" || request.method === "HEAD")) {
     const { repositoryName, relativePath } = repositoryObjectPath;
     const repository = await dependencies.repositoryService.getByName(repositoryName);
+    ensureRepositoryPathIsServable(dependencies, repository, relativePath);
     await authorizeRepositoryRead(request, dependencies, repository);
     const objectKey = `repositories/${repositoryName}/${relativePath}`;
     const metadata = await dependencies.repositoryObjectStore.headObject(objectKey);

@@ -317,6 +317,91 @@ describe("Cloudflare runtime routes", () => {
     await expect(response.text()).resolves.toBe("package bytes");
   });
 
+  it("returns not found for apt repository paths denied by the apt plugin", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/secret/token.txt",
+      "do not serve",
+      "text/plain",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/secret/token.txt"),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "not_found", message: "Not Found" },
+    });
+  });
+
+  it("returns not found when a repository ecosystem has no serving plugin", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-public",
+      ecosystem: "pypi",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-public/simple/example/index.html",
+      "<html></html>",
+      "text/html; charset=utf-8",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/simple/example/index.html"),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "not_found", message: "Not Found" },
+    });
+  });
+
+  it("serves repository objects through a non-apt registered plugin", async () => {
+    const harness = createDevDependencyHarness();
+    harness.dependencies.artifactPublisherRegistry.register({
+      ecosystem: "pypi",
+      name: "pypi-simple",
+      version: "0.1.0",
+      capabilities: ["serve:simple"],
+      publisher: {
+        publish: async () => ({
+          publishedAt: "2026-07-18T00:00:30.000Z",
+          objects: [],
+        }),
+      },
+      canServeRepositoryPath: ({ relativePath }) =>
+        relativePath === "simple" || relativePath.startsWith("simple/"),
+    });
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-public",
+      ecosystem: "pypi",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-public/simple/example/index.html",
+      "<html></html>",
+      "text/html; charset=utf-8",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/simple/example/index.html"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    await expect(response.text()).resolves.toBe("<html></html>");
+  });
+
   it("serves public repository objects with production HTTP headers", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
