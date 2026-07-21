@@ -1,0 +1,82 @@
+import { z } from "zod";
+
+export const repositoryVisibilitySchema = z.enum(["private", "public"]);
+
+export const repositorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  ecosystem: z.string(),
+  visibility: repositoryVisibilitySchema,
+  config: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const repositoriesResponseSchema = z.object({
+  repositories: z.array(repositorySchema),
+});
+
+export const publishTokenSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  permissions: z.array(z.string()),
+  repositories: z.array(z.string()),
+  ecosystemScopes: z.record(z.string(), z.unknown()),
+  signingKeyIds: z.array(z.string()),
+  createdAt: z.string(),
+  expiresAt: z.string().optional(),
+  revokedAt: z.string().optional(),
+});
+
+export const publishTokensResponseSchema = z.object({
+  publishTokens: z.array(publishTokenSchema),
+});
+
+export const publishTokenCreateResponseSchema = z.object({
+  token: publishTokenSchema,
+  secret: z.string(),
+});
+
+export const signingKeySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  publicKeyArmored: z.string(),
+  fingerprint: z.string(),
+  keyId: z.string(),
+  createdAt: z.string(),
+  revokedAt: z.string().nullable(),
+});
+
+export const signingKeysResponseSchema = z.object({
+  signingKeys: z.array(signingKeySchema),
+});
+
+export const aptSourceInfoSchema = z.object({
+  repository: z.string(),
+  ecosystem: z.literal("apt"),
+  baseUrl: z.string(),
+  codename: z.string(),
+  components: z.array(z.string()),
+  keyringPath: z.string(),
+  sourceLine: z.string(),
+});
+
+export const installInstructionsSchema = z.object({
+  repository: z.string(),
+  ecosystem: z.literal("apt"),
+  visibility: repositoryVisibilitySchema,
+  keyUrl: z.string(),
+  source: aptSourceInfoSchema,
+  keyringPath: z.string(),
+  sourceListPath: z.string(),
+  authConfPath: z.string().optional(),
+  authConfTemplate: z.string().optional(),
+  commands: z.array(z.string()),
+});
+
+export type Repository = z.infer<typeof repositorySchema>;
+export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;
+export type PublishToken = z.infer<typeof publishTokenSchema>;
+export type PublishTokenCreateResponse = z.infer<typeof publishTokenCreateResponseSchema>;
+export type SigningKey = z.infer<typeof signingKeySchema>;
+export type InstallInstructions = z.infer<typeof installInstructionsSchema>;
