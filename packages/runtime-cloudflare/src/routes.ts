@@ -543,6 +543,14 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     return jsonResponse(await dependencies.signingKeyService.revoke(id));
   }
+  const adminSigningKeyId = parseAdminResourcePath(request.url, "signing-keys");
+  if (adminSigningKeyId) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method === "GET") {
+      return jsonResponse(await dependencies.signingKeyService.getPublicKey(adminSigningKeyId));
+    }
+    throw new NotFoundError();
+  }
   if (url.pathname === "/api/publish-sessions" && request.method === "POST") {
     const secret = requireBearer(request);
     const principal = await dependencies.publishTokenService.verify(secret);

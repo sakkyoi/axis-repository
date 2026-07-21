@@ -2131,6 +2131,23 @@ describe("Cloudflare runtime routes", () => {
     expect(listBody.signingKeys[0]).not.toHaveProperty("encryptedPrivateKeyArmored");
     expect(listBody.signingKeys[0]).not.toHaveProperty("encryptedPassphrase");
 
+    const detailResponse = await app.fetch(
+      new Request(`https://axis.example/admin/signing-keys/${created.id}`, {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(detailResponse.status).toBe(200);
+    const detail = (await detailResponse.json()) as Record<string, unknown>;
+    expect(detail).toMatchObject({
+      id: created.id,
+      name: "debian-prod",
+      revokedAt: null,
+    });
+    expect(detail).not.toHaveProperty("privateKeyArmored");
+    expect(detail).not.toHaveProperty("passphrase");
+    expect(detail).not.toHaveProperty("encryptedPrivateKeyArmored");
+    expect(detail).not.toHaveProperty("encryptedPassphrase");
+
     const revokeResponse = await app.fetch(
       new Request(`https://axis.example/admin/signing-keys/${created.id}/revoke`, {
         method: "POST",
@@ -2147,6 +2164,18 @@ describe("Cloudflare runtime routes", () => {
     expect(revoked).not.toHaveProperty("passphrase");
     expect(revoked).not.toHaveProperty("encryptedPrivateKeyArmored");
     expect(revoked).not.toHaveProperty("encryptedPassphrase");
+  });
+
+  it("returns not found for missing signing key admin detail", async () => {
+    const app = createApp();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/signing-keys/signing_key_missing", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(response.status).toBe(404);
   });
 
   it("requires admin auth for signing key revoke paths before method dispatch", async () => {
