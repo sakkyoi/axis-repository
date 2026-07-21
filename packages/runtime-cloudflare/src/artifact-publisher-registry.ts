@@ -2,8 +2,11 @@ import {
   ValidationError,
   type ArtifactPublisher,
   type Ecosystem,
+  type PublishArtifactRequest,
   type PublishArtifactsInput,
   type PublishResult,
+  type Repository,
+  type TokenPrincipal,
 } from "@axis-repository/core";
 
 export interface PublisherMetadata {
@@ -19,9 +22,26 @@ export interface RepositoryServingContext {
 
 export type RepositoryPathServingRule = (context: RepositoryServingContext) => boolean;
 
+export interface ValidateRepositoryConfigInput {
+  ecosystem: Ecosystem;
+  config: Record<string, unknown>;
+}
+
+export interface ValidatePublishArtifactsInput {
+  repository: Repository;
+  artifacts: PublishArtifactRequest[];
+}
+
+export interface AuthorizePublishInput extends ValidatePublishArtifactsInput {
+  principal: TokenPrincipal;
+}
+
 export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   publisher: ArtifactPublisher;
   canServeRepositoryPath: RepositoryPathServingRule;
+  validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
+  validatePublishArtifacts(input: ValidatePublishArtifactsInput): void;
+  authorizePublish(input: AuthorizePublishInput): void;
 }
 
 export type PublisherDescriptor = ArtifactRepositoryPlugin;
@@ -63,6 +83,16 @@ export class ArtifactPublisherRegistry implements ArtifactPublisher {
       ...plugin,
       capabilities: [...plugin.capabilities],
     };
+  }
+
+  requirePlugin(ecosystem: Ecosystem): ArtifactRepositoryPlugin {
+    const plugin = this.getPlugin(ecosystem);
+    if (!plugin) {
+      throw new ValidationError(
+        `Artifact repository plugin is not configured for ecosystem: ${ecosystem}`,
+      );
+    }
+    return plugin;
   }
 
   async publish(input: PublishArtifactsInput): Promise<PublishResult> {

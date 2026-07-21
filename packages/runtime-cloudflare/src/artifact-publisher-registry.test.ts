@@ -70,6 +70,9 @@ describe("ArtifactPublisherRegistry", () => {
       capabilities: ["package-index"],
       publisher: apt.publisher,
       canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
     });
     registry.register({
       ecosystem: "pypi",
@@ -78,6 +81,9 @@ describe("ArtifactPublisherRegistry", () => {
       capabilities: ["simple-api"],
       publisher: pypi.publisher,
       canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
     });
 
     await expect(registry.publish(publishInput("pypi"))).resolves.toEqual({
@@ -110,6 +116,9 @@ describe("ArtifactPublisherRegistry", () => {
       capabilities: ["generic-manifest"],
       publisher: first.publisher,
       canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
     });
 
     expect(() =>
@@ -120,6 +129,9 @@ describe("ArtifactPublisherRegistry", () => {
         capabilities: ["package-index"],
         publisher: second.publisher,
         canServeRepositoryPath: () => false,
+        validateRepositoryConfig: () => {},
+        validatePublishArtifacts: () => {},
+        authorizePublish: () => {},
       }),
     ).toThrow(new ValidationError("Artifact publisher is already registered for ecosystem: apt"));
   });
@@ -134,6 +146,9 @@ describe("ArtifactPublisherRegistry", () => {
       capabilities: ["generic-manifest"],
       publisher: apt.publisher,
       canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
     });
 
     expect(registry.list()).toEqual([
@@ -157,6 +172,9 @@ describe("ArtifactPublisherRegistry", () => {
       capabilities: ["package-index"],
       publisher: apt.publisher,
       canServeRepositoryPath: () => true,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
     });
 
     const plugin = registry.getPlugin("apt");
@@ -182,5 +200,45 @@ describe("ArtifactPublisherRegistry", () => {
     expect(canServe({ relativePath: "poolish/main/app.deb" })).toBe(false);
     expect(canServe({ relativePath: "simple/example/" })).toBe(false);
     expect(canServe({ relativePath: "secret" })).toBe(false);
+  });
+
+  it("fails closed when requiring an unregistered plugin", () => {
+    const registry = new ArtifactPublisherRegistry();
+
+    expect(() => registry.requirePlugin("npm")).toThrow(
+      new ValidationError("Artifact repository plugin is not configured for ecosystem: npm"),
+    );
+  });
+
+  it("keeps lifecycle hooks on registered plugins", () => {
+    const registry = new ArtifactPublisherRegistry();
+    const publisher = publisherReturning("apt.json");
+    const calls: string[] = [];
+    registry.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["package-index"],
+      publisher: publisher.publisher,
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => calls.push("config"),
+      validatePublishArtifacts: () => calls.push("artifacts"),
+      authorizePublish: () => calls.push("authorize"),
+    });
+
+    const input = publishInput("apt");
+    const plugin = registry.requirePlugin("apt");
+    plugin.validateRepositoryConfig({ ecosystem: "apt", config: {} });
+    plugin.validatePublishArtifacts({
+      repository: input.repository,
+      artifacts: input.session.artifacts,
+    });
+    plugin.authorizePublish({
+      repository: input.repository,
+      principal: input.session.requestedBy,
+      artifacts: input.session.artifacts,
+    });
+
+    expect(calls).toEqual(["config", "artifacts", "authorize"]);
   });
 });
