@@ -13,27 +13,42 @@ export interface PublisherMetadata {
   capabilities: string[];
 }
 
-export interface PublisherDescriptor extends PublisherMetadata {
+export interface RepositoryServingContext {
+  relativePath: string;
+}
+
+export type RepositoryPathServingRule = (context: RepositoryServingContext) => boolean;
+
+export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   publisher: ArtifactPublisher;
+  canServeRepositoryPath: RepositoryPathServingRule;
+}
+
+export type PublisherDescriptor = ArtifactRepositoryPlugin;
+
+export function createPrefixServingPredicate(prefixes: string[]): RepositoryPathServingRule {
+  const normalizedPrefixes = prefixes.map((prefix) => prefix.replace(/^\/+|\/+$/g, ""));
+  return ({ relativePath }) =>
+    normalizedPrefixes.some((prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`));
 }
 
 export class ArtifactPublisherRegistry implements ArtifactPublisher {
-  private readonly publishers = new Map<Ecosystem, PublisherDescriptor>();
+  private readonly plugins = new Map<Ecosystem, ArtifactRepositoryPlugin>();
 
   register(descriptor: PublisherDescriptor): void {
-    if (this.publishers.has(descriptor.ecosystem)) {
+    if (this.plugins.has(descriptor.ecosystem)) {
       throw new ValidationError(
         `Artifact publisher is already registered for ecosystem: ${descriptor.ecosystem}`,
       );
     }
-    this.publishers.set(descriptor.ecosystem, {
+    this.plugins.set(descriptor.ecosystem, {
       ...descriptor,
       capabilities: [...descriptor.capabilities],
     });
   }
 
   list(): PublisherMetadata[] {
-    return Array.from(this.publishers.values()).map((descriptor) => ({
+    return Array.from(this.plugins.values()).map((descriptor) => ({
       ecosystem: descriptor.ecosystem,
       name: descriptor.name,
       version: descriptor.version,
@@ -41,8 +56,17 @@ export class ArtifactPublisherRegistry implements ArtifactPublisher {
     }));
   }
 
+  getPlugin(ecosystem: Ecosystem): ArtifactRepositoryPlugin | undefined {
+    const plugin = this.plugins.get(ecosystem);
+    if (!plugin) return undefined;
+    return {
+      ...plugin,
+      capabilities: [...plugin.capabilities],
+    };
+  }
+
   async publish(input: PublishArtifactsInput): Promise<PublishResult> {
-    const descriptor = this.publishers.get(input.repository.ecosystem);
+    const descriptor = this.plugins.get(input.repository.ecosystem);
     if (!descriptor) {
       throw new ValidationError(
         `Artifact publisher is not configured for ecosystem: ${input.repository.ecosystem}`,

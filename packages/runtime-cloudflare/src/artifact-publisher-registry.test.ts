@@ -1,7 +1,7 @@
 import type { ArtifactPublisher, PublishArtifactsInput } from "@axis-repository/core";
 import { ValidationError } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
-import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
+import { ArtifactPublisherRegistry, createPrefixServingPredicate } from "./artifact-publisher-registry";
 
 function publishInput(ecosystem: string): PublishArtifactsInput {
   return {
@@ -69,6 +69,7 @@ describe("ArtifactPublisherRegistry", () => {
       version: "0.0.0",
       capabilities: ["package-index"],
       publisher: apt.publisher,
+      canServeRepositoryPath: () => false,
     });
     registry.register({
       ecosystem: "pypi",
@@ -76,6 +77,7 @@ describe("ArtifactPublisherRegistry", () => {
       version: "0.0.0",
       capabilities: ["simple-api"],
       publisher: pypi.publisher,
+      canServeRepositoryPath: () => false,
     });
 
     await expect(registry.publish(publishInput("pypi"))).resolves.toEqual({
@@ -107,6 +109,7 @@ describe("ArtifactPublisherRegistry", () => {
       version: "1.0.0",
       capabilities: ["generic-manifest"],
       publisher: first.publisher,
+      canServeRepositoryPath: () => false,
     });
 
     expect(() =>
@@ -116,6 +119,7 @@ describe("ArtifactPublisherRegistry", () => {
         version: "2.0.0",
         capabilities: ["package-index"],
         publisher: second.publisher,
+        canServeRepositoryPath: () => false,
       }),
     ).toThrow(new ValidationError("Artifact publisher is already registered for ecosystem: apt"));
   });
@@ -129,6 +133,7 @@ describe("ArtifactPublisherRegistry", () => {
       version: "0.0.0",
       capabilities: ["generic-manifest"],
       publisher: apt.publisher,
+      canServeRepositoryPath: () => false,
     });
 
     expect(registry.list()).toEqual([
@@ -140,5 +145,42 @@ describe("ArtifactPublisherRegistry", () => {
       },
     ]);
     expect(registry.list()[0]).not.toHaveProperty("publisher");
+  });
+
+  it("returns the plugin registered for an ecosystem", () => {
+    const registry = new ArtifactPublisherRegistry();
+    const apt = publisherReturning("apt.json");
+    registry.register({
+      ecosystem: "apt",
+      name: "apt-signed",
+      version: "0.1.0",
+      capabilities: ["package-index"],
+      publisher: apt.publisher,
+      canServeRepositoryPath: () => true,
+    });
+
+    const plugin = registry.getPlugin("apt");
+
+    expect(plugin?.ecosystem).toBe("apt");
+    expect(plugin?.name).toBe("apt-signed");
+    expect(plugin?.canServeRepositoryPath({ relativePath: "dists/noble/InRelease" })).toBe(true);
+  });
+
+  it("returns undefined for ecosystems without a plugin", () => {
+    const registry = new ArtifactPublisherRegistry();
+
+    expect(registry.getPlugin("pypi")).toBeUndefined();
+  });
+
+  it("creates prefix serving predicates that allow only exact roots and nested children", () => {
+    const canServe = createPrefixServingPredicate(["dists", "pool"]);
+
+    expect(canServe({ relativePath: "dists/noble/InRelease" })).toBe(true);
+    expect(canServe({ relativePath: "pool/main/app.deb" })).toBe(true);
+    expect(canServe({ relativePath: "dists" })).toBe(true);
+    expect(canServe({ relativePath: "pool" })).toBe(true);
+    expect(canServe({ relativePath: "poolish/main/app.deb" })).toBe(false);
+    expect(canServe({ relativePath: "simple/example/" })).toBe(false);
+    expect(canServe({ relativePath: "secret" })).toBe(false);
   });
 });
