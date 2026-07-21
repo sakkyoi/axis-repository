@@ -14,7 +14,7 @@ export function normalizeApiBaseUrl(value: string | undefined): string {
   return trimmed.replace(/\/+$/, "");
 }
 
-export function getRuntimeConfig(windowLike: AxisAdminWindow = window): AxisAdminRuntimeConfig {
+export function getRuntimeConfig(windowLike: AxisAdminWindow = globalThis as AxisAdminWindow): AxisAdminRuntimeConfig {
   return {
     apiBaseUrl: normalizeApiBaseUrl(windowLike.__AXIS_ADMIN_CONFIG__?.apiBaseUrl),
   };
