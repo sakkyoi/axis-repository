@@ -153,6 +153,10 @@ function validAptConfig(signingKeyId = "signing_key_prod"): Record<string, unkno
   };
 }
 
+function basicAuth(secret: string, username = "axis"): string {
+  return `Basic ${btoa(`${username}:${secret}`)}`;
+}
+
 type TestAxisEnv = {
   AXIS_ADMIN?: DurableObjectNamespace | undefined;
   AXIS_OBJECTS?: R2Bucket | undefined;
@@ -460,6 +464,15 @@ describe("AxisAdminDO", () => {
     expect(read.status).toBe(200);
     expect(read.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     await expect(read.text()).resolves.toContain("-----BEGIN PGP SIGNED MESSAGE-----");
+
+    const basicRead = await object.fetch(
+      new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease", {
+        headers: { authorization: basicAuth(tokenBody.secret) },
+      }),
+    );
+
+    expect(basicRead.status).toBe(200);
+    await expect(basicRead.text()).resolves.toContain("-----BEGIN PGP SIGNED MESSAGE-----");
 
     const rangedRead = await object.fetch(
       new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease", {
