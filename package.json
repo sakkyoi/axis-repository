@@ -5,6 +5,7 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "build": "pnpm -r build",
+    "dev:ui": "pnpm --filter @axis-repository/admin-ui dev",
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck"
   },
