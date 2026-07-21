@@ -13,6 +13,7 @@ import {
   type Repository,
   type RepositoryVisibility,
   type SigningKey,
+  type InstallInstructions,
 } from "./schemas";
 
 export interface CreatePublishTokenInput {
@@ -40,7 +41,7 @@ export interface AxisClient {
   listRepositories(): Promise<Repository[]>;
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
-  getAptInstallInstructions(name: string): Promise<unknown>;
+  getAptInstallInstructions(name: string): Promise<InstallInstructions>;
   listPublishTokens(): Promise<ReturnType<typeof publishTokensResponseSchema.parse>["publishTokens"]>;
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
   createPublishToken(input: CreatePublishTokenInput): Promise<PublishTokenCreateResponse>;
