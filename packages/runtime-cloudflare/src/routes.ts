@@ -14,6 +14,7 @@ import {
 } from "@axis-repository/core";
 import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "./apt-client";
 import { parseAptRepositoryConfig } from "./apt-metadata";
+import { adminUiAssets, type AdminUiAsset } from "./admin-ui-assets";
 import type { AppDependencies } from "./dev-dependencies";
 import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "./http";
 
@@ -235,6 +236,36 @@ function objectResponse(input: {
       ...(input.range ? { range: input.range } : {}),
     }),
   });
+}
+
+function adminUiAssetResponse(asset: AdminUiAsset): Response {
+  return new Response(asset.body, {
+    headers: {
+      "content-type": asset.contentType,
+      "cache-control": asset.contentType.startsWith("text/html")
+        ? "no-store"
+        : "public, max-age=31536000, immutable",
+    },
+  });
+}
+
+function adminUiResponse(pathname: string): Response | null {
+  if (
+    pathname === "/health"
+    || pathname.startsWith("/admin/")
+    || pathname.startsWith("/api/")
+    || pathname.startsWith("/repositories/")
+  ) {
+    return null;
+  }
+  const asset = adminUiAssets.get(pathname);
+  if (asset) {
+    return adminUiAssetResponse(asset);
+  }
+  if (pathname.startsWith("/assets/")) {
+    return null;
+  }
+  return adminUiAssetResponse(adminUiAssets.get("/")!);
 }
 
 function rawPathname(requestUrl: string): string {
@@ -645,6 +676,12 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       cacheControl,
       ...(parsedRange ? { range: parsedRange } : {}),
     });
+  }
+  if (request.method === "GET") {
+    const uiResponse = adminUiResponse(url.pathname);
+    if (uiResponse) {
+      return uiResponse;
+    }
   }
   throw new NotFoundError();
 }

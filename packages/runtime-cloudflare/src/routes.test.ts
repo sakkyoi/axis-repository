@@ -220,14 +220,35 @@ describe("Cloudflare runtime routes", () => {
     await expect(response.json()).resolves.toEqual({ ok: true, service: "axis-repository" });
   });
 
-  it("returns not found for unknown routes", async () => {
+  it("returns not found for unknown API routes", async () => {
     const app = createApp();
-    const response = await app.fetch(new Request("https://axis.example/missing"));
+    const response = await app.fetch(new Request("https://axis.example/api/missing"));
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: { code: "not_found", message: "Not Found" },
     });
+  });
+
+  it("serves the admin UI shell for root paths", async () => {
+    const app = createApp();
+    const response = await app.fetch(new Request("https://axis.example/"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    await expect(response.text()).resolves.toContain('<div id="root">');
+  });
+
+  it("serves admin UI assets without taking over API routes", async () => {
+    const app = createApp();
+
+    const asset = await app.fetch(new Request("https://axis.example/assets/index.js"));
+    const api = await app.fetch(new Request("https://axis.example/admin/repositories"));
+
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get("content-type")).toBe("application/javascript; charset=utf-8");
+    await expect(asset.text()).resolves.toContain("Axis Repository");
+    expect(api.status).toBe(401);
   });
 
   it("reuses the default app across worker fetches", async () => {
