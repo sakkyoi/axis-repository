@@ -354,6 +354,7 @@ async function buildRelease(input: {
     `Date: ${new Date(input.publishDate).toUTCString()}`,
     `Architectures: ${input.config.architectures.join(" ")}`,
     `Components: ${input.config.components.join(" ")}`,
+    "Acquire-By-Hash: no",
     "SHA256:",
     ...sha256Lines,
     "SHA512:",

@@ -195,6 +195,7 @@ describe("APT metadata", () => {
     expect(metadata.release).toContain("Date: Sat, 18 Jul 2026 00:10:00 GMT\n");
     expect(metadata.release).toContain("Architectures: amd64\n");
     expect(metadata.release).toContain("Components: main\n");
+    expect(metadata.release).toContain("Acquire-By-Hash: no\n");
     expect(metadata.release).toContain("SHA256:\n");
     expect(metadata.release).toContain("SHA512:\n");
 
