@@ -295,6 +295,28 @@ describe("Cloudflare runtime routes", () => {
     await expect(response.text()).resolves.toBe("signed release");
   });
 
+  it("serves apt pool objects through the registered apt plugin", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/pool/main/app.deb",
+      "package bytes",
+      "application/vnd.debian.binary-package",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/pool/main/app.deb"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("package bytes");
+  });
+
   it("serves public repository objects with production HTTP headers", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

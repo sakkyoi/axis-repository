@@ -9,7 +9,7 @@ import {
   type SecretHasher,
 } from "@axis-repository/core";
 import { AptPublisher } from "./apt-publisher";
-import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
+import { ArtifactPublisherRegistry, createPrefixServingPredicate } from "./artifact-publisher-registry";
 import MemoryUploadBroker from "./memory-upload-broker";
 import { OpenPgpSigner } from "./openpgp-signer";
 import { MemoryRepositoryObjectStore } from "./repository-object-store";
@@ -23,6 +23,7 @@ export interface AppDependencies {
   publishSessionService: PublishSessionService;
   signingKeyService: SigningKeyService;
   repositoryObjectStore: RepositoryObjectStore;
+  artifactPublisherRegistry: ArtifactPublisherRegistry;
 }
 
 export interface DevDependencyHarness {
@@ -70,8 +71,9 @@ export function createDevDependencyHarness(
     ecosystem: "apt",
     name: "apt-signed",
     version: "0.1.0",
-    capabilities: ["apt", "signed-release", "pool-copy"],
+    capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
     publisher: aptPublisher,
+    canServeRepositoryPath: createPrefixServingPredicate(["dists", "pool"]),
   });
 
   return {
@@ -88,6 +90,7 @@ export function createDevDependencyHarness(
       }),
       signingKeyService,
       repositoryObjectStore: objectStore,
+      artifactPublisherRegistry: artifactPublisher,
     },
     repositoryObjectStore: objectStore,
   };
