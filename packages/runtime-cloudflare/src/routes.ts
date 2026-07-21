@@ -7,6 +7,7 @@ import {
   type PublishArtifactRequest,
   type PublishTokenRecord,
   type Repository,
+  type RepositoryVisibility,
   type RepositoryObject,
   type RepositoryObjectMetadata,
   type RepositoryObjectRange,
@@ -42,6 +43,12 @@ export function errorResponse(error: unknown): Response {
 
 function repositoryVisibility(body: Record<string, unknown>): "private" | "public" {
   if (body.visibility === undefined) return "private";
+  if (body.visibility === "private" || body.visibility === "public") return body.visibility;
+  throw new ValidationError("visibility must be private or public");
+}
+
+function optionalRepositoryVisibility(body: Record<string, unknown>): RepositoryVisibility | undefined {
+  if (body.visibility === undefined) return undefined;
   if (body.visibility === "private" || body.visibility === "public") return body.visibility;
   throw new ValidationError("visibility must be private or public");
 }
@@ -269,6 +276,39 @@ function parseRepositoryObjectPath(requestUrl: string): { repositoryName: string
   };
 }
 
+function parseAdminResourcePath(requestUrl: string, collection: string): string | null {
+  const rawPath = rawPathname(requestUrl);
+  const prefix = `/admin/${collection}/`;
+  if (!rawPath.startsWith(prefix)) {
+    return null;
+  }
+  const rawRest = rawPath.slice(prefix.length);
+  const rawSegments = rawRest.split("/");
+  if (rawSegments.length !== 1) {
+    return null;
+  }
+  const value = decodePathSegment(rawSegments[0] ?? "");
+  if (!value || value === "." || value === "..") {
+    throw new NotFoundError();
+  }
+  return value;
+}
+
+function parseRepositoryUpdate(body: Record<string, unknown>): {
+  visibility?: RepositoryVisibility;
+  config?: Record<string, unknown>;
+} {
+  if (body.name !== undefined || body.ecosystem !== undefined) {
+    throw new ValidationError("Repository name and ecosystem are immutable");
+  }
+  const visibility = optionalRepositoryVisibility(body);
+  const config = optionalObjectField(body, "config");
+  return {
+    ...(visibility === undefined ? {} : { visibility }),
+    ...(config === undefined ? {} : { config }),
+  };
+}
+
 type AptHelperAction = "key.gpg" | "source" | "install";
 
 function parseAptHelperPath(requestUrl: string): { repositoryName: string; action: AptHelperAction } | null {
@@ -397,6 +437,20 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       });
       return jsonResponse(repository, { status: 201 });
     }
+  }
+  const adminRepositoryName = parseAdminResourcePath(request.url, "repositories");
+  if (adminRepositoryName) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method === "GET") {
+      return jsonResponse(await dependencies.repositoryService.getByName(adminRepositoryName));
+    }
+    if (request.method === "PATCH") {
+      const body = await readJsonObject(request);
+      return jsonResponse(
+        await dependencies.repositoryService.update(adminRepositoryName, parseRepositoryUpdate(body)),
+      );
+    }
+    throw new NotFoundError();
   }
   if (url.pathname === "/admin/publish-tokens") {
     requireAdmin(request, dependencies.adminToken);

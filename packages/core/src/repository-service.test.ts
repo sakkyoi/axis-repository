@@ -59,4 +59,60 @@ describe("RepositoryService", () => {
       }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
+
+  it("gets repositories by name", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryService({ state, clock, randomId });
+    const repository = await service.create({
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: { apt: { codename: "noble" } },
+    });
+
+    await expect(service.getByName("debian-internal")).resolves.toEqual(repository);
+  });
+
+  it("updates repository visibility and config without changing immutable fields", async () => {
+    const state = new MemoryStateStore();
+    const mutableClock: Clock = {
+      now: () => new Date("2026-07-13T00:00:00.000Z"),
+    };
+    const service = new RepositoryService({ state, clock: mutableClock, randomId });
+    const repository = await service.create({
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: { apt: { codename: "noble", components: ["main"] } },
+    });
+    mutableClock.now = () => new Date("2026-07-14T00:00:00.000Z");
+
+    const updated = await service.update("debian-internal", {
+      visibility: "public",
+      config: { apt: { codename: "jammy", components: ["main", "contrib"] } },
+    });
+
+    expect(updated).toEqual({
+      ...repository,
+      visibility: "public",
+      config: { apt: { codename: "jammy", components: ["main", "contrib"] } },
+      updatedAt: "2026-07-14T00:00:00.000Z",
+    });
+    await expect(service.getByName("debian-internal")).resolves.toEqual(updated);
+  });
+
+  it("rejects empty repository update payloads", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryService({ state, clock, randomId });
+    await service.create({
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: {},
+    });
+
+    await expect(service.update("debian-internal", {})).rejects.toThrow(
+      "Repository update must include visibility or config",
+    );
+  });
 });

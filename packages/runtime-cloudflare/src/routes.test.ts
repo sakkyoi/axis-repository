@@ -370,6 +370,135 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("gets repositories by name through admin routes", async () => {
+    const app = createApp();
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: validAptConfig(),
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories/debian-internal", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: validAptConfig(),
+    });
+  });
+
+  it("updates repository visibility and config through admin routes", async () => {
+    const app = createApp();
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: validAptConfig(signingKey.id),
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories/debian-internal", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          visibility: "public",
+          config: {
+            apt: {
+              codename: "jammy",
+              components: ["main", "contrib"],
+              architectures: ["amd64"],
+              signingKeyId: signingKey.id,
+            },
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "public",
+      config: {
+        apt: {
+          codename: "jammy",
+          components: ["main", "contrib"],
+          architectures: ["amd64"],
+          signingKeyId: signingKey.id,
+        },
+      },
+    });
+  });
+
+  it("rejects immutable repository fields on admin updates", async () => {
+    const app = createApp();
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: validAptConfig(),
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories/debian-internal", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "renamed", ecosystem: "pypi" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "Repository name and ecosystem are immutable" },
+    });
+  });
+
+  it("validates repository config on admin updates", async () => {
+    const app = createApp();
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: validAptConfig(),
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories/debian-internal", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          config: {
+            apt: {
+              codename: "noble",
+              components: ["main"],
+              architectures: ["amd64"],
+            },
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "config.apt.signingKeyId is required" },
+    });
+  });
+
   it("serves the apt repository signing public key", async () => {
     const app = createApp();
     const signingKey = await createSigningKey(app);

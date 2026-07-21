@@ -9,6 +9,11 @@ export interface CreateRepositoryInput {
   config?: Record<string, unknown>;
 }
 
+export interface UpdateRepositoryInput {
+  visibility?: RepositoryVisibility;
+  config?: Record<string, unknown>;
+}
+
 export interface RepositoryServiceOptions {
   state: StateStore;
   clock: Clock;
@@ -51,5 +56,20 @@ export class RepositoryService {
       throw new NotFoundError(`Repository not found: ${name}`);
     }
     return repository;
+  }
+
+  async update(name: string, input: UpdateRepositoryInput): Promise<Repository> {
+    if (input.visibility === undefined && input.config === undefined) {
+      throw new ValidationError("Repository update must include visibility or config");
+    }
+    const repository = await this.getByName(name);
+    const updated: Repository = {
+      ...repository,
+      ...(input.visibility === undefined ? {} : { visibility: input.visibility }),
+      ...(input.config === undefined ? {} : { config: input.config }),
+      updatedAt: this.options.clock.now().toISOString(),
+    };
+    await this.options.state.repositories.save(updated);
+    return updated;
   }
 }

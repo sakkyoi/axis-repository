@@ -7,6 +7,7 @@ import {
   PublishSessionService,
   type Repository,
   RepositoryService,
+  type UpdateRepositoryInput,
   type VerifyPublishUploadInput,
   type VerifyPublishUploadResult,
 } from "@axis-repository/core";
@@ -35,6 +36,17 @@ export class PluginRepositoryService {
 
   getByName(name: string): Promise<Repository> {
     return this.options.repositoryService.getByName(name);
+  }
+
+  async update(name: string, input: UpdateRepositoryInput): Promise<Repository> {
+    const current = await this.options.repositoryService.getByName(name);
+    const nextConfig = input.config ?? current.config;
+    const plugin = this.options.plugins.requirePlugin(current.ecosystem);
+    plugin.validateRepositoryConfig({
+      ecosystem: current.ecosystem,
+      config: nextConfig,
+    });
+    return this.options.repositoryService.update(name, input);
   }
 }
 
