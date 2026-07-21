@@ -277,6 +277,133 @@ describe("AxisAdminDO", () => {
     expect(response.status).toBe(201);
   });
 
+  it("serves hardened admin APIs through the Durable Object", async () => {
+    const { generateKey } = await import("openpgp");
+    const key = await generateKey({
+      type: "ecc",
+      curve: "curve25519Legacy",
+      userIDs: [{ name: "Axis Test", email: "axis@example.test" }],
+      passphrase: "correct-passphrase",
+    });
+    const object = createObject({ ADMIN_TOKEN: "test-admin-token" });
+
+    const createSigningKey = await object.fetch(
+      new Request("https://axis.example/admin/signing-keys", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-prod",
+          privateKeyArmored: key.privateKey,
+          passphrase: "correct-passphrase",
+        }),
+      }),
+    );
+    expect(createSigningKey.status).toBe(201);
+    const signingKey = (await createSigningKey.json()) as { id: string };
+
+    const createRepository = await object.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-internal",
+          ecosystem: "apt",
+          config: validAptConfig(signingKey.id),
+        }),
+      }),
+    );
+    expect(createRepository.status).toBe(201);
+
+    const repositoryDetail = await object.fetch(
+      new Request("https://axis.example/admin/repositories/debian-internal", {
+        headers: { authorization: "Bearer test-admin-token" },
+      }),
+    );
+    expect(repositoryDetail.status).toBe(200);
+    await expect(repositoryDetail.json()).resolves.toMatchObject({
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+
+    const repositoryUpdate = await object.fetch(
+      new Request("https://axis.example/admin/repositories/debian-internal", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ visibility: "public" }),
+      }),
+    );
+    expect(repositoryUpdate.status).toBe(200);
+    await expect(repositoryUpdate.json()).resolves.toMatchObject({
+      name: "debian-internal",
+      visibility: "public",
+    });
+
+    const createToken = await object.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+          signingKeyIds: [signingKey.id],
+        }),
+      }),
+    );
+    expect(createToken.status).toBe(201);
+    const tokenBody = (await createToken.json()) as { secret: string };
+
+    const tokenDetail = await object.fetch(
+      new Request("https://axis.example/admin/publish-tokens/github-actions", {
+        headers: { authorization: "Bearer test-admin-token" },
+      }),
+    );
+    expect(tokenDetail.status).toBe(200);
+    const tokenDetailBody = (await tokenDetail.json()) as Record<string, unknown>;
+    expect(tokenDetailBody).toMatchObject({ name: "github-actions" });
+    expect(tokenDetailBody).not.toHaveProperty("tokenHash");
+    expect(JSON.stringify(tokenDetailBody)).not.toContain(tokenBody.secret);
+
+    const revokeToken = await object.fetch(
+      new Request("https://axis.example/admin/publish-tokens/github-actions/revoke", {
+        method: "POST",
+        headers: { authorization: "Bearer test-admin-token" },
+      }),
+    );
+    expect(revokeToken.status).toBe(200);
+    await expect(revokeToken.json()).resolves.toMatchObject({
+      name: "github-actions",
+      revokedAt: expect.any(String),
+    });
+
+    const signingKeyDetail = await object.fetch(
+      new Request(`https://axis.example/admin/signing-keys/${signingKey.id}`, {
+        headers: { authorization: "Bearer test-admin-token" },
+      }),
+    );
+    expect(signingKeyDetail.status).toBe(200);
+    const signingKeyDetailBody = (await signingKeyDetail.json()) as Record<string, unknown>;
+    expect(signingKeyDetailBody).toMatchObject({ id: signingKey.id, name: "debian-prod" });
+    expect(signingKeyDetailBody).not.toHaveProperty("privateKeyArmored");
+    expect(signingKeyDetailBody).not.toHaveProperty("passphrase");
+    expect(signingKeyDetailBody).not.toHaveProperty("encryptedPrivateKeyArmored");
+    expect(signingKeyDetailBody).not.toHaveProperty("encryptedPassphrase");
+  });
+
   it("finalizes publish sessions through the Durable Object R2 path", async () => {
     const { generateKey } = await import("openpgp");
     const key = await generateKey({
