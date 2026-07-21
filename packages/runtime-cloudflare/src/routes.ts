@@ -294,6 +294,23 @@ function parseAdminResourcePath(requestUrl: string, collection: string): string 
   return value;
 }
 
+function parseAdminResourceActionPath(requestUrl: string, collection: string, action: string): string | null {
+  const rawPath = rawPathname(requestUrl);
+  const prefix = `/admin/${collection}/`;
+  if (!rawPath.startsWith(prefix)) {
+    return null;
+  }
+  const rawSegments = rawPath.slice(prefix.length).split("/");
+  if (rawSegments.length !== 2 || rawSegments[1] !== action) {
+    return null;
+  }
+  const value = decodePathSegment(rawSegments[0] ?? "");
+  if (!value || value === "." || value === "..") {
+    throw new NotFoundError();
+  }
+  return value;
+}
+
 function parseRepositoryUpdate(body: Record<string, unknown>): {
   visibility?: RepositoryVisibility;
   config?: Record<string, unknown>;
@@ -478,6 +495,22 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         { status: 201 },
       );
     }
+  }
+  const revokePublishTokenName = parseAdminResourceActionPath(request.url, "publish-tokens", "revoke");
+  if (revokePublishTokenName) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method !== "POST") {
+      throw new NotFoundError();
+    }
+    return jsonResponse(publicPublishToken(await dependencies.publishTokenService.revoke(revokePublishTokenName)));
+  }
+  const adminPublishTokenName = parseAdminResourcePath(request.url, "publish-tokens");
+  if (adminPublishTokenName) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method === "GET") {
+      return jsonResponse(publicPublishToken(await dependencies.publishTokenService.getByName(adminPublishTokenName)));
+    }
+    throw new NotFoundError();
   }
   if (url.pathname === "/admin/signing-keys") {
     requireAdmin(request, dependencies.adminToken);

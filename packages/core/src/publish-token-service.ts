@@ -1,5 +1,5 @@
 import type { PublishTokenRecord, TokenPrincipal } from "./domain";
-import { ForbiddenError, UnauthorizedError, ValidationError } from "./errors";
+import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "./errors";
 import type { Clock, RandomId, SecretHasher, StateStore } from "./ports";
 
 function cloneRecord(input: Record<string, unknown>): Record<string, unknown> {
@@ -81,10 +81,21 @@ export class PublishTokenService {
     return records.map(copyRecord);
   }
 
+  async getByName(name: string): Promise<PublishTokenRecord> {
+    const record = await this.options.state.publishTokens.getByName(name);
+    if (!record) {
+      throw new NotFoundError(`Publish token not found: ${name}`);
+    }
+    return copyRecord(record);
+  }
+
   async revoke(name: string): Promise<PublishTokenRecord> {
     const record = await this.options.state.publishTokens.getByName(name);
     if (!record) {
-      throw new UnauthorizedError();
+      throw new NotFoundError(`Publish token not found: ${name}`);
+    }
+    if (record.revokedAt) {
+      return copyRecord(record);
     }
     const revoked: PublishTokenRecord = {
       ...record,

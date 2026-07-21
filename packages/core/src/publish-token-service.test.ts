@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ForbiddenError,
   MemoryStateStore,
+  NotFoundError,
   PublishTokenService,
   UnauthorizedError,
   ValidationError,
@@ -370,5 +371,65 @@ describe("PublishTokenService", () => {
     await service.revoke("github-actions");
 
     await expect(service.verify(result.secret)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("gets publish tokens by name", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+    const result = await service.create({
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    await expect(service.getByName("github-actions")).resolves.toEqual(result.record);
+  });
+
+  it("returns not found for missing publish token detail", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+
+    await expect(service.getByName("missing")).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("revokes publish tokens idempotently", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+    await service.create({
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    const revoked = await service.revoke("github-actions");
+    const revokedAgain = await service.revoke("github-actions");
+
+    expect(revoked.revokedAt).toBe("2026-07-13T00:00:00.000Z");
+    expect(revokedAgain.revokedAt).toBe(revoked.revokedAt);
+  });
+
+  it("returns not found when revoking missing publish tokens", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+
+    await expect(service.revoke("missing")).rejects.toBeInstanceOf(NotFoundError);
   });
 });

@@ -1926,6 +1926,106 @@ describe("Cloudflare runtime routes", () => {
     expect(listBody.publishTokens[0]).not.toHaveProperty("tokenHash");
   });
 
+  it("gets publish tokens by name without exposing secrets or hashes", async () => {
+    const app = createApp();
+    const secret = await createToken(app, {
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens/github-actions", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+    });
+    expect(body).not.toHaveProperty("tokenHash");
+    expect(JSON.stringify(body)).not.toContain(secret);
+  });
+
+  it("revokes publish tokens by name without exposing secrets or hashes", async () => {
+    const app = createApp();
+    const secret = await createToken(app, {
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens/github-actions/revoke", {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      name: "github-actions",
+      revokedAt: expect.any(String),
+    });
+    expect(body).not.toHaveProperty("tokenHash");
+    expect(JSON.stringify(body)).not.toContain(secret);
+  });
+
+  it("revokes publish tokens idempotently through admin routes", async () => {
+    const app = createApp();
+    await createToken(app, {
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    const first = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens/github-actions/revoke", {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const firstBody = (await first.json()) as { revokedAt: string };
+    const second = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens/github-actions/revoke", {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const secondBody = (await second.json()) as { revokedAt: string };
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(secondBody.revokedAt).toBe(firstBody.revokedAt);
+  });
+
+  it("returns not found for missing publish token admin resources", async () => {
+    const app = createApp();
+
+    const detail = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens/missing", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const revoke = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens/missing/revoke", {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(detail.status).toBe(404);
+    expect(revoke.status).toBe(404);
+  });
+
   it("creates a publish token with an expiration", async () => {
     const app = createApp();
     const expiresAt = "2030-01-01T00:00:00.000Z";
