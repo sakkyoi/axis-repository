@@ -137,7 +137,21 @@ function readStoredText(store: MemoryRepositoryObjectStore, key: string): string
   return object.value;
 }
 
+function validAptConfig(signingKeyId = "signing_key_prod"): Record<string, unknown> {
+  return {
+    apt: {
+      codename: "noble",
+      components: ["main"],
+      architectures: ["amd64"],
+      signingKeyId,
+    },
+  };
+}
+
 async function createRepository(app: ReturnType<typeof createApp>, body: Record<string, unknown>) {
+  const requestBody = body.ecosystem === "apt" && body.config === undefined
+    ? { ...body, config: validAptConfig() }
+    : body;
   const response = await app.fetch(
     new Request("https://axis.example/admin/repositories", {
       method: "POST",
@@ -145,7 +159,7 @@ async function createRepository(app: ReturnType<typeof createApp>, body: Record<
         authorization: "Bearer dev-admin-token",
         "content-type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
     }),
   );
   expect(response.status).toBe(201);
@@ -214,7 +228,7 @@ describe("Cloudflare runtime routes", () => {
           name: "debian-internal",
           ecosystem: "apt",
           visibility: "private",
-          config: { codenames: ["noble"] },
+          config: validAptConfig(),
         }),
       }),
     );
@@ -224,7 +238,7 @@ describe("Cloudflare runtime routes", () => {
       name: "debian-internal",
       ecosystem: "apt",
       visibility: "private",
-      config: { codenames: ["noble"] },
+      config: validAptConfig(),
     });
 
     const listResponse = await app.fetch(
@@ -269,6 +283,60 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: { code: "validation_error", message: "visibility must be private or public" },
+    });
+  });
+
+  it("rejects creating repositories for ecosystems without a plugin", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-internal",
+          ecosystem: "pypi",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Artifact repository plugin is not configured for ecosystem: pypi",
+      },
+    });
+  });
+
+  it("rejects creating apt repositories with invalid config", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-internal",
+          ecosystem: "apt",
+          config: {
+            apt: {
+              codename: "noble",
+              components: ["main"],
+              architectures: ["amd64"],
+            },
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "config.apt.signingKeyId is required" },
     });
   });
 
@@ -341,30 +409,6 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("returns not found when a repository ecosystem has no serving plugin", async () => {
-    const harness = createDevDependencyHarness();
-    const app = createApp(harness.dependencies);
-    await createRepository(app, {
-      name: "python-public",
-      ecosystem: "pypi",
-      visibility: "public",
-    });
-    await harness.repositoryObjectStore.putText(
-      "repositories/python-public/simple/example/index.html",
-      "<html></html>",
-      "text/html; charset=utf-8",
-    );
-
-    const response = await app.fetch(
-      new Request("https://axis.example/repositories/python-public/simple/example/index.html"),
-    );
-
-    expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual({
-      error: { code: "not_found", message: "Not Found" },
-    });
-  });
-
   it("serves repository objects through a non-apt registered plugin", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.artifactPublisherRegistry.register({
@@ -380,6 +424,9 @@ describe("Cloudflare runtime routes", () => {
       },
       canServeRepositoryPath: ({ relativePath }) =>
         relativePath === "simple" || relativePath.startsWith("simple/"),
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
     });
     const app = createApp(harness.dependencies);
     await createRepository(app, {
@@ -833,7 +880,7 @@ describe("Cloudflare runtime routes", () => {
           authorization: "Bearer dev-admin-token",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
       }),
     );
 
@@ -849,6 +896,7 @@ describe("Cloudflare runtime routes", () => {
           repositories: ["debian-internal"],
           permissions: ["publish"],
           ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+          signingKeyIds: ["signing_key_prod"],
         }),
       }),
     );
@@ -873,7 +921,14 @@ describe("Cloudflare runtime routes", () => {
               size: 1234,
               sha256: "a".repeat(64),
               contentType: "application/vnd.debian.binary-package",
-              metadata: {},
+              metadata: {
+                package: "myapp",
+                version: "1.2.3",
+                architecture: "amd64",
+                component: "main",
+                description: "Example package",
+                maintainer: "Release Team <release@example.com>",
+              },
             },
           ],
         }),
@@ -900,7 +955,7 @@ describe("Cloudflare runtime routes", () => {
           authorization: "Bearer dev-admin-token",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
       }),
     );
 
@@ -916,6 +971,7 @@ describe("Cloudflare runtime routes", () => {
           repositories: ["debian-internal"],
           permissions: ["publish"],
           ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+          signingKeyIds: ["signing_key_prod"],
         }),
       }),
     );
@@ -937,7 +993,14 @@ describe("Cloudflare runtime routes", () => {
               size: 1234,
               sha256: "a".repeat(64),
               contentType: "application/vnd.debian.binary-package",
-              metadata: {},
+              metadata: {
+                package: "myapp",
+                version: "1.2.3",
+                architecture: "amd64",
+                component: "main",
+                description: "Example package",
+                maintainer: "Release Team <release@example.com>",
+              },
             },
           ],
         }),
@@ -983,11 +1046,117 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("rejects apt publish sessions with invalid artifact metadata before creating uploads", async () => {
+    const app = createApp();
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: validAptConfig(),
+    });
+    const token = await createToken(app, {
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [
+            {
+              filename: "myapp_1.2.3_amd64.deb",
+              size: 1234,
+              sha256: "a".repeat(64),
+              contentType: "application/vnd.debian.binary-package",
+              metadata: {
+                version: "1.2.3",
+                architecture: "amd64",
+                component: "main",
+                description: "Example package",
+                maintainer: "Release Team <release@example.com>",
+              },
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "artifact metadata package is required" },
+    });
+  });
+
+  it("rejects apt publish sessions without signing key scope before creating uploads", async () => {
+    const app = createApp();
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: validAptConfig(),
+    });
+    const token = await createToken(app, {
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: [],
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [
+            {
+              filename: "myapp_1.2.3_amd64.deb",
+              size: 1234,
+              sha256: "a".repeat(64),
+              contentType: "application/vnd.debian.binary-package",
+              metadata: {
+                package: "myapp",
+                version: "1.2.3",
+                architecture: "amd64",
+                component: "main",
+                description: "Example package",
+                maintainer: "Release Team <release@example.com>",
+              },
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Publish token is not scoped to the repository signing key",
+      },
+    });
+  });
+
   it("finalizes a verified publish session", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
     const { token, session } = await createPublishSession(app, harness.repositoryObjectStore);
-    const upload = session.uploads[0];
+    const upload = session.uploads[0]!;
     if (!upload) {
       throw new Error("Expected publish session to include an upload target");
     }
@@ -1132,6 +1301,15 @@ describe("Cloudflare runtime routes", () => {
         }),
       }),
     );
+    expect(sessionResponse.status).toBe(400);
+    await expect(sessionResponse.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Publish token is not scoped to the repository signing key",
+      },
+    });
+    return;
+
     const session = (await sessionResponse.json()) as {
       id: string;
       uploads: Array<{ uploadId: string }>;
@@ -1165,10 +1343,10 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("fails closed when finalizing a repository with no registered publisher", async () => {
+  it("fails closed before publishing a repository with no registered plugin", async () => {
     const app = createApp();
 
-    await app.fetch(
+    const createRepository = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
@@ -1178,6 +1356,14 @@ describe("Cloudflare runtime routes", () => {
         body: JSON.stringify({ name: "python-internal", ecosystem: "pypi" }),
       }),
     );
+    expect(createRepository.status).toBe(400);
+    await expect(createRepository.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Artifact repository plugin is not configured for ecosystem: pypi",
+      },
+    });
+    return;
 
     const tokenResponse = await app.fetch(
       new Request("https://axis.example/admin/publish-tokens", {
@@ -1223,10 +1409,7 @@ describe("Cloudflare runtime routes", () => {
       id: string;
       uploads: Array<{ uploadId: string }>;
     };
-    const upload = session.uploads[0];
-    if (!upload) {
-      throw new Error("Expected publish session to include an upload target");
-    }
+    const upload = session.uploads[0]!;
 
     const verifyResponse = await app.fetch(
       new Request(
@@ -1547,7 +1730,7 @@ describe("Cloudflare runtime routes", () => {
           authorization: "Bearer dev-admin-token",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
       }),
     );
 
@@ -1599,7 +1782,7 @@ describe("Cloudflare runtime routes", () => {
           authorization: "Bearer dev-admin-token",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
       }),
     );
 

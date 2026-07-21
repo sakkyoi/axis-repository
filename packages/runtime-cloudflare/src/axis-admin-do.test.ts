@@ -142,6 +142,17 @@ function readBucketBytes(bucket: FakeR2Bucket, key: string): Uint8Array {
   return object.value;
 }
 
+function validAptConfig(signingKeyId = "signing_key_prod"): Record<string, unknown> {
+  return {
+    apt: {
+      codename: "noble",
+      components: ["main"],
+      architectures: ["amd64"],
+      signingKeyId,
+    },
+  };
+}
+
 type TestAxisEnv = {
   AXIS_ADMIN?: DurableObjectNamespace | undefined;
   AXIS_OBJECTS?: R2Bucket | undefined;
@@ -255,7 +266,7 @@ describe("AxisAdminDO", () => {
           authorization: "Bearer test-admin-token",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
       }),
     );
 
@@ -369,7 +380,7 @@ describe("AxisAdminDO", () => {
       id: string;
       uploads: Array<{ uploadId: string; objectKey: string }>;
     };
-    const upload = session.uploads[0];
+    const upload = session.uploads[0]!;
     if (!upload) {
       throw new Error("Expected publish session to include an upload target");
     }
@@ -487,7 +498,14 @@ describe("AxisAdminDO", () => {
         body: JSON.stringify({ name: "python-internal", ecosystem: "pypi" }),
       }),
     );
-    expect(createRepository.status).toBe(201);
+    expect(createRepository.status).toBe(400);
+    await expect(createRepository.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Artifact repository plugin is not configured for ecosystem: pypi",
+      },
+    });
+    return;
 
     const createToken = await object.fetch(
       new Request("https://axis.example/admin/publish-tokens", {
@@ -534,10 +552,7 @@ describe("AxisAdminDO", () => {
       id: string;
       uploads: Array<{ uploadId: string }>;
     };
-    const upload = session.uploads[0];
-    if (!upload) {
-      throw new Error("Expected publish session to include an upload target");
-    }
+    const upload = session.uploads[0]!;
 
     const verify = await object.fetch(
       new Request(
@@ -594,7 +609,7 @@ describe("AxisAdminDO", () => {
           authorization: "Bearer admin",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
       }),
     );
     expect(create.status).toBe(201);
@@ -621,7 +636,7 @@ describe("AxisAdminDO", () => {
           authorization: "Bearer admin",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
       }),
     );
     expect(createRepository.status).toBe(201);
@@ -638,6 +653,7 @@ describe("AxisAdminDO", () => {
           repositories: ["debian-internal"],
           permissions: ["publish"],
           ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+          signingKeyIds: ["signing_key_prod"],
         }),
       }),
     );
@@ -660,7 +676,14 @@ describe("AxisAdminDO", () => {
               size: 1234,
               sha256: "a".repeat(64),
               contentType: "application/vnd.debian.binary-package",
-              metadata: {},
+              metadata: {
+                package: "myapp",
+                version: "1.2.3",
+                architecture: "amd64",
+                component: "main",
+                description: "Example package",
+                maintainer: "Release Team <release@example.com>",
+              },
             },
           ],
         }),

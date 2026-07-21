@@ -85,7 +85,18 @@ describe("worker entrypoint", () => {
           authorization: "Bearer admin",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt" }),
+        body: JSON.stringify({
+          name: "debian-internal",
+          ecosystem: "apt",
+          config: {
+            apt: {
+              codename: "noble",
+              components: ["main"],
+              architectures: ["amd64"],
+              signingKeyId: "signing_key_prod",
+            },
+          },
+        }),
       }),
       env,
     );

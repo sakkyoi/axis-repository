@@ -5,8 +5,9 @@ import {
   type Clock,
 } from "@axis-repository/core";
 import { createApp } from "./app";
+import { createAptPlugin } from "./apt-plugin";
 import { AptPublisher } from "./apt-publisher";
-import { ArtifactPublisherRegistry, createPrefixServingPredicate } from "./artifact-publisher-registry";
+import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
 import { WebCryptoRandomId, Sha256SecretHasher } from "./crypto";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
 import type { AppDependencies } from "./dev-dependencies";
@@ -14,6 +15,7 @@ import { MemoryUploadBroker } from "./memory-upload-broker";
 import { OpenPgpSigner } from "./openpgp-signer";
 import { R2PresignedUploadBroker } from "./r2-upload-broker";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "./repository-object-store";
+import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "./secret-encryption";
 import { SigningKeyService } from "./signing-key-service";
 
@@ -112,25 +114,27 @@ export function createDurableObjectDependencies(
     signer: new OpenPgpSigner(),
   });
   const artifactPublisher = new ArtifactPublisherRegistry();
-  artifactPublisher.register({
-    ecosystem: "apt",
-    name: "apt-signed",
-    version: "0.1.0",
-    capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
-    publisher: aptPublisher,
-    canServeRepositoryPath: createPrefixServingPredicate(["dists", "pool"]),
+  artifactPublisher.register(createAptPlugin({ publisher: aptPublisher }));
+  const repositoryService = new RepositoryService({ state, clock, randomId });
+  const publishSessionService = new PublishSessionService({
+    state,
+    uploadBroker,
+    artifactPublisher,
+    clock,
+    randomId,
   });
 
   return {
     adminToken: env.ADMIN_TOKEN,
-    repositoryService: new RepositoryService({ state, clock, randomId }),
+    repositoryService: new PluginRepositoryService({
+      repositoryService,
+      plugins: artifactPublisher,
+    }),
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
-    publishSessionService: new PublishSessionService({
-      state,
-      uploadBroker,
-      artifactPublisher,
-      clock,
-      randomId,
+    publishSessionService: new PluginPublishSessionService({
+      publishSessionService,
+      repositoryService,
+      plugins: artifactPublisher,
     }),
     signingKeyService,
     repositoryObjectStore: objectStore,
