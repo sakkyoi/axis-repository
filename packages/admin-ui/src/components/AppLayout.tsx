@@ -1,8 +1,10 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { KeyRound, Package, Settings, ShieldCheck } from "lucide-react";
-import { getAdminToken, getApiBaseUrl } from "../settings";
+import { KeyRound, LogOut, Package, Settings, ShieldCheck } from "lucide-react";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
+import { useAuth } from "../auth";
+import { getRuntimeConfig } from "../runtime-config";
 
 const navItems = [
   { to: "/repositories", label: "Repositories", icon: Package },
@@ -12,8 +14,8 @@ const navItems = [
 ];
 
 export function AppLayout() {
-  const hasToken = Boolean(getAdminToken());
-  const apiBaseUrl = getApiBaseUrl() || "same-origin";
+  const auth = useAuth();
+  const apiBaseUrl = getRuntimeConfig().apiBaseUrl || "same-origin";
 
   return (
     <div className="grid min-h-screen grid-cols-[240px_1fr] bg-background text-foreground">
@@ -45,9 +47,13 @@ export function AppLayout() {
       <div className="min-w-0">
         <header className="flex h-14 items-center justify-between border-b border-border bg-panel px-5">
           <div className="text-sm text-muted-foreground">API target: {apiBaseUrl}</div>
-          <Badge variant={hasToken ? "success" : "warning"}>
-            {hasToken ? "Admin token configured" : "Admin token missing"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="success">Signed in</Badge>
+            <Button type="button" variant="outline" onClick={auth.logout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </Button>
+          </div>
         </header>
         <main className="p-5">
           <Outlet />

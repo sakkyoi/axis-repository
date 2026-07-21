@@ -1,12 +1,13 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAxisClient, type CreatePublishTokenInput, type CreateSigningKeyInput, type UpdateRepositoryInput } from "./client";
-import { getAdminToken, getApiBaseUrl } from "../settings";
+import { useAuth } from "../auth";
+import { getRuntimeConfig } from "../runtime-config";
 
 export function useAxisClient() {
-  const adminToken = getAdminToken();
-  const baseUrl = getApiBaseUrl();
-  return useMemo(() => createAxisClient({ adminToken, baseUrl }), [adminToken, baseUrl]);
+  const { adminToken } = useAuth();
+  const { apiBaseUrl } = getRuntimeConfig();
+  return useMemo(() => createAxisClient({ adminToken, baseUrl: apiBaseUrl }), [adminToken, apiBaseUrl]);
 }
 
 export function useRepositories() {
