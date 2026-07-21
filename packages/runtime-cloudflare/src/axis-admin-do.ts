@@ -31,6 +31,7 @@ export interface AxisEnv {
   R2_SECRET_ACCESS_KEY?: string;
   UPLOAD_URL_TTL_SECONDS?: string;
   UPLOAD_BACKEND?: string;
+  ADMIN_UI_API_BASE_URL?: string;
 }
 
 type UploadBackend = "r2" | "memory";
@@ -126,6 +127,7 @@ export function createDurableObjectDependencies(
 
   return {
     adminToken: env.ADMIN_TOKEN,
+    adminUiRuntimeConfig: { apiBaseUrl: env.ADMIN_UI_API_BASE_URL ?? "" },
     repositoryService: new PluginRepositoryService({
       repositoryService,
       plugins: artifactPublisher,

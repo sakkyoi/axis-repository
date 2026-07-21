@@ -242,6 +242,20 @@ describe("Cloudflare runtime routes", () => {
     expect(html.indexOf("window.__AXIS_ADMIN_CONFIG__")).toBeLessThan(html.indexOf('src="/assets/'));
   });
 
+  it("injects the configured admin UI API base URL into the shell", async () => {
+    const app = createApp(
+      createDevDependencyHarness(
+        "dev-admin-token",
+        "dev-signing-key-encryption-secret",
+        { apiBaseUrl: "https://admin-api.example/base" },
+      ).dependencies,
+    );
+    const response = await app.fetch(new Request("https://axis.example/"));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain('"apiBaseUrl":"https://admin-api.example/base"');
+  });
+
   it("serves admin UI assets without taking over API routes", async () => {
     const app = createApp();
 

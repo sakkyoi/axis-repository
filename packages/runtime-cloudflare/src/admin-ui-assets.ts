@@ -9,6 +9,15 @@ export interface AdminUiRuntimeConfig {
   apiBaseUrl?: string;
 }
 
+function jsonForInlineScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 function base64ToBytes(value: string): Uint8Array {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
@@ -29,7 +38,7 @@ function bytesToText(value: BodyInit): string {
 }
 
 export function injectAdminUiRuntimeConfig(html: BodyInit, config: AdminUiRuntimeConfig): string {
-  const configScript = `<script>window.__AXIS_ADMIN_CONFIG__=${JSON.stringify({
+  const configScript = `<script>window.__AXIS_ADMIN_CONFIG__=${jsonForInlineScript({
     apiBaseUrl: config.apiBaseUrl ?? "",
   })};</script>`;
   const htmlText = bytesToText(html);

@@ -238,17 +238,20 @@ function objectResponse(input: {
   });
 }
 
-function adminUiAssetResponse(asset: AdminUiAsset): Response {
+function adminUiAssetResponse(asset: AdminUiAsset, dependencies: AppDependencies): Response {
   const isHtml = asset.contentType.startsWith("text/html");
-  return new Response(isHtml ? injectAdminUiRuntimeConfig(asset.body, { apiBaseUrl: "" }) : asset.body, {
-    headers: {
-      "content-type": asset.contentType,
-      "cache-control": isHtml ? "no-store" : "public, max-age=31536000, immutable",
+  return new Response(
+    isHtml ? injectAdminUiRuntimeConfig(asset.body, dependencies.adminUiRuntimeConfig) : asset.body,
+    {
+      headers: {
+        "content-type": asset.contentType,
+        "cache-control": isHtml ? "no-store" : "public, max-age=31536000, immutable",
+      },
     },
-  });
+  );
 }
 
-function adminUiResponse(pathname: string): Response | null {
+function adminUiResponse(pathname: string, dependencies: AppDependencies): Response | null {
   if (
     pathname === "/health"
     || pathname === "/admin"
@@ -262,12 +265,12 @@ function adminUiResponse(pathname: string): Response | null {
   }
   const asset = adminUiAssets.get(pathname);
   if (asset) {
-    return adminUiAssetResponse(asset);
+    return adminUiAssetResponse(asset, dependencies);
   }
   if (pathname.startsWith("/assets/")) {
     return null;
   }
-  return adminUiAssetResponse(adminUiAssets.get("/")!);
+  return adminUiAssetResponse(adminUiAssets.get("/")!, dependencies);
 }
 
 function rawPathname(requestUrl: string): string {
@@ -680,7 +683,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     });
   }
   if (request.method === "GET") {
-    const uiResponse = adminUiResponse(url.pathname);
+    const uiResponse = adminUiResponse(url.pathname, dependencies);
     if (uiResponse) {
       return uiResponse;
     }

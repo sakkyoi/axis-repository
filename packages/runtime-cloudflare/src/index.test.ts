@@ -104,4 +104,47 @@ describe("worker entrypoint", () => {
     expect(response.status).toBe(201);
     expect(namespace.requestedNames).toEqual(["global"]);
   });
+
+  it("passes admin UI runtime config from Worker env into the Durable Object app", async () => {
+    const object = new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, {
+      AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
+      ADMIN_TOKEN: "admin",
+      TOKEN_HASH_PEPPER: "pepper",
+      SIGNING_KEY_ENCRYPTION_SECRET: "signing-secret",
+      R2_ACCOUNT_ID: "account123",
+      R2_BUCKET_NAME: "axis-repository",
+      R2_ACCESS_KEY_ID: "access",
+      R2_SECRET_ACCESS_KEY: "secret",
+      ADMIN_UI_API_BASE_URL: "https://admin-api.example/base",
+    });
+    const namespace = new FakeNamespace(object);
+    const env = {
+      AXIS_ADMIN: namespace,
+      AXIS_OBJECTS: new FakeR2Bucket(),
+      ADMIN_TOKEN: "admin",
+      TOKEN_HASH_PEPPER: "pepper",
+      SIGNING_KEY_ENCRYPTION_SECRET: "signing-secret",
+      R2_ACCOUNT_ID: "account123",
+      R2_BUCKET_NAME: "axis-repository",
+      R2_ACCESS_KEY_ID: "access",
+      R2_SECRET_ACCESS_KEY: "secret",
+      ADMIN_UI_API_BASE_URL: "https://admin-api.example/base",
+    } as unknown as AxisEnv;
+
+    const response = await worker.fetch(new Request("https://axis.example/"), env);
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain('"apiBaseUrl":"https://admin-api.example/base"');
+    expect(namespace.requestedNames).toEqual(["global"]);
+  });
+
+  it("passes admin UI runtime config from Worker env into the fallback app", async () => {
+    const response = await worker.fetch(
+      new Request("https://axis.example/"),
+      { ADMIN_UI_API_BASE_URL: "https://fallback-api.example/base" } as unknown as AxisEnv,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain('"apiBaseUrl":"https://fallback-api.example/base"');
+  });
 });

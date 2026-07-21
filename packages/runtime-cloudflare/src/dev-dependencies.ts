@@ -9,6 +9,7 @@ import {
   type SecretHasher,
 } from "@axis-repository/core";
 import { createAptPlugin } from "./apt-plugin";
+import type { AdminUiRuntimeConfig } from "./admin-ui-assets";
 import { AptPublisher } from "./apt-publisher";
 import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
 import MemoryUploadBroker from "./memory-upload-broker";
@@ -20,6 +21,7 @@ import { SigningKeyService } from "./signing-key-service";
 
 export interface AppDependencies {
   adminToken: string;
+  adminUiRuntimeConfig: AdminUiRuntimeConfig;
   repositoryService: PluginRepositoryService;
   publishTokenService: PublishTokenService;
   publishSessionService: PluginPublishSessionService;
@@ -36,13 +38,15 @@ export interface DevDependencyHarness {
 export function createDevDependencies(
   adminToken = "dev-admin-token",
   signingKeyEncryptionSecret = "dev-signing-key-encryption-secret",
+  adminUiRuntimeConfig: AdminUiRuntimeConfig = {},
 ): AppDependencies {
-  return createDevDependencyHarness(adminToken, signingKeyEncryptionSecret).dependencies;
+  return createDevDependencyHarness(adminToken, signingKeyEncryptionSecret, adminUiRuntimeConfig).dependencies;
 }
 
 export function createDevDependencyHarness(
   adminToken = "dev-admin-token",
   signingKeyEncryptionSecret = "dev-signing-key-encryption-secret",
+  adminUiRuntimeConfig: AdminUiRuntimeConfig = {},
 ): DevDependencyHarness {
   const state = new MemoryStateStore();
   const clock: Clock = { now: () => new Date() };
@@ -82,6 +86,7 @@ export function createDevDependencyHarness(
   return {
     dependencies: {
       adminToken,
+      adminUiRuntimeConfig,
       repositoryService: new PluginRepositoryService({
         repositoryService,
         plugins: artifactPublisher,
