@@ -407,6 +407,32 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(401);
   });
 
+  it("serves private apt signing keys with basic read-token auth", async () => {
+    const app = createApp();
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+      config: validAptConfig(signingKey.id),
+    });
+    const token = await createToken(app, {
+      name: "reader",
+      repositories: ["debian-private"],
+      permissions: ["read"],
+      ecosystemScopes: {},
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/apt/key.gpg", {
+        headers: { authorization: basicAuth(token) },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe(signingKey.publicKeyArmored);
+  });
+
   it("returns apt source information using the request origin", async () => {
     const app = createApp();
     const signingKey = await createSigningKey(app);
@@ -972,6 +998,79 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/plain");
     await expect(response.text()).resolves.toBe("signed release");
+  });
+
+  it("serves private apt metadata and pool objects with basic read-token auth", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    const token = await createToken(app, {
+      name: "reader",
+      repositories: ["debian-private"],
+      permissions: ["read"],
+      ecosystemScopes: {},
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-private/dists/noble/InRelease",
+      "signed release",
+      "text/plain",
+    );
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-private/dists/noble/main/binary-amd64/Packages.gz",
+      "package index",
+      "application/gzip",
+    );
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-private/pool/main/app.deb",
+      "package bytes",
+      "application/vnd.debian.binary-package",
+    );
+
+    const inRelease = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/dists/noble/InRelease", {
+        headers: { authorization: basicAuth(token) },
+      }),
+    );
+    const packages = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/dists/noble/main/binary-amd64/Packages.gz", {
+        headers: { authorization: basicAuth(token) },
+      }),
+    );
+    const poolObject = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/pool/main/app.deb", {
+        headers: { authorization: basicAuth(token) },
+      }),
+    );
+
+    expect(inRelease.status).toBe(200);
+    await expect(inRelease.text()).resolves.toBe("signed release");
+    expect(packages.status).toBe(200);
+    expect(packages.headers.get("content-type")).toBe("application/gzip");
+    await expect(packages.text()).resolves.toBe("package index");
+    expect(poolObject.status).toBe(200);
+    await expect(poolObject.text()).resolves.toBe("package bytes");
+  });
+
+  it("rejects malformed basic auth for private repository reads", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-private/dists/noble/InRelease", {
+        headers: { authorization: "Basic not-base64" },
+      }),
+    );
+
+    expect(response.status).toBe(401);
   });
 
   it("serves private HEAD and ranged reads with read-token auth and private cache headers", async () => {

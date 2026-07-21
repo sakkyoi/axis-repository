@@ -2,6 +2,7 @@ import {
   AxisError,
   ForbiddenError,
   NotFoundError,
+  UnauthorizedError,
   ValidationError,
   type PublishArtifactRequest,
   type PublishTokenRecord,
@@ -337,11 +338,43 @@ async function authorizeRepositoryRead(
   if (repository.visibility === "public") {
     return;
   }
-  const secret = requireBearer(request);
+  const secret = requireRepositoryReadSecret(request);
   const principal = await dependencies.publishTokenService.verify(secret);
   if (!principal.repositories.includes(repository.name) || !principal.permissions.includes("read")) {
     throw new ForbiddenError();
   }
+}
+
+function requireRepositoryReadSecret(request: Request): string {
+  const authorization = request.headers.get("authorization");
+  if (!authorization) {
+    throw new UnauthorizedError();
+  }
+  if (/^Bearer\s+/i.test(authorization)) {
+    return requireBearer(request);
+  }
+  if (/^Basic\s+/i.test(authorization)) {
+    return requireBasicPassword(authorization.slice(authorization.indexOf(" ") + 1).trim());
+  }
+  throw new UnauthorizedError();
+}
+
+function requireBasicPassword(encodedCredentials: string): string {
+  let credentials: string;
+  try {
+    credentials = atob(encodedCredentials);
+  } catch {
+    throw new UnauthorizedError();
+  }
+  const separator = credentials.indexOf(":");
+  if (separator < 0) {
+    throw new UnauthorizedError();
+  }
+  const password = credentials.slice(separator + 1);
+  if (!password) {
+    throw new UnauthorizedError();
+  }
+  return password;
 }
 
 export async function dispatch(request: Request, dependencies: AppDependencies): Promise<Response> {
