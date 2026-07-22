@@ -1,30 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { Plus, Save } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Textarea } from "../components/ui/textarea";
-import {
-  useAptInstallInstructions,
-  useAptSigningPublicKey,
-  useAptSourceInfo,
-  useAptSigningKeys,
-  useRepositories,
-  useUpdateRepository,
-} from "../api/hooks";
-import type { Repository, RepositoryVisibility, SigningKey } from "../api/schemas";
+import { useRepositories } from "../api/hooks";
+import type { Repository } from "../api/schemas";
 import { ADMIN_UI_PATHS } from "../navigation";
-import { aptInstallCommandText, repositoryRowStateClass } from "../repository-page-model";
-import {
-  activeSigningKeys,
-  buildAptRepositoryFormValues,
-  buildUpdateAptRepositoryInput,
-  type AptRepositoryFormValues,
-} from "../repository-forms";
-import { AptSigningKeyDialog, AptSigningKeyList } from "./SigningKeysPage";
-import { asJson, EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
+import { repositoryRowStateClass } from "../repository-page-model";
+import { GenericRepositoryDetail, getRepositoryDetailPlugin } from "../repository-detail-plugins";
+import { EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 export function RepositoriesPage() {
   const navigate = useNavigate();
@@ -112,62 +96,8 @@ function RepositoryDetailEmptyState() {
 }
 
 function RepositoryDetail({ repository }: { repository: Repository }) {
-  const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
-  const [config, setConfig] = useState(asJson(repository.config));
-  const [configError, setConfigError] = useState("");
-  const [aptValues, setAptValues] = useState<AptRepositoryFormValues>(() => buildAptRepositoryFormValues(repository));
-  const [aptError, setAptError] = useState("");
-  const updateRepository = useUpdateRepository();
-  const install = useAptInstallInstructions(repository.name, repository.ecosystem === "apt");
-  const publicKey = useAptSigningPublicKey(repository.name, repository.ecosystem === "apt");
-  const source = useAptSourceInfo(repository.name, repository.ecosystem === "apt");
-  const signingKeysQuery = useAptSigningKeys(repository.name, repository.ecosystem === "apt");
-  const signingKeys = signingKeysQuery.data ?? [];
-  const activeKeys = activeSigningKeys(signingKeys);
-  const aptSigningKeys = signingKeyOptions(activeKeys, signingKeys, aptValues.signingKeyId);
-
-  useEffect(() => {
-    setVisibility(repository.visibility);
-    setConfig(asJson(repository.config));
-    setConfigError("");
-    setAptValues(buildAptRepositoryFormValues(repository));
-    setAptError("");
-  }, [repository]);
-
-  function updateAptField<K extends keyof AptRepositoryFormValues>(field: K, value: AptRepositoryFormValues[K]) {
-    setAptValues((current) => ({ ...current, [field]: value }));
-  }
-
-  async function saveJsonConfig() {
-    let parsedConfig: Record<string, unknown>;
-    try {
-      parsedConfig = JSON.parse(config) as Record<string, unknown>;
-      setConfigError("");
-    } catch (error) {
-      setConfigError(error instanceof Error ? error.message : "Invalid JSON");
-      return;
-    }
-
-    updateRepository.mutate({
-      name: repository.name,
-      input: {
-        visibility,
-        config: parsedConfig,
-      },
-    });
-  }
-
-  async function saveAptConfig() {
-    try {
-      await updateRepository.mutateAsync({
-        name: repository.name,
-        input: buildUpdateAptRepositoryInput(aptValues),
-      });
-      setAptError("");
-    } catch (caught) {
-      setAptError(caught instanceof Error ? caught.message : "Repository could not be saved");
-    }
-  }
+  const plugin = getRepositoryDetailPlugin(repository.ecosystem);
+  const Detail = plugin?.Detail ?? GenericRepositoryDetail;
 
   return (
     <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
@@ -176,157 +106,8 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
         <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
       </div>
       <div className="grid min-h-0 gap-4 overflow-y-auto overflow-x-hidden p-4">
-      {repository.ecosystem === "apt" && (
-        <>
-          <div className="grid gap-3">
-            <AptRepositoryFields values={aptValues} signingKeys={aptSigningKeys} onChange={updateAptField} />
-            {aptError && <ErrorState error={aptError} />}
-            <Button onClick={saveAptConfig} disabled={updateRepository.isPending || aptSigningKeys.length === 0}>
-              <Save className="mr-2 h-4 w-4" />
-              Save repository
-            </Button>
-          </div>
-          <details className="grid gap-3 border-t border-border pt-4">
-            <summary className="cursor-pointer text-sm font-semibold">Advanced JSON config</summary>
-            <div className="mt-3 grid gap-3">
-              <Textarea value={config} onChange={(event) => setConfig(event.target.value)} />
-              {configError && <ErrorState error={configError} />}
-              <Button variant="outline" onClick={saveJsonConfig} disabled={updateRepository.isPending}>
-                Save JSON config
-              </Button>
-            </div>
-          </details>
-        </>
-      )}
-      {repository.ecosystem !== "apt" && (
-        <>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium">Visibility</span>
-            <VisibilitySelect value={visibility} onChange={setVisibility} />
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium">Config JSON</span>
-            <Textarea value={config} onChange={(event) => setConfig(event.target.value)} />
-          </label>
-          {configError && <ErrorState error={configError} />}
-          <Button onClick={saveJsonConfig} disabled={updateRepository.isPending}>
-            <Save className="mr-2 h-4 w-4" />
-            Save repository
-          </Button>
-        </>
-      )}
-      {updateRepository.isError && <ErrorState error={updateRepository.error} />}
-      {repository.ecosystem === "apt" && signingKeysQuery.isError && (
-        <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />
-      )}
-      {repository.ecosystem === "apt" && (
-        <details className="grid gap-3 border-t border-border pt-4">
-          <summary className="cursor-pointer text-sm font-semibold">APT signing keys</summary>
-          <div className="mt-3 grid gap-3">
-            <AptSigningKeyDialog repositoryName={repository.name} />
-            <AptSigningKeyList repositoryName={repository.name} signingKeys={signingKeys} />
-          </div>
-        </details>
-      )}
-      {repository.ecosystem === "apt" && (
-        <div className="grid gap-3 border-t border-border pt-4">
-          <h3 className="text-sm font-semibold">APT client setup</h3>
-          <details className="min-w-0">
-            <summary className="cursor-pointer text-sm font-medium">key.gpg</summary>
-            <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{publicKey.data ?? "Loading..."}</pre>
-          </details>
-          <details className="min-w-0">
-            <summary className="cursor-pointer text-sm font-medium">source</summary>
-            <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{source.data ? asJson(source.data) : "Loading..."}</pre>
-          </details>
-          <details className="min-w-0" open>
-            <summary className="cursor-pointer text-sm font-medium">install</summary>
-            <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{install.data ? aptInstallCommandText(install.data) : "Loading..."}</pre>
-          </details>
-          {publicKey.isError && <ErrorState title="APT key unavailable" error={publicKey.error} />}
-          {source.isError && <ErrorState title="APT source unavailable" error={source.error} />}
-          {install.isError && <ErrorState title="APT install unavailable" error={install.error} />}
-        </div>
-      )}
+        <Detail repository={repository} />
       </div>
     </aside>
   );
-}
-
-function AptRepositoryFields({
-  values,
-  signingKeys,
-  onChange,
-  includeName = false,
-}: {
-  values: AptRepositoryFormValues;
-  signingKeys: SigningKey[];
-  onChange: <K extends keyof AptRepositoryFormValues>(field: K, value: AptRepositoryFormValues[K]) => void;
-  includeName?: boolean;
-}) {
-  return (
-    <div className="grid gap-3">
-      {includeName && (
-        <label className="grid gap-2">
-          <span className="text-sm font-medium">Name</span>
-          <Input value={values.name} onChange={(event) => onChange("name", event.target.value)} placeholder="debian-internal" required />
-        </label>
-      )}
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Visibility</span>
-        <VisibilitySelect value={values.visibility} onChange={(value) => onChange("visibility", value)} />
-      </label>
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Codename</span>
-        <Input value={values.codename} onChange={(event) => onChange("codename", event.target.value)} placeholder="noble" required />
-      </label>
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Components</span>
-        <Input value={values.components} onChange={(event) => onChange("components", event.target.value)} placeholder="main contrib" required />
-      </label>
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Architectures</span>
-        <Input value={values.architectures} onChange={(event) => onChange("architectures", event.target.value)} placeholder="amd64 arm64" required />
-      </label>
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Signing key</span>
-        {signingKeys.length === 0 ? (
-          <EmptyState message="No active signing key is available." />
-        ) : (
-          <Select value={values.signingKeyId} onValueChange={(value) => onChange("signingKeyId", value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select signing key" />
-            </SelectTrigger>
-            <SelectContent>
-              {signingKeys.map((key) => (
-                <SelectItem key={key.id} value={key.id}>{key.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </label>
-    </div>
-  );
-}
-
-function VisibilitySelect({ value, onChange }: { value: RepositoryVisibility; onChange: (value: RepositoryVisibility) => void }) {
-  return (
-    <Select value={value} onValueChange={(nextValue) => onChange(nextValue as RepositoryVisibility)}>
-      <SelectTrigger>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="private">private</SelectItem>
-        <SelectItem value="public">public</SelectItem>
-      </SelectContent>
-    </Select>
-  );
-}
-
-function signingKeyOptions(activeKeys: SigningKey[], allKeys: SigningKey[], currentId: string): SigningKey[] {
-  if (!currentId || activeKeys.some((key) => key.id === currentId)) {
-    return activeKeys;
-  }
-  const current = allKeys.find((key) => key.id === currentId);
-  return current ? [current, ...activeKeys] : activeKeys;
 }
