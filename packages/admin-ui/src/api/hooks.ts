@@ -1,6 +1,12 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createAxisClient, type CreatePublishTokenInput, type CreateSigningKeyInput, type UpdateRepositoryInput } from "./client";
+import {
+  createAxisClient,
+  type CreatePublishTokenInput,
+  type CreateRepositoryInput,
+  type CreateSigningKeyInput,
+  type UpdateRepositoryInput,
+} from "./client";
 import { useAuth } from "../auth";
 import { getRuntimeConfig } from "../runtime-config";
 
@@ -15,6 +21,15 @@ export function useRepositories() {
   return useQuery({
     queryKey: ["repositories"],
     queryFn: () => client.listRepositories(),
+  });
+}
+
+export function useCreateRepository() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateRepositoryInput) => client.createRepository(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["repositories"] }),
   });
 }
 

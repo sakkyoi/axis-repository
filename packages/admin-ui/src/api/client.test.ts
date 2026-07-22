@@ -94,4 +94,55 @@ describe("createAxisClient", () => {
 
     expect(requests).toEqual(["GET /admin/session"]);
   });
+
+  it("creates repositories through the admin endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: Array<{ method: string; url: string; data: unknown }> = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push({
+        method: config.method?.toUpperCase() ?? "",
+        url: config.url ?? "",
+        data: config.data ? JSON.parse(String(config.data)) : undefined,
+      });
+      return {
+        data: {
+          id: "repo_1",
+          name: "debian-internal",
+          ecosystem: "apt",
+          visibility: "private",
+          config: { apt: { codename: "noble" } },
+          createdAt: "2026-07-22T00:00:00.000Z",
+          updatedAt: "2026-07-22T00:00:00.000Z",
+        },
+        status: 201,
+        statusText: "Created",
+        headers: {},
+        config,
+      };
+    };
+
+    const repository = await client.createRepository({
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: { apt: { codename: "noble" } },
+    });
+
+    expect(repository.name).toBe("debian-internal");
+    expect(requests).toEqual([
+      {
+        method: "POST",
+        url: "/admin/repositories",
+        data: {
+          name: "debian-internal",
+          ecosystem: "apt",
+          visibility: "private",
+          config: { apt: { codename: "noble" } },
+        },
+      },
+    ]);
+  });
 });

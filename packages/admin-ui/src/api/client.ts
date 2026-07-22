@@ -32,6 +32,13 @@ export interface CreateSigningKeyInput {
   passphrase: string;
 }
 
+export interface CreateRepositoryInput {
+  name: string;
+  ecosystem: string;
+  visibility: RepositoryVisibility;
+  config: Record<string, unknown>;
+}
+
 export interface UpdateRepositoryInput {
   visibility?: RepositoryVisibility;
   config?: Record<string, unknown>;
@@ -41,6 +48,7 @@ export interface AxisClient {
   http: AxiosInstance;
   verifyAdminToken(): Promise<void>;
   listRepositories(): Promise<Repository[]>;
+  createRepository(input: CreateRepositoryInput): Promise<Repository>;
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
   getAptInstallInstructions(name: string): Promise<InstallInstructions>;
@@ -69,6 +77,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async listRepositories() {
       const response = await http.get("/admin/repositories");
       return repositoriesResponseSchema.parse(response.data).repositories;
+    },
+    async createRepository(input: CreateRepositoryInput) {
+      const response = await http.post("/admin/repositories", input);
+      return repositorySchema.parse(response.data);
     },
     async getRepository(name: string) {
       const response = await http.get(`/admin/repositories/${encodePathSegment(name)}`);
