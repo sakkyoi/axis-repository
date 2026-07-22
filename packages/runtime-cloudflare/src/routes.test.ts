@@ -628,7 +628,7 @@ describe("Cloudflare runtime routes", () => {
     await expect(response.text()).resolves.toBe(signingKey.publicKeyArmored);
   });
 
-  it("requires read auth for private apt signing keys", async () => {
+  it("serves private apt signing keys without read auth", async () => {
     const app = createApp();
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
@@ -642,7 +642,8 @@ describe("Cloudflare runtime routes", () => {
       new Request("https://axis.example/repositories/debian-private/apt/key.gpg"),
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe(signingKey.publicKeyArmored);
   });
 
   it("serves private apt client helpers through admin-scoped endpoints", async () => {
@@ -687,7 +688,7 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("serves private apt signing keys with basic read-token auth", async () => {
+  it("also serves private apt signing keys when basic read-token auth is present", async () => {
     const app = createApp();
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
@@ -775,7 +776,7 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("returns private apt install auth template without exposing the token secret", async () => {
+  it("returns private apt install auth template without requiring or exposing a token secret", async () => {
     const app = createApp();
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
@@ -792,9 +793,7 @@ describe("Cloudflare runtime routes", () => {
     });
 
     const response = await app.fetch(
-      new Request("https://axis.example/repositories/debian-private/apt/install", {
-        headers: { authorization: `Bearer ${token}` },
-      }),
+      new Request("https://axis.example/repositories/debian-private/apt/install"),
     );
     const body = await response.json() as Record<string, unknown>;
 

@@ -11,12 +11,5 @@ export function repositoryRowStateClass(repositoryName: string, selectedName: st
 }
 
 export function aptInstallCommandText(instructions: InstallInstructions): string {
-  const authConfig = instructions.authConfPath && instructions.authConfTemplate
-    ? [
-        `sudo tee ${instructions.authConfPath} <<'EOF'`,
-        instructions.authConfTemplate.trimEnd(),
-        "EOF",
-      ]
-    : [];
-  return [...authConfig, ...instructions.commands].join("\n");
+  return instructions.script;
 }

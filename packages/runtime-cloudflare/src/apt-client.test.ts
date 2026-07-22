@@ -54,6 +54,16 @@ describe("APT client helpers", () => {
         "echo 'deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib' | sudo tee /etc/apt/sources.list.d/axis-debian-public.list",
         "sudo apt update",
       ],
+      script: [
+        "# Install the repository signing key.",
+        "curl -fsSL https://axis.example/repositories/debian-public/apt/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/axis-debian-public.gpg",
+        "",
+        "# Configure APT to use this repository.",
+        "echo 'deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib' | sudo tee /etc/apt/sources.list.d/axis-debian-public.list",
+        "",
+        "# Refresh package indexes.",
+        "sudo apt update",
+      ].join("\n"),
     });
   });
 
@@ -66,6 +76,23 @@ describe("APT client helpers", () => {
       visibility: "private",
       authConfPath: "/etc/apt/auth.conf.d/axis-debian-private.conf",
       authConfTemplate: "machine axis.example\nlogin axis\npassword <READ_TOKEN>\n",
+      script: [
+        "# Configure credentials for private repository access.",
+        "sudo tee /etc/apt/auth.conf.d/axis-debian-private.conf <<'EOF'",
+        "machine axis.example",
+        "login axis",
+        "password <READ_TOKEN>",
+        "EOF",
+        "",
+        "# Install the repository signing key.",
+        "curl -fsSL https://axis.example/repositories/debian-private/apt/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/axis-debian-private.gpg",
+        "",
+        "# Configure APT to use this repository.",
+        "echo 'deb [signed-by=/usr/share/keyrings/axis-debian-private.gpg] https://axis.example/repositories/debian-private noble main contrib' | sudo tee /etc/apt/sources.list.d/axis-debian-private.list",
+        "",
+        "# Refresh package indexes.",
+        "sudo apt update",
+      ].join("\n"),
     });
     expect(JSON.stringify(buildAptInstallInfo({
       origin: "https://axis.example",

@@ -69,6 +69,7 @@ export const installInstructionsSchema = z.object({
   keyringPath: z.string(),
   sourceListPath: z.string(),
   sourceLine: z.string(),
+  script: z.string(),
   authConfPath: z.string().optional(),
   authConfTemplate: z.string().optional(),
   commands: z.array(z.string()),

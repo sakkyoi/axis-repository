@@ -54,6 +54,7 @@ describe("admin API schemas", () => {
         "deb [signed-by=/usr/share/keyrings/axis-debian-internal.gpg] https://axis.example/repositories/debian-internal noble main",
       authConfPath: "/etc/apt/auth.conf.d/axis-debian-internal.conf",
       authConfTemplate: "machine axis.example\nlogin axis\npassword <READ_TOKEN>\n",
+      script: "# Configure credentials for private repository access.\nsudo apt update",
       commands: ["sudo apt update"],
     });
 
@@ -253,6 +254,7 @@ describe("createAxisClient", () => {
           sourceListPath: "/etc/apt/sources.list.d/axis-debian-private.list",
           sourceLine:
             "deb [signed-by=/usr/share/keyrings/axis-debian-private.gpg] https://axis.example/repositories/debian-private noble main",
+          script: "# Configure credentials for private repository access.\nsudo apt update",
           commands: ["sudo apt update"],
         },
         status: 200,

@@ -22,6 +22,7 @@ export interface AptInstallInfo {
   keyringPath: string;
   sourceListPath: string;
   sourceLine: string;
+  script: string;
   commands: string[];
   authConfPath?: string;
   authConfTemplate?: string;
@@ -60,6 +61,33 @@ export function buildAptSourceInfo(input: {
   };
 }
 
+function buildAptInstallScript(install: Omit<AptInstallInfo, "script">): string {
+  const sections: string[][] = [];
+  if (install.authConfPath && install.authConfTemplate) {
+    sections.push([
+      "# Configure credentials for private repository access.",
+      `sudo tee ${install.authConfPath} <<'EOF'`,
+      install.authConfTemplate.trimEnd(),
+      "EOF",
+    ]);
+  }
+  sections.push(
+    [
+      "# Install the repository signing key.",
+      install.commands[0]!,
+    ],
+    [
+      "# Configure APT to use this repository.",
+      install.commands[1]!,
+    ],
+    [
+      "# Refresh package indexes.",
+      install.commands[2]!,
+    ],
+  );
+  return sections.map((section) => section.join("\n")).join("\n\n");
+}
+
 export function buildAptInstallInfo(input: {
   origin: string;
   repository: AptClientRepositoryInfo;
@@ -67,7 +95,7 @@ export function buildAptInstallInfo(input: {
   const source = buildAptSourceInfo(input);
   const keyUrl = `${source.baseUrl}/apt/key.gpg`;
   const sourceListPath = sourceListPathForRepository(input.repository.name);
-  const install: AptInstallInfo = {
+  const install: Omit<AptInstallInfo, "script"> = {
     repository: input.repository.name,
     visibility: input.repository.visibility,
     keyUrl,
@@ -81,11 +109,18 @@ export function buildAptInstallInfo(input: {
     ],
   };
   if (input.repository.visibility === "private") {
-    return {
+    const privateInstall = {
       ...install,
       authConfPath: authConfPathForRepository(input.repository.name),
       authConfTemplate: `machine ${new URL(input.origin).host}\nlogin axis\npassword <READ_TOKEN>\n`,
     };
+    return {
+      ...privateInstall,
+      script: buildAptInstallScript(privateInstall),
+    };
   }
-  return install;
+  return {
+    ...install,
+    script: buildAptInstallScript(install),
+  };
 }

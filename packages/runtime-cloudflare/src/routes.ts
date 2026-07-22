@@ -727,7 +727,6 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   const aptHelperPath = parseAptHelperPath(request.url);
   if (aptHelperPath && request.method === "GET") {
     const repository = await dependencies.repositoryService.getByName(aptHelperPath.repositoryName);
-    await authorizeRepositoryRead(request, dependencies, repository);
     return aptClientHelperResponse(dependencies, url.origin, repository, aptHelperPath.action);
   }
   const repositoryObjectPath = parseRepositoryObjectPath(request.url);

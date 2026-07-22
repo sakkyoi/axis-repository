@@ -26,22 +26,13 @@ describe("repository page model", () => {
       sourceListPath: "/etc/apt/sources.list.d/axis-debian-private.list",
       sourceLine:
         "deb [signed-by=/usr/share/keyrings/axis-debian-private.gpg] https://axis.example/repositories/debian-private noble main",
+      script: "# Install from the APT plugin.\nsudo apt update",
       authConfPath: "/etc/apt/auth.conf.d/axis-debian-private.conf",
       authConfTemplate: "machine axis.example\nlogin axis\npassword <READ_TOKEN>\n",
       commands: ["curl -fsSL https://axis.example/key.gpg", "sudo apt update"],
     };
 
-    expect(aptInstallCommandText(instructions)).toBe(
-      [
-        "sudo tee /etc/apt/auth.conf.d/axis-debian-private.conf <<'EOF'",
-        "machine axis.example",
-        "login axis",
-        "password <READ_TOKEN>",
-        "EOF",
-        "curl -fsSL https://axis.example/key.gpg",
-        "sudo apt update",
-      ].join("\n"),
-    );
+    expect(aptInstallCommandText(instructions)).toBe("# Install from the APT plugin.\nsudo apt update");
   });
 });
 
