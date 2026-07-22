@@ -425,7 +425,7 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("rejects creating repositories for ecosystems without a plugin", async () => {
+  it("creates pypi repositories when the PyPI plugin is enabled", async () => {
     const app = createApp();
     const response = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
@@ -437,16 +437,18 @@ describe("Cloudflare runtime routes", () => {
         body: JSON.stringify({
           name: "python-internal",
           ecosystem: "pypi",
+          visibility: "private",
+          config: {},
         }),
       }),
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: {
-        code: "validation_error",
-        message: "Artifact repository plugin is not configured for ecosystem: pypi",
-      },
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
     });
   });
 
@@ -470,6 +472,16 @@ describe("Cloudflare runtime routes", () => {
           clientHelpers: {
             namespace: "apt",
             actions: ["key.gpg", "source", "install"],
+          },
+        },
+        {
+          ecosystem: "pypi",
+          name: "pypi-simple",
+          version: "0.1.0",
+          capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
+          clientHelpers: {
+            namespace: "pypi",
+            actions: ["simple-url"],
           },
         },
       ],
@@ -844,8 +856,8 @@ describe("Cloudflare runtime routes", () => {
   it("rejects apt helper routes for non-apt repositories", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.artifactPublisherRegistry.register({
-      ecosystem: "pypi",
-      name: "pypi-simple",
+      ecosystem: "gems",
+      name: "gems-simple",
       version: "0.1.0",
       capabilities: ["serve:simple"],
       publisher: {
@@ -859,13 +871,13 @@ describe("Cloudflare runtime routes", () => {
     });
     const app = createApp(harness.dependencies);
     await createRepository(app, {
-      name: "python-public",
-      ecosystem: "pypi",
+      name: "ruby-public",
+      ecosystem: "gems",
       visibility: "public",
     });
 
     const response = await app.fetch(
-      new Request("https://axis.example/repositories/python-public/apt/source"),
+      new Request("https://axis.example/repositories/ruby-public/apt/source"),
     );
 
     expect(response.status).toBe(404);
@@ -874,8 +886,8 @@ describe("Cloudflare runtime routes", () => {
   it("serves repository client helpers through the repository plugin namespace", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.artifactPublisherRegistry.register({
-      ecosystem: "pypi",
-      name: "pypi-simple",
+      ecosystem: "gems",
+      name: "gems-simple",
       version: "0.1.0",
       capabilities: ["client-helpers"],
       publisher: {
@@ -895,24 +907,46 @@ describe("Cloudflare runtime routes", () => {
     });
     const app = createApp(harness.dependencies);
     await createRepository(app, {
-      name: "python-public",
-      ecosystem: "pypi",
+      name: "ruby-public",
+      ecosystem: "gems",
       visibility: "public",
     });
 
     const response = await app.fetch(
-      new Request("https://axis.example/repositories/python-public/simple/install"),
+      new Request("https://axis.example/repositories/ruby-public/simple/install"),
     );
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe("pypi:python-public:install");
+    await expect(response.text()).resolves.toBe("gems:ruby-public:install");
+  });
+
+  it("serves the default PyPI simple URL client helper", async () => {
+    const app = createApp();
+    await createRepository(app, {
+      name: "python-public",
+      ecosystem: "pypi",
+      visibility: "public",
+      config: {},
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/pypi/simple-url"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      repository: "python-public",
+      ecosystem: "pypi",
+      simpleUrl: "https://axis.example/repositories/python-public/simple/",
+      pipIndexUrl: "https://axis.example/repositories/python-public/simple/",
+    });
   });
 
   it("applies repository read auth to plugin client helpers that are not public", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.artifactPublisherRegistry.register({
-      ecosystem: "pypi",
-      name: "pypi-simple",
+      ecosystem: "gems",
+      name: "gems-simple",
       version: "0.1.0",
       capabilities: ["client-helpers"],
       publisher: {
@@ -931,22 +965,22 @@ describe("Cloudflare runtime routes", () => {
     });
     const app = createApp(harness.dependencies);
     await createRepository(app, {
-      name: "python-private",
-      ecosystem: "pypi",
+      name: "ruby-private",
+      ecosystem: "gems",
       visibility: "private",
     });
     const token = await createToken(app, {
       name: "reader",
-      repositories: ["python-private"],
+      repositories: ["ruby-private"],
       permissions: ["read"],
       ecosystemScopes: {},
     });
 
     const rejected = await app.fetch(
-      new Request("https://axis.example/repositories/python-private/simple/tokened"),
+      new Request("https://axis.example/repositories/ruby-private/simple/tokened"),
     );
     const accepted = await app.fetch(
-      new Request("https://axis.example/repositories/python-private/simple/tokened", {
+      new Request("https://axis.example/repositories/ruby-private/simple/tokened", {
         headers: { authorization: `Bearer ${token}` },
       }),
     );
@@ -1028,8 +1062,8 @@ describe("Cloudflare runtime routes", () => {
   it("serves repository objects through a non-apt registered plugin", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.artifactPublisherRegistry.register({
-      ecosystem: "pypi",
-      name: "pypi-simple",
+      ecosystem: "gems",
+      name: "gems-simple",
       version: "0.1.0",
       capabilities: ["serve:simple"],
       publisher: {
@@ -1046,18 +1080,18 @@ describe("Cloudflare runtime routes", () => {
     });
     const app = createApp(harness.dependencies);
     await createRepository(app, {
-      name: "python-public",
-      ecosystem: "pypi",
+      name: "ruby-public",
+      ecosystem: "gems",
       visibility: "public",
     });
     await harness.repositoryObjectStore.putText(
-      "repositories/python-public/simple/example/index.html",
+      "repositories/ruby-public/simple/example/index.html",
       "<html></html>",
       "text/html; charset=utf-8",
     );
 
     const response = await app.fetch(
-      new Request("https://axis.example/repositories/python-public/simple/example/index.html"),
+      new Request("https://axis.example/repositories/ruby-public/simple/example/index.html"),
     );
 
     expect(response.status).toBe(200);
@@ -2042,87 +2076,14 @@ describe("Cloudflare runtime routes", () => {
           authorization: "Bearer dev-admin-token",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "python-internal", ecosystem: "pypi" }),
+        body: JSON.stringify({ name: "node-internal", ecosystem: "npm" }),
       }),
     );
     expect(createRepository.status).toBe(400);
     await expect(createRepository.json()).resolves.toEqual({
       error: {
         code: "validation_error",
-        message: "Artifact repository plugin is not configured for ecosystem: pypi",
-      },
-    });
-    return;
-
-    const tokenResponse = await app.fetch(
-      new Request("https://axis.example/admin/publish-tokens", {
-        method: "POST",
-        headers: {
-          authorization: "Bearer dev-admin-token",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          name: "github-actions",
-          repositories: ["python-internal"],
-          permissions: ["publish"],
-          ecosystemScopes: {},
-        }),
-      }),
-    );
-    const tokenBody = (await tokenResponse.json()) as { secret: string };
-
-    const sessionResponse = await app.fetch(
-      new Request("https://axis.example/api/publish-sessions", {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${tokenBody.secret}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          repositoryName: "python-internal",
-          ecosystem: "pypi",
-          artifacts: [
-            {
-              filename: "example-1.0.0.tar.gz",
-              size: 1234,
-              sha256: "b".repeat(64),
-              contentType: "application/gzip",
-              metadata: {},
-            },
-          ],
-        }),
-      }),
-    );
-    expect(sessionResponse.status).toBe(201);
-    const session = (await sessionResponse.json()) as {
-      id: string;
-      uploads: Array<{ uploadId: string }>;
-    };
-    const upload = session.uploads[0]!;
-
-    const verifyResponse = await app.fetch(
-      new Request(
-        `https://axis.example/api/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
-        {
-          method: "POST",
-          headers: { authorization: `Bearer ${tokenBody.secret}` },
-        },
-      ),
-    );
-    expect(verifyResponse.status).toBe(200);
-
-    const finalizeResponse = await app.fetch(
-      new Request(`https://axis.example/api/publish-sessions/${session.id}/finalize`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${tokenBody.secret}` },
-      }),
-    );
-
-    expect(finalizeResponse.status).toBe(400);
-    await expect(finalizeResponse.json()).resolves.toEqual({
-      error: {
-        code: "validation_error",
-        message: "Artifact publisher is not configured for ecosystem: pypi",
+        message: "Artifact repository plugin is not configured for ecosystem: npm",
       },
     });
   });

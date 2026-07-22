@@ -8,12 +8,10 @@ import {
   type RepositoryObjectStore,
   type SecretHasher,
 } from "@axis-repository/core";
-import { createAptPlugin } from "./apt-plugin";
 import type { AdminUiRuntimeConfig } from "./admin-ui-assets";
-import { AptPublisher } from "./apt-publisher";
 import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
+import { createDefaultArtifactPlugins } from "./default-plugins";
 import MemoryUploadBroker from "./memory-upload-broker";
-import { OpenPgpSigner } from "./openpgp-signer";
 import { MemoryRepositoryObjectStore } from "./repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "./secret-encryption";
@@ -67,13 +65,7 @@ export function createDevDependencyHarness(
     randomId,
     encryption: new SecretEncryption(signingKeyEncryptionSecret),
   });
-  const aptPublisher = new AptPublisher({
-    objectStore,
-    signingKeyService,
-    signer: new OpenPgpSigner(),
-  });
-  const artifactPublisher = new ArtifactPublisherRegistry();
-  artifactPublisher.register(createAptPlugin({ publisher: aptPublisher }));
+  const artifactPublisher = createDefaultArtifactPlugins({ objectStore, signingKeyService });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const publishSessionService = new PublishSessionService({
     state,

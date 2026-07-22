@@ -5,14 +5,11 @@ import {
   type Clock,
 } from "@axis-repository/core";
 import { createApp } from "./app";
-import { createAptPlugin } from "./apt-plugin";
-import { AptPublisher } from "./apt-publisher";
-import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
 import { WebCryptoRandomId, Sha256SecretHasher } from "./crypto";
+import { createDefaultArtifactPlugins } from "./default-plugins";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
 import type { AppDependencies } from "./dev-dependencies";
 import { MemoryUploadBroker } from "./memory-upload-broker";
-import { OpenPgpSigner } from "./openpgp-signer";
 import { R2PresignedUploadBroker } from "./r2-upload-broker";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "./repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
@@ -109,13 +106,7 @@ export function createDurableObjectDependencies(
   const objectStore = uploadBackend === "memory"
     ? new MemoryRepositoryObjectStore()
     : new R2RepositoryObjectStore(requiredR2Bucket(env.AXIS_OBJECTS));
-  const aptPublisher = new AptPublisher({
-    objectStore,
-    signingKeyService,
-    signer: new OpenPgpSigner(),
-  });
-  const artifactPublisher = new ArtifactPublisherRegistry();
-  artifactPublisher.register(createAptPlugin({ publisher: aptPublisher }));
+  const artifactPublisher = createDefaultArtifactPlugins({ objectStore, signingKeyService });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const publishSessionService = new PublishSessionService({
     state,
