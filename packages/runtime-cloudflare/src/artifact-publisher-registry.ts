@@ -9,6 +9,10 @@ import {
   type TokenPrincipal,
 } from "@axis-repository/core";
 
+export interface RepositoryClientHelperSigningKey {
+  publicKeyArmored: string;
+}
+
 export interface PublisherMetadata {
   ecosystem: Ecosystem;
   name: string;
@@ -36,15 +40,50 @@ export interface AuthorizePublishInput extends ValidatePublishArtifactsInput {
   principal: TokenPrincipal;
 }
 
+export interface RepositoryClientHelperContext {
+  origin: string;
+  signingKeys: {
+    getPublicKey(id: string): Promise<RepositoryClientHelperSigningKey>;
+  };
+}
+
+export interface RepositoryClientHelperInput extends RepositoryClientHelperContext {
+  repository: Repository;
+  action: string;
+}
+
+export interface RepositoryClientHelpers {
+  namespace: string;
+  actions: string[];
+  isPublic(action: string): boolean;
+  handle(input: RepositoryClientHelperInput): Promise<Response>;
+}
+
 export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   publisher: ArtifactPublisher;
   canServeRepositoryPath: RepositoryPathServingRule;
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
   validatePublishArtifacts(input: ValidatePublishArtifactsInput): void;
   authorizePublish(input: AuthorizePublishInput): void;
+  clientHelpers?: RepositoryClientHelpers;
 }
 
 export type PublisherDescriptor = ArtifactRepositoryPlugin;
+
+function clonePlugin(descriptor: ArtifactRepositoryPlugin): ArtifactRepositoryPlugin {
+  return {
+    ...descriptor,
+    capabilities: [...descriptor.capabilities],
+    ...(descriptor.clientHelpers
+      ? {
+          clientHelpers: {
+            ...descriptor.clientHelpers,
+            actions: [...descriptor.clientHelpers.actions],
+          },
+        }
+      : {}),
+  };
+}
 
 export function createPrefixServingPredicate(prefixes: string[]): RepositoryPathServingRule {
   const normalizedPrefixes = prefixes.map((prefix) => prefix.replace(/^\/+|\/+$/g, ""));
@@ -61,10 +100,7 @@ export class ArtifactPublisherRegistry implements ArtifactPublisher {
         `Artifact publisher is already registered for ecosystem: ${descriptor.ecosystem}`,
       );
     }
-    this.plugins.set(descriptor.ecosystem, {
-      ...descriptor,
-      capabilities: [...descriptor.capabilities],
-    });
+    this.plugins.set(descriptor.ecosystem, clonePlugin(descriptor));
   }
 
   list(): PublisherMetadata[] {
@@ -79,10 +115,7 @@ export class ArtifactPublisherRegistry implements ArtifactPublisher {
   getPlugin(ecosystem: Ecosystem): ArtifactRepositoryPlugin | undefined {
     const plugin = this.plugins.get(ecosystem);
     if (!plugin) return undefined;
-    return {
-      ...plugin,
-      capabilities: [...plugin.capabilities],
-    };
+    return clonePlugin(plugin);
   }
 
   requirePlugin(ecosystem: Ecosystem): ArtifactRepositoryPlugin {

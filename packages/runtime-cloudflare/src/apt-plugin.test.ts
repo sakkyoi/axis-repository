@@ -70,4 +70,41 @@ describe("APT plugin lifecycle", () => {
       }),
     ).toThrow(new ValidationError("Publish token is not scoped to the repository signing key"));
   });
+
+  it("serves APT client helpers from plugin policy", async () => {
+    const plugin = createAptPlugin({
+      publisher: { publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }) },
+    });
+
+    expect(plugin.clientHelpers?.namespace).toBe("apt");
+    expect(plugin.clientHelpers?.actions).toEqual(["key.gpg", "source", "install"]);
+    expect(plugin.clientHelpers?.isPublic("key.gpg")).toBe(true);
+    const keyResponse = await plugin.clientHelpers?.handle({
+      repository: repository(),
+      action: "key.gpg",
+      origin: "https://axis.example",
+      signingKeys: {
+        getPublicKey: async () => ({
+          publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+        }),
+      },
+    });
+    const installResponse = await plugin.clientHelpers?.handle({
+      repository: repository(),
+      action: "install",
+      origin: "https://axis.example",
+      signingKeys: {
+        getPublicKey: async () => ({
+          publicKeyArmored: "unused",
+        }),
+      },
+    });
+
+    expect(keyResponse?.headers.get("content-type")).toBe("application/pgp-keys");
+    await expect(keyResponse?.text()).resolves.toBe("-----BEGIN PGP PUBLIC KEY BLOCK-----");
+    await expect(installResponse?.json()).resolves.toMatchObject({
+      repository: "debian-internal",
+      script: expect.stringContaining("# Install the repository signing key."),
+    });
+  });
 });

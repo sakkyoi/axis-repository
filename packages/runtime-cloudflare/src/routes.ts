@@ -12,7 +12,6 @@ import {
   type RepositoryObjectMetadata,
   type RepositoryObjectRange,
 } from "@axis-repository/core";
-import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "./apt-client";
 import { parseAptRepositoryConfig } from "./apt-metadata";
 import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "./admin-ui-assets";
 import type { AppDependencies } from "./dev-dependencies";
@@ -398,84 +397,85 @@ function parseRepositoryUpdate(body: Record<string, unknown>): {
   };
 }
 
-type AptHelperAction = "key.gpg" | "source" | "install";
-
-function parseAptHelperPath(requestUrl: string): { repositoryName: string; action: AptHelperAction } | null {
+function parseRepositoryClientHelperPath(requestUrl: string): {
+  repositoryName: string;
+  namespace: string;
+  action: string;
+} | null {
   const rawPath = rawPathname(requestUrl);
   const prefix = "/repositories/";
   if (!rawPath.startsWith(prefix)) {
     return null;
   }
   const rawSegments = rawPath.slice(prefix.length).split("/");
-  if (rawSegments.length !== 3 || rawSegments[1] !== "apt") {
+  if (rawSegments.length !== 3) {
     return null;
   }
-  const [rawRepositoryName, , rawAction] = rawSegments;
-  if (!rawRepositoryName || !rawAction) {
+  const [rawRepositoryName, rawNamespace, rawAction] = rawSegments;
+  if (!rawRepositoryName || !rawNamespace || !rawAction) {
     throw new NotFoundError();
   }
   const repositoryName = decodePathSegment(rawRepositoryName);
+  const namespace = decodePathSegment(rawNamespace);
   const action = decodePathSegment(rawAction);
-  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
+  if (
+    !repositoryName
+    || repositoryName === "."
+    || repositoryName === ".."
+    || !namespace
+    || namespace === "."
+    || namespace === ".."
+    || !action
+    || action === "."
+    || action === ".."
+  ) {
     throw new NotFoundError();
   }
-  if (action !== "key.gpg" && action !== "source" && action !== "install") {
-    return null;
+  return { repositoryName, namespace, action };
+}
+
+function repositoryClientHelpers(dependencies: AppDependencies, repository: Repository, namespace: string) {
+  const plugin = dependencies.artifactPublisherRegistry.getPlugin(repository.ecosystem);
+  const helpers = plugin?.clientHelpers;
+  if (!helpers || helpers.namespace !== namespace) {
+    return undefined;
   }
-  return { repositoryName, action };
+  return helpers;
 }
 
-function parseAdminAptClientHelperPath(pathname: string): { repositoryName: string; action: AptHelperAction } | null {
-  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/apt\/client\/([^/]+)$/);
-  if (!match) return null;
-  const repositoryName = decodePathSegment(match[1] ?? "");
-  const action = decodePathSegment(match[2] ?? "");
-  if (!repositoryName || repositoryName === "." || repositoryName === "..") throw new NotFoundError();
-  if (action !== "key.gpg" && action !== "source" && action !== "install") return null;
-  return { repositoryName, action };
-}
-
-function assertAptRepository(repository: Repository): void {
-  if (repository.ecosystem !== "apt") {
-    throw new NotFoundError();
-  }
-}
-
-function aptClientRepositoryInfo(repository: Repository): AptClientRepositoryInfo {
-  const config = parseAptRepositoryConfig(repository);
+function repositoryClientHelperContext(dependencies: AppDependencies, origin: string) {
   return {
-    name: repository.name,
-    visibility: repository.visibility,
-    codename: config.codename,
-    components: config.components,
+    origin,
+    signingKeys: {
+      getPublicKey: (id: string) => dependencies.signingKeyService.getPublicKey(id),
+    },
   };
 }
 
-function aptPublicKeyResponse(publicKeyArmored: string, repository: Repository): Response {
-  const headers = new Headers();
-  headers.set("content-type", "application/pgp-keys");
-  headers.set("cache-control", repositoryCacheControl(repository));
-  return new Response(publicKeyArmored, { headers });
-}
-
-async function aptClientHelperResponse(
-  dependencies: AppDependencies,
-  origin: string,
-  repository: Repository,
-  action: AptHelperAction,
-): Promise<Response> {
-  assertAptRepository(repository);
-  const repositoryInfo = aptClientRepositoryInfo(repository);
-
-  if (action === "key.gpg") {
-    const config = parseAptRepositoryConfig(repository);
-    const key = await dependencies.signingKeyService.getPublicKey(config.signingKeyId);
-    return aptPublicKeyResponse(key.publicKeyArmored, repository);
+function parseAdminRepositoryClientHelperPath(pathname: string): {
+  repositoryName: string;
+  namespace: string;
+  action: string;
+} | null {
+  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/([^/]+)\/client\/([^/]+)$/);
+  if (!match) return null;
+  const repositoryName = decodePathSegment(match[1] ?? "");
+  const namespace = decodePathSegment(match[2] ?? "");
+  const action = decodePathSegment(match[3] ?? "");
+  if (
+    !repositoryName
+    || repositoryName === "."
+    || repositoryName === ".."
+    || !namespace
+    || namespace === "."
+    || namespace === ".."
+    || !action
+    || action === "."
+    || action === ".."
+  ) {
+    throw new NotFoundError();
   }
-  if (action === "source") {
-    return jsonResponse(buildAptSourceInfo({ origin, repository: repositoryInfo }));
-  }
-  return jsonResponse(buildAptInstallInfo({ origin, repository: repositoryInfo }));
+  return { repositoryName, namespace, action };
 }
 
 function ensureRepositoryPathIsServable(
@@ -621,16 +621,19 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     throw new NotFoundError();
   }
-  const adminAptClientHelperPath = parseAdminAptClientHelperPath(url.pathname);
-  if (adminAptClientHelperPath && request.method === "GET") {
+  const adminClientHelperPath = parseAdminRepositoryClientHelperPath(url.pathname);
+  if (adminClientHelperPath && request.method === "GET") {
     requireAdmin(request, dependencies.adminToken);
-    const repository = await dependencies.repositoryService.getByName(adminAptClientHelperPath.repositoryName);
-    return aptClientHelperResponse(
-      dependencies,
-      url.origin,
+    const repository = await dependencies.repositoryService.getByName(adminClientHelperPath.repositoryName);
+    const helpers = repositoryClientHelpers(dependencies, repository, adminClientHelperPath.namespace);
+    if (!helpers || !helpers.actions.includes(adminClientHelperPath.action)) {
+      throw new NotFoundError();
+    }
+    return helpers.handle({
       repository,
-      adminAptClientHelperPath.action,
-    );
+      action: adminClientHelperPath.action,
+      ...repositoryClientHelperContext(dependencies, url.origin),
+    });
   }
   const aptSigningKeyPath = parseRepositoryAptSigningKeyPath(url.pathname);
   if (aptSigningKeyPath) {
@@ -724,10 +727,23 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     });
     return jsonResponse(result);
   }
-  const aptHelperPath = parseAptHelperPath(request.url);
-  if (aptHelperPath && request.method === "GET") {
-    const repository = await dependencies.repositoryService.getByName(aptHelperPath.repositoryName);
-    return aptClientHelperResponse(dependencies, url.origin, repository, aptHelperPath.action);
+  const clientHelperPath = parseRepositoryClientHelperPath(request.url);
+  if (clientHelperPath && request.method === "GET") {
+    const repository = await dependencies.repositoryService.getByName(clientHelperPath.repositoryName);
+    const helpers = repositoryClientHelpers(dependencies, repository, clientHelperPath.namespace);
+    if (helpers) {
+      if (!helpers.actions.includes(clientHelperPath.action)) {
+        throw new NotFoundError();
+      }
+      if (!helpers.isPublic(clientHelperPath.action)) {
+        await authorizeRepositoryRead(request, dependencies, repository);
+      }
+      return helpers.handle({
+        repository,
+        action: clientHelperPath.action,
+        ...repositoryClientHelperContext(dependencies, url.origin),
+      });
+    }
   }
   const repositoryObjectPath = parseRepositoryObjectPath(request.url);
   if (repositoryObjectPath && (request.method === "GET" || request.method === "HEAD")) {

@@ -837,6 +837,91 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(404);
   });
 
+  it("serves repository client helpers through the repository plugin namespace", async () => {
+    const harness = createDevDependencyHarness();
+    harness.dependencies.artifactPublisherRegistry.register({
+      ecosystem: "pypi",
+      name: "pypi-simple",
+      version: "0.1.0",
+      capabilities: ["client-helpers"],
+      publisher: {
+        publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }),
+      },
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
+      clientHelpers: {
+        namespace: "simple",
+        actions: ["install"],
+        isPublic: () => true,
+        handle: async ({ repository, action }) =>
+          new Response(`${repository.ecosystem}:${repository.name}:${action}`),
+      },
+    });
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-public",
+      ecosystem: "pypi",
+      visibility: "public",
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/simple/install"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("pypi:python-public:install");
+  });
+
+  it("applies repository read auth to plugin client helpers that are not public", async () => {
+    const harness = createDevDependencyHarness();
+    harness.dependencies.artifactPublisherRegistry.register({
+      ecosystem: "pypi",
+      name: "pypi-simple",
+      version: "0.1.0",
+      capabilities: ["client-helpers"],
+      publisher: {
+        publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }),
+      },
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
+      clientHelpers: {
+        namespace: "simple",
+        actions: ["tokened"],
+        isPublic: () => false,
+        handle: async () => new Response("private-helper"),
+      },
+    });
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-private",
+      ecosystem: "pypi",
+      visibility: "private",
+    });
+    const token = await createToken(app, {
+      name: "reader",
+      repositories: ["python-private"],
+      permissions: ["read"],
+      ecosystemScopes: {},
+    });
+
+    const rejected = await app.fetch(
+      new Request("https://axis.example/repositories/python-private/simple/tokened"),
+    );
+    const accepted = await app.fetch(
+      new Request("https://axis.example/repositories/python-private/simple/tokened", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+
+    expect(rejected.status).toBe(401);
+    expect(accepted.status).toBe(200);
+    await expect(accepted.text()).resolves.toBe("private-helper");
+  });
+
   it("serves public repository objects without a token", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

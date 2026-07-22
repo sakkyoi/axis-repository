@@ -241,4 +241,30 @@ describe("ArtifactPublisherRegistry", () => {
 
     expect(calls).toEqual(["config", "artifacts", "authorize"]);
   });
+
+  it("keeps client helper metadata on registered plugins without exposing mutable action lists", () => {
+    const registry = new ArtifactPublisherRegistry();
+    const publisher = publisherReturning("apt.json");
+    registry.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["client-helpers"],
+      publisher: publisher.publisher,
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
+      clientHelpers: {
+        namespace: "apt",
+        actions: ["install"],
+        isPublic: () => true,
+        handle: async () => new Response("ok"),
+      },
+    });
+
+    registry.requirePlugin("apt").clientHelpers?.actions.push("mutated");
+
+    expect(registry.requirePlugin("apt").clientHelpers?.actions).toEqual(["install"]);
+  });
 });
