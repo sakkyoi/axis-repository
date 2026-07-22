@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
+import { NewRepositoryPage } from "./pages/NewRepositoryPage";
 import { RepositoriesPage } from "./pages/RepositoriesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TokensPage } from "./pages/TokensPage";
@@ -15,6 +16,7 @@ export default function App() {
       <Route path={ADMIN_UI_PATHS.login} element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
+          <Route path={ADMIN_UI_PATHS.newRepository} element={<NewRepositoryPage />} />
           <Route path={ADMIN_UI_PATHS.repositories} element={<RepositoriesPage />} />
           <Route path={ADMIN_UI_PATHS.tokens} element={<TokensPage />} />
           <Route path={ADMIN_UI_PATHS.settings} element={<SettingsPage />} />

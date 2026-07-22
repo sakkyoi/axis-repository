@@ -2,6 +2,7 @@ export const ADMIN_UI_PATHS = {
   root: "/ui/",
   login: "/ui/login",
   repositories: "/ui/repositories",
+  newRepository: "/ui/repositories/new",
   tokens: "/ui/tokens",
   settings: "/ui/settings",
 } as const;

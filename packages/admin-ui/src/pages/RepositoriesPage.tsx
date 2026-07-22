@@ -1,39 +1,30 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Plus, Save } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
 import {
   useAptInstallInstructions,
-  useCreateRepository,
   useAptSigningKeys,
   useRepositories,
   useUpdateRepository,
 } from "../api/hooks";
 import type { Repository, RepositoryVisibility, SigningKey } from "../api/schemas";
+import { ADMIN_UI_PATHS } from "../navigation";
 import {
   activeSigningKeys,
   buildAptRepositoryFormValues,
-  buildCreateAptRepositoryInput,
   buildUpdateAptRepositoryInput,
   type AptRepositoryFormValues,
 } from "../repository-forms";
 import { AptSigningKeyDialog, AptSigningKeyList } from "./SigningKeysPage";
 import { asJson, EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
-const defaultAptRepositoryValues: AptRepositoryFormValues = {
-  name: "",
-  visibility: "private",
-  codename: "noble",
-  components: "main",
-  architectures: "amd64",
-  signingKeyId: "",
-};
-
 export function RepositoriesPage() {
+  const navigate = useNavigate();
   const repositories = useRepositories();
   const [selectedName, setSelectedName] = useState<string>();
   const selected = useMemo(
@@ -48,7 +39,10 @@ export function RepositoriesPage() {
         description="Manage repository visibility, config, and client setup hints."
         action={(
           <div className="flex items-center gap-2">
-            <CreateRepositoryDialog />
+            <Button type="button" onClick={() => navigate(ADMIN_UI_PATHS.newRepository)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create repository
+            </Button>
           </div>
         )}
       />
@@ -91,89 +85,6 @@ export function RepositoriesPage() {
         </div>
       )}
     </section>
-  );
-}
-
-function CreateRepositoryDialog() {
-  const createRepository = useCreateRepository();
-  const [open, setOpen] = useState(false);
-  const [values, setValues] = useState<AptRepositoryFormValues>(defaultAptRepositoryValues);
-  const [error, setError] = useState("");
-  const repositoryName = values.name.trim();
-  const signingKeysQuery = useAptSigningKeys(repositoryName, open && Boolean(repositoryName));
-  const signingKeys = signingKeysQuery.data ?? [];
-  const activeKeys = activeSigningKeys(signingKeys);
-
-  function updateField<K extends keyof AptRepositoryFormValues>(field: K, value: AptRepositoryFormValues[K]) {
-    setValues((current) => ({
-      ...current,
-      [field]: value,
-      ...(field === "name" ? { signingKeyId: "" } : {}),
-    }));
-  }
-
-  function openChanged(nextOpen: boolean) {
-    setOpen(nextOpen);
-    if (nextOpen) {
-      setError("");
-      setValues({
-        ...defaultAptRepositoryValues,
-      });
-    }
-  }
-
-  useEffect(() => {
-    if (activeKeys.length === 0 || activeKeys.some((key) => key.id === values.signingKeyId)) {
-      return;
-    }
-    setValues((current) => ({ ...current, signingKeyId: activeKeys[0]?.id ?? "" }));
-  }, [activeKeys, values.signingKeyId]);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    try {
-      await createRepository.mutateAsync(buildCreateAptRepositoryInput(values));
-      setError("");
-      setOpen(false);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Repository could not be created");
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={openChanged}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Create repository
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create repository</DialogTitle>
-          <DialogDescription>Create an APT repository with typed config and signing enabled.</DialogDescription>
-        </DialogHeader>
-        <form className="grid gap-3" onSubmit={submit}>
-          <AptRepositoryFields
-            values={values}
-            signingKeys={activeKeys}
-            onChange={updateField}
-            includeName
-          />
-          {repositoryName && activeKeys.length === 0 && (
-            <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted p-3">
-              <p className="text-sm text-muted-foreground">Create a signing key scoped to {repositoryName} before saving.</p>
-              <AptSigningKeyDialog repositoryName={repositoryName} />
-            </div>
-          )}
-          {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
-          <Button type="submit" disabled={createRepository.isPending || activeKeys.length === 0}>
-            Create repository
-          </Button>
-        </form>
-        {(error || createRepository.isError) && <ErrorState error={error || createRepository.error} />}
-      </DialogContent>
-    </Dialog>
   );
 }
 
