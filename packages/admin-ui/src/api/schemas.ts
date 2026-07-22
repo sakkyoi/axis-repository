@@ -83,4 +83,5 @@ export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;
 export type PublishToken = z.infer<typeof publishTokenSchema>;
 export type PublishTokenCreateResponse = z.infer<typeof publishTokenCreateResponseSchema>;
 export type SigningKey = z.infer<typeof signingKeySchema>;
+export type AptSourceInfo = z.infer<typeof aptSourceInfoSchema>;
 export type InstallInstructions = z.infer<typeof installInstructionsSchema>;

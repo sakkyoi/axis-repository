@@ -53,6 +53,24 @@ export function useAptInstallInstructions(repositoryName: string | undefined, en
   });
 }
 
+export function useAptSigningPublicKey(repositoryName: string | undefined, enabled: boolean) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["apt-public-key", repositoryName],
+    queryFn: () => client.getAptSigningPublicKey(repositoryName ?? ""),
+    enabled: Boolean(repositoryName) && enabled,
+  });
+}
+
+export function useAptSourceInfo(repositoryName: string | undefined, enabled: boolean) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["apt-source", repositoryName],
+    queryFn: () => client.getAptSourceInfo(repositoryName ?? ""),
+    enabled: Boolean(repositoryName) && enabled,
+  });
+}
+
 export function usePublishTokens() {
   const client = useAxisClient();
   return useQuery({

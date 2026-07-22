@@ -208,4 +208,68 @@ describe("createAxisClient", () => {
       },
     ]);
   });
+
+  it("uses admin-scoped endpoints for APT client helper previews", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      if (String(config.url).endsWith("/key.gpg")) {
+        return {
+          data: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          config,
+        };
+      }
+      if (String(config.url).endsWith("/source")) {
+        return {
+          data: {
+            repository: "debian-private",
+            ecosystem: "apt",
+            baseUrl: "https://axis.example/repositories/debian-private",
+            codename: "noble",
+            components: ["main"],
+            keyringPath: "/usr/share/keyrings/axis-debian-private.gpg",
+            sourceLine:
+              "deb [signed-by=/usr/share/keyrings/axis-debian-private.gpg] https://axis.example/repositories/debian-private noble main",
+          },
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          config,
+        };
+      }
+      return {
+        data: {
+          repository: "debian-private",
+          visibility: "private",
+          keyUrl: "https://axis.example/repositories/debian-private/apt/key.gpg",
+          keyringPath: "/usr/share/keyrings/axis-debian-private.gpg",
+          sourceListPath: "/etc/apt/sources.list.d/axis-debian-private.list",
+          sourceLine:
+            "deb [signed-by=/usr/share/keyrings/axis-debian-private.gpg] https://axis.example/repositories/debian-private noble main",
+          commands: ["sudo apt update"],
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await client.getAptSigningPublicKey("debian-private");
+    await client.getAptSourceInfo("debian-private");
+    await client.getAptInstallInstructions("debian-private");
+
+    expect(requests).toEqual([
+      "GET /admin/repositories/debian-private/apt/client/key.gpg",
+      "GET /admin/repositories/debian-private/apt/client/source",
+      "GET /admin/repositories/debian-private/apt/client/install",
+    ]);
+  });
 });

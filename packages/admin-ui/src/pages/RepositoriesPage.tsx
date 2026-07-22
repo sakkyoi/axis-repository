@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Plus, Save } from "lucide-react";
+import { Plus, Save } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../components/ui/textarea";
 import {
   useAptInstallInstructions,
+  useAptSigningPublicKey,
+  useAptSourceInfo,
   useAptSigningKeys,
   useRepositories,
   useUpdateRepository,
@@ -96,6 +98,8 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
   const [aptError, setAptError] = useState("");
   const updateRepository = useUpdateRepository();
   const install = useAptInstallInstructions(repository.name, repository.ecosystem === "apt");
+  const publicKey = useAptSigningPublicKey(repository.name, repository.ecosystem === "apt");
+  const source = useAptSourceInfo(repository.name, repository.ecosystem === "apt");
   const signingKeysQuery = useAptSigningKeys(repository.name, repository.ecosystem === "apt");
   const signingKeys = signingKeysQuery.data ?? [];
   const activeKeys = activeSigningKeys(signingKeys);
@@ -205,16 +209,21 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
       {repository.ecosystem === "apt" && (
         <div className="grid gap-3 border-t border-border pt-4">
           <h3 className="text-sm font-semibold">APT client setup</h3>
-          <a className="inline-flex items-center gap-2 text-sm font-medium text-foreground underline-offset-4 hover:text-primary hover:underline" href={`/repositories/${repository.name}/apt/key.gpg`}>
-            key.gpg <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          <a className="inline-flex items-center gap-2 text-sm font-medium text-foreground underline-offset-4 hover:text-primary hover:underline" href={`/repositories/${repository.name}/apt/source`}>
-            source <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          <a className="inline-flex items-center gap-2 text-sm font-medium text-foreground underline-offset-4 hover:text-primary hover:underline" href={`/repositories/${repository.name}/apt/install`}>
-            install <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          {install.data && <pre className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">{asJson(install.data)}</pre>}
+          <details>
+            <summary className="cursor-pointer text-sm font-medium">key.gpg</summary>
+            <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">{publicKey.data ?? "Loading..."}</pre>
+          </details>
+          <details>
+            <summary className="cursor-pointer text-sm font-medium">source</summary>
+            <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">{source.data ? asJson(source.data) : "Loading..."}</pre>
+          </details>
+          <details open>
+            <summary className="cursor-pointer text-sm font-medium">install</summary>
+            <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">{install.data ? asJson(install.data) : "Loading..."}</pre>
+          </details>
+          {publicKey.isError && <ErrorState title="APT key unavailable" error={publicKey.error} />}
+          {source.isError && <ErrorState title="APT source unavailable" error={source.error} />}
+          {install.isError && <ErrorState title="APT install unavailable" error={install.error} />}
         </div>
       )}
     </aside>

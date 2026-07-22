@@ -1,6 +1,7 @@
 import type { AxiosInstance } from "axios";
 import { createHttpClient, type HttpOptions } from "./http";
 import {
+  aptSourceInfoSchema,
   installInstructionsSchema,
   adminSessionSchema,
   publishTokenCreateResponseSchema,
@@ -14,6 +15,7 @@ import {
   type Repository,
   type RepositoryVisibility,
   type SigningKey,
+  type AptSourceInfo,
   type InstallInstructions,
 } from "./schemas";
 
@@ -57,6 +59,8 @@ export interface AxisClient {
   createRepository(input: CreateRepositoryInput): Promise<Repository>;
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
+  getAptSigningPublicKey(name: string): Promise<string>;
+  getAptSourceInfo(name: string): Promise<AptSourceInfo>;
   getAptInstallInstructions(name: string): Promise<InstallInstructions>;
   listPublishTokens(): Promise<ReturnType<typeof publishTokensResponseSchema.parse>["publishTokens"]>;
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
@@ -97,8 +101,16 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.patch(`/admin/repositories/${encodePathSegment(name)}`, input);
       return repositorySchema.parse(response.data);
     },
+    async getAptSigningPublicKey(name: string) {
+      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/apt/client/key.gpg`);
+      return typeof response.data === "string" ? response.data : String(response.data);
+    },
+    async getAptSourceInfo(name: string) {
+      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/apt/client/source`);
+      return aptSourceInfoSchema.parse(response.data);
+    },
     async getAptInstallInstructions(name: string) {
-      const response = await http.get(`/repositories/${encodePathSegment(name)}/apt/install`);
+      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/apt/client/install`);
       return installInstructionsSchema.parse(response.data);
     },
     async listPublishTokens() {

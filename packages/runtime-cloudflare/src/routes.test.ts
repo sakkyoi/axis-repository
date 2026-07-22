@@ -645,6 +645,48 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(401);
   });
 
+  it("serves private apt client helpers through admin-scoped endpoints", async () => {
+    const app = createApp();
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+      config: validAptConfig(signingKey.id),
+    });
+
+    const keyResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/debian-private/apt/client/key.gpg", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const sourceResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/debian-private/apt/client/source", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const installResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/debian-private/apt/client/install", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(keyResponse.status).toBe(200);
+    await expect(keyResponse.text()).resolves.toBe(signingKey.publicKeyArmored);
+    expect(sourceResponse.status).toBe(200);
+    await expect(sourceResponse.json()).resolves.toMatchObject({
+      repository: "debian-private",
+      sourceLine:
+        "deb [signed-by=/usr/share/keyrings/axis-debian-private.gpg] https://axis.example/repositories/debian-private noble main",
+    });
+    expect(installResponse.status).toBe(200);
+    await expect(installResponse.json()).resolves.toMatchObject({
+      repository: "debian-private",
+      visibility: "private",
+      authConfTemplate: "machine axis.example\nlogin axis\npassword <READ_TOKEN>\n",
+    });
+  });
+
   it("serves private apt signing keys with basic read-token auth", async () => {
     const app = createApp();
     const signingKey = await createSigningKey(app);

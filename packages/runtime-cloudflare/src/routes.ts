@@ -425,6 +425,16 @@ function parseAptHelperPath(requestUrl: string): { repositoryName: string; actio
   return { repositoryName, action };
 }
 
+function parseAdminAptClientHelperPath(pathname: string): { repositoryName: string; action: AptHelperAction } | null {
+  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/apt\/client\/([^/]+)$/);
+  if (!match) return null;
+  const repositoryName = decodePathSegment(match[1] ?? "");
+  const action = decodePathSegment(match[2] ?? "");
+  if (!repositoryName || repositoryName === "." || repositoryName === "..") throw new NotFoundError();
+  if (action !== "key.gpg" && action !== "source" && action !== "install") return null;
+  return { repositoryName, action };
+}
+
 function assertAptRepository(repository: Repository): void {
   if (repository.ecosystem !== "apt") {
     throw new NotFoundError();
@@ -446,6 +456,26 @@ function aptPublicKeyResponse(publicKeyArmored: string, repository: Repository):
   headers.set("content-type", "application/pgp-keys");
   headers.set("cache-control", repositoryCacheControl(repository));
   return new Response(publicKeyArmored, { headers });
+}
+
+async function aptClientHelperResponse(
+  dependencies: AppDependencies,
+  origin: string,
+  repository: Repository,
+  action: AptHelperAction,
+): Promise<Response> {
+  assertAptRepository(repository);
+  const repositoryInfo = aptClientRepositoryInfo(repository);
+
+  if (action === "key.gpg") {
+    const config = parseAptRepositoryConfig(repository);
+    const key = await dependencies.signingKeyService.getPublicKey(config.signingKeyId);
+    return aptPublicKeyResponse(key.publicKeyArmored, repository);
+  }
+  if (action === "source") {
+    return jsonResponse(buildAptSourceInfo({ origin, repository: repositoryInfo }));
+  }
+  return jsonResponse(buildAptInstallInfo({ origin, repository: repositoryInfo }));
 }
 
 function ensureRepositoryPathIsServable(
@@ -591,6 +621,17 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     throw new NotFoundError();
   }
+  const adminAptClientHelperPath = parseAdminAptClientHelperPath(url.pathname);
+  if (adminAptClientHelperPath && request.method === "GET") {
+    requireAdmin(request, dependencies.adminToken);
+    const repository = await dependencies.repositoryService.getByName(adminAptClientHelperPath.repositoryName);
+    return aptClientHelperResponse(
+      dependencies,
+      url.origin,
+      repository,
+      adminAptClientHelperPath.action,
+    );
+  }
   const aptSigningKeyPath = parseRepositoryAptSigningKeyPath(url.pathname);
   if (aptSigningKeyPath) {
     requireAdmin(request, dependencies.adminToken);
@@ -686,19 +727,8 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   const aptHelperPath = parseAptHelperPath(request.url);
   if (aptHelperPath && request.method === "GET") {
     const repository = await dependencies.repositoryService.getByName(aptHelperPath.repositoryName);
-    assertAptRepository(repository);
     await authorizeRepositoryRead(request, dependencies, repository);
-    const repositoryInfo = aptClientRepositoryInfo(repository);
-
-    if (aptHelperPath.action === "key.gpg") {
-      const config = parseAptRepositoryConfig(repository);
-      const key = await dependencies.signingKeyService.getPublicKey(config.signingKeyId);
-      return aptPublicKeyResponse(key.publicKeyArmored, repository);
-    }
-    if (aptHelperPath.action === "source") {
-      return jsonResponse(buildAptSourceInfo({ origin: url.origin, repository: repositoryInfo }));
-    }
-    return jsonResponse(buildAptInstallInfo({ origin: url.origin, repository: repositoryInfo }));
+    return aptClientHelperResponse(dependencies, url.origin, repository, aptHelperPath.action);
   }
   const repositoryObjectPath = parseRepositoryObjectPath(request.url);
   if (repositoryObjectPath && (request.method === "GET" || request.method === "HEAD")) {
