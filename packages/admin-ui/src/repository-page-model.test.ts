@@ -12,8 +12,9 @@ describe("repository page model", () => {
   });
 
   it("highlights only the selected repository row", () => {
-    expect(repositoryRowStateClass("debian-internal", "debian-internal")).toContain("bg-primary");
-    expect(repositoryRowStateClass("debian-internal", undefined)).not.toContain("bg-primary");
+    expect(repositoryRowStateClass("debian-internal", "debian-internal")).toContain("border-l-primary");
+    expect(repositoryRowStateClass("debian-internal", "debian-internal")).not.toContain("text-primary-foreground");
+    expect(repositoryRowStateClass("debian-internal", undefined)).not.toContain("border-l-primary");
   });
 
   it("renders APT install instructions as shell commands with optional auth config", () => {

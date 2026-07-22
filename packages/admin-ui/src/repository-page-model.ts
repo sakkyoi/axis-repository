@@ -6,8 +6,8 @@ export function initialRepositorySelection(_repositories: Repository[]): string 
 
 export function repositoryRowStateClass(repositoryName: string, selectedName: string | undefined): string {
   return repositoryName === selectedName
-    ? "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
-    : "hover:bg-muted/60";
+    ? "border-l-4 border-l-primary bg-primary/10 hover:bg-primary/15"
+    : "border-l-4 border-l-transparent hover:bg-muted/60";
 }
 
 export function aptInstallCommandText(instructions: InstallInstructions): string {
