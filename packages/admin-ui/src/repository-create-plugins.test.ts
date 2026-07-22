@@ -7,11 +7,16 @@ import {
 
 describe("repository create plugins", () => {
   it("exposes APT as a wizard plugin with config and dependency steps", () => {
-    expect(repositoryCreatePlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt"]);
+    expect(repositoryCreatePlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
     expect(getRepositoryCreatePlugin("apt")).toMatchObject({
       ecosystem: "apt",
       displayName: "APT",
       steps: ["plugin", "basics", "config", "dependencies", "review"],
+    });
+    expect(getRepositoryCreatePlugin("pypi")).toMatchObject({
+      ecosystem: "pypi",
+      displayName: "PyPI",
+      steps: ["plugin", "basics", "review"],
     });
   });
 
@@ -44,6 +49,24 @@ describe("repository create plugins", () => {
     });
   });
 
+  it("builds a PyPI repository create payload from wizard state", () => {
+    const plugin = getRepositoryCreatePlugin("pypi");
+
+    expect(plugin.buildCreateInput({
+      name: "python-internal",
+      visibility: "private",
+      config: {},
+      dependencies: {},
+    })).toEqual({
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {
+        pypi: {},
+      },
+    });
+  });
+
   it("uses server plugin metadata to expose only create plugins supported by both sides", () => {
     const options = repositoryCreatePluginOptions([
       {
@@ -51,6 +74,12 @@ describe("repository create plugins", () => {
         name: "apt-signed",
         version: "0.1.0",
         capabilities: ["signed-release", "client-helpers"],
+      },
+      {
+        ecosystem: "pypi",
+        name: "pypi-simple",
+        version: "0.1.0",
+        capabilities: ["simple-api", "client-helpers"],
       },
       {
         ecosystem: "npm",
@@ -68,6 +97,14 @@ describe("repository create plugins", () => {
         capabilities: ["signed-release", "client-helpers"],
         supported: true,
         plugin: getRepositoryCreatePlugin("apt"),
+      },
+      {
+        ecosystem: "pypi",
+        displayName: "PyPI",
+        description: "Python package repositories using the Simple Repository API.",
+        capabilities: ["simple-api", "client-helpers"],
+        supported: true,
+        plugin: getRepositoryCreatePlugin("pypi"),
       },
       {
         ecosystem: "npm",

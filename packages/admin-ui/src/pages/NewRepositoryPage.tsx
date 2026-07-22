@@ -206,7 +206,10 @@ export function NewRepositoryPage() {
 function StepIndicator({ steps, currentStep }: { steps: RepositoryCreateStep[]; currentStep: RepositoryCreateStep }) {
   const currentIndex = steps.indexOf(currentStep);
   return (
-    <ol className="grid grid-cols-5 overflow-hidden rounded-lg border border-border bg-panel">
+    <ol
+      className="grid overflow-hidden rounded-lg border border-border bg-panel"
+      style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+    >
       {steps.map((step, index) => {
         const isCurrent = step === currentStep;
         const isDone = index < currentIndex;

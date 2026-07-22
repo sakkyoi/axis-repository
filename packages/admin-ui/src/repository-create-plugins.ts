@@ -94,7 +94,35 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
   buildCreateInput: (state) => buildCreateAptRepositoryInput(aptFormValues(state)),
 };
 
-export const repositoryCreatePlugins = [aptRepositoryCreatePlugin] as const;
+export const pypiRepositoryCreatePlugin: RepositoryCreatePlugin = {
+  ecosystem: "pypi",
+  displayName: "PyPI",
+  description: "Python package repositories using the Simple Repository API.",
+  capabilities: ["simple-api", "serve:simple", "client-helpers"],
+  steps: ["plugin", "basics", "review"],
+  defaults: {
+    name: "",
+    visibility: "private",
+    config: {},
+    dependencies: {},
+  },
+  validateStep: (step, state) => {
+    if (step === "basics") {
+      return state.name.trim() ? [] : ["Repository name is required"];
+    }
+    return [];
+  },
+  buildCreateInput: (state) => ({
+    name: state.name,
+    ecosystem: "pypi",
+    visibility: state.visibility,
+    config: {
+      pypi: {},
+    },
+  }),
+};
+
+export const repositoryCreatePlugins = [aptRepositoryCreatePlugin, pypiRepositoryCreatePlugin] as const;
 
 export function getRepositoryCreatePlugin(ecosystem: string): RepositoryCreatePlugin {
   const plugin = repositoryCreatePlugins.find((candidate) => candidate.ecosystem === ecosystem);

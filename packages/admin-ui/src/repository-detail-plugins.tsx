@@ -258,13 +258,90 @@ function signingKeyOptions(activeKeys: SigningKey[], allKeys: SigningKey[], curr
   return current ? [current, ...activeKeys] : activeKeys;
 }
 
+export function pypiSimpleIndexUrl(repository: Repository): string {
+  return `/repositories/${repository.name}/simple/`;
+}
+
+export function pypiInstallCommandText(repository: Repository): string {
+  const simplePath = pypiSimpleIndexUrl(repository);
+  if (repository.visibility === "private") {
+    return [
+      "# Use a read token for private repositories.",
+      "export AXIS_PYPI_TOKEN=\"<READ_TOKEN>\"",
+      "",
+      "# Install packages from this repository.",
+      "pip install \\",
+      `  --index-url "https://axis:\${AXIS_PYPI_TOKEN}@<HOST>${simplePath}" \\`,
+      "  <package>",
+    ].join("\n");
+  }
+  return [
+    "# Install packages from this repository.",
+    "pip install \\",
+    `  --index-url "https://<HOST>${simplePath}" \\`,
+    "  <package>",
+  ].join("\n");
+}
+
+function PypiRepositoryDetail({ repository }: { repository: Repository }) {
+  const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
+  const updateRepository = useUpdateRepository();
+
+  useEffect(() => {
+    setVisibility(repository.visibility);
+  }, [repository]);
+
+  async function savePypiConfig() {
+    updateRepository.mutate({
+      name: repository.name,
+      input: {
+        visibility,
+        config: repository.config,
+      },
+    });
+  }
+
+  return (
+    <>
+      <div className="grid gap-3">
+        <label className="grid gap-2">
+          <span className="text-sm font-medium">Visibility</span>
+          <VisibilitySelect value={visibility} onChange={setVisibility} />
+        </label>
+        <Button onClick={savePypiConfig} disabled={updateRepository.isPending}>
+          <Save className="mr-2 h-4 w-4" />
+          Save repository
+        </Button>
+      </div>
+      {updateRepository.isError && <ErrorState error={updateRepository.error} />}
+      <div className="grid gap-3 border-t border-border pt-4">
+        <h3 className="text-sm font-semibold">PyPI client setup</h3>
+        <details className="min-w-0" open>
+          <summary className="cursor-pointer text-sm font-medium">Simple API URL</summary>
+          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{pypiSimpleIndexUrl(repository)}</pre>
+        </details>
+        <details className="min-w-0" open>
+          <summary className="cursor-pointer text-sm font-medium">pip install</summary>
+          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{pypiInstallCommandText({ ...repository, visibility })}</pre>
+        </details>
+      </div>
+    </>
+  );
+}
+
 export const aptRepositoryDetailPlugin: RepositoryDetailPlugin = {
   ecosystem: "apt",
   displayName: "APT",
   Detail: AptRepositoryDetail,
 };
 
-export const repositoryDetailPlugins = [aptRepositoryDetailPlugin] as const;
+export const pypiRepositoryDetailPlugin: RepositoryDetailPlugin = {
+  ecosystem: "pypi",
+  displayName: "PyPI",
+  Detail: PypiRepositoryDetail,
+};
+
+export const repositoryDetailPlugins = [aptRepositoryDetailPlugin, pypiRepositoryDetailPlugin] as const;
 
 export function getRepositoryDetailPlugin(ecosystem: string): RepositoryDetailPlugin | undefined {
   return repositoryDetailPlugins.find((plugin) => plugin.ecosystem === ecosystem);
