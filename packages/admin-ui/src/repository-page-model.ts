@@ -10,6 +10,10 @@ export function repositoryRowStateClass(repositoryName: string, selectedName: st
     : "border-l-4 border-l-transparent hover:bg-muted/60";
 }
 
+export function repositoryDetailBodyClass(): string {
+  return "grid min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4";
+}
+
 export function aptInstallCommandText(instructions: InstallInstructions): string {
   return instructions.script;
 }

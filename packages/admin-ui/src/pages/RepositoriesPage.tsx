@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { useRepositories } from "../api/hooks";
 import type { Repository } from "../api/schemas";
 import { ADMIN_UI_PATHS } from "../navigation";
-import { repositoryRowStateClass } from "../repository-page-model";
+import { repositoryDetailBodyClass, repositoryRowStateClass } from "../repository-page-model";
 import { GenericRepositoryDetail, getRepositoryDetailPlugin } from "../repository-detail-plugins";
 import { EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
@@ -105,7 +105,7 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
         <h2 className="text-base font-semibold">{repository.name}</h2>
         <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
       </div>
-      <div className="grid min-h-0 gap-4 overflow-y-auto overflow-x-hidden p-4">
+      <div className={repositoryDetailBodyClass()}>
         <Detail repository={repository} />
       </div>
     </aside>

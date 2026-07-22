@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   aptInstallCommandText,
   initialRepositorySelection,
+  repositoryDetailBodyClass,
   repositoryRowStateClass,
 } from "./repository-page-model";
 import type { InstallInstructions, Repository } from "./api/schemas";
@@ -15,6 +16,10 @@ describe("repository page model", () => {
     expect(repositoryRowStateClass("debian-internal", "debian-internal")).toContain("border-l-primary");
     expect(repositoryRowStateClass("debian-internal", "debian-internal")).not.toContain("text-primary-foreground");
     expect(repositoryRowStateClass("debian-internal", undefined)).not.toContain("border-l-primary");
+  });
+
+  it("keeps short repository details packed at the top of the scroll area", () => {
+    expect(repositoryDetailBodyClass()).toContain("content-start");
   });
 
   it("renders APT install instructions as shell commands with optional auth config", () => {
