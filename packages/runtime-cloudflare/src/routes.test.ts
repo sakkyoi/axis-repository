@@ -230,9 +230,25 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("serves the admin UI shell for root paths", async () => {
+  it("redirects root requests to the admin UI namespace", async () => {
     const app = createApp();
     const response = await app.fetch(new Request("https://axis.example/"));
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/ui/");
+  });
+
+  it("redirects bare admin UI namespace requests to the canonical trailing slash", async () => {
+    const app = createApp();
+    const response = await app.fetch(new Request("https://axis.example/ui"));
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/ui/");
+  });
+
+  it("serves the admin UI shell under the /ui namespace", async () => {
+    const app = createApp();
+    const response = await app.fetch(new Request("https://axis.example/ui/repositories"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
@@ -250,7 +266,7 @@ describe("Cloudflare runtime routes", () => {
         { apiBaseUrl: "https://admin-api.example/base" },
       ).dependencies,
     );
-    const response = await app.fetch(new Request("https://axis.example/"));
+    const response = await app.fetch(new Request("https://axis.example/ui/settings"));
 
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain('"apiBaseUrl":"https://admin-api.example/base"');
@@ -259,7 +275,7 @@ describe("Cloudflare runtime routes", () => {
   it("serves admin UI assets without taking over API routes", async () => {
     const app = createApp();
 
-    const shell = await app.fetch(new Request("https://axis.example/"));
+    const shell = await app.fetch(new Request("https://axis.example/ui/"));
     const shellHtml = await shell.text();
     const assetPath = shellHtml.match(/src="([^"]+\.js)"/)?.[1];
     expect(assetPath).toMatch(/^\/assets\/index-.+\.js$/);
@@ -286,6 +302,15 @@ describe("Cloudflare runtime routes", () => {
     expect(admin.headers.get("content-type")).toBe("application/json; charset=utf-8");
     expect(api.headers.get("content-type")).toBe("application/json; charset=utf-8");
     expect(repositories.headers.get("content-type")).toBe("application/json; charset=utf-8");
+  });
+
+  it("does not serve the admin UI shell for non-namespaced login routes", async () => {
+    const app = createApp();
+
+    const response = await app.fetch(new Request("https://axis.example/login"));
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
   });
 
   it("reuses the default app across worker fetches", async () => {

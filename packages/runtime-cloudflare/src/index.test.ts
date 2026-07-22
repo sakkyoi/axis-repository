@@ -131,19 +131,28 @@ describe("worker entrypoint", () => {
       ADMIN_UI_API_BASE_URL: "https://admin-api.example/base",
     } as unknown as AxisEnv;
 
-    const response = await worker.fetch(new Request("https://axis.example/"), env);
+    const root = await worker.fetch(new Request("https://axis.example/"), env);
+    const response = await worker.fetch(new Request("https://axis.example/ui/"), env);
 
+    expect(root.status).toBe(302);
+    expect(root.headers.get("location")).toBe("/ui/");
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain('"apiBaseUrl":"https://admin-api.example/base"');
-    expect(namespace.requestedNames).toEqual(["global"]);
+    expect(namespace.requestedNames).toEqual(["global", "global"]);
   });
 
   it("passes admin UI runtime config from Worker env into the fallback app", async () => {
-    const response = await worker.fetch(
+    const root = await worker.fetch(
       new Request("https://axis.example/"),
       { ADMIN_UI_API_BASE_URL: "https://fallback-api.example/base" } as unknown as AxisEnv,
     );
+    const response = await worker.fetch(
+      new Request("https://axis.example/ui/"),
+      { ADMIN_UI_API_BASE_URL: "https://fallback-api.example/base" } as unknown as AxisEnv,
+    );
 
+    expect(root.status).toBe(302);
+    expect(root.headers.get("location")).toBe("/ui/");
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain('"apiBaseUrl":"https://fallback-api.example/base"');
   });

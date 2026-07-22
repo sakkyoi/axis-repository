@@ -4,15 +4,16 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import { useAuth } from "../auth";
+import { ADMIN_UI_NAV_ITEMS } from "../navigation";
 import { getRuntimeConfig } from "../runtime-config";
 import { useTheme, type ThemePreference } from "../theme";
 
-const navItems = [
-  { to: "/repositories", label: "Repositories", icon: Package },
-  { to: "/tokens", label: "Tokens", icon: ShieldCheck },
-  { to: "/signing-keys", label: "Signing Keys", icon: KeyRound },
-  { to: "/settings", label: "Settings", icon: Settings },
-];
+const navIcons = {
+  repositories: Package,
+  tokens: ShieldCheck,
+  signingKeys: KeyRound,
+  settings: Settings,
+} as const;
 
 const themeOptions: Array<{ value: ThemePreference; label: string; icon: typeof Monitor }> = [
   { value: "system", label: "System", icon: Monitor },
@@ -35,21 +36,24 @@ export function AppLayout() {
           </div>
         </div>
         <nav className="grid gap-1 p-3">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                cn(
-                  "flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-                  isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-                )
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </NavLink>
-          ))}
+          {ADMIN_UI_NAV_ITEMS.map((item) => {
+            const Icon = navIcons[item.id];
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  cn(
+                    "flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                    isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                  )
+                }
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </NavLink>
+            );
+          })}
         </nav>
       </aside>
       <div className="min-w-0">

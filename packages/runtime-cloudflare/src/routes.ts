@@ -252,6 +252,9 @@ function adminUiAssetResponse(asset: AdminUiAsset, dependencies: AppDependencies
 }
 
 function adminUiResponse(pathname: string, dependencies: AppDependencies): Response | null {
+  if (pathname === "/" || pathname === "/ui") {
+    return new Response(null, { status: 302, headers: { location: "/ui/" } });
+  }
   if (
     pathname === "/health"
     || pathname === "/admin"
@@ -268,6 +271,9 @@ function adminUiResponse(pathname: string, dependencies: AppDependencies): Respo
     return adminUiAssetResponse(asset, dependencies);
   }
   if (pathname.startsWith("/assets/")) {
+    return null;
+  }
+  if (!pathname.startsWith("/ui/")) {
     return null;
   }
   return adminUiAssetResponse(adminUiAssets.get("/")!, dependencies);
