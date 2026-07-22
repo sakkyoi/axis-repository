@@ -27,6 +27,7 @@ async function createSigningKey(state: MemoryStateStore) {
     encryption: new SecretEncryption("local-test-secret"),
   });
   await service.create({
+    repositoryName: "debian-internal",
     name: "debian-prod",
     privateKeyArmored: key.privateKey,
     passphrase: "correct-passphrase",

@@ -62,11 +62,11 @@ export interface AxisClient {
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
   createPublishToken(input: CreatePublishTokenInput): Promise<PublishTokenCreateResponse>;
   revokePublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
-  listAptSigningKeys(): Promise<SigningKey[]>;
-  getAptSigningKey(id: string): Promise<SigningKey>;
-  importAptSigningKey(input: ImportAptSigningKeyInput): Promise<SigningKey>;
-  generateAptSigningKey(input: GenerateAptSigningKeyInput): Promise<SigningKey>;
-  revokeAptSigningKey(id: string): Promise<SigningKey>;
+  listAptSigningKeys(repositoryName: string): Promise<SigningKey[]>;
+  getAptSigningKey(repositoryName: string, id: string): Promise<SigningKey>;
+  importAptSigningKey(repositoryName: string, input: ImportAptSigningKeyInput): Promise<SigningKey>;
+  generateAptSigningKey(repositoryName: string, input: GenerateAptSigningKeyInput): Promise<SigningKey>;
+  revokeAptSigningKey(repositoryName: string, id: string): Promise<SigningKey>;
 }
 
 function encodePathSegment(value: string): string {
@@ -117,24 +117,24 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.post(`/admin/publish-tokens/${encodePathSegment(name)}/revoke`);
       return publishTokenSchema.parse(response.data);
     },
-    async listAptSigningKeys() {
-      const response = await http.get("/admin/apt/signing-keys");
+    async listAptSigningKeys(repositoryName: string) {
+      const response = await http.get(`/admin/repositories/${encodePathSegment(repositoryName)}/apt/signing-keys`);
       return signingKeysResponseSchema.parse(response.data).signingKeys;
     },
-    async getAptSigningKey(id: string) {
-      const response = await http.get(`/admin/apt/signing-keys/${encodePathSegment(id)}`);
+    async getAptSigningKey(repositoryName: string, id: string) {
+      const response = await http.get(`/admin/repositories/${encodePathSegment(repositoryName)}/apt/signing-keys/${encodePathSegment(id)}`);
       return signingKeySchema.parse(response.data);
     },
-    async importAptSigningKey(input: ImportAptSigningKeyInput) {
-      const response = await http.post("/admin/apt/signing-keys/import", input);
+    async importAptSigningKey(repositoryName: string, input: ImportAptSigningKeyInput) {
+      const response = await http.post(`/admin/repositories/${encodePathSegment(repositoryName)}/apt/signing-keys/import`, input);
       return signingKeySchema.parse(response.data);
     },
-    async generateAptSigningKey(input: GenerateAptSigningKeyInput) {
-      const response = await http.post("/admin/apt/signing-keys/generate", input);
+    async generateAptSigningKey(repositoryName: string, input: GenerateAptSigningKeyInput) {
+      const response = await http.post(`/admin/repositories/${encodePathSegment(repositoryName)}/apt/signing-keys/generate`, input);
       return signingKeySchema.parse(response.data);
     },
-    async revokeAptSigningKey(id: string) {
-      const response = await http.post(`/admin/apt/signing-keys/${encodePathSegment(id)}/revoke`);
+    async revokeAptSigningKey(repositoryName: string, id: string) {
+      const response = await http.post(`/admin/repositories/${encodePathSegment(repositoryName)}/apt/signing-keys/${encodePathSegment(id)}/revoke`);
       return signingKeySchema.parse(response.data);
     },
   };

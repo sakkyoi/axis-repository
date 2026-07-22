@@ -79,11 +79,12 @@ export function useRevokePublishToken() {
   });
 }
 
-export function useAptSigningKeys() {
+export function useAptSigningKeys(repositoryName: string | undefined, enabled = true) {
   const client = useAxisClient();
   return useQuery({
-    queryKey: ["apt-signing-keys"],
-    queryFn: () => client.listAptSigningKeys(),
+    queryKey: ["apt-signing-keys", repositoryName],
+    queryFn: () => client.listAptSigningKeys(repositoryName ?? ""),
+    enabled: Boolean(repositoryName) && enabled,
   });
 }
 
@@ -91,8 +92,9 @@ export function useImportAptSigningKey() {
   const client = useAxisClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: ImportAptSigningKeyInput) => client.importAptSigningKey(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys"] }),
+    mutationFn: ({ repositoryName, input }: { repositoryName: string; input: ImportAptSigningKeyInput }) =>
+      client.importAptSigningKey(repositoryName, input),
+    onSuccess: (_data, variables) => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys", variables.repositoryName] }),
   });
 }
 
@@ -100,8 +102,9 @@ export function useGenerateAptSigningKey() {
   const client = useAxisClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: GenerateAptSigningKeyInput) => client.generateAptSigningKey(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys"] }),
+    mutationFn: ({ repositoryName, input }: { repositoryName: string; input: GenerateAptSigningKeyInput }) =>
+      client.generateAptSigningKey(repositoryName, input),
+    onSuccess: (_data, variables) => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys", variables.repositoryName] }),
   });
 }
 
@@ -109,7 +112,8 @@ export function useRevokeAptSigningKey() {
   const client = useAxisClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => client.revokeAptSigningKey(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys"] }),
+    mutationFn: ({ repositoryName, id }: { repositoryName: string; id: string }) =>
+      client.revokeAptSigningKey(repositoryName, id),
+    onSuccess: (_data, variables) => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys", variables.repositoryName] }),
   });
 }

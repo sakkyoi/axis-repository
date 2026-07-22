@@ -103,6 +103,7 @@ describe("APT repository forms", () => {
 function signingKey(overrides: Partial<SigningKey>): SigningKey {
   return {
     id: "signing_key_prod",
+    repositoryName: "debian-internal",
     name: "debian-prod",
     publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
     fingerprint: "fingerprint",

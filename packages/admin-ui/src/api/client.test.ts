@@ -161,6 +161,7 @@ describe("createAxisClient", () => {
       return {
         data: {
           id: "signing_key_1",
+          repositoryName: "debian-prod",
           name: "debian-prod",
           publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
           fingerprint: "FINGERPRINT",
@@ -175,12 +176,12 @@ describe("createAxisClient", () => {
       };
     };
 
-    await client.importAptSigningKey({
+    await client.importAptSigningKey("debian-prod", {
       name: "debian-prod",
       privateKeyArmored: "private",
       passphrase: "secret",
     });
-    await client.generateAptSigningKey({
+    await client.generateAptSigningKey("debian-prod", {
       name: "debian-generated",
       userIdName: "Axis Repository",
       userIdEmail: "axis@example.test",
@@ -189,7 +190,7 @@ describe("createAxisClient", () => {
     expect(requests).toEqual([
       {
         method: "POST",
-        url: "/admin/apt/signing-keys/import",
+        url: "/admin/repositories/debian-prod/apt/signing-keys/import",
         data: {
           name: "debian-prod",
           privateKeyArmored: "private",
@@ -198,7 +199,7 @@ describe("createAxisClient", () => {
       },
       {
         method: "POST",
-        url: "/admin/apt/signing-keys/generate",
+        url: "/admin/repositories/debian-prod/apt/signing-keys/generate",
         data: {
           name: "debian-generated",
           userIdName: "Axis Repository",

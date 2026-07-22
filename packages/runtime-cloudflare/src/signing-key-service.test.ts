@@ -28,6 +28,7 @@ describe("SigningKeyService", () => {
     });
 
     const generated = await service.generate({
+      repositoryName: "debian-prod",
       name: "debian-generated",
       userIdName: "Axis Repository",
       userIdEmail: "axis@example.test",
@@ -35,6 +36,7 @@ describe("SigningKeyService", () => {
 
     expect(generated).toMatchObject({
       id: "signing_key_fixed",
+      repositoryName: "debian-prod",
       name: "debian-generated",
       publicKeyArmored: expect.stringContaining("BEGIN PGP PUBLIC KEY BLOCK"),
       fingerprint: expect.any(String),
@@ -62,6 +64,7 @@ describe("SigningKeyService", () => {
     });
 
     const created = await service.create({
+      repositoryName: "debian-prod",
       name: "debian-prod",
       privateKeyArmored: fixture.privateKey,
       passphrase: "correct-passphrase",
@@ -69,6 +72,7 @@ describe("SigningKeyService", () => {
 
     expect(created).toMatchObject({
       id: "signing_key_fixed",
+      repositoryName: "debian-prod",
       name: "debian-prod",
       publicKeyArmored: expect.stringContaining("BEGIN PGP PUBLIC KEY BLOCK"),
       fingerprint: expect.any(String),
@@ -81,7 +85,7 @@ describe("SigningKeyService", () => {
     expect(created).not.toHaveProperty("privateKeyArmored");
     expect(created).not.toHaveProperty("passphrase");
 
-    const stored = await state.signingKeys.getByName("debian-prod");
+    const stored = await state.signingKeys.getByName("debian-prod", "debian-prod");
     expect(stored?.encryptedPrivateKeyArmored.ciphertext).not.toContain("BEGIN PGP PRIVATE KEY");
     expect(stored?.encryptedPassphrase.ciphertext).not.toContain("correct-passphrase");
     expect(JSON.stringify(stored)).not.toContain(fixture.privateKey);
@@ -97,6 +101,7 @@ describe("SigningKeyService", () => {
       encryption: new SecretEncryption("local-test-secret"),
     });
     await service.create({
+      repositoryName: "debian-prod",
       name: "debian-prod",
       privateKeyArmored: fixture.privateKey,
       passphrase: "correct-passphrase",
@@ -104,11 +109,41 @@ describe("SigningKeyService", () => {
 
     await expect(
       service.create({
+        repositoryName: "debian-prod",
         name: "debian-prod",
         privateKeyArmored: fixture.privateKey,
         passphrase: "correct-passphrase",
       }),
-    ).rejects.toThrow("Signing key already exists: debian-prod");
+    ).rejects.toThrow("Signing key already exists in repository debian-prod: debian-prod");
+  });
+
+  it("allows the same signing key name in different repositories", async () => {
+    const firstFixture = await privateKeyFixture("first-passphrase");
+    const secondFixture = await privateKeyFixture("second-passphrase");
+    const service = new SigningKeyService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId: { create: (prefix) => `${prefix}_${crypto.randomUUID().replaceAll("-", "")}` },
+      encryption: new SecretEncryption("local-test-secret"),
+    });
+
+    const first = await service.create({
+      repositoryName: "debian-prod",
+      name: "release",
+      privateKeyArmored: firstFixture.privateKey,
+      passphrase: "first-passphrase",
+    });
+    const second = await service.create({
+      repositoryName: "debian-staging",
+      name: "release",
+      privateKeyArmored: secondFixture.privateKey,
+      passphrase: "second-passphrase",
+    });
+
+    expect(first.repositoryName).toBe("debian-prod");
+    expect(second.repositoryName).toBe("debian-staging");
+    await expect(service.listForRepository("debian-prod")).resolves.toHaveLength(1);
+    await expect(service.listForRepository("debian-staging")).resolves.toHaveLength(1);
   });
 
   it("rejects duplicate key material by fingerprint even under a different name", async () => {
@@ -120,6 +155,7 @@ describe("SigningKeyService", () => {
       encryption: new SecretEncryption("local-test-secret"),
     });
     const created = await service.create({
+      repositoryName: "debian-prod",
       name: "debian-prod",
       privateKeyArmored: fixture.privateKey,
       passphrase: "correct-passphrase",
@@ -127,6 +163,7 @@ describe("SigningKeyService", () => {
 
     await expect(
       service.create({
+        repositoryName: "debian-staging",
         name: "debian-staging",
         privateKeyArmored: fixture.privateKey,
         passphrase: "correct-passphrase",
@@ -145,6 +182,7 @@ describe("SigningKeyService", () => {
 
     await expect(
       service.create({
+        repositoryName: "debian-prod",
         name: "invalid",
         privateKeyArmored: "not a private key",
         passphrase: "correct-passphrase",
@@ -153,6 +191,7 @@ describe("SigningKeyService", () => {
 
     await expect(
       service.create({
+        repositoryName: "debian-prod",
         name: "wrong-passphrase",
         privateKeyArmored: fixture.privateKey,
         passphrase: "wrong-passphrase",
@@ -170,6 +209,7 @@ describe("SigningKeyService", () => {
       encryption: new SecretEncryption("local-test-secret"),
     });
     await service.create({
+      repositoryName: "debian-prod",
       name: "debian-prod",
       privateKeyArmored: fixture.privateKey,
       passphrase: "correct-passphrase",
@@ -192,6 +232,7 @@ describe("SigningKeyService", () => {
       encryption: new SecretEncryption("local-test-secret"),
     });
     await service.create({
+      repositoryName: "debian-prod",
       name: "debian-prod",
       privateKeyArmored: fixture.privateKey,
       passphrase: "correct-passphrase",
@@ -214,6 +255,7 @@ describe("SigningKeyService", () => {
       encryption: new SecretEncryption("local-test-secret"),
     });
     await service.create({
+      repositoryName: "debian-prod",
       name: "debian-prod",
       privateKeyArmored: fixture.privateKey,
       passphrase: "correct-passphrase",
@@ -249,6 +291,7 @@ describe("SigningKeyService", () => {
       encryption: new SecretEncryption("local-test-secret"),
     });
     await service.create({
+      repositoryName: "debian-prod",
       name: "debian-prod",
       privateKeyArmored: fixture.privateKey,
       passphrase: "correct-passphrase",

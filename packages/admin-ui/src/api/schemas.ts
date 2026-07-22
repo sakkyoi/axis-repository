@@ -39,6 +39,7 @@ export const publishTokenCreateResponseSchema = z.object({
 
 export const signingKeySchema = z.object({
   id: z.string(),
+  repositoryName: z.string(),
   name: z.string(),
   publicKeyArmored: z.string(),
   fingerprint: z.string(),

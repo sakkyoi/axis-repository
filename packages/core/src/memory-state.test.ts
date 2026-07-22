@@ -41,6 +41,7 @@ const session = (overrides: Partial<PublishSession>): PublishSession => ({
 
 const signingKey = (overrides: Partial<SigningKeyRecord> = {}): SigningKeyRecord => ({
   id: "signing_key_1",
+  repositoryName: "debian-internal",
   name: "debian-prod",
   publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----",
   encryptedPrivateKeyArmored: {
@@ -170,7 +171,7 @@ describe("MemoryStateStore signing keys", () => {
     await expect(state.signingKeys.getById("signing_key_1")).resolves.toMatchObject({
       name: "alpha",
     });
-    await expect(state.signingKeys.getByName("zeta")).resolves.toMatchObject({
+    await expect(state.signingKeys.getByName("zeta", "debian-internal")).resolves.toMatchObject({
       id: "signing_key_2",
     });
     await expect(state.signingKeys.list()).resolves.toMatchObject([
@@ -184,9 +185,22 @@ describe("MemoryStateStore signing keys", () => {
     await state.signingKeys.save(signingKey({ id: "signing_key_1", name: "old-name" }));
     await state.signingKeys.save(signingKey({ id: "signing_key_1", name: "new-name" }));
 
-    await expect(state.signingKeys.getByName("old-name")).resolves.toBeNull();
-    await expect(state.signingKeys.getByName("new-name")).resolves.toMatchObject({
+    await expect(state.signingKeys.getByName("old-name", "debian-internal")).resolves.toBeNull();
+    await expect(state.signingKeys.getByName("new-name", "debian-internal")).resolves.toMatchObject({
       id: "signing_key_1",
+    });
+  });
+
+  it("scopes signing key name indexes by repository", async () => {
+    const state = new MemoryStateStore();
+    await state.signingKeys.save(signingKey({ id: "signing_key_1", repositoryName: "debian-prod", name: "release" }));
+    await state.signingKeys.save(signingKey({ id: "signing_key_2", repositoryName: "debian-staging", name: "release" }));
+
+    await expect(state.signingKeys.getByName("release", "debian-prod")).resolves.toMatchObject({
+      id: "signing_key_1",
+    });
+    await expect(state.signingKeys.getByName("release", "debian-staging")).resolves.toMatchObject({
+      id: "signing_key_2",
     });
   });
 });

@@ -353,6 +353,36 @@ function parseAdminResourceActionPath(requestUrl: string, collection: string, ac
   return value;
 }
 
+function parseRepositoryAptSigningKeyPath(pathname: string): {
+  repositoryName: string;
+  action?: "import" | "generate";
+  signingKeyId?: string;
+  revoke?: boolean;
+} | null {
+  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/apt\/signing-keys(?:\/([^/]+)(?:\/(revoke))?)?$/);
+  if (!match) return null;
+  const repositoryName = decodePathSegment(match[1] ?? "");
+  if (!repositoryName || repositoryName === "." || repositoryName === "..") throw new NotFoundError();
+  const second = match[2] ? decodePathSegment(match[2]) : undefined;
+  const third = match[3];
+  if (!second) return { repositoryName };
+  if ((second === "import" || second === "generate") && !third) return { repositoryName, action: second };
+  if (third === "revoke") return { repositoryName, signingKeyId: second, revoke: true };
+  return { repositoryName, signingKeyId: second };
+}
+
+async function requireRepositoryScopedSigningKey(
+  dependencies: AppDependencies,
+  repositoryName: string,
+  signingKeyId: string,
+) {
+  const key = await dependencies.signingKeyService.getPublicKey(signingKeyId);
+  if (key.repositoryName !== repositoryName) {
+    throw new NotFoundError();
+  }
+  return key;
+}
+
 function parseRepositoryUpdate(body: Record<string, unknown>): {
   visibility?: RepositoryVisibility;
   config?: Record<string, unknown>;
@@ -561,60 +591,51 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     throw new NotFoundError();
   }
-  if (url.pathname === "/admin/apt/signing-keys") {
+  const aptSigningKeyPath = parseRepositoryAptSigningKeyPath(url.pathname);
+  if (aptSigningKeyPath) {
     requireAdmin(request, dependencies.adminToken);
-    if (request.method === "GET") {
+    if (!aptSigningKeyPath.action && !aptSigningKeyPath.signingKeyId && request.method === "GET") {
       return jsonResponse({
-        signingKeys: await dependencies.signingKeyService.list(),
+        signingKeys: await dependencies.signingKeyService.listForRepository(aptSigningKeyPath.repositoryName),
       });
     }
-    throw new NotFoundError();
-  }
-  if (url.pathname === "/admin/apt/signing-keys/import") {
-    requireAdmin(request, dependencies.adminToken);
-    if (request.method === "POST") {
+    if (aptSigningKeyPath.action === "import" && request.method === "POST") {
       const body = await readJsonObject(request);
       const key = await dependencies.signingKeyService.create({
+        repositoryName: aptSigningKeyPath.repositoryName,
         name: stringField(body, "name"),
         privateKeyArmored: stringField(body, "privateKeyArmored"),
         passphrase: stringField(body, "passphrase"),
       });
       return jsonResponse(key, { status: 201 });
     }
-    throw new NotFoundError();
-  }
-  if (url.pathname === "/admin/apt/signing-keys/generate") {
-    requireAdmin(request, dependencies.adminToken);
-    if (request.method === "POST") {
+    if (aptSigningKeyPath.action === "generate" && request.method === "POST") {
       const body = await readJsonObject(request);
       const key = await dependencies.signingKeyService.generate({
+        repositoryName: aptSigningKeyPath.repositoryName,
         name: stringField(body, "name"),
         userIdName: stringField(body, "userIdName"),
         userIdEmail: stringField(body, "userIdEmail"),
       });
       return jsonResponse(key, { status: 201 });
     }
-    throw new NotFoundError();
-  }
-  const revokeSigningKeyMatch = url.pathname.match(
-    /^\/admin\/apt\/signing-keys\/([^/]+)\/revoke$/,
-  );
-  if (revokeSigningKeyMatch) {
-    requireAdmin(request, dependencies.adminToken);
-    if (request.method !== "POST") {
-      throw new NotFoundError();
+    if (aptSigningKeyPath.signingKeyId && aptSigningKeyPath.revoke) {
+      if (request.method !== "POST") {
+        throw new NotFoundError();
+      }
+      await requireRepositoryScopedSigningKey(
+        dependencies,
+        aptSigningKeyPath.repositoryName,
+        aptSigningKeyPath.signingKeyId,
+      );
+      return jsonResponse(await dependencies.signingKeyService.revoke(aptSigningKeyPath.signingKeyId));
     }
-    const [, id] = revokeSigningKeyMatch;
-    if (!id) {
-      throw new NotFoundError();
-    }
-    return jsonResponse(await dependencies.signingKeyService.revoke(id));
-  }
-  const adminSigningKeyId = parseAdminResourcePath(request.url, "apt/signing-keys");
-  if (adminSigningKeyId) {
-    requireAdmin(request, dependencies.adminToken);
-    if (request.method === "GET") {
-      return jsonResponse(await dependencies.signingKeyService.getPublicKey(adminSigningKeyId));
+    if (aptSigningKeyPath.signingKeyId && request.method === "GET") {
+      return jsonResponse(await requireRepositoryScopedSigningKey(
+        dependencies,
+        aptSigningKeyPath.repositoryName,
+        aptSigningKeyPath.signingKeyId,
+      ));
     }
     throw new NotFoundError();
   }

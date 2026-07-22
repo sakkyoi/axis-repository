@@ -16,7 +16,7 @@ import { asJson, EmptyState, ErrorState, formatDate } from "./shared";
 
 type CreateMode = "generate" | "import";
 
-export function AptSigningKeyDialog() {
+export function AptSigningKeyDialog({ repositoryName, disabled = false }: { repositoryName: string; disabled?: boolean }) {
   const generateKey = useGenerateAptSigningKey();
   const importKey = useImportAptSigningKey();
   const [mode, setMode] = useState<CreateMode>("generate");
@@ -28,15 +28,21 @@ export function AptSigningKeyDialog() {
     try {
       if (mode === "generate") {
         await generateKey.mutateAsync({
-          name: String(form.get("name") ?? ""),
-          userIdName: String(form.get("userIdName") ?? ""),
-          userIdEmail: String(form.get("userIdEmail") ?? ""),
+          repositoryName,
+          input: {
+            name: String(form.get("name") ?? ""),
+            userIdName: String(form.get("userIdName") ?? ""),
+            userIdEmail: String(form.get("userIdEmail") ?? ""),
+          },
         });
       } else {
         await importKey.mutateAsync({
-          name: String(form.get("name") ?? ""),
-          privateKeyArmored: String(form.get("privateKeyArmored") ?? ""),
-          passphrase: String(form.get("passphrase") ?? ""),
+          repositoryName,
+          input: {
+            name: String(form.get("name") ?? ""),
+            privateKeyArmored: String(form.get("privateKeyArmored") ?? ""),
+            passphrase: String(form.get("passphrase") ?? ""),
+          },
         });
       }
       setError("");
@@ -51,7 +57,7 @@ export function AptSigningKeyDialog() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline">
+        <Button variant="outline" disabled={disabled}>
           <KeyRound className="mr-2 h-4 w-4" />
           APT signing key
         </Button>
@@ -59,7 +65,7 @@ export function AptSigningKeyDialog() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>APT signing key</DialogTitle>
-          <DialogDescription>Generate or import an OpenPGP key for APT repository metadata signing.</DialogDescription>
+          <DialogDescription>Generate or import an OpenPGP key for {repositoryName} metadata signing.</DialogDescription>
         </DialogHeader>
         <form className="grid gap-3" onSubmit={submit}>
           <label className="grid gap-2">
@@ -99,7 +105,7 @@ export function AptSigningKeyDialog() {
   );
 }
 
-export function AptSigningKeyList({ signingKeys }: { signingKeys: SigningKey[] }) {
+export function AptSigningKeyList({ repositoryName, signingKeys }: { repositoryName: string; signingKeys: SigningKey[] }) {
   const [selectedId, setSelectedId] = useState<string>();
   const selected = signingKeys.find((key) => key.id === selectedId) ?? signingKeys[0];
   const revoke = useRevokeAptSigningKey();
@@ -150,7 +156,7 @@ export function AptSigningKeyList({ signingKeys }: { signingKeys: SigningKey[] }
           <Button
             variant="destructive"
             disabled={Boolean(selected.revokedAt) || revoke.isPending}
-            onClick={() => revoke.mutate(selected.id)}
+            onClick={() => revoke.mutate({ repositoryName, id: selected.id })}
           >
             <RotateCcw className="mr-2 h-4 w-4" />
             Revoke key

@@ -96,8 +96,8 @@ export class MemoryStateStore implements StateStore {
     getById: async (id: string): Promise<SigningKeyRecord | null> => {
       return this.signingKeyById.get(id) ?? null;
     },
-    getByName: async (name: string): Promise<SigningKeyRecord | null> => {
-      const id = this.signingKeyIdByName.get(name);
+    getByName: async (name: string, repositoryName: string): Promise<SigningKeyRecord | null> => {
+      const id = this.signingKeyIdByName.get(signingKeyNameIndex(repositoryName, name));
       return id ? this.signingKeyById.get(id) ?? null : null;
     },
     list: async (): Promise<SigningKeyRecord[]> => {
@@ -107,17 +107,22 @@ export class MemoryStateStore implements StateStore {
     },
     save: async (record: SigningKeyRecord): Promise<void> => {
       const existing = this.signingKeyById.get(record.id);
-      if (existing && existing.name !== record.name) {
-        this.signingKeyIdByName.delete(existing.name);
+      if (existing && (existing.name !== record.name || existing.repositoryName !== record.repositoryName)) {
+        this.signingKeyIdByName.delete(signingKeyNameIndex(existing.repositoryName, existing.name));
       }
 
-      const existingIdForName = this.signingKeyIdByName.get(record.name);
+      const nameIndex = signingKeyNameIndex(record.repositoryName, record.name);
+      const existingIdForName = this.signingKeyIdByName.get(nameIndex);
       if (existingIdForName && existingIdForName !== record.id) {
         this.signingKeyById.delete(existingIdForName);
       }
 
       this.signingKeyById.set(record.id, record);
-      this.signingKeyIdByName.set(record.name, record.id);
+      this.signingKeyIdByName.set(nameIndex, record.id);
     },
   };
+}
+
+function signingKeyNameIndex(repositoryName: string, name: string): string {
+  return `${repositoryName}\0${name}`;
 }

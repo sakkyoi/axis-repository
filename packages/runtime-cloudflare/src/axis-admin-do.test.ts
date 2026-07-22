@@ -288,7 +288,7 @@ describe("AxisAdminDO", () => {
     const object = createObject({ ADMIN_TOKEN: "test-admin-token" });
 
     const createSigningKey = await object.fetch(
-      new Request("https://axis.example/admin/apt/signing-keys/import", {
+      new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys/import", {
         method: "POST",
         headers: {
           authorization: "Bearer test-admin-token",
@@ -391,7 +391,7 @@ describe("AxisAdminDO", () => {
     });
 
     const signingKeyDetail = await object.fetch(
-      new Request(`https://axis.example/admin/apt/signing-keys/${signingKey.id}`, {
+      new Request(`https://axis.example/admin/repositories/debian-internal/apt/signing-keys/${signingKey.id}`, {
         headers: { authorization: "Bearer test-admin-token" },
       }),
     );
@@ -419,7 +419,7 @@ describe("AxisAdminDO", () => {
     });
 
     const createSigningKey = await object.fetch(
-      new Request("https://axis.example/admin/apt/signing-keys/import", {
+      new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys/import", {
         method: "POST",
         headers: {
           authorization: "Bearer test-admin-token",

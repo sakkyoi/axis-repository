@@ -20,6 +20,7 @@ export interface EncryptedSecret {
 
 export interface SigningKeyRecord {
   id: string;
+  repositoryName: string;
   name: string;
   publicKeyArmored: string;
   encryptedPrivateKeyArmored: EncryptedSecret;

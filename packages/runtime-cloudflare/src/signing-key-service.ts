@@ -11,6 +11,7 @@ import type { SecretEncryption } from "./secret-encryption";
 
 export interface PublicSigningKey {
   id: string;
+  repositoryName: string;
   name: string;
   publicKeyArmored: string;
   fingerprint: string;
@@ -21,6 +22,7 @@ export interface PublicSigningKey {
 
 export interface ActivePrivateSigningKey {
   id: string;
+  repositoryName: string;
   privateKeyArmored: string;
   passphrase: string;
   fingerprint: string;
@@ -37,11 +39,13 @@ export class SigningKeyService {
     },
   ) {}
 
-  async create(input: { name: string; privateKeyArmored: string; passphrase: string }): Promise<PublicSigningKey> {
+  async create(input: { repositoryName: string; name: string; privateKeyArmored: string; passphrase: string }): Promise<PublicSigningKey> {
+    const repositoryName = input.repositoryName.trim();
+    if (!repositoryName) throw new ValidationError("Signing key repository name is required");
     const name = input.name.trim();
     if (!name) throw new ValidationError("Signing key name is required");
-    if (await this.options.state.signingKeys.getByName(name)) {
-      throw new ValidationError(`Signing key already exists: ${name}`);
+    if (await this.options.state.signingKeys.getByName(name, repositoryName)) {
+      throw new ValidationError(`Signing key already exists in repository ${repositoryName}: ${name}`);
     }
 
     const privateKey = await this.readAndDecryptPrivateKey(input.privateKeyArmored, input.passphrase);
@@ -53,6 +57,7 @@ export class SigningKeyService {
     const publicKeyArmored = privateKey.toPublic().armor();
     const record: SigningKeyRecord = {
       id: this.options.randomId.create("signing_key"),
+      repositoryName,
       name,
       publicKeyArmored,
       encryptedPrivateKeyArmored: await this.options.encryption.encrypt(input.privateKeyArmored),
@@ -65,7 +70,7 @@ export class SigningKeyService {
     return this.toPublic(record);
   }
 
-  async generate(input: { name: string; userIdName: string; userIdEmail: string }): Promise<PublicSigningKey> {
+  async generate(input: { repositoryName: string; name: string; userIdName: string; userIdEmail: string }): Promise<PublicSigningKey> {
     const userIdName = input.userIdName.trim();
     const userIdEmail = input.userIdEmail.trim();
     if (!userIdName) throw new ValidationError("Signing key user ID name is required");
@@ -79,6 +84,7 @@ export class SigningKeyService {
       passphrase,
     });
     return this.create({
+      repositoryName: input.repositoryName,
       name: input.name,
       privateKeyArmored: key.privateKey,
       passphrase,
@@ -87,6 +93,12 @@ export class SigningKeyService {
 
   async list(): Promise<PublicSigningKey[]> {
     return (await this.options.state.signingKeys.list()).map((record) => this.toPublic(record));
+  }
+
+  async listForRepository(repositoryName: string): Promise<PublicSigningKey[]> {
+    return (await this.options.state.signingKeys.list())
+      .filter((record) => record.repositoryName === repositoryName)
+      .map((record) => this.toPublic(record));
   }
 
   async revoke(id: string): Promise<PublicSigningKey> {
@@ -111,6 +123,7 @@ export class SigningKeyService {
     if (record.revokedAt) throw new ValidationError("Signing key has been revoked");
     return {
       id: record.id,
+      repositoryName: record.repositoryName,
       privateKeyArmored: await this.options.encryption.decrypt(record.encryptedPrivateKeyArmored),
       passphrase: await this.options.encryption.decrypt(record.encryptedPassphrase),
       fingerprint: record.fingerprint,
@@ -130,6 +143,7 @@ export class SigningKeyService {
   private toPublic(record: SigningKeyRecord): PublicSigningKey {
     return {
       id: record.id,
+      repositoryName: record.repositoryName,
       name: record.name,
       publicKeyArmored: record.publicKeyArmored,
       fingerprint: record.fingerprint,

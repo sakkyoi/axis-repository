@@ -18,7 +18,7 @@ const sessionKey = (id: string) => `publish-session:${id}`;
 const tokenKey = (id: string) => `publish-token:${id}`;
 const tokenNameKey = (name: string) => `publish-token-name:${name}`;
 const signingKeyKey = (id: string) => `signing-key:${id}`;
-const signingKeyNameKey = (name: string) => `signing-key-name:${name}`;
+const signingKeyNameKey = (repositoryName: string, name: string) => `signing-key-name:${repositoryName}:${name}`;
 
 function clonePublishSession(session: PublishSession): PublishSession {
   return JSON.parse(JSON.stringify(session)) as PublishSession;
@@ -133,8 +133,8 @@ export class DurableStateStore implements StateStore {
     getById: async (id: string): Promise<SigningKeyRecord | null> => {
       return (await this.storage.get<SigningKeyRecord>(signingKeyKey(id))) ?? null;
     },
-    getByName: async (name: string): Promise<SigningKeyRecord | null> => {
-      const id = await this.storage.get<string>(signingKeyNameKey(name));
+    getByName: async (name: string, repositoryName: string): Promise<SigningKeyRecord | null> => {
+      const id = await this.storage.get<string>(signingKeyNameKey(repositoryName, name));
       return id
         ? ((await this.storage.get<SigningKeyRecord>(signingKeyKey(id))) ?? null)
         : null;
@@ -151,19 +151,19 @@ export class DurableStateStore implements StateStore {
       const existing = await this.storage.get<SigningKeyRecord>(
         signingKeyKey(record.id),
       );
-      if (existing && existing.name !== record.name) {
-        await this.storage.delete(signingKeyNameKey(existing.name));
+      if (existing && (existing.name !== record.name || existing.repositoryName !== record.repositoryName)) {
+        await this.storage.delete(signingKeyNameKey(existing.repositoryName, existing.name));
       }
 
       const existingIdForName = await this.storage.get<string>(
-        signingKeyNameKey(record.name),
+        signingKeyNameKey(record.repositoryName, record.name),
       );
       if (existingIdForName && existingIdForName !== record.id) {
         await this.storage.delete(signingKeyKey(existingIdForName));
       }
 
       await this.storage.put(signingKeyKey(record.id), record);
-      await this.storage.put(signingKeyNameKey(record.name), record.id);
+      await this.storage.put(signingKeyNameKey(record.repositoryName, record.name), record.id);
     },
   };
 }

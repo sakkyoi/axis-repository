@@ -109,7 +109,7 @@ export interface PublishTokenStore {
 
 export interface SigningKeyStore {
   getById(id: string): Promise<SigningKeyRecord | null>;
-  getByName(name: string): Promise<SigningKeyRecord | null>;
+  getByName(name: string, repositoryName: string): Promise<SigningKeyRecord | null>;
   list(): Promise<SigningKeyRecord[]>;
   save(record: SigningKeyRecord): Promise<void>;
 }
