@@ -357,7 +357,8 @@ function InlineAptSigningKeyForm({
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       const key = await generateKey.mutateAsync({
         repositoryName,
@@ -369,7 +370,7 @@ function InlineAptSigningKeyForm({
       });
       setError("");
       onCreated(key);
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Signing key could not be generated");
     }
@@ -377,7 +378,8 @@ function InlineAptSigningKeyForm({
 
   async function importSigningKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       const key = await importKey.mutateAsync({
         repositoryName,
@@ -389,7 +391,7 @@ function InlineAptSigningKeyForm({
       });
       setError("");
       onCreated(key);
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Signing key could not be imported");
     }

@@ -21,11 +21,17 @@ export function PageHeader({
 }
 
 export function ErrorState({ title = "Request failed", error }: { title?: string; error: unknown }) {
+  const message = typeof error === "string"
+    ? error
+    : error instanceof Error
+      ? error.message
+      : "Unexpected error";
+
   return (
     <Alert className="border-destructive/35 bg-destructive/10 text-destructive">
       <AlertTitle>{title}</AlertTitle>
       <AlertDescription className="text-destructive">
-        {error instanceof Error ? error.message : "Unexpected error"}
+        {message}
       </AlertDescription>
     </Alert>
   );
