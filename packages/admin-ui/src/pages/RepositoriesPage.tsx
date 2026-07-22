@@ -16,6 +16,7 @@ import {
 } from "../api/hooks";
 import type { Repository, RepositoryVisibility, SigningKey } from "../api/schemas";
 import { ADMIN_UI_PATHS } from "../navigation";
+import { aptInstallCommandText, repositoryRowStateClass } from "../repository-page-model";
 import {
   activeSigningKeys,
   buildAptRepositoryFormValues,
@@ -30,7 +31,7 @@ export function RepositoriesPage() {
   const repositories = useRepositories();
   const [selectedName, setSelectedName] = useState<string>();
   const selected = useMemo(
-    () => repositories.data?.find((repository) => repository.name === selectedName) ?? repositories.data?.[0],
+    () => repositories.data?.find((repository) => repository.name === selectedName),
     [repositories.data, selectedName],
   );
 
@@ -51,10 +52,14 @@ export function RepositoriesPage() {
       <div className="min-h-0">
         {repositories.isError && <ErrorState error={repositories.error} />}
         {repositories.isLoading && <div className="text-sm text-muted-foreground">Loading repositories...</div>}
-        {repositories.data && repositories.data.length === 0 && <EmptyState message="No repositories have been created." />}
-        {repositories.data && repositories.data.length > 0 && (
+        {repositories.data && (
           <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
             <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
+              {repositories.data.length === 0 ? (
+                <div className="p-4">
+                  <EmptyState message="No repositories have been created." />
+                </div>
+              ) : (
               <table className="w-full border-collapse text-sm">
                 <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
                   <tr>
@@ -68,7 +73,7 @@ export function RepositoriesPage() {
                   {repositories.data.map((repository) => (
                     <tr
                       key={repository.id}
-                      className="cursor-pointer border-t border-border hover:bg-muted/60"
+                      className={`cursor-pointer border-t border-border ${repositoryRowStateClass(repository.name, selectedName)}`}
                       onClick={() => setSelectedName(repository.name)}
                     >
                       <td className="px-3 py-2 font-medium">{repository.name}</td>
@@ -83,12 +88,26 @@ export function RepositoriesPage() {
                   ))}
                 </tbody>
               </table>
+              )}
             </div>
-            {selected && <RepositoryDetail repository={selected} />}
+            {selected ? <RepositoryDetail repository={selected} /> : <RepositoryDetailEmptyState />}
           </div>
         )}
       </div>
     </section>
+  );
+}
+
+function RepositoryDetailEmptyState() {
+  return (
+    <aside className="grid min-h-0 min-w-0 place-items-center rounded-lg border border-dashed border-border bg-panel p-6">
+      <div className="max-w-xs text-center">
+        <h2 className="text-sm font-semibold">Select a repository</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Choose an item from the repository list to inspect config, signing keys, and client setup.
+        </p>
+      </div>
+    </aside>
   );
 }
 
@@ -151,11 +170,12 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
   }
 
   return (
-    <aside className="grid min-h-0 min-w-0 gap-4 overflow-y-auto overflow-x-hidden rounded-lg border border-border bg-panel p-4">
-      <div>
+    <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
+      <div className="sticky top-0 z-10 border-b border-border bg-panel p-4">
         <h2 className="text-base font-semibold">{repository.name}</h2>
         <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
       </div>
+      <div className="grid min-h-0 gap-4 overflow-y-auto overflow-x-hidden p-4">
       {repository.ecosystem === "apt" && (
         <>
           <div className="grid gap-3">
@@ -221,13 +241,14 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
           </details>
           <details className="min-w-0" open>
             <summary className="cursor-pointer text-sm font-medium">install</summary>
-            <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{install.data ? asJson(install.data) : "Loading..."}</pre>
+            <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{install.data ? aptInstallCommandText(install.data) : "Loading..."}</pre>
           </details>
           {publicKey.isError && <ErrorState title="APT key unavailable" error={publicKey.error} />}
           {source.isError && <ErrorState title="APT source unavailable" error={source.error} />}
           {install.isError && <ErrorState title="APT install unavailable" error={install.error} />}
         </div>
       )}
+      </div>
     </aside>
   );
 }
