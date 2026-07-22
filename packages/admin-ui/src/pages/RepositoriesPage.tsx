@@ -52,8 +52,8 @@ export function RepositoriesPage() {
       {repositories.isLoading && <div className="text-sm text-muted-foreground">Loading repositories...</div>}
       {repositories.data && repositories.data.length === 0 && <EmptyState message="No repositories have been created." />}
       {repositories.data && repositories.data.length > 0 && (
-        <div className="grid grid-cols-[minmax(0,1fr)_420px] gap-5">
-          <div className="overflow-hidden rounded-lg border border-border bg-panel">
+        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-panel">
             <table className="w-full border-collapse text-sm">
               <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
                 <tr>
@@ -149,7 +149,7 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
   }
 
   return (
-    <aside className="grid gap-4 rounded-lg border border-border bg-panel p-4">
+    <aside className="grid min-w-0 gap-4 overflow-hidden rounded-lg border border-border bg-panel p-4">
       <div>
         <h2 className="text-base font-semibold">{repository.name}</h2>
         <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
@@ -209,17 +209,17 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
       {repository.ecosystem === "apt" && (
         <div className="grid gap-3 border-t border-border pt-4">
           <h3 className="text-sm font-semibold">APT client setup</h3>
-          <details>
+          <details className="min-w-0">
             <summary className="cursor-pointer text-sm font-medium">key.gpg</summary>
-            <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">{publicKey.data ?? "Loading..."}</pre>
+            <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{publicKey.data ?? "Loading..."}</pre>
           </details>
-          <details>
+          <details className="min-w-0">
             <summary className="cursor-pointer text-sm font-medium">source</summary>
-            <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">{source.data ? asJson(source.data) : "Loading..."}</pre>
+            <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{source.data ? asJson(source.data) : "Loading..."}</pre>
           </details>
-          <details open>
+          <details className="min-w-0" open>
             <summary className="cursor-pointer text-sm font-medium">install</summary>
-            <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">{install.data ? asJson(install.data) : "Loading..."}</pre>
+            <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{install.data ? asJson(install.data) : "Loading..."}</pre>
           </details>
           {publicKey.isError && <ErrorState title="APT key unavailable" error={publicKey.error} />}
           {source.isError && <ErrorState title="APT source unavailable" error={source.error} />}

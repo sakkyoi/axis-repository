@@ -26,8 +26,8 @@ export function AppLayout() {
   const apiBaseUrl = getRuntimeConfig().apiBaseUrl || "same-origin";
 
   return (
-    <div className="grid min-h-screen grid-cols-[240px_1fr] bg-background text-foreground">
-      <aside className="border-r border-border bg-panel">
+    <div className="grid h-screen overflow-hidden grid-cols-[240px_minmax(0,1fr)] bg-background text-foreground">
+      <aside className="h-screen overflow-y-auto border-r border-border bg-panel">
         <div className="flex h-14 items-center border-b border-border px-5">
           <div>
             <div className="text-sm font-semibold">Axis Repository</div>
@@ -55,8 +55,8 @@ export function AppLayout() {
           })}
         </nav>
       </aside>
-      <div className="min-w-0">
-        <header className="flex h-14 items-center justify-between border-b border-border bg-panel/95 px-5">
+      <div className="grid min-h-0 min-w-0 grid-rows-[56px_minmax(0,1fr)]">
+        <header className="flex min-w-0 items-center justify-between border-b border-border bg-panel/95 px-5">
           <div className="text-sm text-muted-foreground">API target: {apiBaseUrl}</div>
           <div className="flex items-center gap-2">
             <div className="flex h-9 items-center rounded-md border border-border bg-background p-0.5">
@@ -88,7 +88,7 @@ export function AppLayout() {
             </Button>
           </div>
         </header>
-        <main className="p-5">
+        <main className="min-h-0 overflow-y-auto p-5">
           <Outlet />
         </main>
       </div>
