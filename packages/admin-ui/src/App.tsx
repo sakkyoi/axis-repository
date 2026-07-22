@@ -4,7 +4,6 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
 import { RepositoriesPage } from "./pages/RepositoriesPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { SigningKeysPage } from "./pages/SigningKeysPage";
 import { TokensPage } from "./pages/TokensPage";
 import { ADMIN_UI_PATHS } from "./navigation";
 
@@ -18,7 +17,6 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path={ADMIN_UI_PATHS.repositories} element={<RepositoriesPage />} />
           <Route path={ADMIN_UI_PATHS.tokens} element={<TokensPage />} />
-          <Route path={ADMIN_UI_PATHS.signingKeys} element={<SigningKeysPage />} />
           <Route path={ADMIN_UI_PATHS.settings} element={<SettingsPage />} />
         </Route>
       </Route>

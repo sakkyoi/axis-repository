@@ -21,7 +21,7 @@ async function createPublishSession(
   });
 
   const signingKeyResponse = await app.fetch(
-    new Request("https://axis.example/admin/signing-keys", {
+    new Request("https://axis.example/admin/apt/signing-keys/import", {
       method: "POST",
       headers: {
         authorization: "Bearer dev-admin-token",
@@ -190,7 +190,7 @@ async function createSigningKey(app: ReturnType<typeof createApp>): Promise<{ id
     passphrase: "correct-passphrase",
   });
   const response = await app.fetch(
-    new Request("https://axis.example/admin/signing-keys", {
+    new Request("https://axis.example/admin/apt/signing-keys/import", {
       method: "POST",
       headers: {
         authorization: "Bearer dev-admin-token",
@@ -1746,7 +1746,7 @@ describe("Cloudflare runtime routes", () => {
     const app = createApp();
 
     const signingKeyResponse = await app.fetch(
-      new Request("https://axis.example/admin/signing-keys", {
+      new Request("https://axis.example/admin/apt/signing-keys/import", {
         method: "POST",
         headers: {
           authorization: "Bearer dev-admin-token",
@@ -2188,7 +2188,7 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("creates, lists, and revokes signing keys through admin routes", async () => {
+  it("imports, generates, lists, and revokes APT signing keys through admin routes", async () => {
     const { generateKey } = await import("openpgp");
     const key = await generateKey({
       type: "ecc",
@@ -2199,7 +2199,7 @@ describe("Cloudflare runtime routes", () => {
     const app = createApp();
 
     const createResponse = await app.fetch(
-      new Request("https://axis.example/admin/signing-keys", {
+      new Request("https://axis.example/admin/apt/signing-keys/import", {
         method: "POST",
         headers: {
           authorization: "Bearer dev-admin-token",
@@ -2226,7 +2226,7 @@ describe("Cloudflare runtime routes", () => {
     expect(created).not.toHaveProperty("encryptedPassphrase");
 
     const listResponse = await app.fetch(
-      new Request("https://axis.example/admin/signing-keys", {
+      new Request("https://axis.example/admin/apt/signing-keys", {
         headers: { authorization: "Bearer dev-admin-token" },
       }),
     );
@@ -2241,7 +2241,7 @@ describe("Cloudflare runtime routes", () => {
     expect(listBody.signingKeys[0]).not.toHaveProperty("encryptedPassphrase");
 
     const detailResponse = await app.fetch(
-      new Request(`https://axis.example/admin/signing-keys/${created.id}`, {
+      new Request(`https://axis.example/admin/apt/signing-keys/${created.id}`, {
         headers: { authorization: "Bearer dev-admin-token" },
       }),
     );
@@ -2258,7 +2258,7 @@ describe("Cloudflare runtime routes", () => {
     expect(detail).not.toHaveProperty("encryptedPassphrase");
 
     const revokeResponse = await app.fetch(
-      new Request(`https://axis.example/admin/signing-keys/${created.id}/revoke`, {
+      new Request(`https://axis.example/admin/apt/signing-keys/${created.id}/revoke`, {
         method: "POST",
         headers: { authorization: "Bearer dev-admin-token" },
       }),
@@ -2273,13 +2273,36 @@ describe("Cloudflare runtime routes", () => {
     expect(revoked).not.toHaveProperty("passphrase");
     expect(revoked).not.toHaveProperty("encryptedPrivateKeyArmored");
     expect(revoked).not.toHaveProperty("encryptedPassphrase");
+
+    const generateResponse = await app.fetch(
+      new Request("https://axis.example/admin/apt/signing-keys/generate", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-generated",
+          userIdName: "Axis Repository",
+          userIdEmail: "axis@example.test",
+        }),
+      }),
+    );
+    expect(generateResponse.status).toBe(201);
+    const generated = (await generateResponse.json()) as Record<string, unknown>;
+    expect(generated).toMatchObject({
+      name: "debian-generated",
+      revokedAt: null,
+    });
+    expect(generated).not.toHaveProperty("privateKeyArmored");
+    expect(generated).not.toHaveProperty("passphrase");
   });
 
-  it("returns not found for missing signing key admin detail", async () => {
+  it("returns not found for missing APT signing key admin detail", async () => {
     const app = createApp();
 
     const response = await app.fetch(
-      new Request("https://axis.example/admin/signing-keys/signing_key_missing", {
+      new Request("https://axis.example/admin/apt/signing-keys/signing_key_missing", {
         headers: { authorization: "Bearer dev-admin-token" },
       }),
     );
@@ -2287,11 +2310,11 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(404);
   });
 
-  it("requires admin auth for signing key revoke paths before method dispatch", async () => {
+  it("requires admin auth for APT signing key revoke paths before method dispatch", async () => {
     const app = createApp();
 
     const response = await app.fetch(
-      new Request("https://axis.example/admin/signing-keys/signing_key_missing/revoke"),
+      new Request("https://axis.example/admin/apt/signing-keys/signing_key_missing/revoke"),
     );
 
     expect(response.status).toBe(401);

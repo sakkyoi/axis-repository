@@ -26,10 +26,16 @@ export interface CreatePublishTokenInput {
   expiresAt?: string;
 }
 
-export interface CreateSigningKeyInput {
+export interface ImportAptSigningKeyInput {
   name: string;
   privateKeyArmored: string;
   passphrase: string;
+}
+
+export interface GenerateAptSigningKeyInput {
+  name: string;
+  userIdName: string;
+  userIdEmail: string;
 }
 
 export interface CreateRepositoryInput {
@@ -56,10 +62,11 @@ export interface AxisClient {
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
   createPublishToken(input: CreatePublishTokenInput): Promise<PublishTokenCreateResponse>;
   revokePublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
-  listSigningKeys(): Promise<SigningKey[]>;
-  getSigningKey(id: string): Promise<SigningKey>;
-  createSigningKey(input: CreateSigningKeyInput): Promise<SigningKey>;
-  revokeSigningKey(id: string): Promise<SigningKey>;
+  listAptSigningKeys(): Promise<SigningKey[]>;
+  getAptSigningKey(id: string): Promise<SigningKey>;
+  importAptSigningKey(input: ImportAptSigningKeyInput): Promise<SigningKey>;
+  generateAptSigningKey(input: GenerateAptSigningKeyInput): Promise<SigningKey>;
+  revokeAptSigningKey(id: string): Promise<SigningKey>;
 }
 
 function encodePathSegment(value: string): string {
@@ -110,20 +117,24 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.post(`/admin/publish-tokens/${encodePathSegment(name)}/revoke`);
       return publishTokenSchema.parse(response.data);
     },
-    async listSigningKeys() {
-      const response = await http.get("/admin/signing-keys");
+    async listAptSigningKeys() {
+      const response = await http.get("/admin/apt/signing-keys");
       return signingKeysResponseSchema.parse(response.data).signingKeys;
     },
-    async getSigningKey(id: string) {
-      const response = await http.get(`/admin/signing-keys/${encodePathSegment(id)}`);
+    async getAptSigningKey(id: string) {
+      const response = await http.get(`/admin/apt/signing-keys/${encodePathSegment(id)}`);
       return signingKeySchema.parse(response.data);
     },
-    async createSigningKey(input: CreateSigningKeyInput) {
-      const response = await http.post("/admin/signing-keys", input);
+    async importAptSigningKey(input: ImportAptSigningKeyInput) {
+      const response = await http.post("/admin/apt/signing-keys/import", input);
       return signingKeySchema.parse(response.data);
     },
-    async revokeSigningKey(id: string) {
-      const response = await http.post(`/admin/signing-keys/${encodePathSegment(id)}/revoke`);
+    async generateAptSigningKey(input: GenerateAptSigningKeyInput) {
+      const response = await http.post("/admin/apt/signing-keys/generate", input);
+      return signingKeySchema.parse(response.data);
+    },
+    async revokeAptSigningKey(id: string) {
+      const response = await http.post(`/admin/apt/signing-keys/${encodePathSegment(id)}/revoke`);
       return signingKeySchema.parse(response.data);
     },
   };

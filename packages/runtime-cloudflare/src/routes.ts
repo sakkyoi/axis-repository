@@ -561,13 +561,17 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     throw new NotFoundError();
   }
-  if (url.pathname === "/admin/signing-keys") {
+  if (url.pathname === "/admin/apt/signing-keys") {
     requireAdmin(request, dependencies.adminToken);
     if (request.method === "GET") {
       return jsonResponse({
         signingKeys: await dependencies.signingKeyService.list(),
       });
     }
+    throw new NotFoundError();
+  }
+  if (url.pathname === "/admin/apt/signing-keys/import") {
+    requireAdmin(request, dependencies.adminToken);
     if (request.method === "POST") {
       const body = await readJsonObject(request);
       const key = await dependencies.signingKeyService.create({
@@ -577,9 +581,23 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       });
       return jsonResponse(key, { status: 201 });
     }
+    throw new NotFoundError();
+  }
+  if (url.pathname === "/admin/apt/signing-keys/generate") {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method === "POST") {
+      const body = await readJsonObject(request);
+      const key = await dependencies.signingKeyService.generate({
+        name: stringField(body, "name"),
+        userIdName: stringField(body, "userIdName"),
+        userIdEmail: stringField(body, "userIdEmail"),
+      });
+      return jsonResponse(key, { status: 201 });
+    }
+    throw new NotFoundError();
   }
   const revokeSigningKeyMatch = url.pathname.match(
-    /^\/admin\/signing-keys\/([^/]+)\/revoke$/,
+    /^\/admin\/apt\/signing-keys\/([^/]+)\/revoke$/,
   );
   if (revokeSigningKeyMatch) {
     requireAdmin(request, dependencies.adminToken);
@@ -592,7 +610,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     return jsonResponse(await dependencies.signingKeyService.revoke(id));
   }
-  const adminSigningKeyId = parseAdminResourcePath(request.url, "signing-keys");
+  const adminSigningKeyId = parseAdminResourcePath(request.url, "apt/signing-keys");
   if (adminSigningKeyId) {
     requireAdmin(request, dependencies.adminToken);
     if (request.method === "GET") {

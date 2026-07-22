@@ -9,8 +9,8 @@ import { Textarea } from "../components/ui/textarea";
 import {
   useAptInstallInstructions,
   useCreateRepository,
+  useAptSigningKeys,
   useRepositories,
-  useSigningKeys,
   useUpdateRepository,
 } from "../api/hooks";
 import type { Repository, RepositoryVisibility, SigningKey } from "../api/schemas";
@@ -21,6 +21,7 @@ import {
   buildUpdateAptRepositoryInput,
   type AptRepositoryFormValues,
 } from "../repository-forms";
+import { AptSigningKeyDialog, AptSigningKeyList } from "./SigningKeysPage";
 import { asJson, EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 const defaultAptRepositoryValues: AptRepositoryFormValues = {
@@ -34,7 +35,7 @@ const defaultAptRepositoryValues: AptRepositoryFormValues = {
 
 export function RepositoriesPage() {
   const repositories = useRepositories();
-  const signingKeys = useSigningKeys();
+  const signingKeys = useAptSigningKeys();
   const [selectedName, setSelectedName] = useState<string>();
   const selected = useMemo(
     () => repositories.data?.find((repository) => repository.name === selectedName) ?? repositories.data?.[0],
@@ -46,12 +47,23 @@ export function RepositoriesPage() {
       <PageHeader
         title="Repositories"
         description="Manage repository visibility, config, and client setup hints."
-        action={<CreateRepositoryDialog signingKeys={signingKeys.data ?? []} />}
+        action={(
+          <div className="flex items-center gap-2">
+            <AptSigningKeyDialog />
+            <CreateRepositoryDialog signingKeys={signingKeys.data ?? []} />
+          </div>
+        )}
       />
       {repositories.isError && <ErrorState error={repositories.error} />}
       {signingKeys.isError && <ErrorState title="Signing keys unavailable" error={signingKeys.error} />}
       {repositories.isLoading && <div className="text-sm text-muted-foreground">Loading repositories...</div>}
       {repositories.data && repositories.data.length === 0 && <EmptyState message="No repositories have been created." />}
+      <details className="mb-5 rounded-lg border border-border bg-panel p-4">
+        <summary className="cursor-pointer text-sm font-semibold">APT signing keys</summary>
+        <div className="mt-4">
+          <AptSigningKeyList signingKeys={signingKeys.data ?? []} />
+        </div>
+      </details>
       {repositories.data && repositories.data.length > 0 && (
         <div className="grid grid-cols-[minmax(0,1fr)_420px] gap-5">
           <div className="overflow-hidden rounded-lg border border-border bg-panel">

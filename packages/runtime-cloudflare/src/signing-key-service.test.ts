@@ -18,6 +18,39 @@ async function privateKeyFixture(passphrase = "correct-passphrase") {
 }
 
 describe("SigningKeyService", () => {
+  it("generates encrypted signing keys without exposing generated secret material", async () => {
+    const state = new MemoryStateStore();
+    const service = new SigningKeyService({
+      state,
+      clock,
+      randomId,
+      encryption: new SecretEncryption("local-test-secret"),
+    });
+
+    const generated = await service.generate({
+      name: "debian-generated",
+      userIdName: "Axis Repository",
+      userIdEmail: "axis@example.test",
+    });
+
+    expect(generated).toMatchObject({
+      id: "signing_key_fixed",
+      name: "debian-generated",
+      publicKeyArmored: expect.stringContaining("BEGIN PGP PUBLIC KEY BLOCK"),
+      fingerprint: expect.any(String),
+      keyId: expect.any(String),
+      createdAt: "2026-07-18T00:00:00.000Z",
+      revokedAt: null,
+    });
+    for (const fieldName of privateFieldNames) {
+      expect(generated).not.toHaveProperty(fieldName);
+    }
+    await expect(service.getActivePrivateKey("signing_key_fixed")).resolves.toMatchObject({
+      privateKeyArmored: expect.stringContaining("BEGIN PGP PRIVATE KEY BLOCK"),
+      passphrase: "pgp_passphrase_fixed",
+    });
+  });
+
   it("creates encrypted signing keys and returns only public fields", async () => {
     const state = new MemoryStateStore();
     const fixture = await privateKeyFixture();

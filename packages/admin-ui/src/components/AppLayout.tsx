@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { KeyRound, LogOut, Monitor, Moon, Package, Settings, ShieldCheck, Sun } from "lucide-react";
+import { LogOut, Monitor, Moon, Package, Settings, ShieldCheck, Sun } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
@@ -11,7 +11,6 @@ import { useTheme, type ThemePreference } from "../theme";
 const navIcons = {
   repositories: Package,
   tokens: ShieldCheck,
-  signingKeys: KeyRound,
   settings: Settings,
 } as const;
 

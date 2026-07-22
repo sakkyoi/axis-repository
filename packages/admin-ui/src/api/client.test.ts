@@ -145,4 +145,66 @@ describe("createAxisClient", () => {
       },
     ]);
   });
+
+  it("uses APT-scoped endpoints for signing key import and generation", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: Array<{ method: string; url: string; data: unknown }> = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push({
+        method: config.method?.toUpperCase() ?? "",
+        url: config.url ?? "",
+        data: config.data ? JSON.parse(String(config.data)) : undefined,
+      });
+      return {
+        data: {
+          id: "signing_key_1",
+          name: "debian-prod",
+          publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+          fingerprint: "FINGERPRINT",
+          keyId: "KEYID",
+          createdAt: "2026-07-22T00:00:00.000Z",
+          revokedAt: null,
+        },
+        status: 201,
+        statusText: "Created",
+        headers: {},
+        config,
+      };
+    };
+
+    await client.importAptSigningKey({
+      name: "debian-prod",
+      privateKeyArmored: "private",
+      passphrase: "secret",
+    });
+    await client.generateAptSigningKey({
+      name: "debian-generated",
+      userIdName: "Axis Repository",
+      userIdEmail: "axis@example.test",
+    });
+
+    expect(requests).toEqual([
+      {
+        method: "POST",
+        url: "/admin/apt/signing-keys/import",
+        data: {
+          name: "debian-prod",
+          privateKeyArmored: "private",
+          passphrase: "secret",
+        },
+      },
+      {
+        method: "POST",
+        url: "/admin/apt/signing-keys/generate",
+        data: {
+          name: "debian-generated",
+          userIdName: "Axis Repository",
+          userIdEmail: "axis@example.test",
+        },
+      },
+    ]);
+  });
 });

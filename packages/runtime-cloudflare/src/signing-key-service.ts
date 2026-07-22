@@ -6,7 +6,7 @@ import {
   type SigningKeyRecord,
   type StateStore,
 } from "@axis-repository/core";
-import { decryptKey, readPrivateKey } from "openpgp";
+import { decryptKey, generateKey, readPrivateKey } from "openpgp";
 import type { SecretEncryption } from "./secret-encryption";
 
 export interface PublicSigningKey {
@@ -63,6 +63,26 @@ export class SigningKeyService {
     };
     await this.options.state.signingKeys.save(record);
     return this.toPublic(record);
+  }
+
+  async generate(input: { name: string; userIdName: string; userIdEmail: string }): Promise<PublicSigningKey> {
+    const userIdName = input.userIdName.trim();
+    const userIdEmail = input.userIdEmail.trim();
+    if (!userIdName) throw new ValidationError("Signing key user ID name is required");
+    if (!userIdEmail) throw new ValidationError("Signing key user ID email is required");
+
+    const passphrase = this.options.randomId.create("pgp_passphrase");
+    const key = await generateKey({
+      type: "ecc",
+      curve: "curve25519Legacy",
+      userIDs: [{ name: userIdName, email: userIdEmail }],
+      passphrase,
+    });
+    return this.create({
+      name: input.name,
+      privateKeyArmored: key.privateKey,
+      passphrase,
+    });
   }
 
   async list(): Promise<PublicSigningKey[]> {

@@ -2,9 +2,10 @@ import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAxisClient,
+  type GenerateAptSigningKeyInput,
+  type ImportAptSigningKeyInput,
   type CreatePublishTokenInput,
   type CreateRepositoryInput,
-  type CreateSigningKeyInput,
   type UpdateRepositoryInput,
 } from "./client";
 import { useAuth } from "../auth";
@@ -78,28 +79,37 @@ export function useRevokePublishToken() {
   });
 }
 
-export function useSigningKeys() {
+export function useAptSigningKeys() {
   const client = useAxisClient();
   return useQuery({
-    queryKey: ["signing-keys"],
-    queryFn: () => client.listSigningKeys(),
+    queryKey: ["apt-signing-keys"],
+    queryFn: () => client.listAptSigningKeys(),
   });
 }
 
-export function useCreateSigningKey() {
+export function useImportAptSigningKey() {
   const client = useAxisClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateSigningKeyInput) => client.createSigningKey(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["signing-keys"] }),
+    mutationFn: (input: ImportAptSigningKeyInput) => client.importAptSigningKey(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys"] }),
   });
 }
 
-export function useRevokeSigningKey() {
+export function useGenerateAptSigningKey() {
   const client = useAxisClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => client.revokeSigningKey(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["signing-keys"] }),
+    mutationFn: (input: GenerateAptSigningKeyInput) => client.generateAptSigningKey(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys"] }),
+  });
+}
+
+export function useRevokeAptSigningKey() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.revokeAptSigningKey(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys"] }),
   });
 }
