@@ -42,9 +42,9 @@ export function LoginPage() {
           <p className="mt-1 text-sm text-muted-foreground">Sign in to the admin console.</p>
         </div>
         {error && (
-          <Alert className="border-red-200 bg-red-50 text-red-700">
+          <Alert className="border-destructive/35 bg-destructive/10 text-destructive">
             <AlertTitle>Sign in failed</AlertTitle>
-            <AlertDescription className="text-red-700">{error}</AlertDescription>
+            <AlertDescription className="text-destructive">{error}</AlertDescription>
           </Alert>
         )}
         <form className="grid gap-3" onSubmit={submit}>

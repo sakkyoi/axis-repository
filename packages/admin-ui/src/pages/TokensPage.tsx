@@ -144,9 +144,9 @@ function CreateTokenDialog() {
         </form>
         {scopeError && <ErrorState error={scopeError} />}
         {secret && (
-          <div className="grid gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
-            <div className="text-sm font-medium text-amber-900">Token secret</div>
-            <code className="break-all text-sm text-amber-900">{secret}</code>
+          <div className="grid gap-2 rounded-md border border-warning/40 bg-warning/15 p-3 text-warning-foreground">
+            <div className="text-sm font-medium">Token secret</div>
+            <code className="break-all text-sm">{secret}</code>
           </div>
         )}
         {createToken.isError && <ErrorState error={createToken.error} />}

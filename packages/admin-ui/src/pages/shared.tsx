@@ -22,9 +22,11 @@ export function PageHeader({
 
 export function ErrorState({ title = "Request failed", error }: { title?: string; error: unknown }) {
   return (
-    <Alert className="border-red-200 bg-red-50">
+    <Alert className="border-destructive/35 bg-destructive/10 text-destructive">
       <AlertTitle>{title}</AlertTitle>
-      <AlertDescription>{error instanceof Error ? error.message : "Unexpected error"}</AlertDescription>
+      <AlertDescription className="text-destructive">
+        {error instanceof Error ? error.message : "Unexpected error"}
+      </AlertDescription>
     </Alert>
   );
 }

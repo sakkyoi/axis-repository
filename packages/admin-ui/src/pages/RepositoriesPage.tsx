@@ -124,13 +124,13 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
       {repository.ecosystem === "apt" && (
         <div className="grid gap-3 border-t border-border pt-4">
           <h3 className="text-sm font-semibold">APT client setup</h3>
-          <a className="inline-flex items-center gap-2 text-sm text-blue-700" href={`/repositories/${repository.name}/apt/key.gpg`}>
+          <a className="inline-flex items-center gap-2 text-sm font-medium text-foreground underline-offset-4 hover:text-primary hover:underline" href={`/repositories/${repository.name}/apt/key.gpg`}>
             key.gpg <ExternalLink className="h-3.5 w-3.5" />
           </a>
-          <a className="inline-flex items-center gap-2 text-sm text-blue-700" href={`/repositories/${repository.name}/apt/source`}>
+          <a className="inline-flex items-center gap-2 text-sm font-medium text-foreground underline-offset-4 hover:text-primary hover:underline" href={`/repositories/${repository.name}/apt/source`}>
             source <ExternalLink className="h-3.5 w-3.5" />
           </a>
-          <a className="inline-flex items-center gap-2 text-sm text-blue-700" href={`/repositories/${repository.name}/apt/install`}>
+          <a className="inline-flex items-center gap-2 text-sm font-medium text-foreground underline-offset-4 hover:text-primary hover:underline" href={`/repositories/${repository.name}/apt/install`}>
             install <ExternalLink className="h-3.5 w-3.5" />
           </a>
           {install.data && (
