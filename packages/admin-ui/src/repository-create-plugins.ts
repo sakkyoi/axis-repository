@@ -1,5 +1,5 @@
 import type { CreateRepositoryInput } from "./api/client";
-import type { RepositoryVisibility } from "./api/schemas";
+import type { RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
 import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "./repository-forms";
 
 export type RepositoryCreateStep = "plugin" | "basics" | "config" | "dependencies" | "review";
@@ -21,6 +21,23 @@ export interface RepositoryCreatePlugin {
   validateStep(step: RepositoryCreateStep, state: RepositoryCreateWizardState): string[];
   buildCreateInput(state: RepositoryCreateWizardState): CreateRepositoryInput;
 }
+
+export type RepositoryCreatePluginOption =
+  | {
+      ecosystem: string;
+      displayName: string;
+      description: string;
+      capabilities: string[];
+      supported: true;
+      plugin: RepositoryCreatePlugin;
+    }
+  | {
+      ecosystem: string;
+      displayName: string;
+      description: string;
+      capabilities: string[];
+      supported: false;
+    };
 
 function splitList(value: string): string[] {
   return value
@@ -85,4 +102,30 @@ export function getRepositoryCreatePlugin(ecosystem: string): RepositoryCreatePl
     throw new Error(`Repository create plugin is not configured: ${ecosystem}`);
   }
   return plugin;
+}
+
+export function repositoryCreatePluginOptions(
+  serverPlugins: RepositoryPlugin[],
+  localPlugins: readonly RepositoryCreatePlugin[] = repositoryCreatePlugins,
+): RepositoryCreatePluginOption[] {
+  return serverPlugins.map((serverPlugin) => {
+    const localPlugin = localPlugins.find((candidate) => candidate.ecosystem === serverPlugin.ecosystem);
+    if (localPlugin) {
+      return {
+        ecosystem: serverPlugin.ecosystem,
+        displayName: localPlugin.displayName,
+        description: localPlugin.description,
+        capabilities: [...serverPlugin.capabilities],
+        supported: true,
+        plugin: localPlugin,
+      };
+    }
+    return {
+      ecosystem: serverPlugin.ecosystem,
+      displayName: serverPlugin.ecosystem,
+      description: "Server plugin is enabled, but this admin UI cannot create it yet.",
+      capabilities: [...serverPlugin.capabilities],
+      supported: false,
+    };
+  });
 }

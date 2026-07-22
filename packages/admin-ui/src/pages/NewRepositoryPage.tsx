@@ -1,7 +1,13 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, KeyRound, Package, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useAptSigningKeys, useCreateRepository, useGenerateAptSigningKey, useImportAptSigningKey } from "../api/hooks";
+import {
+  useAptSigningKeys,
+  useCreateRepository,
+  useGenerateAptSigningKey,
+  useImportAptSigningKey,
+  useRepositoryPlugins,
+} from "../api/hooks";
 import type { RepositoryVisibility, SigningKey } from "../api/schemas";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -12,7 +18,9 @@ import { cn } from "../lib/utils";
 import { ADMIN_UI_PATHS } from "../navigation";
 import {
   getRepositoryCreatePlugin,
+  repositoryCreatePluginOptions,
   repositoryCreatePlugins,
+  type RepositoryCreatePluginOption,
   type RepositoryCreateStep,
   type RepositoryCreateWizardState,
 } from "../repository-create-plugins";
@@ -30,8 +38,25 @@ const stepLabels: Record<RepositoryCreateStep, string> = {
 export function NewRepositoryPage() {
   const navigate = useNavigate();
   const createRepository = useCreateRepository();
-  const [selectedEcosystem, setSelectedEcosystem] = useState("apt");
-  const plugin = getRepositoryCreatePlugin(selectedEcosystem);
+  const repositoryPlugins = useRepositoryPlugins();
+  const pluginOptions = useMemo(
+    () => repositoryCreatePluginOptions(repositoryPlugins.data ?? []),
+    [repositoryPlugins.data],
+  );
+  const firstSupportedPlugin = pluginOptions.find((option) => option.supported)?.plugin ?? repositoryCreatePlugins[0];
+  const [selectedEcosystem, setSelectedEcosystem] = useState(firstSupportedPlugin.ecosystem);
+  const selectedOption = pluginOptions.find((option) => option.ecosystem === selectedEcosystem && option.supported);
+  const plugin = selectedOption?.supported ? selectedOption.plugin : firstSupportedPlugin;
+  const canUseSelectedPlugin = Boolean(selectedOption);
+  const summaryTitle = repositoryPlugins.isLoading
+    ? "Loading plugins"
+    : canUseSelectedPlugin ? plugin.displayName : "No supported plugin";
+  const summaryDescription = repositoryPlugins.isLoading
+    ? "Checking which repository plugins this server has enabled."
+    : canUseSelectedPlugin
+      ? plugin.description
+      : "This server has no repository plugin that the current admin UI can create.";
+  const summaryCapabilities = selectedOption?.capabilities ?? [];
   const [stepIndex, setStepIndex] = useState(0);
   const [state, setState] = useState<RepositoryCreateWizardState>(plugin.defaults);
   const [error, setError] = useState("");
@@ -92,7 +117,13 @@ export function NewRepositoryPage() {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="rounded-lg border border-border bg-panel p-5">
           {currentStep === "plugin" && (
-            <PluginStep selectedEcosystem={selectedEcosystem} onSelect={selectPlugin} />
+            <PluginStep
+              options={pluginOptions}
+              isLoading={repositoryPlugins.isLoading}
+              error={repositoryPlugins.error}
+              selectedEcosystem={selectedEcosystem}
+              onSelect={selectPlugin}
+            />
           )}
           {currentStep === "basics" && (
             <BasicsStep
@@ -127,11 +158,11 @@ export function NewRepositoryPage() {
         <aside className="rounded-lg border border-border bg-panel p-4">
           <div className="flex items-center gap-2">
             <Package className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-semibold">{plugin.displayName}</h2>
+            <h2 className="text-sm font-semibold">{summaryTitle}</h2>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">{plugin.description}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{summaryDescription}</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            {plugin.capabilities.map((capability) => (
+            {summaryCapabilities.map((capability) => (
               <span key={capability} className="rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
                 {capability}
               </span>
@@ -158,7 +189,11 @@ export function NewRepositoryPage() {
             Create repository
           </Button>
         ) : (
-          <Button type="button" disabled={stepErrors.length > 0 && currentStep !== "plugin"} onClick={next}>
+          <Button
+            type="button"
+            disabled={(stepErrors.length > 0 && currentStep !== "plugin") || (currentStep === "plugin" && !canUseSelectedPlugin)}
+            onClick={next}
+          >
             Next
             <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
@@ -196,25 +231,51 @@ function StepIndicator({ steps, currentStep }: { steps: RepositoryCreateStep[]; 
   );
 }
 
-function PluginStep({ selectedEcosystem, onSelect }: { selectedEcosystem: string; onSelect: (ecosystem: string) => void }) {
+function PluginStep({
+  options,
+  isLoading,
+  error,
+  selectedEcosystem,
+  onSelect,
+}: {
+  options: RepositoryCreatePluginOption[];
+  isLoading: boolean;
+  error: unknown;
+  selectedEcosystem: string;
+  onSelect: (ecosystem: string) => void;
+}) {
   return (
     <div className="grid gap-4">
       <div>
         <h2 className="text-base font-semibold">Repository plugin</h2>
         <p className="mt-1 text-sm text-muted-foreground">Start by choosing the repository type this instance can provide.</p>
       </div>
+      {isLoading && <div className="text-sm text-muted-foreground">Loading repository plugins...</div>}
+      {Boolean(error) && <ErrorState title="Repository plugins unavailable" error={error} />}
+      {!isLoading && !error && options.length === 0 && (
+        <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+          No repository plugins are enabled on this server.
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-2">
-        {repositoryCreatePlugins.map((plugin) => (
+        {options.map((plugin) => (
           <button
             key={plugin.ecosystem}
             type="button"
+            disabled={!plugin.supported}
             className={cn(
               "grid gap-2 rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-primary hover:bg-muted",
               selectedEcosystem === plugin.ecosystem && "border-primary bg-primary/10",
+              !plugin.supported && "cursor-not-allowed opacity-60 hover:border-border hover:bg-background",
             )}
-            onClick={() => onSelect(plugin.ecosystem)}
+            onClick={() => {
+              if (plugin.supported) onSelect(plugin.ecosystem);
+            }}
           >
-            <span className="text-sm font-semibold">{plugin.displayName}</span>
+            <span className="flex items-center justify-between gap-2 text-sm font-semibold">
+              {plugin.displayName}
+              {!plugin.supported && <span className="text-xs font-medium text-muted-foreground">Unsupported</span>}
+            </span>
             <span className="text-sm text-muted-foreground">{plugin.description}</span>
           </button>
         ))}
