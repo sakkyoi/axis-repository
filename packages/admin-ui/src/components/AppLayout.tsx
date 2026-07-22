@@ -88,7 +88,7 @@ export function AppLayout() {
             </Button>
           </div>
         </header>
-        <main className="min-h-0 overflow-y-auto p-5">
+        <main className="min-h-0 overflow-hidden p-5">
           <Outlet />
         </main>
       </div>

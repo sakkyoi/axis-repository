@@ -35,7 +35,7 @@ export function RepositoriesPage() {
   );
 
   return (
-    <section>
+    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
       <PageHeader
         title="Repositories"
         description="Manage repository visibility, config, and client setup hints."
@@ -48,44 +48,46 @@ export function RepositoriesPage() {
           </div>
         )}
       />
-      {repositories.isError && <ErrorState error={repositories.error} />}
-      {repositories.isLoading && <div className="text-sm text-muted-foreground">Loading repositories...</div>}
-      {repositories.data && repositories.data.length === 0 && <EmptyState message="No repositories have been created." />}
-      {repositories.data && repositories.data.length > 0 && (
-        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
-          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-panel">
-            <table className="w-full border-collapse text-sm">
-              <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Ecosystem</th>
-                  <th className="px-3 py-2">Visibility</th>
-                  <th className="px-3 py-2">Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {repositories.data.map((repository) => (
-                  <tr
-                    key={repository.id}
-                    className="cursor-pointer border-t border-border hover:bg-muted/60"
-                    onClick={() => setSelectedName(repository.name)}
-                  >
-                    <td className="px-3 py-2 font-medium">{repository.name}</td>
-                    <td className="px-3 py-2">{repository.ecosystem}</td>
-                    <td className="px-3 py-2">
-                      <Badge variant={repository.visibility === "public" ? "success" : "default"}>
-                        {repository.visibility}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">{formatDate(repository.updatedAt)}</td>
+      <div className="min-h-0">
+        {repositories.isError && <ErrorState error={repositories.error} />}
+        {repositories.isLoading && <div className="text-sm text-muted-foreground">Loading repositories...</div>}
+        {repositories.data && repositories.data.length === 0 && <EmptyState message="No repositories have been created." />}
+        {repositories.data && repositories.data.length > 0 && (
+          <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+            <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
+              <table className="w-full border-collapse text-sm">
+                <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2">Name</th>
+                    <th className="px-3 py-2">Ecosystem</th>
+                    <th className="px-3 py-2">Visibility</th>
+                    <th className="px-3 py-2">Updated</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {repositories.data.map((repository) => (
+                    <tr
+                      key={repository.id}
+                      className="cursor-pointer border-t border-border hover:bg-muted/60"
+                      onClick={() => setSelectedName(repository.name)}
+                    >
+                      <td className="px-3 py-2 font-medium">{repository.name}</td>
+                      <td className="px-3 py-2">{repository.ecosystem}</td>
+                      <td className="px-3 py-2">
+                        <Badge variant={repository.visibility === "public" ? "success" : "default"}>
+                          {repository.visibility}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">{formatDate(repository.updatedAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {selected && <RepositoryDetail repository={selected} />}
           </div>
-          {selected && <RepositoryDetail repository={selected} />}
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }
@@ -149,7 +151,7 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
   }
 
   return (
-    <aside className="grid min-w-0 gap-4 overflow-hidden rounded-lg border border-border bg-panel p-4">
+    <aside className="grid min-h-0 min-w-0 gap-4 overflow-y-auto overflow-x-hidden rounded-lg border border-border bg-panel p-4">
       <div>
         <h2 className="text-base font-semibold">{repository.name}</h2>
         <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
