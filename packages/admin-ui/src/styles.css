@@ -4,19 +4,44 @@
 
 :root {
   color-scheme: light;
-  --background: 216 29% 97%;
-  --foreground: 222 32% 12%;
-  --panel: 0 0% 100%;
-  --panel-foreground: 222 32% 12%;
-  --muted: 220 18% 93%;
-  --muted-foreground: 218 11% 42%;
-  --primary: 215 28% 17%;
-  --primary-foreground: 0 0% 100%;
+  --background: 48 22% 96%;
+  --foreground: 60 6% 9%;
+  --panel: 48 33% 99%;
+  --panel-foreground: 60 6% 9%;
+  --muted: 45 18% 90%;
+  --muted-foreground: 45 6% 36%;
+  --primary: 72 100% 52%;
+  --primary-foreground: 70 65% 6%;
   --destructive: 0 74% 48%;
   --destructive-foreground: 0 0% 100%;
-  --border: 220 16% 86%;
-  --input: 220 16% 82%;
-  --ring: 212 100% 38%;
+  --border: 42 14% 78%;
+  --input: 42 14% 72%;
+  --ring: 72 100% 42%;
+  --success: 164 76% 28%;
+  --success-foreground: 0 0% 100%;
+  --warning: 39 92% 48%;
+  --warning-foreground: 36 90% 8%;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: 0 0% 6%;
+  --foreground: 60 11% 96%;
+  --panel: 0 0% 9%;
+  --panel-foreground: 60 11% 96%;
+  --muted: 0 0% 13%;
+  --muted-foreground: 45 6% 66%;
+  --primary: 72 100% 63%;
+  --primary-foreground: 70 65% 6%;
+  --destructive: 0 74% 58%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 20%;
+  --input: 0 0% 26%;
+  --ring: 72 100% 63%;
+  --success: 164 70% 44%;
+  --success-foreground: 164 90% 8%;
+  --warning: 42 96% 58%;
+  --warning-foreground: 36 90% 8%;
 }
 
 body {
