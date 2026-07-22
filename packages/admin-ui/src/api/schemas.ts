@@ -16,6 +16,21 @@ export const repositoriesResponseSchema = z.object({
   repositories: z.array(repositorySchema),
 });
 
+export const repositoryPluginSchema = z.object({
+  ecosystem: z.string(),
+  name: z.string(),
+  version: z.string(),
+  capabilities: z.array(z.string()),
+  clientHelpers: z.object({
+    namespace: z.string(),
+    actions: z.array(z.string()),
+  }).optional(),
+});
+
+export const repositoryPluginsResponseSchema = z.object({
+  plugins: z.array(repositoryPluginSchema),
+});
+
 export const publishTokenSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -80,6 +95,7 @@ export const adminSessionSchema = z.object({
 });
 
 export type Repository = z.infer<typeof repositorySchema>;
+export type RepositoryPlugin = z.infer<typeof repositoryPluginSchema>;
 export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;
 export type PublishToken = z.infer<typeof publishTokenSchema>;
 export type PublishTokenCreateResponse = z.infer<typeof publishTokenCreateResponseSchema>;

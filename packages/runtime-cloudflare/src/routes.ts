@@ -564,6 +564,13 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       return jsonResponse(repository, { status: 201 });
     }
   }
+  if (url.pathname === "/admin/repository-plugins") {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method === "GET") {
+      return jsonResponse({ plugins: dependencies.artifactPublisherRegistry.list() });
+    }
+    throw new NotFoundError();
+  }
   const adminRepositoryName = parseAdminResourcePath(request.url, "repositories");
   if (adminRepositoryName) {
     requireAdmin(request, dependencies.adminToken);

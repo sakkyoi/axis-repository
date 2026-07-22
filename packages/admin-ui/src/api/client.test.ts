@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createAxisClient } from "./client";
-import { installInstructionsSchema, publishTokenCreateResponseSchema, repositorySchema } from "./schemas";
+import {
+  installInstructionsSchema,
+  publishTokenCreateResponseSchema,
+  repositoryPluginSchema,
+  repositorySchema,
+} from "./schemas";
 
 describe("admin API schemas", () => {
   it("parses repositories with arbitrary plugin config", () => {
@@ -60,6 +65,21 @@ describe("admin API schemas", () => {
 
     expect(instructions.sourceLine).toContain("noble main");
     expect(instructions.authConfTemplate).toContain("<READ_TOKEN>");
+  });
+
+  it("parses repository plugin metadata", () => {
+    const plugin = repositoryPluginSchema.parse({
+      ecosystem: "apt",
+      name: "apt-signed",
+      version: "0.1.0",
+      capabilities: ["signed-release", "client-helpers"],
+      clientHelpers: {
+        namespace: "apt",
+        actions: ["key.gpg", "source", "install"],
+      },
+    });
+
+    expect(plugin.clientHelpers?.actions).toEqual(["key.gpg", "source", "install"]);
   });
 });
 
@@ -145,6 +165,42 @@ describe("createAxisClient", () => {
         },
       },
     ]);
+  });
+
+  it("lists repository plugin metadata through the admin endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          plugins: [
+            {
+              ecosystem: "apt",
+              name: "apt-signed",
+              version: "0.1.0",
+              capabilities: ["signed-release", "client-helpers"],
+              clientHelpers: {
+                namespace: "apt",
+                actions: ["key.gpg", "source", "install"],
+              },
+            },
+          ],
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    const plugins = await client.listRepositoryPlugins();
+
+    expect(requests).toEqual(["GET /admin/repository-plugins"]);
+    expect(plugins.map((plugin) => plugin.ecosystem)).toEqual(["apt"]);
   });
 
   it("uses APT-scoped endpoints for signing key import and generation", async () => {

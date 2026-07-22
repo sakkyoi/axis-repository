@@ -450,6 +450,40 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("lists repository plugin metadata through admin routes", async () => {
+    const app = createApp();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repository-plugins", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      plugins: [
+        {
+          ecosystem: "apt",
+          name: "apt-signed",
+          version: "0.1.0",
+          capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
+          clientHelpers: {
+            namespace: "apt",
+            actions: ["key.gpg", "source", "install"],
+          },
+        },
+      ],
+    });
+  });
+
+  it("requires admin auth before listing repository plugin metadata", async () => {
+    const app = createApp();
+
+    const response = await app.fetch(new Request("https://axis.example/admin/repository-plugins"));
+
+    expect(response.status).toBe(401);
+  });
+
   it("rejects creating apt repositories with invalid config", async () => {
     const app = createApp();
     const response = await app.fetch(

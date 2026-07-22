@@ -143,12 +143,18 @@ describe("ArtifactPublisherRegistry", () => {
       ecosystem: "apt",
       name: "generic-manifest",
       version: "0.0.0",
-      capabilities: ["generic-manifest"],
+      capabilities: ["generic-manifest", "client-helpers"],
       publisher: apt.publisher,
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
       validatePublishArtifacts: () => {},
       authorizePublish: () => {},
+      clientHelpers: {
+        namespace: "apt",
+        actions: ["install"],
+        isPublic: () => true,
+        handle: async () => new Response("ok"),
+      },
     });
 
     expect(registry.list()).toEqual([
@@ -156,10 +162,15 @@ describe("ArtifactPublisherRegistry", () => {
         ecosystem: "apt",
         name: "generic-manifest",
         version: "0.0.0",
-        capabilities: ["generic-manifest"],
+        capabilities: ["generic-manifest", "client-helpers"],
+        clientHelpers: {
+          namespace: "apt",
+          actions: ["install"],
+        },
       },
     ]);
     expect(registry.list()[0]).not.toHaveProperty("publisher");
+    expect(registry.list()[0]).not.toHaveProperty("handle");
   });
 
   it("returns the plugin registered for an ecosystem", () => {

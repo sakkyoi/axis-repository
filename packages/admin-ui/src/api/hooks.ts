@@ -25,6 +25,14 @@ export function useRepositories() {
   });
 }
 
+export function useRepositoryPlugins() {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["repository-plugins"],
+    queryFn: () => client.listRepositoryPlugins(),
+  });
+}
+
 export function useCreateRepository() {
   const client = useAxisClient();
   const queryClient = useQueryClient();

@@ -18,6 +18,10 @@ export interface PublisherMetadata {
   name: string;
   version: string;
   capabilities: string[];
+  clientHelpers?: {
+    namespace: string;
+    actions: string[];
+  };
 }
 
 export interface RepositoryServingContext {
@@ -104,12 +108,21 @@ export class ArtifactPublisherRegistry implements ArtifactPublisher {
   }
 
   list(): PublisherMetadata[] {
-    return Array.from(this.plugins.values()).map((descriptor) => ({
-      ecosystem: descriptor.ecosystem,
-      name: descriptor.name,
-      version: descriptor.version,
-      capabilities: [...descriptor.capabilities],
-    }));
+    return Array.from(this.plugins.values()).map((descriptor) => {
+      const metadata: PublisherMetadata = {
+        ecosystem: descriptor.ecosystem,
+        name: descriptor.name,
+        version: descriptor.version,
+        capabilities: [...descriptor.capabilities],
+      };
+      if (descriptor.clientHelpers) {
+        metadata.clientHelpers = {
+          namespace: descriptor.clientHelpers.namespace,
+          actions: [...descriptor.clientHelpers.actions],
+        };
+      }
+      return metadata;
+    });
   }
 
   getPlugin(ecosystem: Ecosystem): ArtifactRepositoryPlugin | undefined {

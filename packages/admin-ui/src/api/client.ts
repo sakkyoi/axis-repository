@@ -7,12 +7,14 @@ import {
   publishTokenCreateResponseSchema,
   publishTokenSchema,
   publishTokensResponseSchema,
+  repositoryPluginsResponseSchema,
   repositoriesResponseSchema,
   repositorySchema,
   signingKeySchema,
   signingKeysResponseSchema,
   type PublishTokenCreateResponse,
   type Repository,
+  type RepositoryPlugin,
   type RepositoryVisibility,
   type SigningKey,
   type AptSourceInfo,
@@ -55,6 +57,7 @@ export interface UpdateRepositoryInput {
 export interface AxisClient {
   http: AxiosInstance;
   verifyAdminToken(): Promise<void>;
+  listRepositoryPlugins(): Promise<RepositoryPlugin[]>;
   listRepositories(): Promise<Repository[]>;
   createRepository(input: CreateRepositoryInput): Promise<Repository>;
   getRepository(name: string): Promise<Repository>;
@@ -88,6 +91,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async listRepositories() {
       const response = await http.get("/admin/repositories");
       return repositoriesResponseSchema.parse(response.data).repositories;
+    },
+    async listRepositoryPlugins() {
+      const response = await http.get("/admin/repository-plugins");
+      return repositoryPluginsResponseSchema.parse(response.data).plugins;
     },
     async createRepository(input: CreateRepositoryInput) {
       const response = await http.post("/admin/repositories", input);
