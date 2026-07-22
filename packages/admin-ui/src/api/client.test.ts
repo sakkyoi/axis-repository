@@ -72,4 +72,26 @@ describe("createAxisClient", () => {
     expect(client.http.defaults.baseURL).toBe("https://axis.example");
     expect(client.http.defaults.headers.common.Authorization).toBe("Bearer admin-secret");
   });
+
+  it("verifies admin tokens through the session endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: { ok: true },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await client.verifyAdminToken();
+
+    expect(requests).toEqual(["GET /admin/session"]);
+  });
 });

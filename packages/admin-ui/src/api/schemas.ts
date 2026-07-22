@@ -73,6 +73,10 @@ export const installInstructionsSchema = z.object({
   commands: z.array(z.string()),
 });
 
+export const adminSessionSchema = z.object({
+  ok: z.literal(true),
+});
+
 export type Repository = z.infer<typeof repositorySchema>;
 export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;
 export type PublishToken = z.infer<typeof publishTokenSchema>;

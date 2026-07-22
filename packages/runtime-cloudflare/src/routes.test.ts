@@ -351,6 +351,32 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("verifies valid admin tokens through the admin session route", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/session", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
+  });
+
+  it("rejects invalid admin tokens through the admin session route", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/session", {
+        headers: { authorization: "Bearer wrong-token" },
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "unauthorized", message: "Unauthorized" },
+    });
+  });
+
   it("rejects invalid repository visibility", async () => {
     const app = createApp();
     const response = await app.fetch(

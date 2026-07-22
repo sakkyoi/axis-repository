@@ -2,9 +2,12 @@ import { type FormEvent, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { LogIn } from "lucide-react";
 import { useAuth } from "../auth";
+import { createAxisClient } from "../api/client";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { authenticateAdminLogin } from "../login";
+import { getRuntimeConfig } from "../runtime-config";
 
 interface LoginLocationState {
   from?: string;
@@ -16,6 +19,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const from = (location.state as LoginLocationState | null)?.from ?? "/repositories";
 
@@ -23,14 +27,24 @@ export function LoginPage() {
     return <Navigate to={from} replace />;
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    const trimmed = token.trim();
-    if (!trimmed) {
-      setError("Admin token is required.");
+    setIsVerifying(true);
+    const result = await authenticateAdminLogin({
+      token,
+      login: auth.login,
+      verifyToken: (adminToken) =>
+        createAxisClient({
+          adminToken,
+          baseUrl: getRuntimeConfig().apiBaseUrl,
+        }).verifyAdminToken(),
+    });
+    setIsVerifying(false);
+    if (!result.authenticated) {
+      setError(result.error);
       return;
     }
-    auth.login(trimmed);
+    setError("");
     navigate(from, { replace: true });
   }
 
@@ -58,9 +72,9 @@ export function LoginPage() {
               placeholder="Bearer token value"
             />
           </label>
-          <Button type="submit">
+          <Button type="submit" disabled={isVerifying}>
             <LogIn className="mr-2 h-4 w-4" />
-            Sign in
+            {isVerifying ? "Checking..." : "Sign in"}
           </Button>
         </form>
       </section>

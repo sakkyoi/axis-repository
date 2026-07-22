@@ -2,6 +2,7 @@ import type { AxiosInstance } from "axios";
 import { createHttpClient, type HttpOptions } from "./http";
 import {
   installInstructionsSchema,
+  adminSessionSchema,
   publishTokenCreateResponseSchema,
   publishTokenSchema,
   publishTokensResponseSchema,
@@ -38,6 +39,7 @@ export interface UpdateRepositoryInput {
 
 export interface AxisClient {
   http: AxiosInstance;
+  verifyAdminToken(): Promise<void>;
   listRepositories(): Promise<Repository[]>;
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
@@ -60,6 +62,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
   const http = createHttpClient(options);
   return {
     http,
+    async verifyAdminToken() {
+      const response = await http.get("/admin/session");
+      adminSessionSchema.parse(response.data);
+    },
     async listRepositories() {
       const response = await http.get("/admin/repositories");
       return repositoriesResponseSchema.parse(response.data).repositories;

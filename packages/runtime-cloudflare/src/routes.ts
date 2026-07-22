@@ -475,6 +475,13 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (url.pathname === "/health") {
     return jsonResponse({ ok: true, service: "axis-repository" });
   }
+  if (url.pathname === "/admin/session") {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method === "GET") {
+      return jsonResponse({ ok: true });
+    }
+    throw new NotFoundError();
+  }
   if (url.pathname === "/admin/repositories") {
     requireAdmin(request, dependencies.adminToken);
     if (request.method === "GET") {
