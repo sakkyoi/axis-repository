@@ -4,6 +4,7 @@ import type { PublishSession } from "./api/schemas";
 import {
   publishSessionArtifactSummary,
   publishSessionStatusMeta,
+  repositoryPublishSessionsView,
   sessionsForRepository,
 } from "./repository-publish-sessions-model";
 
@@ -29,6 +30,13 @@ const session = (overrides: Partial<PublishSession>): PublishSession => ({
 });
 
 describe("repository publish sessions model", () => {
+  it("shows the APT publish form even when the repository has no sessions", () => {
+    expect(repositoryPublishSessionsView({ name: "debian-internal", ecosystem: "apt" }, [])).toEqual({
+      sessions: [],
+      showAptPublishForm: true,
+    });
+  });
+
   it("filters sessions for a repository and preserves API ordering", () => {
     expect(
       sessionsForRepository("debian-internal", [

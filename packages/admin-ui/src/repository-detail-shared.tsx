@@ -24,7 +24,7 @@ import { asJson, ErrorState } from "./pages/shared";
 import {
   publishSessionArtifactSummary,
   publishSessionStatusMeta,
-  sessionsForRepository,
+  repositoryPublishSessionsView,
 } from "./repository-publish-sessions-model";
 import type { RepositoryDetailSection } from "./repository-detail-plugins";
 
@@ -96,30 +96,22 @@ export function PublishSessionsSection({
   pluginMetadata: RepositoryPlugin | undefined;
 }) {
   const publishSessions = usePublishSessions();
-  const sessions = sessionsForRepository(repository.name, publishSessions.data ?? []).slice(0, 5);
-
-  if (publishSessions.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading publish sessions...</p>;
-  }
-
-  if (publishSessions.isError) {
-    return <ErrorState title="Publish sessions unavailable" error={publishSessions.error} />;
-  }
-
-  if (sessions.length === 0) {
-    return (
-      <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
-        No publish sessions for this repository.
-      </div>
-    );
-  }
+  const publishSessionsView = repositoryPublishSessionsView(repository, publishSessions.data ?? []);
+  const sessions = publishSessionsView.sessions.slice(0, 5);
 
   return (
     <div className="grid gap-2">
-      {repository.ecosystem === "apt" && <AptPublishArtifactForm repository={repository} />}
-      {sessions.map((session) => (
-        <PublishSessionItem key={session.id} session={session} />
-      ))}
+      {publishSessionsView.showAptPublishForm && <AptPublishArtifactForm repository={repository} />}
+      {publishSessions.isLoading && <p className="text-sm text-muted-foreground">Loading publish sessions...</p>}
+      {publishSessions.isError && <ErrorState title="Publish sessions unavailable" error={publishSessions.error} />}
+      {!publishSessions.isLoading && !publishSessions.isError && sessions.length === 0 && (
+        <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+          No publish sessions for this repository.
+        </div>
+      )}
+      {!publishSessions.isLoading &&
+        !publishSessions.isError &&
+        sessions.map((session) => <PublishSessionItem key={session.id} session={session} />)}
     </div>
   );
 }

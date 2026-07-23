@@ -1,9 +1,22 @@
-import type { PublishSession, PublishSessionStatus } from "./api/schemas";
+import type { PublishSession, PublishSessionStatus, Repository } from "./api/schemas";
 
 export type PublishSessionStatusVariant = "default" | "success" | "warning" | "destructive";
 
 export function sessionsForRepository(repositoryName: string, sessions: PublishSession[]): PublishSession[] {
   return sessions.filter((session) => session.repositoryName === repositoryName);
+}
+
+export function repositoryPublishSessionsView(
+  repository: Pick<Repository, "name" | "ecosystem">,
+  sessions: PublishSession[],
+): {
+  sessions: PublishSession[];
+  showAptPublishForm: boolean;
+} {
+  return {
+    sessions: sessionsForRepository(repository.name, sessions),
+    showAptPublishForm: repository.ecosystem === "apt",
+  };
 }
 
 export function publishSessionStatusMeta(status: PublishSessionStatus): {
