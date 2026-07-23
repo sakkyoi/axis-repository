@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/ta
 import { Textarea } from "../../components/ui/textarea";
 import { ErrorState, formatDate } from "../../pages/shared";
 import type { RepositoryCreateFieldRendererProps } from "../../repository-ui-plugin-types";
-import { activeSigningKeys } from "../../repository-forms";
+import { activeSigningKeys } from "./forms";
 
 export function AptSigningKeyDependencyField({
   field,

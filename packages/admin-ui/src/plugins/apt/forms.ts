@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { CreateRepositoryInput, UpdateRepositoryInput } from "./api/client";
-import type { Repository, RepositoryVisibility, SigningKey } from "./api/schemas";
+import type { CreateRepositoryInput, UpdateRepositoryInput } from "../../api/client";
+import type { Repository, RepositoryVisibility, SigningKey } from "../../api/schemas";
 
 export interface AptRepositoryFormValues {
   name: string;

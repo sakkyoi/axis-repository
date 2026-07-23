@@ -4,8 +4,8 @@ import {
   buildAptRepositoryFormValues,
   buildCreateAptRepositoryInput,
   buildUpdateAptRepositoryInput,
-} from "./repository-forms";
-import type { Repository, SigningKey } from "./api/schemas";
+} from "./forms";
+import type { Repository, SigningKey } from "../../api/schemas";
 
 describe("APT repository forms", () => {
   it("builds create input from typed APT repository values", () => {

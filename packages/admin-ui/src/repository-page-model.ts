@@ -1,4 +1,4 @@
-import type { InstallInstructions, Repository } from "./api/schemas";
+import type { Repository } from "./api/schemas";
 
 export function initialRepositorySelection(_repositories: Repository[]): string | undefined {
   return undefined;
@@ -12,8 +12,4 @@ export function repositoryRowStateClass(repositoryName: string, selectedName: st
 
 export function repositoryDetailBodyClass(): string {
   return "grid min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4";
-}
-
-export function aptInstallCommandText(instructions: InstallInstructions): string {
-  return instructions.script;
 }

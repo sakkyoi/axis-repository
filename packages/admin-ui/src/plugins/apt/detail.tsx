@@ -14,7 +14,7 @@ import {
   buildAptRepositoryFormValues,
   buildUpdateAptRepositoryInput,
   type AptRepositoryFormValues,
-} from "../../repository-forms";
+} from "./forms";
 
 export function AptSettingsSection({
   repository,

@@ -1,7 +1,7 @@
 import { aptPluginManifest, type PluginRepositoryConfigFieldManifest } from "@axis-repository/core/plugin-manifests";
 import type { RepositoryCreatePlugin, RepositoryCreateWizardState } from "../../repository-ui-plugin-types";
 import { repositoryCreateStepsForConfig } from "../../repository-create-steps";
-import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "../../repository-forms";
+import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "./forms";
 
 function splitList(value: string): string[] {
   return value
