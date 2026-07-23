@@ -68,6 +68,7 @@ export interface AxisClient {
   getAptSourceInfo(name: string): Promise<AptSourceInfo>;
   getAptInstallInstructions(name: string): Promise<InstallInstructions>;
   getPypiClientInfo(name: string): Promise<PypiClientInfo>;
+  getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown>;
   listPublishTokens(): Promise<ReturnType<typeof publishTokensResponseSchema.parse>["publishTokens"]>;
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
   createPublishToken(input: CreatePublishTokenInput): Promise<PublishTokenCreateResponse>;
@@ -126,6 +127,12 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async getPypiClientInfo(name: string) {
       const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/pypi/client/simple-url`);
       return pypiClientInfoSchema.parse(response.data);
+    },
+    async getRepositoryClientHelper(name: string, namespace: string, action: string) {
+      const response = await http.get(
+        `/admin/repositories/${encodePathSegment(name)}/${encodePathSegment(namespace)}/client/${encodePathSegment(action)}`,
+      );
+      return response.data;
     },
     async listPublishTokens() {
       const response = await http.get("/admin/publish-tokens");

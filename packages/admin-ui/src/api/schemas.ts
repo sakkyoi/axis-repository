@@ -2,6 +2,17 @@ import { z } from "zod";
 
 export const repositoryVisibilitySchema = z.enum(["private", "public"]);
 
+export const repositoryClientHelperResponseKindSchema = z.enum(["json", "shell", "text"]);
+
+export const repositoryClientHelperActionSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  responseKind: repositoryClientHelperResponseKindSchema,
+  defaultOpen: z.boolean(),
+  public: z.boolean(),
+  displayPath: z.string().optional(),
+});
+
 export const repositorySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -23,7 +34,7 @@ export const repositoryPluginSchema = z.object({
   capabilities: z.array(z.string()),
   clientHelpers: z.object({
     namespace: z.string(),
-    actions: z.array(z.string()),
+    actions: z.array(repositoryClientHelperActionSchema),
   }).optional(),
 });
 
@@ -102,6 +113,7 @@ export const adminSessionSchema = z.object({
 });
 
 export type Repository = z.infer<typeof repositorySchema>;
+export type RepositoryClientHelperAction = z.infer<typeof repositoryClientHelperActionSchema>;
 export type RepositoryPlugin = z.infer<typeof repositoryPluginSchema>;
 export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;
 export type PublishToken = z.infer<typeof publishTokenSchema>;

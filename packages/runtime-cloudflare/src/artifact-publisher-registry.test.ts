@@ -151,7 +151,15 @@ describe("ArtifactPublisherRegistry", () => {
       authorizePublish: () => {},
       clientHelpers: {
         namespace: "apt",
-        actions: ["install"],
+        actions: [
+          {
+            name: "install",
+            label: "Install",
+            responseKind: "shell",
+            defaultOpen: true,
+            public: true,
+          },
+        ],
         isPublic: () => true,
         handle: async () => new Response("ok"),
       },
@@ -165,7 +173,15 @@ describe("ArtifactPublisherRegistry", () => {
         capabilities: ["generic-manifest", "client-helpers"],
         clientHelpers: {
           namespace: "apt",
-          actions: ["install"],
+          actions: [
+            {
+              name: "install",
+              label: "Install",
+              responseKind: "shell",
+              defaultOpen: true,
+              public: true,
+            },
+          ],
         },
       },
     ]);
@@ -268,14 +284,38 @@ describe("ArtifactPublisherRegistry", () => {
       authorizePublish: () => {},
       clientHelpers: {
         namespace: "apt",
-        actions: ["install"],
+        actions: [
+          {
+            name: "install",
+            label: "Install",
+            responseKind: "shell",
+            defaultOpen: true,
+            public: true,
+          },
+        ],
         isPublic: () => true,
         handle: async () => new Response("ok"),
       },
     });
 
-    registry.requirePlugin("apt").clientHelpers?.actions.push("mutated");
+    registry.requirePlugin("apt").clientHelpers?.actions.push({
+      name: "mutated",
+      label: "Mutated",
+      responseKind: "text",
+      defaultOpen: false,
+      public: true,
+    });
 
-    expect(registry.requirePlugin("apt").clientHelpers?.actions).toEqual(["install"]);
+    registry.requirePlugin("apt").clientHelpers!.actions[0]!.label = "Mutated";
+
+    expect(registry.requirePlugin("apt").clientHelpers?.actions).toEqual([
+      {
+        name: "install",
+        label: "Install",
+        responseKind: "shell",
+        defaultOpen: true,
+        public: true,
+      },
+    ]);
   });
 });

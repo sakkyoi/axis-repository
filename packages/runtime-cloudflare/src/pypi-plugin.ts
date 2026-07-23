@@ -38,7 +38,16 @@ export function createPypiPlugin(input?: { objectStore?: RepositoryObjectStore }
     authorizePublish: () => {},
     clientHelpers: {
       namespace: "pypi",
-      actions: ["simple-url"],
+      actions: [
+        {
+          name: "simple-url",
+          label: "Simple API URL",
+          responseKind: "text",
+          defaultOpen: true,
+          public: true,
+          displayPath: "simpleUrl",
+        },
+      ],
       isPublic: (action) => action === "simple-url",
       handle: async ({ repository, action, origin }) => {
         if (action !== "simple-url") {

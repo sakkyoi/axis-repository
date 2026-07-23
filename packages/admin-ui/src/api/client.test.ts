@@ -97,11 +97,27 @@ describe("admin API schemas", () => {
       capabilities: ["signed-release", "client-helpers"],
       clientHelpers: {
         namespace: "apt",
-        actions: ["key.gpg", "source", "install"],
+        actions: [
+          {
+            name: "install",
+            label: "Install",
+            responseKind: "shell",
+            defaultOpen: true,
+            public: true,
+          },
+        ],
       },
     });
 
-    expect(plugin.clientHelpers?.actions).toEqual(["key.gpg", "source", "install"]);
+    expect(plugin.clientHelpers?.actions).toEqual([
+      {
+        name: "install",
+        label: "Install",
+        responseKind: "shell",
+        defaultOpen: true,
+        public: true,
+      },
+    ]);
   });
 });
 
@@ -207,7 +223,15 @@ describe("createAxisClient", () => {
               capabilities: ["signed-release", "client-helpers"],
               clientHelpers: {
                 namespace: "apt",
-                actions: ["key.gpg", "source", "install"],
+                actions: [
+                  {
+                    name: "install",
+                    label: "Install",
+                    responseKind: "shell",
+                    defaultOpen: true,
+                    public: true,
+                  },
+                ],
               },
             },
           ],
@@ -378,6 +402,30 @@ describe("createAxisClient", () => {
     const info = await client.getPypiClientInfo("python-internal");
 
     expect(info.pipIndexUrl).toBe("https://axis.example/repositories/python-internal/simple/");
+    expect(requests).toEqual([
+      "GET /admin/repositories/python-internal/pypi/client/simple-url",
+    ]);
+  });
+
+  it("uses a generic admin-scoped endpoint for repository client helpers", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: { script: "pip install demo" },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.getRepositoryClientHelper("python-internal", "pypi", "simple-url"))
+      .resolves.toEqual({ script: "pip install demo" });
     expect(requests).toEqual([
       "GET /admin/repositories/python-internal/pypi/client/simple-url",
     ]);

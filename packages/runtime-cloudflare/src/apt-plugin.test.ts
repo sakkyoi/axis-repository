@@ -77,7 +77,29 @@ describe("APT plugin lifecycle", () => {
     });
 
     expect(plugin.clientHelpers?.namespace).toBe("apt");
-    expect(plugin.clientHelpers?.actions).toEqual(["key.gpg", "source", "install"]);
+    expect(plugin.clientHelpers?.actions).toEqual([
+      {
+        name: "key.gpg",
+        label: "key.gpg",
+        responseKind: "text",
+        defaultOpen: false,
+        public: true,
+      },
+      {
+        name: "source",
+        label: "source",
+        responseKind: "json",
+        defaultOpen: false,
+        public: true,
+      },
+      {
+        name: "install",
+        label: "install",
+        responseKind: "shell",
+        defaultOpen: true,
+        public: true,
+      },
+    ]);
     expect(plugin.clientHelpers?.isPublic("key.gpg")).toBe(true);
     const keyResponse = await plugin.clientHelpers?.handle({
       repository: repository(),

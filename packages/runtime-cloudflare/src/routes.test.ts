@@ -471,7 +471,29 @@ describe("Cloudflare runtime routes", () => {
           capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
           clientHelpers: {
             namespace: "apt",
-            actions: ["key.gpg", "source", "install"],
+            actions: [
+              {
+                name: "key.gpg",
+                label: "key.gpg",
+                responseKind: "text",
+                defaultOpen: false,
+                public: true,
+              },
+              {
+                name: "source",
+                label: "source",
+                responseKind: "json",
+                defaultOpen: false,
+                public: true,
+              },
+              {
+                name: "install",
+                label: "install",
+                responseKind: "shell",
+                defaultOpen: true,
+                public: true,
+              },
+            ],
           },
         },
         {
@@ -481,7 +503,16 @@ describe("Cloudflare runtime routes", () => {
           capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
           clientHelpers: {
             namespace: "pypi",
-            actions: ["simple-url"],
+            actions: [
+              {
+                name: "simple-url",
+                label: "Simple API URL",
+                responseKind: "text",
+                defaultOpen: true,
+                public: true,
+                displayPath: "simpleUrl",
+              },
+            ],
           },
         },
       ],
@@ -899,7 +930,15 @@ describe("Cloudflare runtime routes", () => {
       authorizePublish: () => {},
       clientHelpers: {
         namespace: "simple",
-        actions: ["install"],
+        actions: [
+          {
+            name: "install",
+            label: "Install",
+            responseKind: "text",
+            defaultOpen: true,
+            public: true,
+          },
+        ],
         isPublic: () => true,
         handle: async ({ repository, action }) =>
           new Response(`${repository.ecosystem}:${repository.name}:${action}`),
@@ -958,7 +997,15 @@ describe("Cloudflare runtime routes", () => {
       authorizePublish: () => {},
       clientHelpers: {
         namespace: "simple",
-        actions: ["tokened"],
+        actions: [
+          {
+            name: "tokened",
+            label: "Tokened",
+            responseKind: "text",
+            defaultOpen: true,
+            public: false,
+          },
+        ],
         isPublic: () => false,
         handle: async () => new Response("private-helper"),
       },

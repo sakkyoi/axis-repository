@@ -67,7 +67,29 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
     },
     clientHelpers: {
       namespace: "apt",
-      actions: ["key.gpg", "source", "install"],
+      actions: [
+        {
+          name: "key.gpg",
+          label: "key.gpg",
+          responseKind: "text",
+          defaultOpen: false,
+          public: true,
+        },
+        {
+          name: "source",
+          label: "source",
+          responseKind: "json",
+          defaultOpen: false,
+          public: true,
+        },
+        {
+          name: "install",
+          label: "install",
+          responseKind: "shell",
+          defaultOpen: true,
+          public: true,
+        },
+      ],
       isPublic: (action) => action === "key.gpg" || action === "source" || action === "install",
       handle: async ({ repository, action, origin, signingKeys }) => {
         const repositoryInfo = aptClientRepositoryInfo(repository);

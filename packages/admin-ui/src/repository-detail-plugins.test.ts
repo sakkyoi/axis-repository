@@ -3,6 +3,7 @@ import {
   getRepositoryDetailPlugin,
   pypiInstallCommandText,
   pypiSimpleIndexUrl,
+  repositoryClientHelperDisplayText,
   repositoryDetailPlugins,
 } from "./repository-detail-plugins";
 
@@ -44,5 +45,21 @@ describe("repository detail plugins", () => {
       "  --index-url \"https://axis:${AXIS_PYPI_TOKEN}@axis.example/repositories/python-internal/simple/\" \\",
       "  <package>",
     ].join("\n"));
+  });
+
+  it("formats generic repository client helper responses by metadata kind", () => {
+    expect(repositoryClientHelperDisplayText({ responseKind: "shell" }, { script: "sudo apt update" }))
+      .toBe("sudo apt update");
+    expect(repositoryClientHelperDisplayText({ responseKind: "json" }, { simpleUrl: "https://axis.example/simple/" }))
+      .toBe("{\n  \"simpleUrl\": \"https://axis.example/simple/\"\n}");
+    expect(repositoryClientHelperDisplayText({ responseKind: "text" }, "plain text"))
+      .toBe("plain text");
+  });
+
+  it("formats a selected client helper response field when the plugin provides a display path", () => {
+    expect(repositoryClientHelperDisplayText(
+      { responseKind: "text", displayPath: "simpleUrl" },
+      { simpleUrl: "https://axis.example/repositories/python/simple/" },
+    )).toBe("https://axis.example/repositories/python/simple/");
   });
 });

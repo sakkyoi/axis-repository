@@ -88,6 +88,20 @@ export function usePypiClientInfo(repositoryName: string | undefined, enabled: b
   });
 }
 
+export function useRepositoryClientHelper(
+  repositoryName: string | undefined,
+  namespace: string | undefined,
+  action: string | undefined,
+  enabled: boolean,
+) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["repository-client-helper", repositoryName, namespace, action],
+    queryFn: () => client.getRepositoryClientHelper(repositoryName ?? "", namespace ?? "", action ?? ""),
+    enabled: Boolean(repositoryName && namespace && action) && enabled,
+  });
+}
+
 export function usePublishTokens() {
   const client = useAxisClient();
   return useQuery({

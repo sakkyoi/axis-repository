@@ -3,8 +3,8 @@ import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { useRepositories } from "../api/hooks";
-import type { Repository } from "../api/schemas";
+import { useRepositories, useRepositoryPlugins } from "../api/hooks";
+import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { ADMIN_UI_PATHS } from "../navigation";
 import { repositoryDetailBodyClass, repositoryRowStateClass } from "../repository-page-model";
 import { GenericRepositoryDetail, getRepositoryDetailPlugin } from "../repository-detail-plugins";
@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 export function RepositoriesPage() {
   const navigate = useNavigate();
   const repositories = useRepositories();
+  const repositoryPlugins = useRepositoryPlugins();
   const [selectedName, setSelectedName] = useState<string>();
   const selected = useMemo(
     () => repositories.data?.find((repository) => repository.name === selectedName),
@@ -74,7 +75,12 @@ export function RepositoriesPage() {
               </table>
               )}
             </div>
-            {selected ? <RepositoryDetail repository={selected} /> : <RepositoryDetailEmptyState />}
+            {selected ? (
+              <RepositoryDetail
+                repository={selected}
+                pluginMetadata={repositoryPlugins.data?.find((plugin) => plugin.ecosystem === selected.ecosystem)}
+              />
+            ) : <RepositoryDetailEmptyState />}
           </div>
         )}
       </div>
@@ -95,7 +101,13 @@ function RepositoryDetailEmptyState() {
   );
 }
 
-function RepositoryDetail({ repository }: { repository: Repository }) {
+function RepositoryDetail({
+  repository,
+  pluginMetadata,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
   const plugin = getRepositoryDetailPlugin(repository.ecosystem);
   const Detail = plugin?.Detail ?? GenericRepositoryDetail;
 
@@ -106,7 +118,7 @@ function RepositoryDetail({ repository }: { repository: Repository }) {
         <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
       </div>
       <div className={repositoryDetailBodyClass()}>
-        <Detail repository={repository} />
+        <Detail repository={repository} pluginMetadata={pluginMetadata} />
       </div>
     </aside>
   );

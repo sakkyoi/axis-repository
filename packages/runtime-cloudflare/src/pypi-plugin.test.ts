@@ -31,7 +31,16 @@ describe("PyPI plugin lifecycle", () => {
     const plugin = createPypiPlugin();
 
     expect(plugin.clientHelpers?.namespace).toBe("pypi");
-    expect(plugin.clientHelpers?.actions).toEqual(["simple-url"]);
+    expect(plugin.clientHelpers?.actions).toEqual([
+      {
+        name: "simple-url",
+        label: "Simple API URL",
+        responseKind: "text",
+        defaultOpen: true,
+        public: true,
+        displayPath: "simpleUrl",
+      },
+    ]);
     expect(plugin.clientHelpers?.isPublic("simple-url")).toBe(true);
     const response = await plugin.clientHelpers?.handle({
       repository: {

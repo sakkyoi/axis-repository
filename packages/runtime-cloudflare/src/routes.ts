@@ -443,6 +443,13 @@ function repositoryClientHelpers(dependencies: AppDependencies, repository: Repo
   return helpers;
 }
 
+function hasRepositoryClientHelperAction(
+  helpers: NonNullable<ReturnType<typeof repositoryClientHelpers>>,
+  action: string,
+): boolean {
+  return helpers.actions.some((helperAction) => helperAction.name === action);
+}
+
 function repositoryClientHelperContext(dependencies: AppDependencies, origin: string) {
   return {
     origin,
@@ -633,7 +640,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     requireAdmin(request, dependencies.adminToken);
     const repository = await dependencies.repositoryService.getByName(adminClientHelperPath.repositoryName);
     const helpers = repositoryClientHelpers(dependencies, repository, adminClientHelperPath.namespace);
-    if (!helpers || !helpers.actions.includes(adminClientHelperPath.action)) {
+    if (!helpers || !hasRepositoryClientHelperAction(helpers, adminClientHelperPath.action)) {
       throw new NotFoundError();
     }
     return helpers.handle({
@@ -739,7 +746,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const repository = await dependencies.repositoryService.getByName(clientHelperPath.repositoryName);
     const helpers = repositoryClientHelpers(dependencies, repository, clientHelperPath.namespace);
     if (helpers) {
-      if (!helpers.actions.includes(clientHelperPath.action)) {
+      if (!hasRepositoryClientHelperAction(helpers, clientHelperPath.action)) {
         throw new NotFoundError();
       }
       if (!helpers.isPublic(clientHelperPath.action)) {

@@ -13,6 +13,17 @@ export interface RepositoryClientHelperSigningKey {
   publicKeyArmored: string;
 }
 
+export type RepositoryClientHelperResponseKind = "json" | "shell" | "text";
+
+export interface RepositoryClientHelperAction {
+  name: string;
+  label: string;
+  responseKind: RepositoryClientHelperResponseKind;
+  defaultOpen: boolean;
+  public: boolean;
+  displayPath?: string;
+}
+
 export interface PublisherMetadata {
   ecosystem: Ecosystem;
   name: string;
@@ -20,7 +31,7 @@ export interface PublisherMetadata {
   capabilities: string[];
   clientHelpers?: {
     namespace: string;
-    actions: string[];
+    actions: RepositoryClientHelperAction[];
   };
 }
 
@@ -58,7 +69,7 @@ export interface RepositoryClientHelperInput extends RepositoryClientHelperConte
 
 export interface RepositoryClientHelpers {
   namespace: string;
-  actions: string[];
+  actions: RepositoryClientHelperAction[];
   isPublic(action: string): boolean;
   handle(input: RepositoryClientHelperInput): Promise<Response>;
 }
@@ -82,7 +93,7 @@ function clonePlugin(descriptor: ArtifactRepositoryPlugin): ArtifactRepositoryPl
       ? {
           clientHelpers: {
             ...descriptor.clientHelpers,
-            actions: [...descriptor.clientHelpers.actions],
+            actions: descriptor.clientHelpers.actions.map((action) => ({ ...action })),
           },
         }
       : {}),
@@ -118,7 +129,7 @@ export class ArtifactPublisherRegistry implements ArtifactPublisher {
       if (descriptor.clientHelpers) {
         metadata.clientHelpers = {
           namespace: descriptor.clientHelpers.namespace,
-          actions: [...descriptor.clientHelpers.actions],
+          actions: descriptor.clientHelpers.actions.map((action) => ({ ...action })),
         };
       }
       return metadata;

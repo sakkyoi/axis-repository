@@ -1,19 +1,16 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { Save } from "lucide-react";
 import {
-  useAptInstallInstructions,
   useAptSigningKeys,
-  useAptSigningPublicKey,
-  useAptSourceInfo,
   usePypiClientInfo,
+  useRepositoryClientHelper,
   useUpdateRepository,
 } from "./api/hooks";
-import type { Repository, RepositoryVisibility, SigningKey } from "./api/schemas";
+import type { Repository, RepositoryClientHelperAction, RepositoryPlugin, RepositoryVisibility, SigningKey } from "./api/schemas";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Textarea } from "./components/ui/textarea";
-import { aptInstallCommandText } from "./repository-page-model";
 import {
   activeSigningKeys,
   buildAptRepositoryFormValues,
@@ -26,10 +23,10 @@ import { asJson, EmptyState, ErrorState } from "./pages/shared";
 export interface RepositoryDetailPlugin {
   ecosystem: string;
   displayName: string;
-  Detail: ComponentType<{ repository: Repository }>;
+  Detail: ComponentType<{ repository: Repository; pluginMetadata: RepositoryPlugin | undefined }>;
 }
 
-export function GenericRepositoryDetail({ repository }: { repository: Repository }) {
+export function GenericRepositoryDetail({ repository }: { repository: Repository; pluginMetadata: RepositoryPlugin | undefined }) {
   const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
   const [config, setConfig] = useState(asJson(repository.config));
   const [configError, setConfigError] = useState("");
@@ -80,15 +77,18 @@ export function GenericRepositoryDetail({ repository }: { repository: Repository
   );
 }
 
-function AptRepositoryDetail({ repository }: { repository: Repository }) {
+function AptRepositoryDetail({
+  repository,
+  pluginMetadata,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
   const [config, setConfig] = useState(asJson(repository.config));
   const [configError, setConfigError] = useState("");
   const [aptValues, setAptValues] = useState<AptRepositoryFormValues>(() => buildAptRepositoryFormValues(repository));
   const [aptError, setAptError] = useState("");
   const updateRepository = useUpdateRepository();
-  const install = useAptInstallInstructions(repository.name, true);
-  const publicKey = useAptSigningPublicKey(repository.name, true);
-  const source = useAptSourceInfo(repository.name, true);
   const signingKeysQuery = useAptSigningKeys(repository.name, true);
   const signingKeys = signingKeysQuery.data ?? [];
   const activeKeys = activeSigningKeys(signingKeys);
@@ -167,24 +167,11 @@ function AptRepositoryDetail({ repository }: { repository: Repository }) {
           <AptSigningKeyList repositoryName={repository.name} signingKeys={signingKeys} />
         </div>
       </details>
-      <div className="grid gap-3 border-t border-border pt-4">
-        <h3 className="text-sm font-semibold">APT client setup</h3>
-        <details className="min-w-0">
-          <summary className="cursor-pointer text-sm font-medium">key.gpg</summary>
-          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{publicKey.data ?? "Loading..."}</pre>
-        </details>
-        <details className="min-w-0">
-          <summary className="cursor-pointer text-sm font-medium">source</summary>
-          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{source.data ? asJson(source.data) : "Loading..."}</pre>
-        </details>
-        <details className="min-w-0" open>
-          <summary className="cursor-pointer text-sm font-medium">install</summary>
-          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{install.data ? aptInstallCommandText(install.data) : "Loading..."}</pre>
-        </details>
-        {publicKey.isError && <ErrorState title="APT key unavailable" error={publicKey.error} />}
-        {source.isError && <ErrorState title="APT source unavailable" error={source.error} />}
-        {install.isError && <ErrorState title="APT install unavailable" error={install.error} />}
-      </div>
+      <RepositoryClientHelperSetup
+        repositoryName={repository.name}
+        title="APT client setup"
+        clientHelpers={pluginMetadata?.clientHelpers}
+      />
     </>
   );
 }
@@ -259,6 +246,74 @@ function signingKeyOptions(activeKeys: SigningKey[], allKeys: SigningKey[], curr
   return current ? [current, ...activeKeys] : activeKeys;
 }
 
+function shellScriptFromHelperResponse(data: unknown): string | undefined {
+  if (!data || typeof data !== "object" || Array.isArray(data) || !("script" in data)) return undefined;
+  const script = (data as { script?: unknown }).script;
+  return typeof script === "string" ? script : undefined;
+}
+
+export function repositoryClientHelperDisplayText(
+  action: Pick<RepositoryClientHelperAction, "responseKind" | "displayPath">,
+  data: unknown,
+): string {
+  const displayData = action.displayPath && data && typeof data === "object" && !Array.isArray(data)
+    ? (data as Record<string, unknown>)[action.displayPath]
+    : data;
+  if (action.responseKind === "shell") {
+    return shellScriptFromHelperResponse(displayData) ?? (typeof displayData === "string" ? displayData : asJson(displayData));
+  }
+  if (action.responseKind === "json") {
+    return asJson(displayData);
+  }
+  return typeof displayData === "string" ? displayData : asJson(displayData);
+}
+
+function RepositoryClientHelperSetup({
+  repositoryName,
+  title,
+  clientHelpers,
+}: {
+  repositoryName: string;
+  title: string;
+  clientHelpers: RepositoryPlugin["clientHelpers"];
+}) {
+  if (!clientHelpers || clientHelpers.actions.length === 0) return null;
+  return (
+    <div className="grid gap-3 border-t border-border pt-4">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      {clientHelpers.actions.map((action) => (
+        <RepositoryClientHelperItem
+          key={action.name}
+          repositoryName={repositoryName}
+          namespace={clientHelpers.namespace}
+          action={action}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RepositoryClientHelperItem({
+  repositoryName,
+  namespace,
+  action,
+}: {
+  repositoryName: string;
+  namespace: string;
+  action: RepositoryClientHelperAction;
+}) {
+  const helper = useRepositoryClientHelper(repositoryName, namespace, action.name, true);
+  return (
+    <details className="min-w-0" open={action.defaultOpen}>
+      <summary className="cursor-pointer text-sm font-medium">{action.label}</summary>
+      <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
+        {helper.data !== undefined ? repositoryClientHelperDisplayText(action, helper.data) : "Loading..."}
+      </pre>
+      {helper.isError && <ErrorState title={`${action.label} unavailable`} error={helper.error} />}
+    </details>
+  );
+}
+
 export function pypiSimpleIndexUrl(repository: Repository): string {
   return `/repositories/${repository.name}/simple/`;
 }
@@ -292,7 +347,13 @@ export function pypiInstallCommandText(repository: Repository, pipIndexUrl = pyp
   ].join("\n");
 }
 
-function PypiRepositoryDetail({ repository }: { repository: Repository }) {
+function PypiRepositoryDetail({
+  repository,
+  pluginMetadata,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
   const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
   const updateRepository = useUpdateRepository();
   const clientInfo = usePypiClientInfo(repository.name, true);
@@ -326,10 +387,14 @@ function PypiRepositoryDetail({ repository }: { repository: Repository }) {
       {updateRepository.isError && <ErrorState error={updateRepository.error} />}
       <div className="grid gap-3 border-t border-border pt-4">
         <h3 className="text-sm font-semibold">PyPI client setup</h3>
-        <details className="min-w-0" open>
-          <summary className="cursor-pointer text-sm font-medium">Simple API URL</summary>
-          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{clientInfo.data?.simpleUrl ?? "Loading..."}</pre>
-        </details>
+        {pluginMetadata?.clientHelpers?.actions.map((action) => (
+          <RepositoryClientHelperItem
+            key={action.name}
+            repositoryName={repository.name}
+            namespace={pluginMetadata.clientHelpers!.namespace}
+            action={action}
+          />
+        ))}
         <details className="min-w-0" open>
           <summary className="cursor-pointer text-sm font-medium">pip install</summary>
           <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{clientInfo.data ? pypiInstallCommandText({ ...repository, visibility }, clientInfo.data.pipIndexUrl) : "Loading..."}</pre>
