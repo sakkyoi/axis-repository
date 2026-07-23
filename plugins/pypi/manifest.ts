@@ -1,4 +1,4 @@
-import type { RepositoryPluginManifest } from "../../packages/core/src/plugin-manifests";
+import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
 
 export const pypiPluginManifest = {
   ecosystem: "pypi",
