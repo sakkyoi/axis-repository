@@ -4,6 +4,7 @@ import {
   aptSourceInfoSchema,
   installInstructionsSchema,
   adminSessionSchema,
+  pypiClientInfoSchema,
   publishTokenCreateResponseSchema,
   publishTokenSchema,
   publishTokensResponseSchema,
@@ -19,6 +20,7 @@ import {
   type SigningKey,
   type AptSourceInfo,
   type InstallInstructions,
+  type PypiClientInfo,
 } from "./schemas";
 
 export interface CreatePublishTokenInput {
@@ -65,6 +67,7 @@ export interface AxisClient {
   getAptSigningPublicKey(name: string): Promise<string>;
   getAptSourceInfo(name: string): Promise<AptSourceInfo>;
   getAptInstallInstructions(name: string): Promise<InstallInstructions>;
+  getPypiClientInfo(name: string): Promise<PypiClientInfo>;
   listPublishTokens(): Promise<ReturnType<typeof publishTokensResponseSchema.parse>["publishTokens"]>;
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
   createPublishToken(input: CreatePublishTokenInput): Promise<PublishTokenCreateResponse>;
@@ -119,6 +122,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async getAptInstallInstructions(name: string) {
       const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/apt/client/install`);
       return installInstructionsSchema.parse(response.data);
+    },
+    async getPypiClientInfo(name: string) {
+      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/pypi/client/simple-url`);
+      return pypiClientInfoSchema.parse(response.data);
     },
     async listPublishTokens() {
       const response = await http.get("/admin/publish-tokens");

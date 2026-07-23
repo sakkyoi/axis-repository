@@ -35,13 +35,13 @@ describe("repository detail plugins", () => {
     };
 
     expect(pypiSimpleIndexUrl(repository)).toBe("/repositories/python-internal/simple/");
-    expect(pypiInstallCommandText(repository)).toBe([
+    expect(pypiInstallCommandText(repository, "https://axis.example/repositories/python-internal/simple/")).toBe([
       "# Use a read token for private repositories.",
       "export AXIS_PYPI_TOKEN=\"<READ_TOKEN>\"",
       "",
       "# Install packages from this repository.",
       "pip install \\",
-      "  --index-url \"https://axis:${AXIS_PYPI_TOKEN}@<HOST>/repositories/python-internal/simple/\" \\",
+      "  --index-url \"https://axis:${AXIS_PYPI_TOKEN}@axis.example/repositories/python-internal/simple/\" \\",
       "  <package>",
     ].join("\n"));
   });

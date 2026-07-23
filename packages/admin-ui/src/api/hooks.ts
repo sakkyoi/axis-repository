@@ -79,6 +79,15 @@ export function useAptSourceInfo(repositoryName: string | undefined, enabled: bo
   });
 }
 
+export function usePypiClientInfo(repositoryName: string | undefined, enabled: boolean) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["pypi-client-info", repositoryName],
+    queryFn: () => client.getPypiClientInfo(repositoryName ?? ""),
+    enabled: Boolean(repositoryName) && enabled,
+  });
+}
+
 export function usePublishTokens() {
   const client = useAxisClient();
   return useQuery({

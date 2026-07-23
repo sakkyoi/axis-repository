@@ -3,6 +3,7 @@ import { createAxisClient } from "./client";
 import { serverErrorMessage } from "./http";
 import {
   installInstructionsSchema,
+  pypiClientInfoSchema,
   publishTokenCreateResponseSchema,
   repositoryPluginSchema,
   repositorySchema,
@@ -75,6 +76,17 @@ describe("admin API schemas", () => {
 
     expect(instructions.sourceLine).toContain("noble main");
     expect(instructions.authConfTemplate).toContain("<READ_TOKEN>");
+  });
+
+  it("parses PyPI client helper information", () => {
+    const info = pypiClientInfoSchema.parse({
+      repository: "python-internal",
+      ecosystem: "pypi",
+      simpleUrl: "https://axis.example/repositories/python-internal/simple/",
+      pipIndexUrl: "https://axis.example/repositories/python-internal/simple/",
+    });
+
+    expect(info.pipIndexUrl).toBe("https://axis.example/repositories/python-internal/simple/");
   });
 
   it("parses repository plugin metadata", () => {
@@ -338,6 +350,36 @@ describe("createAxisClient", () => {
       "GET /admin/repositories/debian-private/apt/client/key.gpg",
       "GET /admin/repositories/debian-private/apt/client/source",
       "GET /admin/repositories/debian-private/apt/client/install",
+    ]);
+  });
+
+  it("uses admin-scoped endpoints for PyPI client helper previews", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          repository: "python-internal",
+          ecosystem: "pypi",
+          simpleUrl: "https://axis.example/repositories/python-internal/simple/",
+          pipIndexUrl: "https://axis.example/repositories/python-internal/simple/",
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    const info = await client.getPypiClientInfo("python-internal");
+
+    expect(info.pipIndexUrl).toBe("https://axis.example/repositories/python-internal/simple/");
+    expect(requests).toEqual([
+      "GET /admin/repositories/python-internal/pypi/client/simple-url",
     ]);
   });
 });

@@ -77,6 +77,13 @@ export const aptSourceInfoSchema = z.object({
   sourceLine: z.string(),
 });
 
+export const pypiClientInfoSchema = z.object({
+  repository: z.string(),
+  ecosystem: z.literal("pypi"),
+  simpleUrl: z.string(),
+  pipIndexUrl: z.string(),
+});
+
 export const installInstructionsSchema = z.object({
   repository: z.string(),
   visibility: repositoryVisibilitySchema,
@@ -101,4 +108,5 @@ export type PublishToken = z.infer<typeof publishTokenSchema>;
 export type PublishTokenCreateResponse = z.infer<typeof publishTokenCreateResponseSchema>;
 export type SigningKey = z.infer<typeof signingKeySchema>;
 export type AptSourceInfo = z.infer<typeof aptSourceInfoSchema>;
+export type PypiClientInfo = z.infer<typeof pypiClientInfoSchema>;
 export type InstallInstructions = z.infer<typeof installInstructionsSchema>;

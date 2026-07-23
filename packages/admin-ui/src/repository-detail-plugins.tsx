@@ -5,6 +5,7 @@ import {
   useAptSigningKeys,
   useAptSigningPublicKey,
   useAptSourceInfo,
+  usePypiClientInfo,
   useUpdateRepository,
 } from "./api/hooks";
 import type { Repository, RepositoryVisibility, SigningKey } from "./api/schemas";
@@ -262,8 +263,16 @@ export function pypiSimpleIndexUrl(repository: Repository): string {
   return `/repositories/${repository.name}/simple/`;
 }
 
-export function pypiInstallCommandText(repository: Repository): string {
-  const simplePath = pypiSimpleIndexUrl(repository);
+function pypiAuthenticatedIndexUrl(pipIndexUrl: string): string {
+  try {
+    const url = new URL(pipIndexUrl);
+    return `${url.protocol}//axis:\${AXIS_PYPI_TOKEN}@${url.host}${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return pipIndexUrl;
+  }
+}
+
+export function pypiInstallCommandText(repository: Repository, pipIndexUrl = pypiSimpleIndexUrl(repository)): string {
   if (repository.visibility === "private") {
     return [
       "# Use a read token for private repositories.",
@@ -271,14 +280,14 @@ export function pypiInstallCommandText(repository: Repository): string {
       "",
       "# Install packages from this repository.",
       "pip install \\",
-      `  --index-url "https://axis:\${AXIS_PYPI_TOKEN}@<HOST>${simplePath}" \\`,
+      `  --index-url "${pypiAuthenticatedIndexUrl(pipIndexUrl)}" \\`,
       "  <package>",
     ].join("\n");
   }
   return [
     "# Install packages from this repository.",
     "pip install \\",
-    `  --index-url "https://<HOST>${simplePath}" \\`,
+    `  --index-url "${pipIndexUrl}" \\`,
     "  <package>",
   ].join("\n");
 }
@@ -286,6 +295,7 @@ export function pypiInstallCommandText(repository: Repository): string {
 function PypiRepositoryDetail({ repository }: { repository: Repository }) {
   const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
   const updateRepository = useUpdateRepository();
+  const clientInfo = usePypiClientInfo(repository.name, true);
 
   useEffect(() => {
     setVisibility(repository.visibility);
@@ -318,12 +328,13 @@ function PypiRepositoryDetail({ repository }: { repository: Repository }) {
         <h3 className="text-sm font-semibold">PyPI client setup</h3>
         <details className="min-w-0" open>
           <summary className="cursor-pointer text-sm font-medium">Simple API URL</summary>
-          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{pypiSimpleIndexUrl(repository)}</pre>
+          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{clientInfo.data?.simpleUrl ?? "Loading..."}</pre>
         </details>
         <details className="min-w-0" open>
           <summary className="cursor-pointer text-sm font-medium">pip install</summary>
-          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{pypiInstallCommandText({ ...repository, visibility })}</pre>
+          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{clientInfo.data ? pypiInstallCommandText({ ...repository, visibility }, clientInfo.data.pipIndexUrl) : "Loading..."}</pre>
         </details>
+        {clientInfo.isError && <ErrorState title="PyPI client setup unavailable" error={clientInfo.error} />}
       </div>
     </>
   );
