@@ -1,53 +1,23 @@
-import type { PluginRepositoryConfigManifest } from "@axis-repository/core/plugin-manifests";
-import type { CreateRepositoryInput } from "./api/client";
-import type { RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
+import type { RepositoryPlugin } from "./api/schemas";
+import type {
+  RepositoryCreateFieldErrors,
+  RepositoryCreatePlugin,
+  RepositoryCreatePluginOption,
+  RepositoryCreateStep,
+} from "./repository-ui-plugin-types";
 import {
   getRepositoryUiPlugin,
   repositoryCreatePluginOptionsFromUiRegistry,
   repositoryCreatePluginsFromUiRegistry,
 } from "./repository-ui-plugins";
 
-export type RepositoryCreateStep = "plugin" | "basics" | "config" | "dependencies" | "review";
-
-export interface RepositoryCreateWizardState {
-  name: string;
-  visibility: RepositoryVisibility;
-  config: Record<string, string>;
-  dependencies: Record<string, string>;
-}
-
-export interface RepositoryCreatePlugin {
-  ecosystem: string;
-  displayName: string;
-  description: string;
-  capabilities: string[];
-  repositoryConfig: PluginRepositoryConfigManifest;
-  steps: RepositoryCreateStep[];
-  defaults: RepositoryCreateWizardState;
-  validateStep(step: RepositoryCreateStep, state: RepositoryCreateWizardState): string[];
-  buildCreateInput(state: RepositoryCreateWizardState): CreateRepositoryInput;
-}
-
-export interface RepositoryCreateFieldErrors {
-  name?: string;
-}
-
-export type RepositoryCreatePluginOption =
-  | {
-      ecosystem: string;
-      displayName: string;
-      description: string;
-      capabilities: string[];
-      supported: true;
-      plugin: RepositoryCreatePlugin;
-    }
-  | {
-      ecosystem: string;
-      displayName: string;
-      description: string;
-      capabilities: string[];
-      supported: false;
-    };
+export type {
+  RepositoryCreateFieldErrors,
+  RepositoryCreatePlugin,
+  RepositoryCreatePluginOption,
+  RepositoryCreateStep,
+  RepositoryCreateWizardState,
+} from "./repository-ui-plugin-types";
 
 export const repositoryCreatePlugins = repositoryCreatePluginsFromUiRegistry();
 export { repositoryCreateStepsForConfig } from "./repository-create-steps";

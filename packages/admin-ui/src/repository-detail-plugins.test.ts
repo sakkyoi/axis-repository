@@ -13,11 +13,9 @@ describe("repository detail plugins", () => {
     expect(repositoryDetailPlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
     expect(getRepositoryDetailPlugin("apt")).toMatchObject({
       ecosystem: "apt",
-      displayName: "APT",
     });
     expect(getRepositoryDetailPlugin("pypi")).toMatchObject({
       ecosystem: "pypi",
-      displayName: "PyPI",
     });
   });
 

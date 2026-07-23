@@ -16,7 +16,7 @@ import {
   publishSessionStatusMeta,
   repositoryPublishSessionsView,
 } from "./repository-publish-sessions-model";
-import type { RepositoryDetailSection } from "./repository-detail-plugins";
+import type { RepositoryDetailSection } from "./repository-ui-plugin-types";
 
 export function GenericRepositoryDetail({ repository }: { repository: Repository; pluginMetadata: RepositoryPlugin | undefined }) {
   return (

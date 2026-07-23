@@ -1,5 +1,3 @@
-import type { ComponentType } from "react";
-import type { Repository, RepositoryPlugin } from "./api/schemas";
 import { pypiInstallCommandText, pypiSimpleIndexUrl } from "./plugins/pypi/detail";
 import {
   AdvancedJsonConfigSection,
@@ -8,24 +6,10 @@ import {
   RepositorySettingsSection,
   repositoryClientHelperDisplayText,
 } from "./repository-detail-shared";
+import type { RepositoryDetailPlugin, RepositoryDetailSection } from "./repository-ui-plugin-types";
 import { getRepositoryUiPlugin, repositoryDetailPluginsFromUiRegistry } from "./repository-ui-plugins";
 
-export interface RepositoryDetailSectionProps {
-  repository: Repository;
-  pluginMetadata: RepositoryPlugin | undefined;
-}
-
-export interface RepositoryDetailSection {
-  id: string;
-  title: string;
-  Component: ComponentType<RepositoryDetailSectionProps>;
-}
-
-export interface RepositoryDetailPlugin {
-  ecosystem: string;
-  displayName: string;
-  sections: RepositoryDetailSection[];
-}
+export type { RepositoryDetailPlugin, RepositoryDetailSection, RepositoryDetailSectionProps } from "./repository-ui-plugin-types";
 
 export const repositoryDetailPlugins = repositoryDetailPluginsFromUiRegistry();
 

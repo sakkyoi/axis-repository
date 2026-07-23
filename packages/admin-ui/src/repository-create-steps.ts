@@ -1,5 +1,5 @@
 import type { PluginRepositoryConfigManifest } from "@axis-repository/core/plugin-manifests";
-import type { RepositoryCreateStep } from "./repository-create-plugins";
+import type { RepositoryCreateStep } from "./repository-ui-plugin-types";
 
 export function repositoryCreateStepsForConfig(
   repositoryConfig: PluginRepositoryConfigManifest,

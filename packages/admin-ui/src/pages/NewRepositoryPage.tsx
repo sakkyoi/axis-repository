@@ -17,12 +17,14 @@ import {
   repositoryCreateAvailabilityError,
   repositoryCreateFieldErrors,
   repositoryCreateStepForServerError,
-  type RepositoryCreatePluginOption,
-  type RepositoryCreateFieldErrors,
-  type RepositoryCreatePlugin,
-  type RepositoryCreateStep,
-  type RepositoryCreateWizardState,
 } from "../repository-create-plugins";
+import type {
+  RepositoryCreateFieldErrors,
+  RepositoryCreatePlugin,
+  RepositoryCreatePluginOption,
+  RepositoryCreateStep,
+  RepositoryCreateWizardState,
+} from "../repository-ui-plugin-types";
 import {
   getRepositoryUiPlugin,
   repositoryCreatePluginOptionsFromUiRegistry,
@@ -54,14 +56,15 @@ export function NewRepositoryPage() {
   const [selectedEcosystem, setSelectedEcosystem] = useState(firstSupportedPlugin.ecosystem);
   const selectedOption = pluginOptions.find((option) => option.ecosystem === selectedEcosystem && option.supported);
   const plugin = selectedOption?.supported ? selectedOption.plugin : firstSupportedPlugin;
+  const pluginManifest = getRepositoryUiPlugin(plugin.ecosystem)?.manifest;
   const canUseSelectedPlugin = Boolean(selectedOption);
   const summaryTitle = repositoryPlugins.isLoading
     ? "Loading plugins"
-    : canUseSelectedPlugin ? plugin.displayName : "No supported plugin";
+    : selectedOption ? selectedOption.displayName : "No supported plugin";
   const summaryDescription = repositoryPlugins.isLoading
     ? "Checking which repository plugins this server has enabled."
-    : canUseSelectedPlugin
-      ? plugin.description
+    : selectedOption
+      ? selectedOption.description
       : "This server has no repository plugin that the current admin UI can create.";
   const summaryCapabilities = selectedOption?.capabilities ?? [];
   const [stepIndex, setStepIndex] = useState(0);
@@ -173,6 +176,7 @@ export function NewRepositoryPage() {
           {currentStep === "config" && (
             <ConfigStep
               plugin={plugin}
+              displayName={pluginManifest?.displayName ?? plugin.ecosystem}
               config={state.config}
               onChange={(config) => updateState({ config })}
             />
@@ -180,6 +184,7 @@ export function NewRepositoryPage() {
           {currentStep === "dependencies" && (
             <DependenciesStep
               plugin={plugin}
+              displayName={pluginManifest?.displayName ?? plugin.ecosystem}
               repositoryName={state.name.trim()}
               dependencies={state.dependencies}
               onChange={(dependencies) => updateState({ dependencies })}
@@ -368,10 +373,12 @@ function BasicsStep({
 
 function ConfigStep({
   plugin,
+  displayName,
   config,
   onChange,
 }: {
   plugin: RepositoryCreatePlugin;
+  displayName: string;
   config: Record<string, string>;
   onChange: (config: Record<string, string>) => void;
 }) {
@@ -380,7 +387,7 @@ function ConfigStep({
   return (
     <div className="grid gap-4">
       <div>
-        <h2 className="text-base font-semibold">{plugin.displayName} config</h2>
+        <h2 className="text-base font-semibold">{displayName} config</h2>
         <p className="mt-1 text-sm text-muted-foreground">Configure the repository fields provided by this plugin.</p>
       </div>
       <RepositoryConfigFields fields={fields} values={config} onChange={onChange} />
@@ -390,11 +397,13 @@ function ConfigStep({
 
 function DependenciesStep({
   plugin,
+  displayName,
   repositoryName,
   dependencies,
   onChange,
 }: {
   plugin: RepositoryCreatePlugin;
+  displayName: string;
   repositoryName: string;
   dependencies: Record<string, string>;
   onChange: (dependencies: Record<string, string>) => void;
@@ -404,7 +413,7 @@ function DependenciesStep({
   return (
     <div className="grid gap-4">
       <div>
-        <h2 className="text-base font-semibold">{plugin.displayName} dependencies</h2>
+        <h2 className="text-base font-semibold">{displayName} dependencies</h2>
         <p className="mt-1 text-sm text-muted-foreground">Satisfy the resources this plugin needs before creation.</p>
       </div>
       <RepositoryDependencyFields fields={fields} repositoryName={repositoryName} values={dependencies} onChange={onChange} />

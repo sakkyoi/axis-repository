@@ -1,5 +1,5 @@
 import { aptPluginManifest, type PluginRepositoryConfigFieldManifest } from "@axis-repository/core/plugin-manifests";
-import type { RepositoryCreatePlugin, RepositoryCreateWizardState } from "../../repository-create-plugins";
+import type { RepositoryCreatePlugin, RepositoryCreateWizardState } from "../../repository-ui-plugin-types";
 import { repositoryCreateStepsForConfig } from "../../repository-create-steps";
 import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "../../repository-forms";
 
@@ -63,9 +63,6 @@ function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormVal
 
 export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
   ecosystem: aptPluginManifest.ecosystem,
-  displayName: aptPluginManifest.displayName,
-  description: aptPluginManifest.description,
-  capabilities: [...aptPluginManifest.capabilities],
   repositoryConfig: aptPluginManifest.repositoryConfig,
   steps: repositoryCreateStepsForConfig(aptPluginManifest.repositoryConfig),
   defaults: {

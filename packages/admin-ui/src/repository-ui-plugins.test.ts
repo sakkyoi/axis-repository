@@ -10,11 +10,26 @@ import {
 
 describe("repository UI plugin registry", () => {
   it("registers each ecosystem once with both create and detail UI support", () => {
-    expect(repositoryUiPlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
+    expect(repositoryUiPlugins.map((plugin) => plugin.manifest.ecosystem)).toEqual(["apt", "pypi"]);
     expect(repositoryUiPlugins.map((plugin) => [plugin.create.ecosystem, plugin.detail.ecosystem])).toEqual([
       ["apt", "apt"],
       ["pypi", "pypi"],
     ]);
+  });
+
+  it("derives UI plugin metadata from the shared core manifest", () => {
+    const apt = getRepositoryUiPlugin("apt");
+
+    expect(apt?.manifest).toMatchObject({
+      ecosystem: "apt",
+      displayName: "APT",
+      description: "Debian package repositories with signed Release metadata.",
+    });
+    expect("displayName" in apt!).toBe(false);
+    expect("displayName" in apt!.create).toBe(false);
+    expect("description" in apt!.create).toBe(false);
+    expect("capabilities" in apt!.create).toBe(false);
+    expect("displayName" in apt!.detail).toBe(false);
   });
 
   it("provides create and detail registry views from the same UI plugin entries", () => {

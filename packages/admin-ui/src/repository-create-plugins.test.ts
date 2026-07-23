@@ -13,12 +13,10 @@ describe("repository create plugins", () => {
     expect(repositoryCreatePlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
     expect(getRepositoryCreatePlugin("apt")).toMatchObject({
       ecosystem: "apt",
-      displayName: "APT",
       steps: ["plugin", "basics", "config", "dependencies", "review"],
     });
     expect(getRepositoryCreatePlugin("pypi")).toMatchObject({
       ecosystem: "pypi",
-      displayName: "PyPI",
       steps: ["plugin", "basics", "review"],
     });
   });
