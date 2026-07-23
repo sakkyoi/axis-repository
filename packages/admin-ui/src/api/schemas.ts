@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PluginClientHelperActionManifest } from "@axis-repository/core/plugin-manifests";
 
 export const repositoryVisibilitySchema = z.enum(["private", "public"]);
 
@@ -113,7 +114,7 @@ export const adminSessionSchema = z.object({
 });
 
 export type Repository = z.infer<typeof repositorySchema>;
-export type RepositoryClientHelperAction = z.infer<typeof repositoryClientHelperActionSchema>;
+export type RepositoryClientHelperAction = PluginClientHelperActionManifest;
 export type RepositoryPlugin = z.infer<typeof repositoryPluginSchema>;
 export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;
 export type PublishToken = z.infer<typeof publishTokenSchema>;

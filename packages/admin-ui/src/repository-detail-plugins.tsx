@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { aptPluginManifest, pypiPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { Repository, RepositoryPlugin } from "./api/schemas";
 import { AptRepositoryDetail } from "./plugins/apt/detail";
 import { PypiRepositoryDetail, pypiInstallCommandText, pypiSimpleIndexUrl } from "./plugins/pypi/detail";
@@ -11,14 +12,14 @@ export interface RepositoryDetailPlugin {
 }
 
 export const aptRepositoryDetailPlugin: RepositoryDetailPlugin = {
-  ecosystem: "apt",
-  displayName: "APT",
+  ecosystem: aptPluginManifest.ecosystem,
+  displayName: aptPluginManifest.displayName,
   Detail: AptRepositoryDetail,
 };
 
 export const pypiRepositoryDetailPlugin: RepositoryDetailPlugin = {
-  ecosystem: "pypi",
-  displayName: "PyPI",
+  ecosystem: pypiPluginManifest.ecosystem,
+  displayName: pypiPluginManifest.displayName,
   Detail: PypiRepositoryDetail,
 };
 

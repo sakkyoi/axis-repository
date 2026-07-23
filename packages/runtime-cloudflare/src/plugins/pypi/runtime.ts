@@ -1,4 +1,5 @@
 import { ValidationError, type Repository, type RepositoryObjectStore } from "@axis-repository/core";
+import { pypiPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { ArtifactRepositoryPlugin } from "../../artifact-publisher-registry";
 import { createPrefixServingPredicate } from "../../artifact-publisher-registry";
 import { GenericManifestPublisher } from "../../generic-manifest-publisher";
@@ -28,26 +29,17 @@ export function createPypiPlugin(input?: { objectStore?: RepositoryObjectStore }
     : { publish: async () => ({ publishedAt: new Date().toISOString(), objects: [] }) };
   return {
     ecosystem: "pypi",
-    name: "pypi-simple",
-    version: "0.1.0",
-    capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
+    name: pypiPluginManifest.runtimeName,
+    version: pypiPluginManifest.version,
+    capabilities: [...pypiPluginManifest.capabilities],
     publisher,
     canServeRepositoryPath: createPrefixServingPredicate(["simple"]),
     validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
     validatePublishArtifacts: () => {},
     authorizePublish: () => {},
     clientHelpers: {
-      namespace: "pypi",
-      actions: [
-        {
-          name: "simple-url",
-          label: "Simple API URL",
-          responseKind: "text",
-          defaultOpen: true,
-          public: true,
-          displayPath: "simpleUrl",
-        },
-      ],
+      namespace: pypiPluginManifest.clientHelpers.namespace,
+      actions: pypiPluginManifest.clientHelpers.actions.map((action) => ({ ...action })),
       isPublic: (action) => action === "simple-url",
       handle: async ({ repository, action, origin }) => {
         if (action !== "simple-url") {

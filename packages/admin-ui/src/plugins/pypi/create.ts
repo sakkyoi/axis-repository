@@ -1,10 +1,11 @@
+import { pypiPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { RepositoryCreatePlugin } from "../../repository-create-plugins";
 
 export const pypiRepositoryCreatePlugin: RepositoryCreatePlugin = {
-  ecosystem: "pypi",
-  displayName: "PyPI",
-  description: "Python package repositories using the Simple Repository API.",
-  capabilities: ["simple-api", "serve:simple", "client-helpers"],
+  ecosystem: pypiPluginManifest.ecosystem,
+  displayName: pypiPluginManifest.displayName,
+  description: pypiPluginManifest.description,
+  capabilities: [...pypiPluginManifest.capabilities],
   steps: ["plugin", "basics", "review"],
   defaults: {
     name: "",
@@ -20,7 +21,7 @@ export const pypiRepositoryCreatePlugin: RepositoryCreatePlugin = {
   },
   buildCreateInput: (state) => ({
     name: state.name,
-    ecosystem: "pypi",
+    ecosystem: pypiPluginManifest.ecosystem,
     visibility: state.visibility,
     config: {
       pypi: {},

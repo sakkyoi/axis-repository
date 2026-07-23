@@ -8,21 +8,17 @@ import {
   type Repository,
   type TokenPrincipal,
 } from "@axis-repository/core";
+import type {
+  PluginClientHelperActionManifest,
+  PluginClientHelperResponseKind,
+} from "@axis-repository/core/plugin-manifests";
 
 export interface RepositoryClientHelperSigningKey {
   publicKeyArmored: string;
 }
 
-export type RepositoryClientHelperResponseKind = "json" | "shell" | "text";
-
-export interface RepositoryClientHelperAction {
-  name: string;
-  label: string;
-  responseKind: RepositoryClientHelperResponseKind;
-  defaultOpen: boolean;
-  public: boolean;
-  displayPath?: string;
-}
+export type RepositoryClientHelperResponseKind = PluginClientHelperResponseKind;
+export type RepositoryClientHelperAction = PluginClientHelperActionManifest;
 
 export interface PublisherMetadata {
   ecosystem: Ecosystem;

@@ -1,3 +1,4 @@
+import { aptPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { RepositoryCreatePlugin, RepositoryCreateWizardState } from "../../repository-create-plugins";
 import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "../../repository-forms";
 
@@ -20,10 +21,10 @@ function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormVal
 }
 
 export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
-  ecosystem: "apt",
-  displayName: "APT",
-  description: "Debian package repositories with signed Release metadata.",
-  capabilities: ["signed-release", "pool-copy", "serve:dists", "serve:pool"],
+  ecosystem: aptPluginManifest.ecosystem,
+  displayName: aptPluginManifest.displayName,
+  description: aptPluginManifest.description,
+  capabilities: [...aptPluginManifest.capabilities],
   steps: ["plugin", "basics", "config", "dependencies", "review"],
   defaults: {
     name: "",

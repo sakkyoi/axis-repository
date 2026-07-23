@@ -1,4 +1,5 @@
 import { ValidationError, type ArtifactPublisher, type Repository } from "@axis-repository/core";
+import { aptPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { ArtifactRepositoryPlugin, ValidateRepositoryConfigInput } from "../../artifact-publisher-registry";
 import { createPrefixServingPredicate } from "../../artifact-publisher-registry";
 import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "../../apt-client";
@@ -50,9 +51,9 @@ function aptPublicKeyResponse(publicKeyArmored: string, repository: Repository):
 export function createAptPlugin(input: { publisher: ArtifactPublisher }): ArtifactRepositoryPlugin {
   return {
     ecosystem: "apt",
-    name: "apt-signed",
-    version: "0.1.0",
-    capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
+    name: aptPluginManifest.runtimeName,
+    version: aptPluginManifest.version,
+    capabilities: [...aptPluginManifest.capabilities],
     publisher: input.publisher,
     canServeRepositoryPath: createPrefixServingPredicate(["dists", "pool"]),
     validateRepositoryConfig: (configInput) => {
@@ -66,30 +67,8 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
       }
     },
     clientHelpers: {
-      namespace: "apt",
-      actions: [
-        {
-          name: "key.gpg",
-          label: "key.gpg",
-          responseKind: "text",
-          defaultOpen: false,
-          public: true,
-        },
-        {
-          name: "source",
-          label: "source",
-          responseKind: "json",
-          defaultOpen: false,
-          public: true,
-        },
-        {
-          name: "install",
-          label: "install",
-          responseKind: "shell",
-          defaultOpen: true,
-          public: true,
-        },
-      ],
+      namespace: aptPluginManifest.clientHelpers.namespace,
+      actions: aptPluginManifest.clientHelpers.actions.map((action) => ({ ...action })),
       isPublic: (action) => action === "key.gpg" || action === "source" || action === "install",
       handle: async ({ repository, action, origin, signingKeys }) => {
         const repositoryInfo = aptClientRepositoryInfo(repository);
