@@ -159,6 +159,15 @@ export function repositoryCreateFieldErrors(message: string): RepositoryCreateFi
   return {};
 }
 
+export function repositoryCreateAvailabilityError(
+  repositoryName: string,
+  existingRepositoryNames: readonly string[],
+): string | undefined {
+  const name = repositoryName.trim();
+  if (!name) return "Repository name is required";
+  return existingRepositoryNames.includes(name) ? `Repository already exists: ${name}` : undefined;
+}
+
 export function repositoryCreatePluginOptions(
   serverPlugins: RepositoryPlugin[],
   localPlugins: readonly RepositoryCreatePlugin[] = repositoryCreatePlugins,

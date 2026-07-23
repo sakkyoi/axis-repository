@@ -6,6 +6,7 @@ import {
   useCreateRepository,
   useGenerateAptSigningKey,
   useImportAptSigningKey,
+  useRepositories,
   useRepositoryPlugins,
 } from "../api/hooks";
 import type { RepositoryVisibility, SigningKey } from "../api/schemas";
@@ -18,6 +19,7 @@ import { cn } from "../lib/utils";
 import { ADMIN_UI_PATHS } from "../navigation";
 import {
   getRepositoryCreatePlugin,
+  repositoryCreateAvailabilityError,
   repositoryCreateFieldErrors,
   repositoryCreatePluginOptions,
   repositoryCreatePlugins,
@@ -41,6 +43,7 @@ const stepLabels: Record<RepositoryCreateStep, string> = {
 export function NewRepositoryPage() {
   const navigate = useNavigate();
   const createRepository = useCreateRepository();
+  const repositories = useRepositories();
   const repositoryPlugins = useRepositoryPlugins();
   const pluginOptions = useMemo(
     () => repositoryCreatePluginOptions(repositoryPlugins.data ?? []),
@@ -92,6 +95,17 @@ export function NewRepositoryPage() {
     if (errors.length > 0) {
       setError(errors[0] ?? "Step is invalid");
       return;
+    }
+    if (currentStep === "basics") {
+      const availabilityError = repositoryCreateAvailabilityError(
+        state.name,
+        repositories.data?.map((repository) => repository.name) ?? [],
+      );
+      if (availabilityError) {
+        setFieldErrors(repositoryCreateFieldErrors(availabilityError));
+        setError(availabilityError);
+        return;
+      }
     }
     setError("");
     setFieldErrors({});

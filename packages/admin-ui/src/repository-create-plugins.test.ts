@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getRepositoryCreatePlugin,
+  repositoryCreateAvailabilityError,
   repositoryCreateFieldErrors,
   repositoryCreatePluginOptions,
   repositoryCreatePlugins,
@@ -130,5 +131,12 @@ describe("repository create plugins", () => {
     expect(repositoryCreateFieldErrors(message)).toEqual({
       name: "Repository already exists: debian-internal",
     });
+  });
+
+  it("detects duplicate repository names before leaving the basics step", () => {
+    expect(repositoryCreateAvailabilityError("debian-internal", ["debian-internal", "python-internal"]))
+      .toBe("Repository already exists: debian-internal");
+    expect(repositoryCreateAvailabilityError("debian-new", ["debian-internal", "python-internal"]))
+      .toBeUndefined();
   });
 });
