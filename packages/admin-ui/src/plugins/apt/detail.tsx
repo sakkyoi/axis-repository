@@ -5,9 +5,8 @@ import type { Repository, RepositoryPlugin, SigningKey } from "../../api/schemas
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { Textarea } from "../../components/ui/textarea";
 import { AptSigningKeyDialog, AptSigningKeyList } from "../../pages/SigningKeysPage";
-import { asJson, EmptyState, ErrorState } from "../../pages/shared";
+import { EmptyState, ErrorState } from "../../pages/shared";
 import { RepositoryClientHelperSetup, VisibilitySelect } from "../../repository-detail-shared";
 import {
   activeSigningKeys,
@@ -16,15 +15,12 @@ import {
   type AptRepositoryFormValues,
 } from "../../repository-forms";
 
-export function AptRepositoryDetail({
+export function AptSettingsSection({
   repository,
-  pluginMetadata,
 }: {
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
 }) {
-  const [config, setConfig] = useState(asJson(repository.config));
-  const [configError, setConfigError] = useState("");
   const [aptValues, setAptValues] = useState<AptRepositoryFormValues>(() => buildAptRepositoryFormValues(repository));
   const [aptError, setAptError] = useState("");
   const updateRepository = useUpdateRepository();
@@ -34,33 +30,12 @@ export function AptRepositoryDetail({
   const aptSigningKeys = signingKeyOptions(activeKeys, signingKeys, aptValues.signingKeyId);
 
   useEffect(() => {
-    setConfig(asJson(repository.config));
-    setConfigError("");
     setAptValues(buildAptRepositoryFormValues(repository));
     setAptError("");
   }, [repository]);
 
   function updateAptField<K extends keyof AptRepositoryFormValues>(field: K, value: AptRepositoryFormValues[K]) {
     setAptValues((current) => ({ ...current, [field]: value }));
-  }
-
-  async function saveJsonConfig() {
-    let parsedConfig: Record<string, unknown>;
-    try {
-      parsedConfig = JSON.parse(config) as Record<string, unknown>;
-      setConfigError("");
-    } catch (error) {
-      setConfigError(error instanceof Error ? error.message : "Invalid JSON");
-      return;
-    }
-
-    updateRepository.mutate({
-      name: repository.name,
-      input: {
-        visibility: aptValues.visibility,
-        config: parsedConfig,
-      },
-    });
   }
 
   async function saveAptConfig() {
@@ -76,42 +51,49 @@ export function AptRepositoryDetail({
   }
 
   return (
-    <>
-      <div className="grid gap-3">
-        <AptRepositoryFields values={aptValues} signingKeys={aptSigningKeys} onChange={updateAptField} />
-        {aptError && <ErrorState error={aptError} />}
-        <Button onClick={saveAptConfig} disabled={updateRepository.isPending || aptSigningKeys.length === 0}>
-          <Save className="mr-2 h-4 w-4" />
-          Save repository
-        </Button>
-      </div>
-      <details className="grid gap-3 border-t border-border pt-4">
-        <summary className="cursor-pointer text-sm font-semibold">Advanced JSON config</summary>
-        <div className="mt-3 grid gap-3">
-          <Textarea value={config} onChange={(event) => setConfig(event.target.value)} />
-          {configError && <ErrorState error={configError} />}
-          <Button variant="outline" onClick={saveJsonConfig} disabled={updateRepository.isPending}>
-            Save JSON config
-          </Button>
-        </div>
-      </details>
+    <div className="grid gap-3">
+      <AptRepositoryFields values={aptValues} signingKeys={aptSigningKeys} onChange={updateAptField} />
+      {aptError && <ErrorState error={aptError} />}
+      <Button onClick={saveAptConfig} disabled={updateRepository.isPending || aptSigningKeys.length === 0}>
+        <Save className="mr-2 h-4 w-4" />
+        Save repository
+      </Button>
       {updateRepository.isError && <ErrorState error={updateRepository.error} />}
-      {signingKeysQuery.isError && (
-        <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />
-      )}
-      <details className="grid gap-3 border-t border-border pt-4">
-        <summary className="cursor-pointer text-sm font-semibold">APT signing keys</summary>
-        <div className="mt-3 grid gap-3">
-          <AptSigningKeyDialog repositoryName={repository.name} />
-          <AptSigningKeyList repositoryName={repository.name} signingKeys={signingKeys} />
-        </div>
-      </details>
-      <RepositoryClientHelperSetup
-        repositoryName={repository.name}
-        title="APT client setup"
-        clientHelpers={pluginMetadata?.clientHelpers}
-      />
-    </>
+      {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
+    </div>
+  );
+}
+
+export function AptSigningKeysSection({
+  repository,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  const signingKeysQuery = useAptSigningKeys(repository.name, true);
+  const signingKeys = signingKeysQuery.data ?? [];
+
+  return (
+    <div className="grid gap-3">
+      <AptSigningKeyDialog repositoryName={repository.name} />
+      <AptSigningKeyList repositoryName={repository.name} signingKeys={signingKeys} />
+      {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
+    </div>
+  );
+}
+
+export function AptClientHelpersSection({
+  repository,
+  pluginMetadata,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  return (
+    <RepositoryClientHelperSetup
+      repositoryName={repository.name}
+      clientHelpers={pluginMetadata?.clientHelpers}
+    />
   );
 }
 

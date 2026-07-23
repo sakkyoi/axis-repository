@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  genericRepositoryDetailSections,
   getRepositoryDetailPlugin,
   pypiInstallCommandText,
   pypiSimpleIndexUrl,
@@ -22,6 +23,27 @@ describe("repository detail plugins", () => {
 
   it("returns undefined when no detail plugin is registered for an ecosystem", () => {
     expect(getRepositoryDetailPlugin("npm")).toBeUndefined();
+  });
+
+  it("exposes ordered detail sections per ecosystem", () => {
+    expect(getRepositoryDetailPlugin("apt")?.sections.map((section) => section.id)).toEqual([
+      "settings",
+      "advanced-json",
+      "signing-keys",
+      "client-helpers",
+    ]);
+    expect(getRepositoryDetailPlugin("pypi")?.sections.map((section) => section.id)).toEqual([
+      "settings",
+      "client-helpers",
+      "install-hints",
+    ]);
+  });
+
+  it("provides generic fallback sections for unknown ecosystems", () => {
+    expect(genericRepositoryDetailSections.map((section) => section.id)).toEqual([
+      "settings",
+      "advanced-json",
+    ]);
   });
 
   it("builds PyPI client setup text from a repository", () => {

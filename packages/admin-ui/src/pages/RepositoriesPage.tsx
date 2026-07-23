@@ -7,7 +7,8 @@ import { useRepositories, useRepositoryPlugins } from "../api/hooks";
 import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { ADMIN_UI_PATHS } from "../navigation";
 import { repositoryDetailBodyClass, repositoryRowStateClass } from "../repository-page-model";
-import { GenericRepositoryDetail, getRepositoryDetailPlugin } from "../repository-detail-plugins";
+import { genericRepositoryDetailSections, getRepositoryDetailPlugin } from "../repository-detail-plugins";
+import { RepositoryDetailSections } from "../repository-detail-shared";
 import { EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 export function RepositoriesPage() {
@@ -109,7 +110,7 @@ function RepositoryDetail({
   pluginMetadata: RepositoryPlugin | undefined;
 }) {
   const plugin = getRepositoryDetailPlugin(repository.ecosystem);
-  const Detail = plugin?.Detail ?? GenericRepositoryDetail;
+  const sections = plugin?.sections ?? genericRepositoryDetailSections;
 
   return (
     <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
@@ -118,7 +119,11 @@ function RepositoryDetail({
         <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
       </div>
       <div className={repositoryDetailBodyClass()}>
-        <Detail repository={repository} pluginMetadata={pluginMetadata} />
+        <RepositoryDetailSections
+          repository={repository}
+          pluginMetadata={pluginMetadata}
+          sections={sections}
+        />
       </div>
     </aside>
   );

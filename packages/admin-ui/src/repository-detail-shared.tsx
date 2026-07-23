@@ -6,15 +6,84 @@ import { Button } from "./components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Textarea } from "./components/ui/textarea";
 import { asJson, ErrorState } from "./pages/shared";
+import type { RepositoryDetailSection } from "./repository-detail-plugins";
 
 export function GenericRepositoryDetail({ repository }: { repository: Repository; pluginMetadata: RepositoryPlugin | undefined }) {
+  return (
+    <>
+      <RepositorySettingsSection repository={repository} pluginMetadata={undefined} />
+      <AdvancedJsonConfigSection repository={repository} pluginMetadata={undefined} />
+    </>
+  );
+}
+
+export function RepositoryDetailSections({
+  repository,
+  pluginMetadata,
+  sections,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+  sections: RepositoryDetailSection[];
+}) {
+  return (
+    <>
+      {sections.map((section) => (
+        <section key={section.id} className="grid gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
+          <h3 className="text-sm font-semibold">{section.title}</h3>
+          <section.Component repository={repository} pluginMetadata={pluginMetadata} />
+        </section>
+      ))}
+    </>
+  );
+}
+
+export function RepositorySettingsSection({
+  repository,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
   const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
+  const updateRepository = useUpdateRepository();
+
+  useEffect(() => {
+    setVisibility(repository.visibility);
+  }, [repository]);
+
+  return (
+    <div className="grid gap-3">
+      <label className="grid gap-2">
+        <span className="text-sm font-medium">Visibility</span>
+        <VisibilitySelect value={visibility} onChange={setVisibility} />
+      </label>
+      <Button
+        onClick={() => updateRepository.mutate({ name: repository.name, input: { visibility, config: repository.config } })}
+        disabled={updateRepository.isPending}
+      >
+        <Save className="mr-2 h-4 w-4" />
+        Save repository
+      </Button>
+      {updateRepository.isError && <ErrorState error={updateRepository.error} />}
+    </div>
+  );
+}
+
+export function AdvancedJsonConfigSection({
+  repository,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  return <RepositoryJsonConfigEditor repository={repository} />;
+}
+
+export function RepositoryJsonConfigEditor({ repository }: { repository: Repository }) {
   const [config, setConfig] = useState(asJson(repository.config));
   const [configError, setConfigError] = useState("");
   const updateRepository = useUpdateRepository();
 
   useEffect(() => {
-    setVisibility(repository.visibility);
     setConfig(asJson(repository.config));
     setConfigError("");
   }, [repository]);
@@ -32,7 +101,7 @@ export function GenericRepositoryDetail({ repository }: { repository: Repository
     updateRepository.mutate({
       name: repository.name,
       input: {
-        visibility,
+        visibility: repository.visibility,
         config: parsedConfig,
       },
     });
@@ -40,10 +109,6 @@ export function GenericRepositoryDetail({ repository }: { repository: Repository
 
   return (
     <>
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Visibility</span>
-        <VisibilitySelect value={visibility} onChange={setVisibility} />
-      </label>
       <label className="grid gap-2">
         <span className="text-sm font-medium">Config JSON</span>
         <Textarea value={config} onChange={(event) => setConfig(event.target.value)} />
@@ -96,17 +161,14 @@ export function repositoryClientHelperDisplayText(
 
 export function RepositoryClientHelperSetup({
   repositoryName,
-  title,
   clientHelpers,
 }: {
   repositoryName: string;
-  title: string;
   clientHelpers: RepositoryPlugin["clientHelpers"];
 }) {
   if (!clientHelpers || clientHelpers.actions.length === 0) return null;
   return (
-    <div className="grid gap-3 border-t border-border pt-4">
-      <h3 className="text-sm font-semibold">{title}</h3>
+    <div className="grid gap-3">
       {clientHelpers.actions.map((action) => (
         <RepositoryClientHelperItem
           key={action.name}
