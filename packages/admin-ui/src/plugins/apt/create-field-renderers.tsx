@@ -4,7 +4,7 @@ import {
   useAptSigningKeys,
   useGenerateAptSigningKey,
   useImportAptSigningKey,
-} from "../../api/hooks";
+} from "./api";
 import type { SigningKey } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";

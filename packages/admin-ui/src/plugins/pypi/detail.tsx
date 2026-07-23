@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
-import { usePypiClientInfo, useUpdateRepository } from "../../api/hooks";
+import { useUpdateRepository } from "../../api/hooks";
 import type { Repository, RepositoryPlugin, RepositoryVisibility } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
 import { ErrorState } from "../../pages/shared";
 import { VisibilitySelect } from "../../repository-detail-shared";
+import { usePypiClientInfo } from "./api";
 
 export function pypiSimpleIndexUrl(repository: Repository): string {
   return `/repositories/${repository.name}/simple/`;

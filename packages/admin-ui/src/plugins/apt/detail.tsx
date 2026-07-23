@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
-import { useAptSigningKeys, useUpdateRepository } from "../../api/hooks";
+import { useUpdateRepository } from "../../api/hooks";
 import type { Repository, RepositoryPlugin, SigningKey } from "../../api/schemas";
+import { useAptSigningKeys } from "./api";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";

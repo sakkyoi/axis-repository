@@ -3,8 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAxisClient,
   type CreateAdminPublishSessionInput,
-  type GenerateAptSigningKeyInput,
-  type ImportAptSigningKeyInput,
   type CreatePublishTokenInput,
   type CreateRepositoryInput,
   type UpdateRepositoryInput,
@@ -50,42 +48,6 @@ export function useUpdateRepository() {
     mutationFn: ({ name, input }: { name: string; input: UpdateRepositoryInput }) =>
       client.updateRepository(name, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["repositories"] }),
-  });
-}
-
-export function useAptInstallInstructions(repositoryName: string | undefined, enabled: boolean) {
-  const client = useAxisClient();
-  return useQuery({
-    queryKey: ["apt-install", repositoryName],
-    queryFn: () => client.getAptInstallInstructions(repositoryName ?? ""),
-    enabled: Boolean(repositoryName) && enabled,
-  });
-}
-
-export function useAptSigningPublicKey(repositoryName: string | undefined, enabled: boolean) {
-  const client = useAxisClient();
-  return useQuery({
-    queryKey: ["apt-public-key", repositoryName],
-    queryFn: () => client.getAptSigningPublicKey(repositoryName ?? ""),
-    enabled: Boolean(repositoryName) && enabled,
-  });
-}
-
-export function useAptSourceInfo(repositoryName: string | undefined, enabled: boolean) {
-  const client = useAxisClient();
-  return useQuery({
-    queryKey: ["apt-source", repositoryName],
-    queryFn: () => client.getAptSourceInfo(repositoryName ?? ""),
-    enabled: Boolean(repositoryName) && enabled,
-  });
-}
-
-export function usePypiClientInfo(repositoryName: string | undefined, enabled: boolean) {
-  const client = useAxisClient();
-  return useQuery({
-    queryKey: ["pypi-client-info", repositoryName],
-    queryFn: () => client.getPypiClientInfo(repositoryName ?? ""),
-    enabled: Boolean(repositoryName) && enabled,
   });
 }
 
@@ -165,41 +127,3 @@ export function useRevokePublishToken() {
   });
 }
 
-export function useAptSigningKeys(repositoryName: string | undefined, enabled = true) {
-  const client = useAxisClient();
-  return useQuery({
-    queryKey: ["apt-signing-keys", repositoryName],
-    queryFn: () => client.listAptSigningKeys(repositoryName ?? ""),
-    enabled: Boolean(repositoryName) && enabled,
-  });
-}
-
-export function useImportAptSigningKey() {
-  const client = useAxisClient();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ repositoryName, input }: { repositoryName: string; input: ImportAptSigningKeyInput }) =>
-      client.importAptSigningKey(repositoryName, input),
-    onSuccess: (_data, variables) => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys", variables.repositoryName] }),
-  });
-}
-
-export function useGenerateAptSigningKey() {
-  const client = useAxisClient();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ repositoryName, input }: { repositoryName: string; input: GenerateAptSigningKeyInput }) =>
-      client.generateAptSigningKey(repositoryName, input),
-    onSuccess: (_data, variables) => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys", variables.repositoryName] }),
-  });
-}
-
-export function useRevokeAptSigningKey() {
-  const client = useAxisClient();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ repositoryName, id }: { repositoryName: string; id: string }) =>
-      client.revokeAptSigningKey(repositoryName, id),
-    onSuccess: (_data, variables) => queryClient.invalidateQueries({ queryKey: ["apt-signing-keys", variables.repositoryName] }),
-  });
-}

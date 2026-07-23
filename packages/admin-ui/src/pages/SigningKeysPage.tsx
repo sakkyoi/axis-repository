@@ -10,7 +10,7 @@ import {
   useGenerateAptSigningKey,
   useImportAptSigningKey,
   useRevokeAptSigningKey,
-} from "../api/hooks";
+} from "../plugins/apt/api";
 import type { SigningKey } from "../api/schemas";
 import { asJson, EmptyState, ErrorState, formatDate } from "./shared";
 

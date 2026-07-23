@@ -1,10 +1,7 @@
 import axios, { type AxiosInstance } from "axios";
 import { createHttpClient, type HttpOptions } from "./http";
 import {
-  aptSourceInfoSchema,
-  installInstructionsSchema,
   adminSessionSchema,
-  pypiClientInfoSchema,
   publishSessionsResponseSchema,
   publishSessionSchema,
   publishTokenCreateResponseSchema,
@@ -13,16 +10,10 @@ import {
   repositoryPluginsResponseSchema,
   repositoriesResponseSchema,
   repositorySchema,
-  signingKeySchema,
-  signingKeysResponseSchema,
   type PublishTokenCreateResponse,
   type Repository,
   type RepositoryPlugin,
   type RepositoryVisibility,
-  type SigningKey,
-  type AptSourceInfo,
-  type InstallInstructions,
-  type PypiClientInfo,
   type PublishSession,
   type PublishArtifact,
   type UploadTarget,
@@ -35,18 +26,6 @@ export interface CreatePublishTokenInput {
   ecosystemScopes: Record<string, unknown>;
   signingKeyIds?: string[];
   expiresAt?: string;
-}
-
-export interface ImportAptSigningKeyInput {
-  name: string;
-  privateKeyArmored: string;
-  passphrase: string;
-}
-
-export interface GenerateAptSigningKeyInput {
-  name: string;
-  userIdName: string;
-  userIdEmail: string;
 }
 
 export interface CreateRepositoryInput {
@@ -75,11 +54,9 @@ export interface AxisClient {
   createRepository(input: CreateRepositoryInput): Promise<Repository>;
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
-  getAptSigningPublicKey(name: string): Promise<string>;
-  getAptSourceInfo(name: string): Promise<AptSourceInfo>;
-  getAptInstallInstructions(name: string): Promise<InstallInstructions>;
-  getPypiClientInfo(name: string): Promise<PypiClientInfo>;
   getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown>;
+  getRepositoryPluginResource(name: string, namespace: string, path: readonly string[]): Promise<unknown>;
+  postRepositoryPluginResource(name: string, namespace: string, path: readonly string[], input?: unknown): Promise<unknown>;
   listPublishSessions(): Promise<PublishSession[]>;
   createAdminPublishSession(input: CreateAdminPublishSessionInput): Promise<PublishSession>;
   uploadPublishArtifact(target: UploadTarget, body: Blob): Promise<void>;
@@ -89,15 +66,16 @@ export interface AxisClient {
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
   createPublishToken(input: CreatePublishTokenInput): Promise<PublishTokenCreateResponse>;
   revokePublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
-  listAptSigningKeys(repositoryName: string): Promise<SigningKey[]>;
-  getAptSigningKey(repositoryName: string, id: string): Promise<SigningKey>;
-  importAptSigningKey(repositoryName: string, input: ImportAptSigningKeyInput): Promise<SigningKey>;
-  generateAptSigningKey(repositoryName: string, input: GenerateAptSigningKeyInput): Promise<SigningKey>;
-  revokeAptSigningKey(repositoryName: string, id: string): Promise<SigningKey>;
 }
 
 function encodePathSegment(value: string): string {
   return encodeURIComponent(value);
+}
+
+function repositoryPluginResourceUrl(name: string, namespace: string, path: readonly string[]): string {
+  const encodedPath = path.map(encodePathSegment).join("/");
+  const suffix = encodedPath ? `/${encodedPath}` : "";
+  return `/admin/repositories/${encodePathSegment(name)}/${encodePathSegment(namespace)}${suffix}`;
 }
 
 export function createAxisClient(options: HttpOptions): AxisClient {
@@ -128,26 +106,18 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.patch(`/admin/repositories/${encodePathSegment(name)}`, input);
       return repositorySchema.parse(response.data);
     },
-    async getAptSigningPublicKey(name: string) {
-      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/apt/client/key.gpg`);
-      return typeof response.data === "string" ? response.data : String(response.data);
-    },
-    async getAptSourceInfo(name: string) {
-      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/apt/client/source`);
-      return aptSourceInfoSchema.parse(response.data);
-    },
-    async getAptInstallInstructions(name: string) {
-      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/apt/client/install`);
-      return installInstructionsSchema.parse(response.data);
-    },
-    async getPypiClientInfo(name: string) {
-      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/pypi/client/simple-url`);
-      return pypiClientInfoSchema.parse(response.data);
-    },
     async getRepositoryClientHelper(name: string, namespace: string, action: string) {
       const response = await http.get(
         `/admin/repositories/${encodePathSegment(name)}/${encodePathSegment(namespace)}/client/${encodePathSegment(action)}`,
       );
+      return response.data;
+    },
+    async getRepositoryPluginResource(name: string, namespace: string, path: readonly string[]) {
+      const response = await http.get(repositoryPluginResourceUrl(name, namespace, path));
+      return response.data;
+    },
+    async postRepositoryPluginResource(name: string, namespace: string, path: readonly string[], input?: unknown) {
+      const response = await http.post(repositoryPluginResourceUrl(name, namespace, path), input);
       return response.data;
     },
     async listPublishSessions() {
@@ -192,26 +162,6 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async revokePublishToken(name: string) {
       const response = await http.post(`/admin/publish-tokens/${encodePathSegment(name)}/revoke`);
       return publishTokenSchema.parse(response.data);
-    },
-    async listAptSigningKeys(repositoryName: string) {
-      const response = await http.get(`/admin/repositories/${encodePathSegment(repositoryName)}/apt/signing-keys`);
-      return signingKeysResponseSchema.parse(response.data).signingKeys;
-    },
-    async getAptSigningKey(repositoryName: string, id: string) {
-      const response = await http.get(`/admin/repositories/${encodePathSegment(repositoryName)}/apt/signing-keys/${encodePathSegment(id)}`);
-      return signingKeySchema.parse(response.data);
-    },
-    async importAptSigningKey(repositoryName: string, input: ImportAptSigningKeyInput) {
-      const response = await http.post(`/admin/repositories/${encodePathSegment(repositoryName)}/apt/signing-keys/import`, input);
-      return signingKeySchema.parse(response.data);
-    },
-    async generateAptSigningKey(repositoryName: string, input: GenerateAptSigningKeyInput) {
-      const response = await http.post(`/admin/repositories/${encodePathSegment(repositoryName)}/apt/signing-keys/generate`, input);
-      return signingKeySchema.parse(response.data);
-    },
-    async revokeAptSigningKey(repositoryName: string, id: string) {
-      const response = await http.post(`/admin/repositories/${encodePathSegment(repositoryName)}/apt/signing-keys/${encodePathSegment(id)}/revoke`);
-      return signingKeySchema.parse(response.data);
     },
   };
 }

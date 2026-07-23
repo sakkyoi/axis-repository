@@ -1,8 +1,8 @@
-import { useAptSigningKeys } from "../../api/hooks";
 import type { Repository, SigningKey } from "../../api/schemas";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { ErrorState } from "../../pages/shared";
 import type { PublishTokenScopeComponentProps, PublishTokenScopeInput } from "../../repository-ui-plugin-types";
+import { useAptSigningKeys } from "./api";
 
 export function aptPublishTokenMissingSigningKeySelections(input: PublishTokenScopeInput): string[] {
   if (!input.permissions.publish) return [];

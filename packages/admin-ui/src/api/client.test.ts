@@ -309,164 +309,6 @@ describe("createAxisClient", () => {
     expect(plugins.map((plugin) => plugin.ecosystem)).toEqual(["apt"]);
   });
 
-  it("uses APT-scoped endpoints for signing key import and generation", async () => {
-    const client = createAxisClient({
-      baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
-    });
-    const requests: Array<{ method: string; url: string; data: unknown }> = [];
-    client.http.defaults.adapter = async (config) => {
-      requests.push({
-        method: config.method?.toUpperCase() ?? "",
-        url: config.url ?? "",
-        data: config.data ? JSON.parse(String(config.data)) : undefined,
-      });
-      return {
-        data: {
-          id: "signing_key_1",
-          repositoryName: "debian-prod",
-          name: "debian-prod",
-          publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
-          fingerprint: "FINGERPRINT",
-          keyId: "KEYID",
-          createdAt: "2026-07-22T00:00:00.000Z",
-          revokedAt: null,
-        },
-        status: 201,
-        statusText: "Created",
-        headers: {},
-        config,
-      };
-    };
-
-    await client.importAptSigningKey("debian-prod", {
-      name: "debian-prod",
-      privateKeyArmored: "private",
-      passphrase: "secret",
-    });
-    await client.generateAptSigningKey("debian-prod", {
-      name: "debian-generated",
-      userIdName: "Axis Repository",
-      userIdEmail: "axis@example.test",
-    });
-
-    expect(requests).toEqual([
-      {
-        method: "POST",
-        url: "/admin/repositories/debian-prod/apt/signing-keys/import",
-        data: {
-          name: "debian-prod",
-          privateKeyArmored: "private",
-          passphrase: "secret",
-        },
-      },
-      {
-        method: "POST",
-        url: "/admin/repositories/debian-prod/apt/signing-keys/generate",
-        data: {
-          name: "debian-generated",
-          userIdName: "Axis Repository",
-          userIdEmail: "axis@example.test",
-        },
-      },
-    ]);
-  });
-
-  it("uses admin-scoped endpoints for APT client helper previews", async () => {
-    const client = createAxisClient({
-      baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
-    });
-    const requests: string[] = [];
-    client.http.defaults.adapter = async (config) => {
-      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
-      if (String(config.url).endsWith("/key.gpg")) {
-        return {
-          data: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
-          status: 200,
-          statusText: "OK",
-          headers: {},
-          config,
-        };
-      }
-      if (String(config.url).endsWith("/source")) {
-        return {
-          data: {
-            repository: "debian-private",
-            ecosystem: "apt",
-            baseUrl: "https://axis.example/repositories/debian-private",
-            codename: "noble",
-            components: ["main"],
-            keyringPath: "/usr/share/keyrings/axis-debian-private.gpg",
-            sourceLine:
-              "deb [signed-by=/usr/share/keyrings/axis-debian-private.gpg] https://axis.example/repositories/debian-private noble main",
-          },
-          status: 200,
-          statusText: "OK",
-          headers: {},
-          config,
-        };
-      }
-      return {
-        data: {
-          repository: "debian-private",
-          visibility: "private",
-          keyUrl: "https://axis.example/repositories/debian-private/apt/key.gpg",
-          keyringPath: "/usr/share/keyrings/axis-debian-private.gpg",
-          sourceListPath: "/etc/apt/sources.list.d/axis-debian-private.list",
-          sourceLine:
-            "deb [signed-by=/usr/share/keyrings/axis-debian-private.gpg] https://axis.example/repositories/debian-private noble main",
-          script: "# Configure credentials for private repository access.\nsudo apt update",
-          commands: ["sudo apt update"],
-        },
-        status: 200,
-        statusText: "OK",
-        headers: {},
-        config,
-      };
-    };
-
-    await client.getAptSigningPublicKey("debian-private");
-    await client.getAptSourceInfo("debian-private");
-    await client.getAptInstallInstructions("debian-private");
-
-    expect(requests).toEqual([
-      "GET /admin/repositories/debian-private/apt/client/key.gpg",
-      "GET /admin/repositories/debian-private/apt/client/source",
-      "GET /admin/repositories/debian-private/apt/client/install",
-    ]);
-  });
-
-  it("uses admin-scoped endpoints for PyPI client helper previews", async () => {
-    const client = createAxisClient({
-      baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
-    });
-    const requests: string[] = [];
-    client.http.defaults.adapter = async (config) => {
-      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
-      return {
-        data: {
-          repository: "python-internal",
-          ecosystem: "pypi",
-          simpleUrl: "https://axis.example/repositories/python-internal/simple/",
-          pipIndexUrl: "https://axis.example/repositories/python-internal/simple/",
-        },
-        status: 200,
-        statusText: "OK",
-        headers: {},
-        config,
-      };
-    };
-
-    const info = await client.getPypiClientInfo("python-internal");
-
-    expect(info.pipIndexUrl).toBe("https://axis.example/repositories/python-internal/simple/");
-    expect(requests).toEqual([
-      "GET /admin/repositories/python-internal/pypi/client/simple-url",
-    ]);
-  });
-
   it("uses a generic admin-scoped endpoint for repository client helpers", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
@@ -488,6 +330,46 @@ describe("createAxisClient", () => {
       .resolves.toEqual({ script: "pip install demo" });
     expect(requests).toEqual([
       "GET /admin/repositories/python-internal/pypi/client/simple-url",
+    ]);
+  });
+
+  it("uses generic admin-scoped endpoints for repository plugin resources", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: Array<{ method: string; url: string; data: unknown }> = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push({
+        method: config.method?.toUpperCase() ?? "",
+        url: config.url ?? "",
+        data: config.data ? JSON.parse(String(config.data)) : undefined,
+      });
+      return {
+        data: { ok: true },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.getRepositoryPluginResource("debian prod", "apt", ["signing-keys", "key 1"]))
+      .resolves.toEqual({ ok: true });
+    await expect(client.postRepositoryPluginResource("debian prod", "apt", ["signing-keys", "generate"], { name: "release" }))
+      .resolves.toEqual({ ok: true });
+
+    expect(requests).toEqual([
+      {
+        method: "GET",
+        url: "/admin/repositories/debian%20prod/apt/signing-keys/key%201",
+        data: undefined,
+      },
+      {
+        method: "POST",
+        url: "/admin/repositories/debian%20prod/apt/signing-keys/generate",
+        data: { name: "release" },
+      },
     ]);
   });
 
