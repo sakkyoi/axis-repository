@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAxisClient } from "../../api/hooks";
-import { pypiClientInfoSchema, type PypiClientInfo } from "../../api/schemas";
+import { pypiClientInfoSchema, type PypiClientInfo } from "./schemas";
 
 const pypiNamespace = "pypi";
 

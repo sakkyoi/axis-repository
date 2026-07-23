@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { createAxisClient } from "./client";
 import { serverErrorMessage } from "./http";
 import {
-  installInstructionsSchema,
-  pypiClientInfoSchema,
   publishSessionsResponseSchema,
   publishTokenCreateResponseSchema,
   repositoryPluginSchema,
@@ -58,36 +56,6 @@ describe("admin API schemas", () => {
 
     expect(response.secret).toBe("axis_publish_secret");
     expect(response.token).not.toHaveProperty("tokenHash");
-  });
-
-  it("parses APT install instructions", () => {
-    const instructions = installInstructionsSchema.parse({
-      repository: "debian-internal",
-      visibility: "private",
-      keyUrl: "https://axis.example/repositories/debian-internal/apt/key.gpg",
-      keyringPath: "/usr/share/keyrings/axis-debian-internal.gpg",
-      sourceListPath: "/etc/apt/sources.list.d/axis-debian-internal.list",
-      sourceLine:
-        "deb [signed-by=/usr/share/keyrings/axis-debian-internal.gpg] https://axis.example/repositories/debian-internal noble main",
-      authConfPath: "/etc/apt/auth.conf.d/axis-debian-internal.conf",
-      authConfTemplate: "machine axis.example\nlogin axis\npassword <READ_TOKEN>\n",
-      script: "# Configure credentials for private repository access.\nsudo apt update",
-      commands: ["sudo apt update"],
-    });
-
-    expect(instructions.sourceLine).toContain("noble main");
-    expect(instructions.authConfTemplate).toContain("<READ_TOKEN>");
-  });
-
-  it("parses PyPI client helper information", () => {
-    const info = pypiClientInfoSchema.parse({
-      repository: "python-internal",
-      ecosystem: "pypi",
-      simpleUrl: "https://axis.example/repositories/python-internal/simple/",
-      pipIndexUrl: "https://axis.example/repositories/python-internal/simple/",
-    });
-
-    expect(info.pipIndexUrl).toBe("https://axis.example/repositories/python-internal/simple/");
   });
 
   it("parses repository plugin metadata", () => {
