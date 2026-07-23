@@ -41,6 +41,12 @@ describe("repository detail plugins", () => {
     ]);
   });
 
+  it("lets the APT UI plugin provide the publish section renderer", () => {
+    const publishSection = getRepositoryDetailPlugin("apt")?.sections.find((section) => section.id === "publish-sessions");
+
+    expect(publishSection?.Component.name).toBe("AptPublishSessionsSection");
+  });
+
   it("provides generic fallback sections for unknown ecosystems", () => {
     expect(genericRepositoryDetailSections.map((section) => section.id)).toEqual([
       "settings",

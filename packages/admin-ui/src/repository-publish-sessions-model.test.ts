@@ -30,10 +30,9 @@ const session = (overrides: Partial<PublishSession>): PublishSession => ({
 });
 
 describe("repository publish sessions model", () => {
-  it("shows the APT publish form even when the repository has no sessions", () => {
+  it("keeps publish sessions view independent from ecosystem-specific renderers", () => {
     expect(repositoryPublishSessionsView({ name: "debian-internal", ecosystem: "apt" }, [])).toEqual({
       sessions: [],
-      showAptPublishForm: true,
     });
   });
 

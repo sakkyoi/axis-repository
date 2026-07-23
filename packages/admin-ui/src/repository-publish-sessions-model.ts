@@ -11,11 +11,9 @@ export function repositoryPublishSessionsView(
   sessions: PublishSession[],
 ): {
   sessions: PublishSession[];
-  showAptPublishForm: boolean;
 } {
   return {
     sessions: sessionsForRepository(repository.name, sessions),
-    showAptPublishForm: repository.ecosystem === "apt",
   };
 }
 

@@ -1,8 +1,7 @@
 import type { PluginRepositoryConfigManifest } from "@axis-repository/core/plugin-manifests";
 import type { CreateRepositoryInput } from "./api/client";
 import type { RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
-import { aptRepositoryCreatePlugin } from "./plugins/apt/create";
-import { pypiRepositoryCreatePlugin } from "./plugins/pypi/create";
+import { getRepositoryUiPlugin, repositoryCreatePluginsFromUiRegistry } from "./repository-ui-plugins";
 
 export type RepositoryCreateStep = "plugin" | "basics" | "config" | "dependencies" | "review";
 
@@ -46,7 +45,7 @@ export type RepositoryCreatePluginOption =
       supported: false;
     };
 
-export const repositoryCreatePlugins = [aptRepositoryCreatePlugin, pypiRepositoryCreatePlugin] as const;
+export const repositoryCreatePlugins = repositoryCreatePluginsFromUiRegistry();
 export { repositoryCreateStepsForConfig } from "./repository-create-steps";
 
 export function getRepositoryCreatePlugin(ecosystem: string): RepositoryCreatePlugin {
@@ -64,13 +63,8 @@ export function repositoryCreateStepForServerError(
   if (/^Repository already exists: /i.test(message) || message === "Repository name is required") {
     return plugin.steps.includes("basics") ? "basics" : undefined;
   }
-  if (/^config\.apt\.|Codename|Components|Architectures/i.test(message)) {
-    return plugin.steps.includes("config") ? "config" : undefined;
-  }
-  if (/Signing key/i.test(message)) {
-    return plugin.steps.includes("dependencies") ? "dependencies" : undefined;
-  }
-  return undefined;
+  const pluginStep = getRepositoryUiPlugin(plugin.ecosystem)?.mapCreateServerError?.(message);
+  return pluginStep && plugin.steps.includes(pluginStep) ? pluginStep : undefined;
 }
 
 export function repositoryCreateFieldErrors(message: string): RepositoryCreateFieldErrors {

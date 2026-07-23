@@ -1,14 +1,6 @@
 import type { ComponentType } from "react";
-import { aptPluginManifest, pypiPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { Repository, RepositoryPlugin } from "./api/schemas";
-import { AptClientHelpersSection, AptSettingsSection, AptSigningKeysSection } from "./plugins/apt/detail";
-import {
-  PypiClientHelpersSection,
-  PypiInstallHintsSection,
-  PypiSettingsSection,
-  pypiInstallCommandText,
-  pypiSimpleIndexUrl,
-} from "./plugins/pypi/detail";
+import { pypiInstallCommandText, pypiSimpleIndexUrl } from "./plugins/pypi/detail";
 import {
   AdvancedJsonConfigSection,
   GenericRepositoryDetail,
@@ -16,6 +8,7 @@ import {
   RepositorySettingsSection,
   repositoryClientHelperDisplayText,
 } from "./repository-detail-shared";
+import { getRepositoryUiPlugin, repositoryDetailPluginsFromUiRegistry } from "./repository-ui-plugins";
 
 export interface RepositoryDetailSectionProps {
   repository: Repository;
@@ -34,30 +27,7 @@ export interface RepositoryDetailPlugin {
   sections: RepositoryDetailSection[];
 }
 
-export const aptRepositoryDetailPlugin: RepositoryDetailPlugin = {
-  ecosystem: aptPluginManifest.ecosystem,
-  displayName: aptPluginManifest.displayName,
-  sections: [
-    { id: "settings", title: "APT settings", Component: AptSettingsSection },
-    { id: "publish-sessions", title: "Publish sessions", Component: PublishSessionsSection },
-    { id: "advanced-json", title: "Advanced JSON config", Component: AdvancedJsonConfigSection },
-    { id: "signing-keys", title: "APT signing keys", Component: AptSigningKeysSection },
-    { id: "client-helpers", title: "APT client setup", Component: AptClientHelpersSection },
-  ],
-};
-
-export const pypiRepositoryDetailPlugin: RepositoryDetailPlugin = {
-  ecosystem: pypiPluginManifest.ecosystem,
-  displayName: pypiPluginManifest.displayName,
-  sections: [
-    { id: "settings", title: "PyPI settings", Component: PypiSettingsSection },
-    { id: "publish-sessions", title: "Publish sessions", Component: PublishSessionsSection },
-    { id: "client-helpers", title: "PyPI client setup", Component: PypiClientHelpersSection },
-    { id: "install-hints", title: "Install hints", Component: PypiInstallHintsSection },
-  ],
-};
-
-export const repositoryDetailPlugins = [aptRepositoryDetailPlugin, pypiRepositoryDetailPlugin] as const;
+export const repositoryDetailPlugins = repositoryDetailPluginsFromUiRegistry();
 
 export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
   { id: "settings", title: "Repository settings", Component: RepositorySettingsSection },
@@ -66,7 +36,7 @@ export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
 ];
 
 export function getRepositoryDetailPlugin(ecosystem: string): RepositoryDetailPlugin | undefined {
-  return repositoryDetailPlugins.find((plugin) => plugin.ecosystem === ecosystem);
+  return getRepositoryUiPlugin(ecosystem)?.detail;
 }
 
 export {

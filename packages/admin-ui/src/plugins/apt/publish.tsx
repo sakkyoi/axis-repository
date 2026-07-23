@@ -1,0 +1,137 @@
+import { useState } from "react";
+import { PackagePlus } from "lucide-react";
+import {
+  useAxisClient,
+  useCreateAdminPublishSession,
+  useFinalizeAdminPublishSession,
+  useVerifyAdminPublishUpload,
+} from "../../api/hooks";
+import type { Repository, RepositoryPlugin } from "../../api/schemas";
+import {
+  buildAptPublishArtifact,
+  defaultAptPublishFormValues,
+  type AptPublishFormValues,
+} from "../../admin-publish-form-model";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { ErrorState } from "../../pages/shared";
+import { PublishSessionsSection } from "../../repository-detail-shared";
+
+export function AptPublishSessionsSection({
+  repository,
+  pluginMetadata,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  return (
+    <div className="grid gap-2">
+      <AptPublishArtifactForm repository={repository} />
+      <PublishSessionsSection repository={repository} pluginMetadata={pluginMetadata} />
+    </div>
+  );
+}
+
+function AptPublishArtifactForm({ repository }: { repository: Repository }) {
+  const client = useAxisClient();
+  const createSession = useCreateAdminPublishSession();
+  const verifyUpload = useVerifyAdminPublishUpload();
+  const finalizeSession = useFinalizeAdminPublishSession();
+  const [file, setFile] = useState<File>();
+  const [values, setValues] = useState<AptPublishFormValues>(() => defaultAptPublishFormValues());
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const isPublishing = createSession.isPending || verifyUpload.isPending || finalizeSession.isPending || status === "Uploading artifact...";
+
+  function updateValue(key: keyof AptPublishFormValues, value: string) {
+    setValues((current) => ({ ...current, [key]: value }));
+  }
+
+  function onFileSelected(nextFile: File | undefined) {
+    setFile(nextFile);
+    if (nextFile) {
+      setValues((current) => ({
+        ...current,
+        ...defaultAptPublishFormValues(nextFile.name),
+      }));
+    }
+  }
+
+  async function publishArtifact() {
+    if (!file) {
+      setError("Choose a .deb file before publishing.");
+      return;
+    }
+    setError("");
+    try {
+      setStatus("Preparing artifact...");
+      const artifact = await buildAptPublishArtifact(file, values);
+      const session = await createSession.mutateAsync({
+        repositoryName: repository.name,
+        ecosystem: repository.ecosystem,
+        artifacts: [artifact],
+      });
+      const upload = session.uploads[0];
+      if (!upload) {
+        throw new Error("Publish session did not return an upload target.");
+      }
+      setStatus("Uploading artifact...");
+      await client.uploadPublishArtifact(upload, file);
+      setStatus("Verifying upload...");
+      await verifyUpload.mutateAsync({ sessionId: session.id, uploadId: upload.uploadId });
+      setStatus("Finalizing repository...");
+      await finalizeSession.mutateAsync(session.id);
+      setStatus("Published.");
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : String(publishError));
+      setStatus("");
+    }
+  }
+
+  return (
+    <div className="grid gap-3 rounded-md border border-border bg-background/40 p-3">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <PackagePlus className="h-4 w-4" />
+        Publish APT artifact
+      </div>
+      <Input
+        type="file"
+        accept=".deb,application/vnd.debian.binary-package"
+        onChange={(event) => onFileSelected(event.currentTarget.files?.[0])}
+      />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <PublishTextInput label="Package" value={values.packageName} onChange={(value) => updateValue("packageName", value)} />
+        <PublishTextInput label="Version" value={values.version} onChange={(value) => updateValue("version", value)} />
+        <PublishTextInput label="Architecture" value={values.architecture} onChange={(value) => updateValue("architecture", value)} />
+        <PublishTextInput label="Component" value={values.component} onChange={(value) => updateValue("component", value)} />
+        <PublishTextInput label="Section" value={values.section} onChange={(value) => updateValue("section", value)} />
+        <PublishTextInput label="Priority" value={values.priority} onChange={(value) => updateValue("priority", value)} />
+      </div>
+      <PublishTextInput label="Description" value={values.description} onChange={(value) => updateValue("description", value)} />
+      <PublishTextInput label="Maintainer" value={values.maintainer} onChange={(value) => updateValue("maintainer", value)} />
+      <Button type="button" onClick={publishArtifact} disabled={isPublishing}>
+        <PackagePlus className="mr-2 h-4 w-4" />
+        Publish artifact
+      </Button>
+      {status && <p className="text-sm text-muted-foreground">{status}</p>}
+      {error && <ErrorState title="Publish failed" error={error} />}
+    </div>
+  );
+}
+
+function PublishTextInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <Input value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
