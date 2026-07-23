@@ -9,5 +9,11 @@
     "noEmit": true,
     "types": ["vite/client", "vitest/globals"]
   },
-  "include": ["src", "vite.config.ts", "../core/src/plugin-manifests.ts"]
+  "include": [
+    "src",
+    "vite.config.ts",
+    "../core/src/plugin-manifests.ts",
+    "../../plugins/*/manifest.ts",
+    "../../plugins/*/admin-ui"
+  ]
 }

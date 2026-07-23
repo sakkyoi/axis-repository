@@ -10,8 +10,8 @@ import type {
   RepositoryPublishPlugin,
   RepositoryUiPlugin,
 } from "./repository-ui-plugin-types";
-import { aptRepositoryUiPlugin } from "./plugins/apt";
-import { pypiRepositoryUiPlugin } from "./plugins/pypi";
+import { aptRepositoryUiPlugin } from "../../../plugins/apt/admin-ui";
+import { pypiRepositoryUiPlugin } from "../../../plugins/pypi/admin-ui";
 
 type NonEmptyArray<T> = [T, ...T[]];
 

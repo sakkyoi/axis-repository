@@ -1,4 +1,3 @@
-import { pypiInstallCommandText, pypiSimpleIndexUrl } from "./plugins/pypi/detail";
 import {
   AdvancedJsonConfigSection,
   GenericRepositoryDetail,
@@ -28,7 +27,5 @@ export function getRepositoryDetailPlugin(ecosystem: string): RepositoryDetailPl
 
 export {
   GenericRepositoryDetail,
-  pypiInstallCommandText,
-  pypiSimpleIndexUrl,
   repositoryClientHelperDisplayText,
 };

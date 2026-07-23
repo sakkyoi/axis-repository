@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { aptPluginManifest, pypiPluginManifest } from "@axis-repository/core/plugin-manifests";
+import { aptPluginManifest } from "../../../plugins/apt/manifest";
+import { pypiPluginManifest } from "../../../plugins/pypi/manifest";
 
 import {
   getPublishTokenScopeExtension,

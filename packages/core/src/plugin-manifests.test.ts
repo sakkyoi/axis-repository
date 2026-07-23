@@ -1,7 +1,23 @@
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { aptPluginManifest, pypiPluginManifest } from "./plugin-manifests";
+import { aptPluginManifest } from "../../../plugins/apt/manifest";
+import { pypiPluginManifest } from "../../../plugins/pypi/manifest";
+
+const srcDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(srcDir, "..", "..", "..");
 
 describe("shared plugin manifests", () => {
+  it("keeps concrete plugin manifests in repo-level plugin directories", () => {
+    const coreManifestTypes = readFileSync(join(srcDir, "plugin-manifests.ts"), "utf8");
+
+    expect(coreManifestTypes).not.toContain("aptPluginManifest");
+    expect(coreManifestTypes).not.toContain("pypiPluginManifest");
+    expect(existsSync(join(repoRoot, "plugins", "apt", "manifest.ts"))).toBe(true);
+    expect(existsSync(join(repoRoot, "plugins", "pypi", "manifest.ts"))).toBe(true);
+  });
+
   it("defines APT metadata once for runtime and admin UI consumers", () => {
     expect(aptPluginManifest).toMatchObject({
       ecosystem: "apt",

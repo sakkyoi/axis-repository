@@ -9,7 +9,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["packages/**/*.test.ts"],
+    include: ["packages/**/*.test.ts", "plugins/**/*.test.ts"],
     globals: false,
     passWithNoTests: true,
   },

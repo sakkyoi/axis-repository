@@ -2,11 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   genericRepositoryDetailSections,
   getRepositoryDetailPlugin,
-  pypiInstallCommandText,
-  pypiSimpleIndexUrl,
   repositoryClientHelperDisplayText,
   repositoryDetailPlugins,
 } from "./repository-detail-plugins";
+import { pypiInstallCommandText, pypiSimpleIndexUrl } from "../../../plugins/pypi/admin-ui/detail";
 
 describe("repository detail plugins", () => {
   it("exposes APT as a repository detail plugin", () => {
