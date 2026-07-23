@@ -1,11 +1,5 @@
 import { useState } from "react";
 import { PackagePlus } from "lucide-react";
-import {
-  useAxisClient,
-  useCreateAdminPublishSession,
-  useFinalizeAdminPublishSession,
-  useVerifyAdminPublishUpload,
-} from "../../api/hooks";
 import type { Repository, RepositoryPlugin } from "../../api/schemas";
 import {
   buildAptPublishArtifact,
@@ -16,6 +10,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { ErrorState } from "../../pages/shared";
 import { PublishSessionsSection } from "../../repository-detail-shared";
+import { useRepositoryArtifactPublisher } from "../../repository-publish-flow";
 
 export function AptPublishSessionsSection({
   repository,
@@ -33,15 +28,10 @@ export function AptPublishSessionsSection({
 }
 
 function AptPublishArtifactForm({ repository }: { repository: Repository }) {
-  const client = useAxisClient();
-  const createSession = useCreateAdminPublishSession();
-  const verifyUpload = useVerifyAdminPublishUpload();
-  const finalizeSession = useFinalizeAdminPublishSession();
+  const publisher = useRepositoryArtifactPublisher(repository);
   const [file, setFile] = useState<File>();
   const [values, setValues] = useState<AptPublishFormValues>(() => defaultAptPublishFormValues());
-  const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const isPublishing = createSession.isPending || verifyUpload.isPending || finalizeSession.isPending || status === "Uploading artifact...";
 
   function updateValue(key: keyof AptPublishFormValues, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -64,27 +54,10 @@ function AptPublishArtifactForm({ repository }: { repository: Repository }) {
     }
     setError("");
     try {
-      setStatus("Preparing artifact...");
       const artifact = await buildAptPublishArtifact(file, values);
-      const session = await createSession.mutateAsync({
-        repositoryName: repository.name,
-        ecosystem: repository.ecosystem,
-        artifacts: [artifact],
-      });
-      const upload = session.uploads[0];
-      if (!upload) {
-        throw new Error("Publish session did not return an upload target.");
-      }
-      setStatus("Uploading artifact...");
-      await client.uploadPublishArtifact(upload, file);
-      setStatus("Verifying upload...");
-      await verifyUpload.mutateAsync({ sessionId: session.id, uploadId: upload.uploadId });
-      setStatus("Finalizing repository...");
-      await finalizeSession.mutateAsync(session.id);
-      setStatus("Published.");
+      await publisher.publish({ files: [file], artifacts: [artifact] });
     } catch (publishError) {
       setError(publishError instanceof Error ? publishError.message : String(publishError));
-      setStatus("");
     }
   }
 
@@ -109,12 +82,12 @@ function AptPublishArtifactForm({ repository }: { repository: Repository }) {
       </div>
       <PublishTextInput label="Description" value={values.description} onChange={(value) => updateValue("description", value)} />
       <PublishTextInput label="Maintainer" value={values.maintainer} onChange={(value) => updateValue("maintainer", value)} />
-      <Button type="button" onClick={publishArtifact} disabled={isPublishing}>
+      <Button type="button" onClick={publishArtifact} disabled={publisher.isPublishing}>
         <PackagePlus className="mr-2 h-4 w-4" />
         Publish artifact
       </Button>
-      {status && <p className="text-sm text-muted-foreground">{status}</p>}
-      {error && <ErrorState title="Publish failed" error={error} />}
+      {publisher.status && <p className="text-sm text-muted-foreground">{publisher.status}</p>}
+      {(error || publisher.error) && <ErrorState title="Publish failed" error={error || publisher.error} />}
     </div>
   );
 }
