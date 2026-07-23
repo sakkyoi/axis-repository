@@ -7,7 +7,7 @@
     "build": "pnpm -r build",
     "dev:ui": "pnpm --filter @axis-repository/admin-ui dev",
     "test": "vitest run",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "tsc --noEmit && pnpm -r typecheck"
   },
   "devDependencies": {
     "@axis-repository/core": "workspace:^",

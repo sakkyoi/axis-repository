@@ -1,4 +1,4 @@
-import type { PluginRepositoryConfigFieldManifest } from "@axis-repository/core/plugin-manifests";
+import type { PluginRepositoryConfigFieldManifest } from "../../../packages/core/src/plugin-manifests";
 import { aptPluginManifest } from "../manifest";
 import type {
   RepositoryCreatePlugin,
