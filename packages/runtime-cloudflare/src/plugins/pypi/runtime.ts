@@ -5,9 +5,10 @@ import { createPrefixServingPredicate } from "../../artifact-publisher-registry"
 import { GenericManifestPublisher } from "../../generic-manifest-publisher";
 
 function validatePypiRepositoryConfig(config: Record<string, unknown>): void {
-  const pypi = config.pypi;
+  const namespace = pypiPluginManifest.repositoryConfig.namespace;
+  const pypi = config[namespace];
   if (pypi !== undefined && (!pypi || typeof pypi !== "object" || Array.isArray(pypi))) {
-    throw new ValidationError("config.pypi must be an object");
+    throw new ValidationError(`config.${namespace} must be an object`);
   }
 }
 

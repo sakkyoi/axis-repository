@@ -10,6 +10,38 @@ describe("shared plugin manifests", () => {
       runtimeName: "apt-signed",
       version: "0.1.0",
       capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
+      repositoryConfig: {
+        namespace: "apt",
+        fields: [
+          {
+            name: "codename",
+            label: "Codename",
+            kind: "text",
+            required: true,
+            defaultValue: "noble",
+          },
+          {
+            name: "components",
+            label: "Components",
+            kind: "string-list",
+            required: true,
+            defaultValue: ["main"],
+          },
+          {
+            name: "architectures",
+            label: "Architectures",
+            kind: "string-list",
+            required: true,
+            defaultValue: ["amd64"],
+          },
+          {
+            name: "signingKeyId",
+            label: "Signing key",
+            kind: "signing-key",
+            required: true,
+          },
+        ],
+      },
       clientHelpers: {
         namespace: "apt",
         actions: [
@@ -47,6 +79,10 @@ describe("shared plugin manifests", () => {
       runtimeName: "pypi-simple",
       version: "0.1.0",
       capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
+      repositoryConfig: {
+        namespace: "pypi",
+        fields: [],
+      },
       clientHelpers: {
         namespace: "pypi",
         actions: [

@@ -1,4 +1,4 @@
-import { aptPluginManifest } from "@axis-repository/core/plugin-manifests";
+import { aptPluginManifest, type PluginRepositoryConfigFieldManifest } from "@axis-repository/core/plugin-manifests";
 import type { RepositoryCreatePlugin, RepositoryCreateWizardState } from "../../repository-create-plugins";
 import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "../../repository-forms";
 
@@ -7,6 +7,46 @@ function splitList(value: string): string[] {
     .split(/[\s,]+/g)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function field(name: string): PluginRepositoryConfigFieldManifest {
+  const configField = aptPluginManifest.repositoryConfig.fields.find((candidate) => candidate.name === name);
+  if (!configField) {
+    throw new Error(`APT repository config field is not declared: ${name}`);
+  }
+  return configField;
+}
+
+function stringDefault(name: string): string {
+  const defaultValue = field(name).defaultValue;
+  return typeof defaultValue === "string" ? defaultValue : "";
+}
+
+function stringListDefault(name: string): string {
+  const defaultValue = field(name).defaultValue;
+  return Array.isArray(defaultValue) ? defaultValue.join(" ") : "";
+}
+
+function requiredFieldError(name: string): string {
+  return `${field(name).label} is required`;
+}
+
+function validateRequiredTextField(state: RepositoryCreateWizardState, name: string): string[] {
+  const configField = field(name);
+  if (!configField.required) return [];
+  return state.config[name]?.trim() ? [] : [requiredFieldError(name)];
+}
+
+function validateRequiredListField(state: RepositoryCreateWizardState, name: string): string[] {
+  const configField = field(name);
+  if (!configField.required) return [];
+  return splitList(state.config[name] ?? "").length === 0 ? [requiredFieldError(name)] : [];
+}
+
+function validateRequiredDependencyField(state: RepositoryCreateWizardState, name: string): string[] {
+  const configField = field(name);
+  if (!configField.required) return [];
+  return state.dependencies[name]?.trim() ? [] : [requiredFieldError(name)];
 }
 
 function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormValues {
@@ -30,9 +70,9 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
     name: "",
     visibility: "private",
     config: {
-      codename: "noble",
-      components: "main",
-      architectures: "amd64",
+      codename: stringDefault("codename"),
+      components: stringListDefault("components"),
+      architectures: stringListDefault("architectures"),
     },
     dependencies: {
       signingKeyId: "",
@@ -43,14 +83,14 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
       return state.name.trim() ? [] : ["Repository name is required"];
     }
     if (step === "config") {
-      const errors: string[] = [];
-      if (!state.config.codename?.trim()) errors.push("Codename is required");
-      if (splitList(state.config.components ?? "").length === 0) errors.push("Components are required");
-      if (splitList(state.config.architectures ?? "").length === 0) errors.push("Architectures are required");
-      return errors;
+      return [
+        ...validateRequiredTextField(state, "codename"),
+        ...validateRequiredListField(state, "components"),
+        ...validateRequiredListField(state, "architectures"),
+      ];
     }
     if (step === "dependencies") {
-      return state.dependencies.signingKeyId?.trim() ? [] : ["Signing key is required"];
+      return validateRequiredDependencyField(state, "signingKeyId");
     }
     return [];
   },

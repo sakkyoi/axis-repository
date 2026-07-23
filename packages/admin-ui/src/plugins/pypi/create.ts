@@ -24,7 +24,7 @@ export const pypiRepositoryCreatePlugin: RepositoryCreatePlugin = {
     ecosystem: pypiPluginManifest.ecosystem,
     visibility: state.visibility,
     config: {
-      pypi: {},
+      [pypiPluginManifest.repositoryConfig.namespace]: {},
     },
   }),
 };

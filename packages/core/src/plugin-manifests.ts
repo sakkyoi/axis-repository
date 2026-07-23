@@ -14,6 +14,22 @@ export interface PluginClientHelpersManifest {
   actions: PluginClientHelperActionManifest[];
 }
 
+export type PluginRepositoryConfigFieldKind = "text" | "string-list" | "signing-key";
+export type PluginRepositoryConfigDefaultValue = string | string[];
+
+export interface PluginRepositoryConfigFieldManifest {
+  name: string;
+  label: string;
+  kind: PluginRepositoryConfigFieldKind;
+  required: boolean;
+  defaultValue?: PluginRepositoryConfigDefaultValue | undefined;
+}
+
+export interface PluginRepositoryConfigManifest {
+  namespace: string;
+  fields: PluginRepositoryConfigFieldManifest[];
+}
+
 export interface RepositoryPluginManifest {
   ecosystem: "apt" | "pypi" | (string & {});
   displayName: string;
@@ -21,6 +37,7 @@ export interface RepositoryPluginManifest {
   runtimeName: string;
   version: string;
   capabilities: string[];
+  repositoryConfig: PluginRepositoryConfigManifest;
   clientHelpers?: PluginClientHelpersManifest;
 }
 
@@ -31,6 +48,38 @@ export const aptPluginManifest = {
   runtimeName: "apt-signed",
   version: "0.1.0",
   capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
+  repositoryConfig: {
+    namespace: "apt",
+    fields: [
+      {
+        name: "codename",
+        label: "Codename",
+        kind: "text",
+        required: true,
+        defaultValue: "noble",
+      },
+      {
+        name: "components",
+        label: "Components",
+        kind: "string-list",
+        required: true,
+        defaultValue: ["main"],
+      },
+      {
+        name: "architectures",
+        label: "Architectures",
+        kind: "string-list",
+        required: true,
+        defaultValue: ["amd64"],
+      },
+      {
+        name: "signingKeyId",
+        label: "Signing key",
+        kind: "signing-key",
+        required: true,
+      },
+    ],
+  },
   clientHelpers: {
     namespace: "apt",
     actions: [
@@ -66,6 +115,10 @@ export const pypiPluginManifest = {
   runtimeName: "pypi-simple",
   version: "0.1.0",
   capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
+  repositoryConfig: {
+    namespace: "pypi",
+    fields: [],
+  },
   clientHelpers: {
     namespace: "pypi",
     actions: [
