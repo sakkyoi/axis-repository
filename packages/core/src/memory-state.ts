@@ -31,6 +31,9 @@ export class MemoryStateStore implements StateStore {
     get: async (id: string): Promise<PublishSession | null> => {
       return this.publishSessionById.get(id) ?? null;
     },
+    list: async (): Promise<PublishSession[]> => {
+      return [...this.publishSessionById.values()].sort(comparePublishSessions);
+    },
     save: async (session: PublishSession): Promise<void> => {
       this.publishSessionById.set(session.id, session);
     },
@@ -121,6 +124,11 @@ export class MemoryStateStore implements StateStore {
       this.signingKeyIdByName.set(nameIndex, record.id);
     },
   };
+}
+
+function comparePublishSessions(left: PublishSession, right: PublishSession): number {
+  const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
+  return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
 }
 
 function signingKeyNameIndex(repositoryName: string, name: string): string {

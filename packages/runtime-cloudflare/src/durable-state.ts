@@ -57,6 +57,12 @@ export class DurableStateStore implements StateStore {
     get: async (id: string): Promise<PublishSession | null> => {
       return (await this.storage.get<PublishSession>(sessionKey(id))) ?? null;
     },
+    list: async (): Promise<PublishSession[]> => {
+      const values = await this.storage.list<PublishSession>({
+        prefix: "publish-session:",
+      });
+      return [...values.values()].sort(comparePublishSessions);
+    },
     save: async (session: PublishSession): Promise<void> => {
       await this.storage.put(sessionKey(session.id), session);
     },
@@ -166,4 +172,9 @@ export class DurableStateStore implements StateStore {
       await this.storage.put(signingKeyNameKey(record.repositoryName, record.name), record.id);
     },
   };
+}
+
+function comparePublishSessions(left: PublishSession, right: PublishSession): number {
+  const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
+  return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
 }

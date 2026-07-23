@@ -18,6 +18,7 @@ describe("publish CLI", () => {
           baseUrl: "https://axis.example",
           tokenEnv: "AXIS_PUBLISH_TOKEN",
           repository: "debian-internal",
+          ecosystem: "apt",
           artifacts: [
             {
               path: "./pkg.deb",
@@ -32,7 +33,20 @@ describe("publish CLI", () => {
       baseUrl: "https://axis.example",
       tokenEnv: "AXIS_PUBLISH_TOKEN",
       repository: "debian-internal",
+      ecosystem: "apt",
       artifacts: [{ path: "./pkg.deb", filename: "pkg.deb" }],
     });
+  });
+
+  it("requires ecosystem", () => {
+    expect(() =>
+      parsePublishRequest(
+        JSON.stringify({
+          baseUrl: "https://axis.example",
+          repository: "debian-internal",
+          artifacts: [{ path: "./pkg.deb", contentType: "application/vnd.debian.binary-package", metadata: {} }],
+        }),
+      ),
+    ).toThrow("ecosystem is required");
   });
 });

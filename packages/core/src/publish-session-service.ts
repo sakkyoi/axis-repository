@@ -16,6 +16,15 @@ export interface CreatePublishSessionInput {
   artifacts: PublishArtifactRequest[];
 }
 
+export interface ListPublishSessionsInput {
+  principal: TokenPrincipal;
+}
+
+export interface GetPublishSessionInput {
+  sessionId: string;
+  principal: TokenPrincipal;
+}
+
 export interface VerifyPublishUploadInput {
   sessionId: string;
   uploadId: string;
@@ -100,6 +109,24 @@ export class PublishSessionService {
     this.finalizingRetryAfterSeconds = options.finalizingRetryAfterSeconds ?? 60;
   }
 
+  async list(input: ListPublishSessionsInput): Promise<PublishSession[]> {
+    this.requirePublishPermission(input.principal);
+    const sessions = await this.options.state.publishSessions.list();
+    return sessions.filter((session) =>
+      input.principal.repositories.includes(session.repositoryName),
+    );
+  }
+
+  async get(input: GetPublishSessionInput): Promise<PublishSession> {
+    this.requirePublishPermission(input.principal);
+    const session = await this.options.state.publishSessions.get(input.sessionId);
+    if (!session) {
+      throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
+    }
+    this.requireRepositoryScope(input.principal, session.repositoryName);
+    return session;
+  }
+
   async create(input: CreatePublishSessionInput): Promise<PublishSession> {
     const artifacts = input.artifacts.map((artifact) => ({
       ...artifact,
@@ -113,12 +140,8 @@ export class PublishSessionService {
     if (repository.ecosystem !== input.ecosystem) {
       throw new ValidationError(`Repository ${repository.name} is not a ${input.ecosystem} repository`);
     }
-    if (!input.principal.permissions.includes("publish")) {
-      throw new ForbiddenError("Publish permission is required");
-    }
-    if (!input.principal.repositories.includes(repository.name)) {
-      throw new ForbiddenError(`Token is not scoped to repository: ${repository.name}`);
-    }
+    this.requirePublishPermission(input.principal);
+    this.requireRepositoryScope(input.principal, repository.name);
     if (artifacts.length === 0) {
       throw new ValidationError("At least one artifact is required");
     }
@@ -169,12 +192,8 @@ export class PublishSessionService {
     if (isExpired(session, this.options.clock.now())) {
       throw new ValidationError("Publish session has expired");
     }
-    if (!input.principal.permissions.includes("publish")) {
-      throw new ForbiddenError("Publish permission is required");
-    }
-    if (!input.principal.repositories.includes(session.repositoryName)) {
-      throw new ForbiddenError(`Token is not scoped to repository: ${session.repositoryName}`);
-    }
+    this.requirePublishPermission(input.principal);
+    this.requireRepositoryScope(input.principal, session.repositoryName);
 
     const uploadIndex = session.uploads.findIndex((upload) => upload.uploadId === input.uploadId);
     if (uploadIndex === -1) {
@@ -225,12 +244,8 @@ export class PublishSessionService {
     if (!session) {
       throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
     }
-    if (!input.principal.permissions.includes("publish")) {
-      throw new ForbiddenError("Publish permission is required");
-    }
-    if (!input.principal.repositories.includes(session.repositoryName)) {
-      throw new ForbiddenError(`Token is not scoped to repository: ${session.repositoryName}`);
-    }
+    this.requirePublishPermission(input.principal);
+    this.requireRepositoryScope(input.principal, session.repositoryName);
     if (session.status !== "ready" && session.status !== "finalizing") {
       throw new ValidationError(`Publish session is not ready: ${session.status}`);
     }
@@ -339,6 +354,18 @@ export class PublishSessionService {
     }
     const retryAfterMs = this.finalizingRetryAfterSeconds * 1000;
     return now.getTime() - new Date(session.finalizingStartedAt).getTime() >= retryAfterMs;
+  }
+
+  private requirePublishPermission(principal: TokenPrincipal): void {
+    if (!principal.permissions.includes("publish")) {
+      throw new ForbiddenError("Publish permission is required");
+    }
+  }
+
+  private requireRepositoryScope(principal: TokenPrincipal, repositoryName: string): void {
+    if (!principal.repositories.includes(repositoryName)) {
+      throw new ForbiddenError(`Token is not scoped to repository: ${repositoryName}`);
+    }
   }
 
   private async saveTerminalSession(

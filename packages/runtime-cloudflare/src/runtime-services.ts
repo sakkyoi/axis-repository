@@ -3,6 +3,8 @@ import {
   type CreateRepositoryInput,
   type FinalizePublishSessionInput,
   type FinalizePublishSessionResult,
+  type GetPublishSessionInput,
+  type ListPublishSessionsInput,
   type PublishSession,
   PublishSessionService,
   type Repository,
@@ -72,6 +74,14 @@ export class PluginPublishSessionService {
       artifacts: input.artifacts,
     });
     return this.options.publishSessionService.create(input);
+  }
+
+  list(input: ListPublishSessionsInput): Promise<PublishSession[]> {
+    return this.options.publishSessionService.list(input);
+  }
+
+  get(input: GetPublishSessionInput): Promise<PublishSession> {
+    return this.options.publishSessionService.get(input);
   }
 
   verifyUpload(input: VerifyPublishUploadInput): Promise<VerifyPublishUploadResult> {

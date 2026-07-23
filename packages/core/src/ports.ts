@@ -88,6 +88,7 @@ export interface RepositoryStore {
 
 export interface PublishSessionStore {
   get(id: string): Promise<PublishSession | null>;
+  list(): Promise<PublishSession[]>;
   save(session: PublishSession): Promise<void>;
   update(
     id: string,

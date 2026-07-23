@@ -27,35 +27,33 @@ describe("publish client", () => {
       }
       if (String(url).endsWith("/api/publish-sessions") && method === "POST") {
         return Response.json({
-          session: {
-            id: "pub_1",
-            repositoryName: "debian-internal",
-            ecosystem: "apt",
-            status: "pending_uploads",
-            requestedBy: {
-              tokenId: "tok_1",
-              name: "ci",
-              permissions: ["publish"],
-              repositories: ["debian-internal"],
-              ecosystemScopes: {},
-              signingKeyIds: [],
-            },
-            artifacts: [],
-            uploads: [
-              {
-                uploadId: "upl_1",
-                filename: "pkg.deb",
-                objectKey: "_staging/uploads/pub_1/upl_1/pkg.deb",
-                method: "PUT",
-                url: "https://uploads.example/upl_1",
-                headers: { "content-type": "application/vnd.debian.binary-package" },
-                expiresAt: "2026-07-23T00:10:00.000Z",
-              },
-            ],
-            verifiedUploads: [],
-            createdAt: "2026-07-23T00:00:00.000Z",
-            expiresAt: "2026-07-23T00:10:00.000Z",
+          id: "pub_1",
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          status: "pending_uploads",
+          requestedBy: {
+            tokenId: "tok_1",
+            name: "ci",
+            permissions: ["publish"],
+            repositories: ["debian-internal"],
+            ecosystemScopes: {},
+            signingKeyIds: [],
           },
+          artifacts: [],
+          uploads: [
+            {
+              uploadId: "upl_1",
+              filename: "pkg.deb",
+              objectKey: "_staging/uploads/pub_1/upl_1/pkg.deb",
+              method: "PUT",
+              url: "https://uploads.example/upl_1",
+              headers: { "content-type": "application/vnd.debian.binary-package" },
+              expiresAt: "2026-07-23T00:10:00.000Z",
+            },
+          ],
+          verifiedUploads: [],
+          createdAt: "2026-07-23T00:00:00.000Z",
+          expiresAt: "2026-07-23T00:10:00.000Z",
         });
       }
       if (String(url).endsWith("/api/publish-sessions/pub_1/uploads/upl_1/verify") && method === "POST") {
@@ -92,6 +90,7 @@ describe("publish client", () => {
 
     const result = await client.publishArtifacts({
       repository: "debian-internal",
+      ecosystem: "apt",
       artifacts: [
         {
           filename: "pkg.deb",
@@ -110,6 +109,11 @@ describe("publish client", () => {
       url: "https://axis.example/api/publish-sessions",
       method: "POST",
       headers: { authorization: "Bearer axis_publish_secret" },
+    });
+    expect(JSON.parse(String(calls[0]?.body))).toMatchObject({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      artifacts: [{ filename: "pkg.deb" }],
     });
   });
 });

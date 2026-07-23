@@ -1715,6 +1715,191 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("starts a publish session from the publish client request shape", async () => {
+    const app = createApp();
+    await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
+    const token = await createToken(app, {
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+
+    const sessionResponse = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [
+            {
+              filename: "myapp_1.2.3_amd64.deb",
+              size: 1234,
+              sha256: "a".repeat(64),
+              contentType: "application/vnd.debian.binary-package",
+              metadata: {
+                package: "myapp",
+                version: "1.2.3",
+                architecture: "amd64",
+                component: "main",
+                description: "Example package",
+                maintainer: "Release Team <release@example.com>",
+              },
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(sessionResponse.status).toBe(201);
+    await expect(sessionResponse.json()).resolves.toMatchObject({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      uploads: [{ filename: "myapp_1.2.3_amd64.deb" }],
+    });
+  });
+
+  it("lists publish sessions scoped to the publish token repositories", async () => {
+    const app = createApp();
+    await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
+    await createRepository(app, { name: "debian-staging", ecosystem: "apt" });
+    const internalToken = await createToken(app, {
+      name: "internal-ci",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+    const stagingToken = await createToken(app, {
+      name: "staging-ci",
+      repositories: ["debian-staging"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["other"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+
+    await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${stagingToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        repositoryName: "debian-staging",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "other_1.0.0_amd64.deb",
+          size: 1,
+          sha256: "b".repeat(64),
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "other",
+            version: "1.0.0",
+            architecture: "amd64",
+            component: "main",
+            description: "Other package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    const internalCreateResponse = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${internalToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "myapp_1.2.3_amd64.deb",
+          size: 1,
+          sha256: "a".repeat(64),
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "myapp",
+            version: "1.2.3",
+            architecture: "amd64",
+            component: "main",
+            description: "Example package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    const internalSession = (await internalCreateResponse.json()) as { id: string };
+
+    const listResponse = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        headers: { authorization: `Bearer ${internalToken}` },
+      }),
+    );
+
+    expect(listResponse.status).toBe(200);
+    await expect(listResponse.json()).resolves.toMatchObject({
+      sessions: [{ id: internalSession.id, repositoryName: "debian-internal" }],
+    });
+  });
+
+  it("gets a publish session by id and rejects tokens outside the repository scope", async () => {
+    const app = createApp();
+    await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
+    const internalToken = await createToken(app, {
+      name: "internal-ci",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+    const externalToken = await createToken(app, {
+      name: "external-ci",
+      repositories: ["debian-external"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+    const createResponse = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${internalToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "myapp_1.2.3_amd64.deb",
+          size: 1,
+          sha256: "a".repeat(64),
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "myapp",
+            version: "1.2.3",
+            architecture: "amd64",
+            component: "main",
+            description: "Example package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    const session = (await createResponse.json()) as { id: string };
+
+    const getResponse = await app.fetch(
+      new Request(`https://axis.example/api/publish-sessions/${session.id}`, {
+        headers: { authorization: `Bearer ${internalToken}` },
+      }),
+    );
+    const forbiddenResponse = await app.fetch(
+      new Request(`https://axis.example/api/publish-sessions/${session.id}`, {
+        headers: { authorization: `Bearer ${externalToken}` },
+      }),
+    );
+
+    expect(getResponse.status).toBe(200);
+    await expect(getResponse.json()).resolves.toMatchObject({
+      session: { id: session.id, repositoryName: "debian-internal" },
+    });
+    expect(forbiddenResponse.status).toBe(403);
+  });
+
   it("verifies an uploaded artifact for a publish session", async () => {
     const app = createApp();
 

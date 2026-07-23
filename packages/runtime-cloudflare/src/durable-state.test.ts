@@ -159,6 +159,19 @@ describe("DurableStateStore", () => {
     await expect(state.publishSessions.get("pub_2")).resolves.toBeNull();
   });
 
+  it("lists publish sessions sorted by created time descending", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    await state.publishSessions.save(publishSession({ id: "pub_old", createdAt: "2026-07-14T00:00:00.000Z" }));
+    await state.publishSessions.save(publishSession({ id: "pub_new", createdAt: "2026-07-14T00:02:00.000Z" }));
+    await state.publishSessions.save(publishSession({ id: "pub_mid", createdAt: "2026-07-14T00:01:00.000Z" }));
+
+    await expect(state.publishSessions.list()).resolves.toMatchObject([
+      { id: "pub_new" },
+      { id: "pub_mid" },
+      { id: "pub_old" },
+    ]);
+  });
+
   it("updates publish sessions from the latest value and does not save when the updater throws", async () => {
     const state = new DurableStateStore(new FakeDurableStorage());
     await state.publishSessions.save(publishSession({ status: "pending_uploads" }));

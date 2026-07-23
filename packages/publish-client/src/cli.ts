@@ -10,6 +10,7 @@ export interface PublishRequestFile {
   tokenEnv?: string;
   token?: string;
   repository: string;
+  ecosystem: string;
   artifacts: Array<{
     path: string;
     filename?: string;
@@ -35,6 +36,9 @@ export function parsePublishRequest(json: string): PublishRequestFile {
   }
   if (!parsed.repository) {
     throw new Error("repository is required");
+  }
+  if (!parsed.ecosystem) {
+    throw new Error("ecosystem is required");
   }
   if (!Array.isArray(parsed.artifacts) || parsed.artifacts.length === 0) {
     throw new Error("artifacts are required");
@@ -72,6 +76,7 @@ export async function runCli(args = process.argv.slice(2), env = process.env): P
 
   const result = await createPublishClient({ baseUrl: request.baseUrl, token }).publishArtifacts({
     repository: request.repository,
+    ecosystem: request.ecosystem,
     artifacts,
   });
   console.log(JSON.stringify(result, null, 2));

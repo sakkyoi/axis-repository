@@ -697,6 +697,12 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     throw new NotFoundError();
   }
+  if (url.pathname === "/api/publish-sessions" && request.method === "GET") {
+    const secret = requireBearer(request);
+    const principal = await dependencies.publishTokenService.verify(secret);
+    const sessions = await dependencies.publishSessionService.list({ principal });
+    return jsonResponse({ sessions });
+  }
   if (url.pathname === "/api/publish-sessions" && request.method === "POST") {
     const secret = requireBearer(request);
     const principal = await dependencies.publishTokenService.verify(secret);
@@ -709,6 +715,17 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       artifacts,
     });
     return jsonResponse(session, { status: 201 });
+  }
+  const getPublishSessionMatch = url.pathname.match(/^\/api\/publish-sessions\/([^/]+)$/);
+  if (getPublishSessionMatch && request.method === "GET") {
+    const [, sessionId] = getPublishSessionMatch;
+    if (!sessionId) {
+      throw new NotFoundError();
+    }
+    const secret = requireBearer(request);
+    const principal = await dependencies.publishTokenService.verify(secret);
+    const session = await dependencies.publishSessionService.get({ sessionId, principal });
+    return jsonResponse({ session });
   }
   const verifyUploadMatch = url.pathname.match(
     /^\/api\/publish-sessions\/([^/]+)\/uploads\/([^/]+)\/verify$/,

@@ -1,4 +1,4 @@
-import type { PublishArtifactRequest, PublishSession, UploadTarget, VerifiedUpload } from "@axis-repository/core";
+import type { Ecosystem, PublishArtifactRequest, PublishSession, UploadTarget, VerifiedUpload } from "@axis-repository/core";
 
 export interface PublishClientOptions {
   baseUrl: string;
@@ -12,6 +12,7 @@ export interface PublishArtifactInput extends PublishArtifactRequest {
 
 export interface PublishArtifactsInput {
   repository: string;
+  ecosystem: Ecosystem;
   artifacts: PublishArtifactInput[];
 }
 
@@ -60,14 +61,14 @@ export function createPublishClient(options: PublishClientOptions): PublishClien
   return {
     baseUrl,
     async publishArtifacts(input) {
-      const create = await requestJson<{ session: PublishSession }>("/api/publish-sessions", {
+      const session = await requestJson<PublishSession>("/api/publish-sessions", {
         method: "POST",
         body: JSON.stringify({
-          repository: input.repository,
+          repositoryName: input.repository,
+          ecosystem: input.ecosystem,
           artifacts: input.artifacts.map(({ body: _body, ...artifact }) => artifact),
         }),
       });
-      const session = create.session;
 
       for (const target of session.uploads) {
         const artifact = input.artifacts.find((candidate) => candidate.filename === target.filename);

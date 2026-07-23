@@ -2,6 +2,7 @@
   "baseUrl": "https://axis.example",
   "tokenEnv": "AXIS_PUBLISH_TOKEN",
   "repository": "debian-internal",
+  "ecosystem": "apt",
   "artifacts": [
     {
       "path": "./dist/myapp_1.2.3_amd64.deb",

@@ -115,6 +115,95 @@ async function createStateWithRepository(): Promise<MemoryStateStore> {
 }
 
 describe("PublishSessionService", () => {
+  it("lists only publish sessions scoped to the token repositories", async () => {
+    const state = await createStateWithRepository();
+    await state.repositories.save({
+      id: "repo_2",
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
+      createdAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:00:00.000Z",
+    });
+    await state.publishSessions.save({
+      id: "pub_apt_old",
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      status: "finalized",
+      requestedBy: principal,
+      artifacts: [],
+      uploads: [],
+      verifiedUploads: [],
+      createdAt: "2026-07-12T00:01:00.000Z",
+      expiresAt: "2026-07-12T00:16:00.000Z",
+    });
+    await state.publishSessions.save({
+      id: "pub_pypi",
+      repositoryName: "python-internal",
+      ecosystem: "pypi",
+      status: "finalized",
+      requestedBy: { ...principal, repositories: ["python-internal"] },
+      artifacts: [],
+      uploads: [],
+      verifiedUploads: [],
+      createdAt: "2026-07-12T00:03:00.000Z",
+      expiresAt: "2026-07-12T00:18:00.000Z",
+    });
+    await state.publishSessions.save({
+      id: "pub_apt_new",
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      status: "ready",
+      requestedBy: principal,
+      artifacts: [],
+      uploads: [],
+      verifiedUploads: [],
+      createdAt: "2026-07-12T00:02:00.000Z",
+      expiresAt: "2026-07-12T00:17:00.000Z",
+    });
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+
+    await expect(service.list({ principal })).resolves.toMatchObject([
+      { id: "pub_apt_new" },
+      { id: "pub_apt_old" },
+    ]);
+  });
+
+  it("gets a publish session only when the token is scoped to its repository", async () => {
+    const state = await createStateWithRepository();
+    await state.publishSessions.save({
+      id: "pub_1",
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      status: "ready",
+      requestedBy: principal,
+      artifacts: [],
+      uploads: [],
+      verifiedUploads: [],
+      createdAt: "2026-07-12T00:00:00.000Z",
+      expiresAt: "2026-07-12T00:15:00.000Z",
+    });
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+
+    await expect(service.get({ sessionId: "pub_1", principal })).resolves.toMatchObject({
+      id: "pub_1",
+    });
+    await expect(
+      service.get({
+        sessionId: "pub_1",
+        principal: { ...principal, repositories: ["python-internal"] },
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("throws not found when getting an unknown publish session", async () => {
+    const state = await createStateWithRepository();
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+
+    await expect(service.get({ sessionId: "pub_missing", principal })).rejects.toBeInstanceOf(NotFoundError);
+  });
+
   it("creates a publish session with upload targets and artifacts", async () => {
     const state = await createStateWithRepository();
     const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
