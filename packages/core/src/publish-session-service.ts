@@ -117,6 +117,10 @@ export class PublishSessionService {
     );
   }
 
+  async listAll(): Promise<PublishSession[]> {
+    return this.options.state.publishSessions.list();
+  }
+
   async get(input: GetPublishSessionInput): Promise<PublishSession> {
     this.requirePublishPermission(input.principal);
     const session = await this.options.state.publishSessions.get(input.sessionId);

@@ -12,6 +12,7 @@ import {
 import {
   AdvancedJsonConfigSection,
   GenericRepositoryDetail,
+  PublishSessionsSection,
   RepositorySettingsSection,
   repositoryClientHelperDisplayText,
 } from "./repository-detail-shared";
@@ -38,6 +39,7 @@ export const aptRepositoryDetailPlugin: RepositoryDetailPlugin = {
   displayName: aptPluginManifest.displayName,
   sections: [
     { id: "settings", title: "APT settings", Component: AptSettingsSection },
+    { id: "publish-sessions", title: "Publish sessions", Component: PublishSessionsSection },
     { id: "advanced-json", title: "Advanced JSON config", Component: AdvancedJsonConfigSection },
     { id: "signing-keys", title: "APT signing keys", Component: AptSigningKeysSection },
     { id: "client-helpers", title: "APT client setup", Component: AptClientHelpersSection },
@@ -49,6 +51,7 @@ export const pypiRepositoryDetailPlugin: RepositoryDetailPlugin = {
   displayName: pypiPluginManifest.displayName,
   sections: [
     { id: "settings", title: "PyPI settings", Component: PypiSettingsSection },
+    { id: "publish-sessions", title: "Publish sessions", Component: PublishSessionsSection },
     { id: "client-helpers", title: "PyPI client setup", Component: PypiClientHelpersSection },
     { id: "install-hints", title: "Install hints", Component: PypiInstallHintsSection },
   ],
@@ -58,6 +61,7 @@ export const repositoryDetailPlugins = [aptRepositoryDetailPlugin, pypiRepositor
 
 export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
   { id: "settings", title: "Repository settings", Component: RepositorySettingsSection },
+  { id: "publish-sessions", title: "Publish sessions", Component: PublishSessionsSection },
   { id: "advanced-json", title: "Advanced JSON config", Component: AdvancedJsonConfigSection },
 ];
 

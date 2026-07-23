@@ -697,6 +697,11 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     throw new NotFoundError();
   }
+  if (url.pathname === "/admin/publish-sessions" && request.method === "GET") {
+    requireAdmin(request, dependencies.adminToken);
+    const sessions = await dependencies.publishSessionService.listAll();
+    return jsonResponse({ sessions });
+  }
   if (url.pathname === "/api/publish-sessions" && request.method === "GET") {
     const secret = requireBearer(request);
     const principal = await dependencies.publishTokenService.verify(secret);

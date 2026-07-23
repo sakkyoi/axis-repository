@@ -28,12 +28,14 @@ describe("repository detail plugins", () => {
   it("exposes ordered detail sections per ecosystem", () => {
     expect(getRepositoryDetailPlugin("apt")?.sections.map((section) => section.id)).toEqual([
       "settings",
+      "publish-sessions",
       "advanced-json",
       "signing-keys",
       "client-helpers",
     ]);
     expect(getRepositoryDetailPlugin("pypi")?.sections.map((section) => section.id)).toEqual([
       "settings",
+      "publish-sessions",
       "client-helpers",
       "install-hints",
     ]);
@@ -42,6 +44,7 @@ describe("repository detail plugins", () => {
   it("provides generic fallback sections for unknown ecosystems", () => {
     expect(genericRepositoryDetailSections.map((section) => section.id)).toEqual([
       "settings",
+      "publish-sessions",
       "advanced-json",
     ]);
   });

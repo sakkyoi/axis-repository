@@ -4,6 +4,7 @@ import { serverErrorMessage } from "./http";
 import {
   installInstructionsSchema,
   pypiClientInfoSchema,
+  publishSessionsResponseSchema,
   publishTokenCreateResponseSchema,
   repositoryPluginSchema,
   repositorySchema,
@@ -118,6 +119,65 @@ describe("admin API schemas", () => {
         public: true,
       },
     ]);
+  });
+
+  it("parses publish session responses", () => {
+    const response = publishSessionsResponseSchema.parse({
+      sessions: [
+        {
+          id: "pub_1",
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          status: "finalized",
+          requestedBy: {
+            tokenId: "tok_1",
+            name: "ci",
+            permissions: ["publish"],
+            repositories: ["debian-internal"],
+            ecosystemScopes: {},
+            signingKeyIds: [],
+          },
+          artifacts: [
+            {
+              filename: "myapp_1.2.3_amd64.deb",
+              size: 1234,
+              sha256: "a".repeat(64),
+              contentType: "application/vnd.debian.binary-package",
+              metadata: { package: "myapp" },
+            },
+          ],
+          uploads: [
+            {
+              uploadId: "upl_1",
+              filename: "myapp_1.2.3_amd64.deb",
+              objectKey: "_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+              method: "PUT",
+              url: "https://uploads.example/upl_1",
+              headers: { "content-type": "application/vnd.debian.binary-package" },
+              expiresAt: "2026-07-23T00:10:00.000Z",
+            },
+          ],
+          verifiedUploads: [
+            {
+              uploadId: "upl_1",
+              objectKey: "_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+              size: 1234,
+              sha256: "a".repeat(64),
+              verifiedAt: "2026-07-23T00:02:00.000Z",
+            },
+          ],
+          createdAt: "2026-07-23T00:00:00.000Z",
+          expiresAt: "2026-07-23T00:10:00.000Z",
+          finalizedAt: "2026-07-23T00:03:00.000Z",
+          publishResult: {
+            publishedAt: "2026-07-23T00:03:00.000Z",
+            objects: [{ key: "repositories/debian-internal/dists/noble/Release", contentType: "text/plain" }],
+          },
+        },
+      ],
+    });
+
+    expect(response.sessions[0]?.publishResult?.objects[0]?.key).toContain("Release");
   });
 });
 
@@ -429,5 +489,50 @@ describe("createAxisClient", () => {
     expect(requests).toEqual([
       "GET /admin/repositories/python-internal/pypi/client/simple-url",
     ]);
+  });
+
+  it("lists publish sessions through the publish API endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          sessions: [
+            {
+              id: "pub_1",
+              repositoryName: "debian-internal",
+              ecosystem: "apt",
+              status: "pending_uploads",
+              requestedBy: {
+                tokenId: "tok_1",
+                name: "ci",
+                permissions: ["publish"],
+                repositories: ["debian-internal"],
+                ecosystemScopes: {},
+                signingKeyIds: [],
+              },
+              artifacts: [],
+              uploads: [],
+              verifiedUploads: [],
+              createdAt: "2026-07-23T00:00:00.000Z",
+              expiresAt: "2026-07-23T00:10:00.000Z",
+            },
+          ],
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    const sessions = await client.listPublishSessions();
+
+    expect(requests).toEqual(["GET /admin/publish-sessions"]);
+    expect(sessions).toMatchObject([{ id: "pub_1", repositoryName: "debian-internal" }]);
   });
 });

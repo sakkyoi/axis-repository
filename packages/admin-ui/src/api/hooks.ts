@@ -102,6 +102,14 @@ export function useRepositoryClientHelper(
   });
 }
 
+export function usePublishSessions() {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["publish-sessions"],
+    queryFn: () => client.listPublishSessions(),
+  });
+}
+
 export function usePublishTokens() {
   const client = useAxisClient();
   return useQuery({

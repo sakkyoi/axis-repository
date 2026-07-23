@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
-import { useRepositoryClientHelper, useUpdateRepository } from "./api/hooks";
-import type { Repository, RepositoryClientHelperAction, RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
+import { usePublishSessions, useRepositoryClientHelper, useUpdateRepository } from "./api/hooks";
+import type { PublishSession, Repository, RepositoryClientHelperAction, RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
+import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Textarea } from "./components/ui/textarea";
 import { asJson, ErrorState } from "./pages/shared";
+import {
+  publishSessionArtifactSummary,
+  publishSessionStatusMeta,
+  sessionsForRepository,
+} from "./repository-publish-sessions-model";
 import type { RepositoryDetailSection } from "./repository-detail-plugins";
 
 export function GenericRepositoryDetail({ repository }: { repository: Repository; pluginMetadata: RepositoryPlugin | undefined }) {
@@ -65,6 +71,99 @@ export function RepositorySettingsSection({
         Save repository
       </Button>
       {updateRepository.isError && <ErrorState error={updateRepository.error} />}
+    </div>
+  );
+}
+
+export function PublishSessionsSection({
+  repository,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  const publishSessions = usePublishSessions();
+  const sessions = sessionsForRepository(repository.name, publishSessions.data ?? []).slice(0, 5);
+
+  if (publishSessions.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading publish sessions...</p>;
+  }
+
+  if (publishSessions.isError) {
+    return <ErrorState title="Publish sessions unavailable" error={publishSessions.error} />;
+  }
+
+  if (sessions.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+        No publish sessions for this repository.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-2">
+      {sessions.map((session) => (
+        <PublishSessionItem key={session.id} session={session} />
+      ))}
+    </div>
+  );
+}
+
+function PublishSessionItem({ session }: { session: PublishSession }) {
+  const status = publishSessionStatusMeta(session.status);
+  return (
+    <details className="min-w-0 rounded-md border border-border bg-background/40 p-3">
+      <summary className="cursor-pointer list-none">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-medium">{session.id}</span>
+              <Badge variant={status.variant}>{status.label}</Badge>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {publishSessionArtifactSummary(session)} · created {session.createdAt}
+            </p>
+          </div>
+        </div>
+      </summary>
+      <div className="mt-3 grid gap-3 text-xs">
+        <SessionList title="Artifacts" items={session.artifacts.map((artifact) => artifact.filename)} />
+        <SessionList title="Uploads" items={session.uploads.map((upload) => `${upload.uploadId} · ${upload.filename}`)} />
+        <SessionList
+          title="Verified uploads"
+          items={session.verifiedUploads.map((upload) => `${upload.uploadId} · ${upload.size} bytes`)}
+        />
+        {session.publishResult && (
+          <SessionList
+            title="Published objects"
+            items={session.publishResult.objects.map((object) => object.key)}
+          />
+        )}
+        {session.failure && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive">
+            {session.failure.message}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function SessionList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="grid gap-1">
+      <div className="font-medium text-muted-foreground">{title}</div>
+      {items.length === 0 ? (
+        <div className="text-muted-foreground">None</div>
+      ) : (
+        <ul className="grid gap-1">
+          {items.map((item) => (
+            <li key={item} className="break-all rounded bg-muted px-2 py-1">
+              {item}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

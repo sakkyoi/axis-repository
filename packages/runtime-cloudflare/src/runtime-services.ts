@@ -80,6 +80,10 @@ export class PluginPublishSessionService {
     return this.options.publishSessionService.list(input);
   }
 
+  listAll(): Promise<PublishSession[]> {
+    return this.options.publishSessionService.listAll();
+  }
+
   get(input: GetPublishSessionInput): Promise<PublishSession> {
     return this.options.publishSessionService.get(input);
   }

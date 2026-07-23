@@ -5,6 +5,7 @@ import {
   installInstructionsSchema,
   adminSessionSchema,
   pypiClientInfoSchema,
+  publishSessionsResponseSchema,
   publishTokenCreateResponseSchema,
   publishTokenSchema,
   publishTokensResponseSchema,
@@ -21,6 +22,7 @@ import {
   type AptSourceInfo,
   type InstallInstructions,
   type PypiClientInfo,
+  type PublishSession,
 } from "./schemas";
 
 export interface CreatePublishTokenInput {
@@ -69,6 +71,7 @@ export interface AxisClient {
   getAptInstallInstructions(name: string): Promise<InstallInstructions>;
   getPypiClientInfo(name: string): Promise<PypiClientInfo>;
   getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown>;
+  listPublishSessions(): Promise<PublishSession[]>;
   listPublishTokens(): Promise<ReturnType<typeof publishTokensResponseSchema.parse>["publishTokens"]>;
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
   createPublishToken(input: CreatePublishTokenInput): Promise<PublishTokenCreateResponse>;
@@ -133,6 +136,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
         `/admin/repositories/${encodePathSegment(name)}/${encodePathSegment(namespace)}/client/${encodePathSegment(action)}`,
       );
       return response.data;
+    },
+    async listPublishSessions() {
+      const response = await http.get("/admin/publish-sessions");
+      return publishSessionsResponseSchema.parse(response.data).sessions;
     },
     async listPublishTokens() {
       const response = await http.get("/admin/publish-tokens");

@@ -1841,6 +1841,89 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("lists all publish sessions through the admin endpoint", async () => {
+    const app = createApp();
+    await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
+    await createRepository(app, { name: "debian-staging", ecosystem: "apt" });
+    const internalToken = await createToken(app, {
+      name: "internal-ci",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+    const stagingToken = await createToken(app, {
+      name: "staging-ci",
+      repositories: ["debian-staging"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["other"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+
+    const internalCreateResponse = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${internalToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "myapp_1.2.3_amd64.deb",
+          size: 1,
+          sha256: "a".repeat(64),
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "myapp",
+            version: "1.2.3",
+            architecture: "amd64",
+            component: "main",
+            description: "Example package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    const stagingCreateResponse = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${stagingToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        repositoryName: "debian-staging",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "other_1.0.0_amd64.deb",
+          size: 1,
+          sha256: "b".repeat(64),
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "other",
+            version: "1.0.0",
+            architecture: "amd64",
+            component: "main",
+            description: "Other package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    const internalSession = (await internalCreateResponse.json()) as { id: string };
+    const stagingSession = (await stagingCreateResponse.json()) as { id: string };
+
+    const adminListResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-sessions", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const unauthorizedResponse = await app.fetch(new Request("https://axis.example/admin/publish-sessions"));
+
+    expect(adminListResponse.status).toBe(200);
+    await expect(adminListResponse.json()).resolves.toMatchObject({
+      sessions: [
+        { id: stagingSession.id, repositoryName: "debian-staging" },
+        { id: internalSession.id, repositoryName: "debian-internal" },
+      ],
+    });
+    expect(unauthorizedResponse.status).toBe(401);
+  });
+
   it("gets a publish session by id and rejects tokens outside the repository scope", async () => {
     const app = createApp();
     await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
