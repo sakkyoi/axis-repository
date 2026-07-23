@@ -1,6 +1,6 @@
 import { ValidationError, type Repository, type TokenPrincipal } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
-import { createAptPlugin } from "./apt-plugin";
+import { createAptPlugin } from "./runtime";
 
 function repository(config: Record<string, unknown> = {
   apt: {

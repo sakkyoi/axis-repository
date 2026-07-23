@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPypiPlugin } from "./pypi-plugin";
+import { createPypiPlugin } from "./runtime";
 
 describe("PyPI plugin lifecycle", () => {
   it("allows empty PyPI repository config", () => {

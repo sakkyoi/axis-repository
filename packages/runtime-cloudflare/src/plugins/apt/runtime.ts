@@ -1,8 +1,8 @@
 import { ValidationError, type ArtifactPublisher, type Repository } from "@axis-repository/core";
-import type { ArtifactRepositoryPlugin, ValidateRepositoryConfigInput } from "./artifact-publisher-registry";
-import { createPrefixServingPredicate } from "./artifact-publisher-registry";
-import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "./apt-client";
-import { parseAptRepositoryConfig, validateAptPublishArtifacts } from "./apt-metadata";
+import type { ArtifactRepositoryPlugin, ValidateRepositoryConfigInput } from "../../artifact-publisher-registry";
+import { createPrefixServingPredicate } from "../../artifact-publisher-registry";
+import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "../../apt-client";
+import { parseAptRepositoryConfig, validateAptPublishArtifacts } from "../../apt-metadata";
 
 function repositoryForConfig(input: ValidateRepositoryConfigInput): Repository {
   return {

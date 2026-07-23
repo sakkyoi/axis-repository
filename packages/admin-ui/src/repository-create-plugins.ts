@@ -1,6 +1,7 @@
 import type { CreateRepositoryInput } from "./api/client";
 import type { RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
-import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "./repository-forms";
+import { aptRepositoryCreatePlugin } from "./plugins/apt/create";
+import { pypiRepositoryCreatePlugin } from "./plugins/pypi/create";
 
 export type RepositoryCreateStep = "plugin" | "basics" | "config" | "dependencies" | "review";
 
@@ -42,89 +43,6 @@ export type RepositoryCreatePluginOption =
       capabilities: string[];
       supported: false;
     };
-
-function splitList(value: string): string[] {
-  return value
-    .split(/[\s,]+/g)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormValues {
-  return {
-    name: state.name,
-    visibility: state.visibility,
-    codename: state.config.codename ?? "",
-    components: state.config.components ?? "",
-    architectures: state.config.architectures ?? "",
-    signingKeyId: state.dependencies.signingKeyId ?? "",
-  };
-}
-
-export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
-  ecosystem: "apt",
-  displayName: "APT",
-  description: "Debian package repositories with signed Release metadata.",
-  capabilities: ["signed-release", "pool-copy", "serve:dists", "serve:pool"],
-  steps: ["plugin", "basics", "config", "dependencies", "review"],
-  defaults: {
-    name: "",
-    visibility: "private",
-    config: {
-      codename: "noble",
-      components: "main",
-      architectures: "amd64",
-    },
-    dependencies: {
-      signingKeyId: "",
-    },
-  },
-  validateStep: (step, state) => {
-    if (step === "basics") {
-      return state.name.trim() ? [] : ["Repository name is required"];
-    }
-    if (step === "config") {
-      const errors: string[] = [];
-      if (!state.config.codename?.trim()) errors.push("Codename is required");
-      if (splitList(state.config.components ?? "").length === 0) errors.push("Components are required");
-      if (splitList(state.config.architectures ?? "").length === 0) errors.push("Architectures are required");
-      return errors;
-    }
-    if (step === "dependencies") {
-      return state.dependencies.signingKeyId?.trim() ? [] : ["Signing key is required"];
-    }
-    return [];
-  },
-  buildCreateInput: (state) => buildCreateAptRepositoryInput(aptFormValues(state)),
-};
-
-export const pypiRepositoryCreatePlugin: RepositoryCreatePlugin = {
-  ecosystem: "pypi",
-  displayName: "PyPI",
-  description: "Python package repositories using the Simple Repository API.",
-  capabilities: ["simple-api", "serve:simple", "client-helpers"],
-  steps: ["plugin", "basics", "review"],
-  defaults: {
-    name: "",
-    visibility: "private",
-    config: {},
-    dependencies: {},
-  },
-  validateStep: (step, state) => {
-    if (step === "basics") {
-      return state.name.trim() ? [] : ["Repository name is required"];
-    }
-    return [];
-  },
-  buildCreateInput: (state) => ({
-    name: state.name,
-    ecosystem: "pypi",
-    visibility: state.visibility,
-    config: {
-      pypi: {},
-    },
-  }),
-};
 
 export const repositoryCreatePlugins = [aptRepositoryCreatePlugin, pypiRepositoryCreatePlugin] as const;
 

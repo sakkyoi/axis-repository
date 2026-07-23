@@ -1,7 +1,7 @@
 import { ValidationError, type Repository, type RepositoryObjectStore } from "@axis-repository/core";
-import type { ArtifactRepositoryPlugin } from "./artifact-publisher-registry";
-import { createPrefixServingPredicate } from "./artifact-publisher-registry";
-import { GenericManifestPublisher } from "./generic-manifest-publisher";
+import type { ArtifactRepositoryPlugin } from "../../artifact-publisher-registry";
+import { createPrefixServingPredicate } from "../../artifact-publisher-registry";
+import { GenericManifestPublisher } from "../../generic-manifest-publisher";
 
 function validatePypiRepositoryConfig(config: Record<string, unknown>): void {
   const pypi = config.pypi;

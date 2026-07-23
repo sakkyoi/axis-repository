@@ -1,0 +1,98 @@
+import { useEffect, useState } from "react";
+import { Save } from "lucide-react";
+import { usePypiClientInfo, useUpdateRepository } from "../../api/hooks";
+import type { Repository, RepositoryPlugin, RepositoryVisibility } from "../../api/schemas";
+import { Button } from "../../components/ui/button";
+import { ErrorState } from "../../pages/shared";
+import { RepositoryClientHelperItem, VisibilitySelect } from "../../repository-detail-shared";
+
+export function pypiSimpleIndexUrl(repository: Repository): string {
+  return `/repositories/${repository.name}/simple/`;
+}
+
+function pypiAuthenticatedIndexUrl(pipIndexUrl: string): string {
+  try {
+    const url = new URL(pipIndexUrl);
+    return `${url.protocol}//axis:\${AXIS_PYPI_TOKEN}@${url.host}${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return pipIndexUrl;
+  }
+}
+
+export function pypiInstallCommandText(repository: Repository, pipIndexUrl = pypiSimpleIndexUrl(repository)): string {
+  if (repository.visibility === "private") {
+    return [
+      "# Use a read token for private repositories.",
+      "export AXIS_PYPI_TOKEN=\"<READ_TOKEN>\"",
+      "",
+      "# Install packages from this repository.",
+      "pip install \\",
+      `  --index-url "${pypiAuthenticatedIndexUrl(pipIndexUrl)}" \\`,
+      "  <package>",
+    ].join("\n");
+  }
+  return [
+    "# Install packages from this repository.",
+    "pip install \\",
+    `  --index-url "${pipIndexUrl}" \\`,
+    "  <package>",
+  ].join("\n");
+}
+
+export function PypiRepositoryDetail({
+  repository,
+  pluginMetadata,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
+  const updateRepository = useUpdateRepository();
+  const clientInfo = usePypiClientInfo(repository.name, true);
+
+  useEffect(() => {
+    setVisibility(repository.visibility);
+  }, [repository]);
+
+  async function savePypiConfig() {
+    updateRepository.mutate({
+      name: repository.name,
+      input: {
+        visibility,
+        config: repository.config,
+      },
+    });
+  }
+
+  return (
+    <>
+      <div className="grid gap-3">
+        <label className="grid gap-2">
+          <span className="text-sm font-medium">Visibility</span>
+          <VisibilitySelect value={visibility} onChange={setVisibility} />
+        </label>
+        <Button onClick={savePypiConfig} disabled={updateRepository.isPending}>
+          <Save className="mr-2 h-4 w-4" />
+          Save repository
+        </Button>
+      </div>
+      {updateRepository.isError && <ErrorState error={updateRepository.error} />}
+      <div className="grid gap-3 border-t border-border pt-4">
+        <h3 className="text-sm font-semibold">PyPI client setup</h3>
+        {pluginMetadata?.clientHelpers?.actions.map((action) => (
+          <RepositoryClientHelperItem
+            key={action.name}
+            repositoryName={repository.name}
+            namespace={pluginMetadata.clientHelpers!.namespace}
+            action={action}
+          />
+        ))}
+        <details className="min-w-0" open>
+          <summary className="cursor-pointer text-sm font-medium">pip install</summary>
+          <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">{clientInfo.data ? pypiInstallCommandText({ ...repository, visibility }, clientInfo.data.pipIndexUrl) : "Loading..."}</pre>
+        </details>
+        {clientInfo.isError && <ErrorState title="PyPI client setup unavailable" error={clientInfo.error} />}
+      </div>
+    </>
+  );
+}

@@ -1,9 +1,9 @@
 import type { RepositoryObjectStore } from "@axis-repository/core";
-import { createAptPlugin } from "./apt-plugin";
 import { AptPublisher } from "./apt-publisher";
 import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
 import { OpenPgpSigner } from "./openpgp-signer";
-import { createPypiPlugin } from "./pypi-plugin";
+import { createAptPlugin } from "./plugins/apt/runtime";
+import { createPypiPlugin } from "./plugins/pypi/runtime";
 import type { SigningKeyService } from "./signing-key-service";
 
 export function createDefaultArtifactPlugins(input: {
