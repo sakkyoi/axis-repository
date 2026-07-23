@@ -1,20 +1,18 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { Plus, RotateCcw } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { useAptSigningKeys, useCreatePublishToken, usePublishTokens, useRepositories, useRevokePublishToken } from "../api/hooks";
+import { useCreatePublishToken, usePublishTokens, useRepositories, useRevokePublishToken } from "../api/hooks";
 import type { Repository } from "../api/schemas";
 import {
-  activeSigningKeysForRepository,
   buildCreatePublishTokenInput,
-  publishTokenNeedsSigningKeySelection,
   repositoryDisplayLabel,
   tokenScopeSummary,
   type PublishTokenPermissionState,
 } from "../publish-token-form-model";
+import { repositoryUiPlugins } from "../repository-ui-plugins";
 import { asJson, EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 export function TokensPage() {
@@ -130,12 +128,9 @@ function CreateTokenDialog({
   const [signingKeySelections, setSigningKeySelections] = useState<Record<string, string>>({});
   const [scopeError, setScopeError] = useState("");
   const createToken = useCreatePublishToken();
-  const selectedAptRepositories = useMemo(
-    () => repositories.filter((repository) =>
-      selectedRepositories.includes(repository.name) && repository.ecosystem === "apt" && permissions.publish,
-    ),
-    [permissions.publish, repositories, selectedRepositories],
-  );
+  const publishTokenScopeExtensions = repositoryUiPlugins
+    .map((plugin) => plugin.publishTokenScope)
+    .filter((scope): scope is NonNullable<typeof scope> => Boolean(scope));
 
   function toggleRepository(repositoryName: string, selected: boolean) {
     setSelectedRepositories((current) =>
@@ -153,12 +148,14 @@ function CreateTokenDialog({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const missingSigningKeys = publishTokenNeedsSigningKeySelection({
-      repositories,
-      selectedRepositories,
-      permissions,
-      signingKeySelections,
-    });
+    const missingScopeSelections = publishTokenScopeExtensions.flatMap((extension) =>
+      extension.missingSelections({
+        repositories,
+        selectedRepositories,
+        permissions,
+        signingKeySelections,
+      }),
+    );
     if (!name.trim()) {
       setScopeError("Token name is required");
       return;
@@ -171,8 +168,8 @@ function CreateTokenDialog({
       setScopeError("Select at least one permission");
       return;
     }
-    if (missingSigningKeys.length > 0) {
-      setScopeError(`Select signing keys for: ${missingSigningKeys.join(", ")}`);
+    if (missingScopeSelections.length > 0) {
+      setScopeError(`Select required token scopes for: ${missingScopeSelections.join(", ")}`);
       return;
     }
 
@@ -255,25 +252,17 @@ function CreateTokenDialog({
               read
             </label>
           </div>
-          {selectedAptRepositories.length > 0 && (
-            <div className="grid gap-3 rounded-md border border-border p-3">
-              <div>
-                <h3 className="text-sm font-semibold">APT signing key scopes</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  APT publish tokens must include the signing key used by each selected repository.
-                </p>
-              </div>
-              {selectedAptRepositories.map((repository) => (
-                <AptSigningKeyScopeField
-                  key={repository.name}
-                  repositoryName={repository.name}
-                  value={signingKeySelections[repository.name] ?? ""}
-                  onChange={(signingKeyId) =>
-                    setSigningKeySelections((current) => ({ ...current, [repository.name]: signingKeyId }))}
-                />
-              ))}
-            </div>
-          )}
+          {publishTokenScopeExtensions.map((extension) => (
+            <extension.Component
+              key={extension.Component.name}
+              repositories={repositories}
+              selectedRepositories={selectedRepositories}
+              permissions={permissions}
+              signingKeySelections={signingKeySelections}
+              onSigningKeySelectionChange={(repositoryName, signingKeyId) =>
+                setSigningKeySelections((current) => ({ ...current, [repositoryName]: signingKeyId }))}
+            />
+          ))}
           <Button type="submit" disabled={createToken.isPending}>Create</Button>
         </form>
         {scopeError && <ErrorState error={scopeError} />}
@@ -286,43 +275,5 @@ function CreateTokenDialog({
         {createToken.isError && <ErrorState error={createToken.error} />}
       </DialogContent>
     </Dialog>
-  );
-}
-
-function AptSigningKeyScopeField({
-  repositoryName,
-  value,
-  onChange,
-}: {
-  repositoryName: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const signingKeys = useAptSigningKeys(repositoryName);
-  const activeKeys = activeSigningKeysForRepository(signingKeys.data ?? [], repositoryName);
-
-  return (
-    <label className="grid gap-2">
-      <span className="text-sm font-medium">{repositoryName} signing key scope</span>
-      {signingKeys.isLoading && <span className="text-sm text-muted-foreground">Loading signing keys...</span>}
-      {!signingKeys.isLoading && activeKeys.length === 0 && (
-        <span className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
-          No active signing key is available for this repository.
-        </span>
-      )}
-      {activeKeys.length > 0 && (
-        <Select value={value} onValueChange={onChange}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select signing key" />
-          </SelectTrigger>
-          <SelectContent>
-            {activeKeys.map((key) => (
-              <SelectItem key={key.id} value={key.id}>{key.name} ({key.keyId})</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      {signingKeys.isError && <ErrorState title="Signing keys unavailable" error={signingKeys.error} />}
-    </label>
   );
 }

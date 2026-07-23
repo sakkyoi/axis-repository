@@ -1,5 +1,5 @@
 import type { CreatePublishTokenInput } from "./api/client";
-import type { PublishToken, Repository, SigningKey } from "./api/schemas";
+import type { PublishToken, Repository } from "./api/schemas";
 
 export interface PublishTokenPermissionState {
   read: boolean;
@@ -29,25 +29,6 @@ export function buildCreatePublishTokenInput(state: BuildCreatePublishTokenInput
     ecosystemScopes: {},
     ...(signingKeyIds.length > 0 ? { signingKeyIds } : {}),
   };
-}
-
-export function publishTokenNeedsSigningKeySelection(input: {
-  repositories: Repository[];
-  selectedRepositories: string[];
-  permissions: PublishTokenPermissionState;
-  signingKeySelections: Record<string, string>;
-}): string[] {
-  if (!input.permissions.publish) return [];
-  const selected = new Set(input.selectedRepositories);
-  return input.repositories
-    .filter((repository) => selected.has(repository.name))
-    .filter((repository) => repository.ecosystem === "apt")
-    .filter((repository) => !input.signingKeySelections[repository.name])
-    .map((repository) => repository.name);
-}
-
-export function activeSigningKeysForRepository(keys: SigningKey[], repositoryName: string): SigningKey[] {
-  return keys.filter((key) => key.repositoryName === repositoryName && !key.revokedAt);
 }
 
 export function repositoryDisplayLabel(repository: Repository): string {

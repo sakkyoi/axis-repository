@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { aptPluginManifest, pypiPluginManifest } from "@axis-repository/core/plugin-manifests";
 
 import {
   getRepositoryUiPlugin,
@@ -14,6 +15,13 @@ describe("repository UI plugin registry", () => {
     expect(repositoryUiPlugins.map((plugin) => [plugin.create.ecosystem, plugin.detail.ecosystem])).toEqual([
       ["apt", "apt"],
       ["pypi", "pypi"],
+    ]);
+  });
+
+  it("keeps UI plugin ecosystems aligned with shared core manifests", () => {
+    expect(repositoryUiPlugins.map((plugin) => plugin.manifest.ecosystem)).toEqual([
+      aptPluginManifest.ecosystem,
+      pypiPluginManifest.ecosystem,
     ]);
   });
 
@@ -78,5 +86,39 @@ describe("repository UI plugin registry", () => {
     expect(getRepositoryUiPlugin("apt")?.createFieldRenderers?.["signing-key"]?.name)
       .toBe("AptSigningKeyDependencyField");
     expect(getRepositoryUiPlugin("pypi")?.createFieldRenderers?.["signing-key"]).toBeUndefined();
+  });
+
+  it("lets ecosystem UI plugins provide publish token scope UI", () => {
+    expect(getRepositoryUiPlugin("apt")?.publishTokenScope?.Component.name)
+      .toBe("AptSigningKeyTokenScopeFields");
+    expect(getRepositoryUiPlugin("pypi")?.publishTokenScope).toBeUndefined();
+  });
+
+  it("lets ecosystem UI plugins validate publish token scope selections", () => {
+    expect(getRepositoryUiPlugin("apt")?.publishTokenScope?.missingSelections({
+      repositories: [
+        {
+          id: "repo_apt",
+          name: "debian-internal",
+          ecosystem: "apt",
+          visibility: "private",
+          config: {},
+          createdAt: "2026-07-23T00:00:00.000Z",
+          updatedAt: "2026-07-23T00:00:00.000Z",
+        },
+        {
+          id: "repo_pypi",
+          name: "python-internal",
+          ecosystem: "pypi",
+          visibility: "private",
+          config: {},
+          createdAt: "2026-07-23T00:00:00.000Z",
+          updatedAt: "2026-07-23T00:00:00.000Z",
+        },
+      ],
+      selectedRepositories: ["debian-internal", "python-internal"],
+      permissions: { read: false, publish: true },
+      signingKeySelections: {},
+    })).toEqual(["debian-internal"]);
   });
 });

@@ -5,6 +5,7 @@ import { aptRepositoryCreatePlugin } from "./create";
 import { AptSigningKeyDependencyField } from "./create-field-renderers";
 import { AptSettingsSection, AptSigningKeysSection } from "./detail";
 import { AptPublishSessionsSection } from "./publish";
+import { AptSigningKeyTokenScopeFields, aptPublishTokenMissingSigningKeySelections } from "./token-scope";
 
 export const aptRepositoryDetailPlugin: RepositoryDetailPlugin = {
   ecosystem: aptPluginManifest.ecosystem,
@@ -23,6 +24,10 @@ export const aptRepositoryUiPlugin: RepositoryUiPlugin = {
   detail: aptRepositoryDetailPlugin,
   createFieldRenderers: {
     "signing-key": AptSigningKeyDependencyField,
+  },
+  publishTokenScope: {
+    Component: AptSigningKeyTokenScopeFields,
+    missingSelections: aptPublishTokenMissingSigningKeySelections,
   },
   mapCreateServerError: (message) => {
     if (/^config\.apt\.|Codename|Components|Architectures/i.test(message)) return "config";

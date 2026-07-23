@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Repository, SigningKey } from "./api/schemas";
+import type { Repository } from "./api/schemas";
 import {
-  activeSigningKeysForRepository,
   buildCreatePublishTokenInput,
-  publishTokenNeedsSigningKeySelection,
   repositoryDisplayLabel,
   tokenScopeSummary,
 } from "./publish-token-form-model";
@@ -66,35 +64,6 @@ describe("publish token form model", () => {
     });
   });
 
-  it("requires signing key selection only for selected APT repositories when publish is enabled", () => {
-    const repositories = [
-      repository("debian-internal", "apt", { apt: { signingKeyId: "signing_key_prod" } }),
-      repository("python-internal", "pypi", { pypi: {} }),
-    ];
-
-    expect(publishTokenNeedsSigningKeySelection({
-      repositories,
-      selectedRepositories: ["debian-internal", "python-internal"],
-      permissions: { read: false, publish: true },
-      signingKeySelections: {},
-    })).toEqual(["debian-internal"]);
-
-    expect(publishTokenNeedsSigningKeySelection({
-      repositories,
-      selectedRepositories: ["debian-internal"],
-      permissions: { read: true, publish: false },
-      signingKeySelections: {},
-    })).toEqual([]);
-  });
-
-  it("filters active signing keys scoped to a repository", () => {
-    expect(activeSigningKeysForRepository([
-      signingKey("signing_key_prod", "debian-internal"),
-      { ...signingKey("signing_key_old", "debian-internal"), revokedAt: "2026-07-23T00:00:00.000Z" },
-      signingKey("signing_key_other", "other-repo"),
-    ], "debian-internal").map((key) => key.id)).toEqual(["signing_key_prod"]);
-  });
-
   it("builds readable repository and token scope summaries", () => {
     expect(repositoryDisplayLabel(repository("debian-internal", "apt", {}))).toBe("debian-internal (apt)");
     expect(tokenScopeSummary({
@@ -118,18 +87,5 @@ function repository(name: string, ecosystem: string, config: Record<string, unkn
     config,
     createdAt: "2026-07-23T00:00:00.000Z",
     updatedAt: "2026-07-23T00:00:00.000Z",
-  };
-}
-
-function signingKey(id: string, repositoryName: string): SigningKey {
-  return {
-    id,
-    repositoryName,
-    name: id,
-    publicKeyArmored: "public",
-    fingerprint: `fingerprint-${id}`,
-    keyId: `key-${id}`,
-    createdAt: "2026-07-23T00:00:00.000Z",
-    revokedAt: null,
   };
 }

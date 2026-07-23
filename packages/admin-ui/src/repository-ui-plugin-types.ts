@@ -72,10 +72,30 @@ export interface RepositoryCreateFieldRendererProps {
 export type RepositoryCreateFieldRenderer = ComponentType<RepositoryCreateFieldRendererProps>;
 export type RepositoryCreateFieldRendererMap = Record<string, RepositoryCreateFieldRenderer>;
 
+export interface PublishTokenScopeInput {
+  repositories: Repository[];
+  selectedRepositories: string[];
+  permissions: {
+    read: boolean;
+    publish: boolean;
+  };
+  signingKeySelections: Record<string, string>;
+}
+
+export interface PublishTokenScopeComponentProps extends PublishTokenScopeInput {
+  onSigningKeySelectionChange: (repositoryName: string, signingKeyId: string) => void;
+}
+
+export interface PublishTokenScopeExtension {
+  Component: ComponentType<PublishTokenScopeComponentProps>;
+  missingSelections(input: PublishTokenScopeInput): string[];
+}
+
 export interface RepositoryUiPlugin {
   manifest: RepositoryPluginManifest;
   create: RepositoryCreatePlugin;
   detail: RepositoryDetailPlugin;
   createFieldRenderers?: RepositoryCreateFieldRendererMap;
+  publishTokenScope?: PublishTokenScopeExtension;
   mapCreateServerError?: (message: string) => RepositoryCreateStep | undefined;
 }
