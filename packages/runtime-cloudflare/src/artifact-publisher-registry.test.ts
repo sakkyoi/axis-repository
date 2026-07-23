@@ -318,4 +318,59 @@ describe("ArtifactPublisherRegistry", () => {
       },
     ]);
   });
+
+  it("keeps admin resource handlers on registered plugins without exposing mutable metadata", async () => {
+    const registry = new ArtifactPublisherRegistry();
+    const publisher = publisherReturning("apt.json");
+    registry.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["admin-resources"],
+      publisher: publisher.publisher,
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
+      adminResources: {
+        namespace: "apt",
+        handle: async () => new Response("handled"),
+      },
+    });
+
+    registry.requirePlugin("apt").adminResources!.namespace = "mutated";
+    const plugin = registry.requirePlugin("apt");
+
+    expect(plugin.adminResources?.namespace).toBe("apt");
+    await expect(plugin.adminResources?.handle({
+      repositoryName: "apt-internal",
+      repository: publishInput("apt").repository,
+      request: new Request("https://axis.example/admin/repositories/apt-internal/apt/signing-keys"),
+      path: ["signing-keys"],
+      services: {},
+    })).resolves.toMatchObject({ status: 200 });
+  });
+
+  it("finds plugins by admin resource namespace", () => {
+    const registry = new ArtifactPublisherRegistry();
+    const publisher = publisherReturning("apt.json");
+    registry.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["admin-resources"],
+      publisher: publisher.publisher,
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
+      adminResources: {
+        namespace: "apt",
+        handle: async () => new Response("handled"),
+      },
+    });
+
+    expect(registry.getPluginByAdminResourceNamespace("apt")?.ecosystem).toBe("apt");
+    expect(registry.getPluginByAdminResourceNamespace("npm")).toBeUndefined();
+  });
 });

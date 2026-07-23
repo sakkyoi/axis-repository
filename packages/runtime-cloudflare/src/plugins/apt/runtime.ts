@@ -1,9 +1,10 @@
-import { ValidationError, type ArtifactPublisher, type Repository } from "@axis-repository/core";
+import { NotFoundError, ValidationError, type ArtifactPublisher, type Repository } from "@axis-repository/core";
 import { aptPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { ArtifactRepositoryPlugin, ValidateRepositoryConfigInput } from "../../artifact-publisher-registry";
 import { createPrefixServingPredicate } from "../../artifact-publisher-registry";
 import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "../../apt-client";
 import { parseAptRepositoryConfig, validateAptPublishArtifacts } from "../../apt-metadata";
+import { readJsonObject, stringField } from "../../http";
 
 function repositoryForConfig(input: ValidateRepositoryConfigInput): Repository {
   return {
@@ -48,6 +49,44 @@ function aptPublicKeyResponse(publicKeyArmored: string, repository: Repository):
   return new Response(publicKeyArmored, { headers });
 }
 
+interface AptSigningKeyService {
+  listForRepository(repositoryName: string): Promise<unknown[]>;
+  create(input: {
+    repositoryName: string;
+    name: string;
+    privateKeyArmored: string;
+    passphrase: string;
+  }): Promise<unknown>;
+  generate(input: {
+    repositoryName: string;
+    name: string;
+    userIdName: string;
+    userIdEmail: string;
+  }): Promise<unknown>;
+  getPublicKey(id: string): Promise<{ repositoryName: string }>;
+  revoke(id: string): Promise<unknown>;
+}
+
+function requireAptSigningKeyService(services: Record<string, unknown>): AptSigningKeyService {
+  const service = services.signingKeyService;
+  if (!service || typeof service !== "object") {
+    throw new ValidationError("APT signing key service is not configured");
+  }
+  return service as AptSigningKeyService;
+}
+
+async function requireRepositoryScopedSigningKey(
+  signingKeyService: AptSigningKeyService,
+  repositoryName: string,
+  signingKeyId: string,
+) {
+  const key = await signingKeyService.getPublicKey(signingKeyId);
+  if (key.repositoryName !== repositoryName) {
+    throw new NotFoundError();
+  }
+  return key;
+}
+
 export function createAptPlugin(input: { publisher: ArtifactPublisher }): ArtifactRepositoryPlugin {
   return {
     ecosystem: "apt",
@@ -84,6 +123,45 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
           return jsonResponse(buildAptInstallInfo({ origin, repository: repositoryInfo }));
         }
         throw new ValidationError(`APT client helper is not configured: ${action}`);
+      },
+    },
+    adminResources: {
+      namespace: aptPluginManifest.repositoryConfig.namespace,
+      handle: async ({ repositoryName, repository, request, path, services }) => {
+        const signingKeyService = requireAptSigningKeyService(services);
+        if (path.length === 1 && path[0] === "signing-keys" && request.method === "GET") {
+          return jsonResponse({
+            signingKeys: await signingKeyService.listForRepository(repositoryName),
+          });
+        }
+        if (path.length === 2 && path[0] === "signing-keys" && path[1] === "import" && request.method === "POST") {
+          const body = await readJsonObject(request);
+          const key = await signingKeyService.create({
+            repositoryName,
+            name: stringField(body, "name"),
+            privateKeyArmored: stringField(body, "privateKeyArmored"),
+            passphrase: stringField(body, "passphrase"),
+          });
+          return jsonResponse(key, { status: 201 });
+        }
+        if (path.length === 2 && path[0] === "signing-keys" && path[1] === "generate" && request.method === "POST") {
+          const body = await readJsonObject(request);
+          const key = await signingKeyService.generate({
+            repositoryName,
+            name: stringField(body, "name"),
+            userIdName: stringField(body, "userIdName"),
+            userIdEmail: stringField(body, "userIdEmail"),
+          });
+          return jsonResponse(key, { status: 201 });
+        }
+        if (path.length === 2 && path[0] === "signing-keys" && request.method === "GET") {
+          return jsonResponse(await requireRepositoryScopedSigningKey(signingKeyService, repositoryName, path[1]!));
+        }
+        if (path.length === 3 && path[0] === "signing-keys" && path[2] === "revoke" && request.method === "POST") {
+          await requireRepositoryScopedSigningKey(signingKeyService, repositoryName, path[1]!);
+          return jsonResponse(await signingKeyService.revoke(path[1]!));
+        }
+        throw new NotFoundError();
       },
     },
   };

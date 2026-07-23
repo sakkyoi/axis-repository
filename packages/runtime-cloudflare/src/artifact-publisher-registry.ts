@@ -70,6 +70,23 @@ export interface RepositoryClientHelpers {
   handle(input: RepositoryClientHelperInput): Promise<Response>;
 }
 
+export interface RepositoryAdminResourceServices {
+  [name: string]: unknown;
+}
+
+export interface RepositoryAdminResourceInput {
+  repositoryName: string;
+  repository?: Repository;
+  request: Request;
+  path: string[];
+  services: RepositoryAdminResourceServices;
+}
+
+export interface RepositoryAdminResources {
+  namespace: string;
+  handle(input: RepositoryAdminResourceInput): Promise<Response>;
+}
+
 export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   publisher: ArtifactPublisher;
   canServeRepositoryPath: RepositoryPathServingRule;
@@ -77,6 +94,7 @@ export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   validatePublishArtifacts(input: ValidatePublishArtifactsInput): void;
   authorizePublish(input: AuthorizePublishInput): void;
   clientHelpers?: RepositoryClientHelpers;
+  adminResources?: RepositoryAdminResources;
 }
 
 export type PublisherDescriptor = ArtifactRepositoryPlugin;
@@ -90,6 +108,13 @@ function clonePlugin(descriptor: ArtifactRepositoryPlugin): ArtifactRepositoryPl
           clientHelpers: {
             ...descriptor.clientHelpers,
             actions: descriptor.clientHelpers.actions.map((action) => ({ ...action })),
+          },
+        }
+      : {}),
+    ...(descriptor.adminResources
+      ? {
+          adminResources: {
+            ...descriptor.adminResources,
           },
         }
       : {}),
@@ -134,6 +159,14 @@ export class ArtifactPublisherRegistry implements ArtifactPublisher {
 
   getPlugin(ecosystem: Ecosystem): ArtifactRepositoryPlugin | undefined {
     const plugin = this.plugins.get(ecosystem);
+    if (!plugin) return undefined;
+    return clonePlugin(plugin);
+  }
+
+  getPluginByAdminResourceNamespace(namespace: string): ArtifactRepositoryPlugin | undefined {
+    const plugin = Array.from(this.plugins.values()).find((descriptor) =>
+      descriptor.adminResources?.namespace === namespace,
+    );
     if (!plugin) return undefined;
     return clonePlugin(plugin);
   }

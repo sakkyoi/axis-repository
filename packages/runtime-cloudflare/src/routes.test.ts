@@ -519,6 +519,42 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("dispatches admin repository plugin resources through the repository plugin", async () => {
+    const harness = createDevDependencyHarness();
+    harness.dependencies.artifactPublisherRegistry.register({
+      ecosystem: "demo",
+      name: "demo-plugin",
+      version: "0.1.0",
+      capabilities: ["admin-resources"],
+      publisher: { publish: async () => ({ publishedAt: "2026-07-23T00:00:00.000Z", objects: [] }) },
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
+      adminResources: {
+        namespace: "demo",
+        handle: async ({ repository, path }) => new Response(JSON.stringify({
+          repository: repository!.name,
+          path,
+        }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      },
+    });
+    const app = createApp(harness.dependencies);
+    await createRepository(app, { name: "demo-repo", ecosystem: "demo", config: { demo: {} } });
+
+    const response = await app.fetch(new Request("https://axis.example/admin/repositories/demo-repo/demo/status", {
+      headers: { authorization: "Bearer dev-admin-token" },
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      repository: "demo-repo",
+      path: ["status"],
+    });
+  });
+
   it("requires admin auth before listing repository plugin metadata", async () => {
     const app = createApp();
 

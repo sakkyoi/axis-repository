@@ -129,4 +129,89 @@ describe("APT plugin lifecycle", () => {
       script: expect.stringContaining("# Install the repository signing key."),
     });
   });
+
+  it("serves APT signing keys from plugin admin resources", async () => {
+    const calls: Array<{ method: string; input?: unknown }> = [];
+    const signingKey = {
+      id: "signing_key_prod",
+      repositoryName: "debian-internal",
+      name: "release",
+      publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+      fingerprint: "FINGERPRINT",
+      keyId: "KEYID",
+      createdAt: "2026-07-22T00:00:00.000Z",
+      revokedAt: null,
+    };
+    const plugin = createAptPlugin({
+      publisher: { publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }) },
+    });
+    const services = {
+      signingKeyService: {
+        listForRepository: async (repositoryName: string) => {
+          calls.push({ method: "listForRepository", input: repositoryName });
+          return [signingKey];
+        },
+        generate: async (input: unknown) => {
+          calls.push({ method: "generate", input });
+          return signingKey;
+        },
+        getPublicKey: async (id: string) => {
+          calls.push({ method: "getPublicKey", input: id });
+          return signingKey;
+        },
+        revoke: async (id: string) => {
+          calls.push({ method: "revoke", input: id });
+          return { ...signingKey, revokedAt: "2026-07-23T00:00:00.000Z" };
+        },
+      },
+    };
+
+    expect(plugin.adminResources?.namespace).toBe("apt");
+    await expect(plugin.adminResources?.handle({
+      repositoryName: "debian-internal",
+      repository: repository(),
+      request: new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys"),
+      path: ["signing-keys"],
+      services,
+    }).then((response) => response.json())).resolves.toEqual({ signingKeys: [signingKey] });
+    await expect(plugin.adminResources?.handle({
+      repositoryName: "debian-internal",
+      repository: repository(),
+      request: new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "release",
+          userIdName: "Axis Repository",
+          userIdEmail: "axis@example.test",
+        }),
+      }),
+      path: ["signing-keys", "generate"],
+      services,
+    }).then((response) => response.status)).resolves.toBe(201);
+    await expect(plugin.adminResources?.handle({
+      repositoryName: "debian-internal",
+      repository: repository(),
+      request: new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys/signing_key_prod/revoke", {
+        method: "POST",
+      }),
+      path: ["signing-keys", "signing_key_prod", "revoke"],
+      services,
+    }).then((response) => response.json())).resolves.toMatchObject({ revokedAt: "2026-07-23T00:00:00.000Z" });
+
+    expect(calls).toEqual([
+      { method: "listForRepository", input: "debian-internal" },
+      {
+        method: "generate",
+        input: {
+          repositoryName: "debian-internal",
+          name: "release",
+          userIdName: "Axis Repository",
+          userIdEmail: "axis@example.test",
+        },
+      },
+      { method: "getPublicKey", input: "signing_key_prod" },
+      { method: "revoke", input: "signing_key_prod" },
+    ]);
+  });
 });
