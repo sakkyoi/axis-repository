@@ -2,6 +2,7 @@ import { aptPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { RepositoryDetailPlugin, RepositoryUiPlugin } from "../../repository-ui-plugin-types";
 import { AdvancedJsonConfigSection, RepositoryClientHelpersSection } from "../../repository-detail-shared";
 import { aptRepositoryCreatePlugin } from "./create";
+import { AptSigningKeyDependencyField } from "./create-field-renderers";
 import { AptSettingsSection, AptSigningKeysSection } from "./detail";
 import { AptPublishSessionsSection } from "./publish";
 
@@ -20,6 +21,9 @@ export const aptRepositoryUiPlugin: RepositoryUiPlugin = {
   manifest: aptPluginManifest,
   create: aptRepositoryCreatePlugin,
   detail: aptRepositoryDetailPlugin,
+  createFieldRenderers: {
+    "signing-key": AptSigningKeyDependencyField,
+  },
   mapCreateServerError: (message) => {
     if (/^config\.apt\.|Codename|Components|Architectures/i.test(message)) return "config";
     if (/Signing key/i.test(message)) return "dependencies";

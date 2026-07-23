@@ -1,4 +1,8 @@
-import type { PluginRepositoryConfigManifest, RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
+import type {
+  PluginRepositoryConfigFieldManifest,
+  PluginRepositoryConfigManifest,
+  RepositoryPluginManifest,
+} from "@axis-repository/core/plugin-manifests";
 import type { ComponentType } from "react";
 import type { CreateRepositoryInput } from "./api/client";
 import type { Repository, RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
@@ -58,9 +62,20 @@ export interface RepositoryDetailPlugin {
   sections: RepositoryDetailSection[];
 }
 
+export interface RepositoryCreateFieldRendererProps {
+  field: PluginRepositoryConfigFieldManifest;
+  repositoryName: string;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+export type RepositoryCreateFieldRenderer = ComponentType<RepositoryCreateFieldRendererProps>;
+export type RepositoryCreateFieldRendererMap = Record<string, RepositoryCreateFieldRenderer>;
+
 export interface RepositoryUiPlugin {
   manifest: RepositoryPluginManifest;
   create: RepositoryCreatePlugin;
   detail: RepositoryDetailPlugin;
+  createFieldRenderers?: RepositoryCreateFieldRendererMap;
   mapCreateServerError?: (message: string) => RepositoryCreateStep | undefined;
 }

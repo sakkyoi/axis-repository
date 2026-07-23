@@ -20,6 +20,7 @@ import {
 } from "../repository-create-plugins";
 import type {
   RepositoryCreateFieldErrors,
+  RepositoryCreateFieldRendererMap,
   RepositoryCreatePlugin,
   RepositoryCreatePluginOption,
   RepositoryCreateStep,
@@ -177,6 +178,8 @@ export function NewRepositoryPage() {
             <ConfigStep
               plugin={plugin}
               displayName={pluginManifest?.displayName ?? plugin.ecosystem}
+              fieldRenderers={getRepositoryUiPlugin(plugin.ecosystem)?.createFieldRenderers}
+              repositoryName={state.name.trim()}
               config={state.config}
               onChange={(config) => updateState({ config })}
             />
@@ -185,6 +188,7 @@ export function NewRepositoryPage() {
             <DependenciesStep
               plugin={plugin}
               displayName={pluginManifest?.displayName ?? plugin.ecosystem}
+              fieldRenderers={getRepositoryUiPlugin(plugin.ecosystem)?.createFieldRenderers}
               repositoryName={state.name.trim()}
               dependencies={state.dependencies}
               onChange={(dependencies) => updateState({ dependencies })}
@@ -374,11 +378,15 @@ function BasicsStep({
 function ConfigStep({
   plugin,
   displayName,
+  fieldRenderers,
+  repositoryName,
   config,
   onChange,
 }: {
   plugin: RepositoryCreatePlugin;
   displayName: string;
+  fieldRenderers: RepositoryCreateFieldRendererMap | undefined;
+  repositoryName: string;
   config: Record<string, string>;
   onChange: (config: Record<string, string>) => void;
 }) {
@@ -390,7 +398,13 @@ function ConfigStep({
         <h2 className="text-base font-semibold">{displayName} config</h2>
         <p className="mt-1 text-sm text-muted-foreground">Configure the repository fields provided by this plugin.</p>
       </div>
-      <RepositoryConfigFields fields={fields} values={config} onChange={onChange} />
+      <RepositoryConfigFields
+        fields={fields}
+        repositoryName={repositoryName}
+        values={config}
+        fieldRenderers={fieldRenderers}
+        onChange={onChange}
+      />
     </div>
   );
 }
@@ -398,12 +412,14 @@ function ConfigStep({
 function DependenciesStep({
   plugin,
   displayName,
+  fieldRenderers,
   repositoryName,
   dependencies,
   onChange,
 }: {
   plugin: RepositoryCreatePlugin;
   displayName: string;
+  fieldRenderers: RepositoryCreateFieldRendererMap | undefined;
   repositoryName: string;
   dependencies: Record<string, string>;
   onChange: (dependencies: Record<string, string>) => void;
@@ -416,7 +432,13 @@ function DependenciesStep({
         <h2 className="text-base font-semibold">{displayName} dependencies</h2>
         <p className="mt-1 text-sm text-muted-foreground">Satisfy the resources this plugin needs before creation.</p>
       </div>
-      <RepositoryDependencyFields fields={fields} repositoryName={repositoryName} values={dependencies} onChange={onChange} />
+      <RepositoryDependencyFields
+        fields={fields}
+        repositoryName={repositoryName}
+        values={dependencies}
+        fieldRenderers={fieldRenderers}
+        onChange={onChange}
+      />
     </div>
   );
 }

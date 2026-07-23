@@ -73,4 +73,10 @@ describe("repository UI plugin registry", () => {
     expect(getRepositoryUiPlugin("apt")?.mapCreateServerError?.("config.apt.codename is required")).toBe("config");
     expect(getRepositoryUiPlugin("pypi")?.mapCreateServerError?.("Signing key is required")).toBeUndefined();
   });
+
+  it("lets ecosystem UI plugins provide custom create field renderers", () => {
+    expect(getRepositoryUiPlugin("apt")?.createFieldRenderers?.["signing-key"]?.name)
+      .toBe("AptSigningKeyDependencyField");
+    expect(getRepositoryUiPlugin("pypi")?.createFieldRenderers?.["signing-key"]).toBeUndefined();
+  });
 });
