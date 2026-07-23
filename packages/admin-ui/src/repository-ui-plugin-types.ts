@@ -5,7 +5,7 @@ import type {
 } from "@axis-repository/core/plugin-manifests";
 import type { ComponentType } from "react";
 import type { CreateRepositoryInput } from "./api/client";
-import type { Repository, RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
+import type { PublishSession, Repository, RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
 
 export type RepositoryCreateStep = "plugin" | "basics" | "config" | "dependencies" | "review";
 
@@ -91,10 +91,17 @@ export interface PublishTokenScopeExtension {
   missingSelections(input: PublishTokenScopeInput): string[];
 }
 
+export interface RepositoryPublishPlugin {
+  ecosystem: string;
+  Component: ComponentType<RepositoryDetailSectionProps>;
+  artifactSummary(session: PublishSession): string;
+}
+
 export interface RepositoryUiPlugin {
   manifest: RepositoryPluginManifest;
   create: RepositoryCreatePlugin;
   detail: RepositoryDetailPlugin;
+  publish?: RepositoryPublishPlugin;
   createFieldRenderers?: RepositoryCreateFieldRendererMap;
   publishTokenScope?: PublishTokenScopeExtension;
   mapCreateServerError?: (message: string) => RepositoryCreateStep | undefined;

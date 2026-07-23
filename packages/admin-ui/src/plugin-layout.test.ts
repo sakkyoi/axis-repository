@@ -22,4 +22,15 @@ describe("admin UI plugin layout", () => {
     expect(existsSync(join(srcDir, "plugins", "apt", "schemas.ts"))).toBe(true);
     expect(existsSync(join(srcDir, "plugins", "pypi", "schemas.ts"))).toBe(true);
   });
+
+  it("keeps ecosystem-specific publish models under UI plugin directories", () => {
+    const sharedPublishModel = readFileSync(join(srcDir, "admin-publish-form-model.ts"), "utf8");
+
+    expect(sharedPublishModel).not.toContain("AptPublishFormValues");
+    expect(sharedPublishModel).not.toContain("defaultAptPublishFormValues");
+    expect(sharedPublishModel).not.toContain("buildAptPublishArtifact");
+    expect(existsSync(join(srcDir, "plugins", "apt", "publish-model.ts"))).toBe(true);
+    expect(existsSync(join(srcDir, "plugins", "apt", "publish-model.test.ts"))).toBe(true);
+    expect(existsSync(join(srcDir, "plugins", "pypi", "publish.tsx"))).toBe(true);
+  });
 });

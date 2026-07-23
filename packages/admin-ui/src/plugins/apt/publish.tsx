@@ -2,10 +2,11 @@ import { useState } from "react";
 import { PackagePlus } from "lucide-react";
 import type { Repository, RepositoryPlugin } from "../../api/schemas";
 import {
+  aptPublishSessionArtifactSummary,
   buildAptPublishArtifact,
   defaultAptPublishFormValues,
   type AptPublishFormValues,
-} from "../../admin-publish-form-model";
+} from "./publish-model";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { ErrorState } from "../../pages/shared";
@@ -22,7 +23,11 @@ export function AptPublishSessionsSection({
   return (
     <div className="grid gap-2">
       <AptPublishArtifactForm repository={repository} />
-      <PublishSessionsSection repository={repository} pluginMetadata={pluginMetadata} />
+      <PublishSessionsSection
+        repository={repository}
+        pluginMetadata={pluginMetadata}
+        artifactSummary={aptPublishSessionArtifactSummary}
+      />
     </div>
   );
 }

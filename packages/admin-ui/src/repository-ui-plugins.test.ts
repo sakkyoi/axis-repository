@@ -94,6 +94,36 @@ describe("repository UI plugin registry", () => {
     expect(getRepositoryUiPlugin("pypi")?.publishTokenScope).toBeUndefined();
   });
 
+  it("lets ecosystem UI plugins provide publish UI and artifact summaries", () => {
+    expect(getRepositoryUiPlugin("apt")?.publish?.Component.name).toBe("AptPublishSessionsSection");
+    expect(getRepositoryUiPlugin("pypi")?.publish?.Component.name).toBe("PypiPublishSessionsSection");
+    expect(getRepositoryUiPlugin("apt")?.publish?.artifactSummary({
+      id: "pub_apt",
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      status: "finalized",
+      requestedBy: {
+        tokenId: "tok_1",
+        name: "ci",
+        permissions: ["publish"],
+        repositories: ["debian-internal"],
+        ecosystemScopes: {},
+        signingKeyIds: [],
+      },
+      artifacts: [{
+        filename: "myapp_1.2.3_amd64.deb",
+        size: 1234,
+        sha256: "a".repeat(64),
+        contentType: "application/vnd.debian.binary-package",
+        metadata: { package: "myapp", version: "1.2.3", architecture: "amd64" },
+      }],
+      uploads: [],
+      verifiedUploads: [],
+      createdAt: "2026-07-23T00:00:00.000Z",
+      expiresAt: "2026-07-23T00:10:00.000Z",
+    })).toBe("myapp 1.2.3 amd64, 0 verified");
+  });
+
   it("lets ecosystem UI plugins validate publish token scope selections", () => {
     expect(getRepositoryUiPlugin("apt")?.publishTokenScope?.missingSelections({
       repositories: [

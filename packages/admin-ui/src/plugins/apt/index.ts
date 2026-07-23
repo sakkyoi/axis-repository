@@ -5,6 +5,7 @@ import { aptRepositoryCreatePlugin } from "./create";
 import { AptSigningKeyDependencyField } from "./create-field-renderers";
 import { AptSettingsSection, AptSigningKeysSection } from "./detail";
 import { AptPublishSessionsSection } from "./publish";
+import { aptPublishSessionArtifactSummary } from "./publish-model";
 import { AptSigningKeyTokenScopeFields, aptPublishTokenMissingSigningKeySelections } from "./token-scope";
 
 export const aptRepositoryDetailPlugin: RepositoryDetailPlugin = {
@@ -22,6 +23,11 @@ export const aptRepositoryUiPlugin: RepositoryUiPlugin = {
   manifest: aptPluginManifest,
   create: aptRepositoryCreatePlugin,
   detail: aptRepositoryDetailPlugin,
+  publish: {
+    ecosystem: aptPluginManifest.ecosystem,
+    Component: AptPublishSessionsSection,
+    artifactSummary: aptPublishSessionArtifactSummary,
+  },
   createFieldRenderers: {
     "signing-key": AptSigningKeyDependencyField,
   },

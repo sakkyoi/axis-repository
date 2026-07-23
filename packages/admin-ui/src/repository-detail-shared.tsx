@@ -81,9 +81,11 @@ export function RepositorySettingsSection({
 
 export function PublishSessionsSection({
   repository,
+  artifactSummary = publishSessionArtifactSummary,
 }: {
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
+  artifactSummary?: (session: PublishSession) => string;
 }) {
   const publishSessions = usePublishSessions();
   const publishSessionsView = repositoryPublishSessionsView(repository, publishSessions.data ?? []);
@@ -100,12 +102,20 @@ export function PublishSessionsSection({
       )}
       {!publishSessions.isLoading &&
         !publishSessions.isError &&
-        sessions.map((session) => <PublishSessionItem key={session.id} session={session} />)}
+        sessions.map((session) => (
+          <PublishSessionItem key={session.id} session={session} artifactSummary={artifactSummary} />
+        ))}
     </div>
   );
 }
 
-function PublishSessionItem({ session }: { session: PublishSession }) {
+function PublishSessionItem({
+  session,
+  artifactSummary,
+}: {
+  session: PublishSession;
+  artifactSummary: (session: PublishSession) => string;
+}) {
   const status = publishSessionStatusMeta(session.status);
   return (
     <details className="min-w-0 rounded-md border border-border bg-background/40 p-3">
@@ -117,7 +127,7 @@ function PublishSessionItem({ session }: { session: PublishSession }) {
               <Badge variant={status.variant}>{status.label}</Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {publishSessionArtifactSummary(session)} · created {session.createdAt}
+              {artifactSummary(session)} · created {session.createdAt}
             </p>
           </div>
         </div>
