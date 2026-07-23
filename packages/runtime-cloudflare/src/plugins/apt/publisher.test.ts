@@ -6,11 +6,11 @@ import {
   type PublishArtifactsInput,
   type RepositoryObjectStore,
 } from "@axis-repository/core";
-import { AptPublisher } from "./apt-publisher";
-import { MemoryRepositoryObjectStore } from "./repository-object-store";
-import { SecretEncryption } from "./secret-encryption";
-import { SigningKeyService } from "./signing-key-service";
-import { OpenPgpSigner } from "./openpgp-signer";
+import { OpenPgpSigner } from "../../openpgp-signer";
+import { MemoryRepositoryObjectStore } from "../../repository-object-store";
+import { SecretEncryption } from "../../secret-encryption";
+import { SigningKeyService } from "../../signing-key-service";
+import { AptPublisher } from "./publisher";
 
 async function createSigningKey(state: MemoryStateStore) {
   const key = await generateKey({

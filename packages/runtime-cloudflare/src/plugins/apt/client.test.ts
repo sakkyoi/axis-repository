@@ -5,7 +5,7 @@ import {
   buildAptSourceInfo,
   keyringPathForRepository,
   sourceListPathForRepository,
-} from "./apt-client";
+} from "./client";
 
 const repository = {
   name: "debian-public",

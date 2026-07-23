@@ -5,8 +5,8 @@ import {
   type PublishResult,
   type RepositoryObjectStore,
 } from "@axis-repository/core";
-import { buildAptRepositoryMetadata } from "./apt-metadata";
-import type { SigningKeyService } from "./signing-key-service";
+import type { SigningKeyService } from "../../signing-key-service";
+import { buildAptRepositoryMetadata } from "./metadata";
 
 const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";
 const GZIP_CONTENT_TYPE = "application/gzip";

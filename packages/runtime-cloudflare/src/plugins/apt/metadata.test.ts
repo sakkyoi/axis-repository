@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError, type PublishArtifactsInput } from "@axis-repository/core";
-import { buildAptRepositoryMetadata, parseAptRepositoryConfig, validateAptPublishArtifacts } from "./apt-metadata";
+import { buildAptRepositoryMetadata, parseAptRepositoryConfig, validateAptPublishArtifacts } from "./metadata";
 
 const textDecoder = new TextDecoder();
 

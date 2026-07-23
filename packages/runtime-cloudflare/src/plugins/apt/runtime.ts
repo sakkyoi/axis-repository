@@ -2,9 +2,9 @@ import { NotFoundError, ValidationError, type ArtifactPublisher, type Repository
 import { aptPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { ArtifactRepositoryPlugin, ValidateRepositoryConfigInput } from "../../artifact-publisher-registry";
 import { createPrefixServingPredicate } from "../../artifact-publisher-registry";
-import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "../../apt-client";
-import { parseAptRepositoryConfig, validateAptPublishArtifacts } from "../../apt-metadata";
 import { readJsonObject, stringField } from "../../http";
+import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "./client";
+import { parseAptRepositoryConfig, validateAptPublishArtifacts } from "./metadata";
 
 function repositoryForConfig(input: ValidateRepositoryConfigInput): Repository {
   return {
