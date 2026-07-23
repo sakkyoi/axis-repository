@@ -22,6 +22,10 @@ export interface RepositoryCreatePlugin {
   buildCreateInput(state: RepositoryCreateWizardState): CreateRepositoryInput;
 }
 
+export interface RepositoryCreateFieldErrors {
+  name?: string;
+}
+
 export type RepositoryCreatePluginOption =
   | {
       ecosystem: string;
@@ -130,6 +134,29 @@ export function getRepositoryCreatePlugin(ecosystem: string): RepositoryCreatePl
     throw new Error(`Repository create plugin is not configured: ${ecosystem}`);
   }
   return plugin;
+}
+
+export function repositoryCreateStepForServerError(
+  message: string,
+  plugin: RepositoryCreatePlugin,
+): RepositoryCreateStep | undefined {
+  if (/^Repository already exists: /i.test(message) || message === "Repository name is required") {
+    return plugin.steps.includes("basics") ? "basics" : undefined;
+  }
+  if (/^config\.apt\.|Codename|Components|Architectures/i.test(message)) {
+    return plugin.steps.includes("config") ? "config" : undefined;
+  }
+  if (/Signing key/i.test(message)) {
+    return plugin.steps.includes("dependencies") ? "dependencies" : undefined;
+  }
+  return undefined;
+}
+
+export function repositoryCreateFieldErrors(message: string): RepositoryCreateFieldErrors {
+  if (/^Repository already exists: /i.test(message) || message === "Repository name is required") {
+    return { name: message };
+  }
+  return {};
 }
 
 export function repositoryCreatePluginOptions(

@@ -18,9 +18,12 @@ import { cn } from "../lib/utils";
 import { ADMIN_UI_PATHS } from "../navigation";
 import {
   getRepositoryCreatePlugin,
+  repositoryCreateFieldErrors,
   repositoryCreatePluginOptions,
   repositoryCreatePlugins,
+  repositoryCreateStepForServerError,
   type RepositoryCreatePluginOption,
+  type RepositoryCreateFieldErrors,
   type RepositoryCreateStep,
   type RepositoryCreateWizardState,
 } from "../repository-create-plugins";
@@ -60,6 +63,7 @@ export function NewRepositoryPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [state, setState] = useState<RepositoryCreateWizardState>(plugin.defaults);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<RepositoryCreateFieldErrors>({});
   const currentStep = plugin.steps[stepIndex] ?? "plugin";
   const stepErrors = plugin.validateStep(currentStep, state);
   const payload = useMemo(() => {
@@ -76,6 +80,7 @@ export function NewRepositoryPage() {
     setState(nextPlugin.defaults);
     setStepIndex(1);
     setError("");
+    setFieldErrors({});
   }
 
   function updateState(patch: Partial<RepositoryCreateWizardState>) {
@@ -89,6 +94,7 @@ export function NewRepositoryPage() {
       return;
     }
     setError("");
+    setFieldErrors({});
     setStepIndex((current) => Math.min(current + 1, plugin.steps.length - 1));
   }
 
@@ -97,7 +103,13 @@ export function NewRepositoryPage() {
       await createRepository.mutateAsync(plugin.buildCreateInput(state));
       navigate(ADMIN_UI_PATHS.repositories);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Repository could not be created");
+      const message = caught instanceof Error ? caught.message : "Repository could not be created";
+      const targetStep = repositoryCreateStepForServerError(message, plugin);
+      if (targetStep) {
+        setStepIndex(plugin.steps.indexOf(targetStep));
+      }
+      setFieldErrors(repositoryCreateFieldErrors(message));
+      setError(message);
     }
   }
 
@@ -129,7 +141,14 @@ export function NewRepositoryPage() {
             <BasicsStep
               name={state.name}
               visibility={state.visibility}
-              onNameChange={(name) => updateState({ name, dependencies: { ...state.dependencies, signingKeyId: "" } })}
+              {...(fieldErrors.name ? { nameError: fieldErrors.name } : {})}
+              onNameChange={(name) => {
+                setFieldErrors((current) => {
+                  const { name: _name, ...rest } = current;
+                  return rest;
+                });
+                updateState({ name, dependencies: { ...state.dependencies, signingKeyId: "" } });
+              }}
               onVisibilityChange={(visibility) => updateState({ visibility })}
             />
           )}
@@ -290,11 +309,13 @@ function PluginStep({
 function BasicsStep({
   name,
   visibility,
+  nameError,
   onNameChange,
   onVisibilityChange,
 }: {
   name: string;
   visibility: RepositoryVisibility;
+  nameError?: string;
   onNameChange: (name: string) => void;
   onVisibilityChange: (visibility: RepositoryVisibility) => void;
 }) {
@@ -307,6 +328,7 @@ function BasicsStep({
       <label className="grid gap-2">
         <span className="text-sm font-medium">Repository name</span>
         <Input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder="debian-internal" required />
+        {nameError && <span className="text-xs font-medium text-destructive">{nameError}</span>}
       </label>
       <label className="grid gap-2">
         <span className="text-sm font-medium">Visibility</span>
@@ -374,7 +396,9 @@ function AptDependenciesStep({
     <div className="grid gap-4">
       <div>
         <h2 className="text-base font-semibold">APT dependencies</h2>
-        <p className="mt-1 text-sm text-muted-foreground">APT repositories need a repository-scoped OpenPGP signing key before creation.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          APT repositories need an OpenPGP key scoped to this repository name. Keys from other repositories are not reusable.
+        </p>
       </div>
       {!repositoryName ? (
         <ErrorState title="Repository name required" error={new Error("Go back and enter a repository name before configuring dependencies.")} />
@@ -384,7 +408,7 @@ function AptDependenciesStep({
             <span className="text-sm font-medium">Signing key</span>
             {activeKeys.length === 0 ? (
               <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-                No active signing key is scoped to {repositoryName}.
+                No active signing key is scoped to {repositoryName}. Generate or import one below.
               </div>
             ) : (
               <Select value={signingKeyId} onValueChange={onSigningKeyChange}>

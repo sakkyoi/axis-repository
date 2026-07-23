@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createAxisClient } from "./client";
+import { serverErrorMessage } from "./http";
 import {
   installInstructionsSchema,
   publishTokenCreateResponseSchema,
@@ -8,6 +9,15 @@ import {
 } from "./schemas";
 
 describe("admin API schemas", () => {
+  it("extracts API error messages from server error responses", () => {
+    expect(serverErrorMessage({
+      error: {
+        code: "validation_error",
+        message: "Repository already exists: debian-internal",
+      },
+    })).toBe("Repository already exists: debian-internal");
+  });
+
   it("parses repositories with arbitrary plugin config", () => {
     const repository = repositorySchema.parse({
       id: "repo_1",

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   getRepositoryCreatePlugin,
+  repositoryCreateFieldErrors,
   repositoryCreatePluginOptions,
   repositoryCreatePlugins,
+  repositoryCreateStepForServerError,
 } from "./repository-create-plugins";
 
 describe("repository create plugins", () => {
@@ -118,5 +120,15 @@ describe("repository create plugins", () => {
 
   it("does not offer local create plugins that are not enabled by the server", () => {
     expect(repositoryCreatePluginOptions([])).toEqual([]);
+  });
+
+  it("maps duplicate repository errors back to the basics step and name field", () => {
+    const plugin = getRepositoryCreatePlugin("apt");
+    const message = "Repository already exists: debian-internal";
+
+    expect(repositoryCreateStepForServerError(message, plugin)).toBe("basics");
+    expect(repositoryCreateFieldErrors(message)).toEqual({
+      name: "Repository already exists: debian-internal",
+    });
   });
 });
