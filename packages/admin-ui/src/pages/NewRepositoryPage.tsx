@@ -27,7 +27,9 @@ import type {
   RepositoryCreateWizardState,
 } from "../repository-ui-plugin-types";
 import {
-  getRepositoryUiPlugin,
+  getRepositoryCreateFieldRenderers,
+  getRepositoryCreatePlugin,
+  getRepositoryPluginManifest,
   repositoryCreatePluginOptionsFromUiRegistry,
   repositoryCreatePluginsFromUiRegistry,
 } from "../repository-ui-plugins";
@@ -57,7 +59,7 @@ export function NewRepositoryPage() {
   const [selectedEcosystem, setSelectedEcosystem] = useState(firstSupportedPlugin.ecosystem);
   const selectedOption = pluginOptions.find((option) => option.ecosystem === selectedEcosystem && option.supported);
   const plugin = selectedOption?.supported ? selectedOption.plugin : firstSupportedPlugin;
-  const pluginManifest = getRepositoryUiPlugin(plugin.ecosystem)?.manifest;
+  const pluginManifest = getRepositoryPluginManifest(plugin.ecosystem);
   const canUseSelectedPlugin = Boolean(selectedOption);
   const summaryTitle = repositoryPlugins.isLoading
     ? "Loading plugins"
@@ -83,7 +85,7 @@ export function NewRepositoryPage() {
   }, [plugin, state]);
 
   function selectPlugin(ecosystem: string) {
-    const nextPlugin = getRepositoryUiPlugin(ecosystem)?.create;
+    const nextPlugin = getRepositoryCreatePlugin(ecosystem);
     if (!nextPlugin) {
       throw new Error(`Repository UI plugin is not configured: ${ecosystem}`);
     }
@@ -178,7 +180,7 @@ export function NewRepositoryPage() {
             <ConfigStep
               plugin={plugin}
               displayName={pluginManifest?.displayName ?? plugin.ecosystem}
-              fieldRenderers={getRepositoryUiPlugin(plugin.ecosystem)?.createFieldRenderers}
+              fieldRenderers={getRepositoryCreateFieldRenderers(plugin.ecosystem)}
               repositoryName={state.name.trim()}
               config={state.config}
               onChange={(config) => updateState({ config })}
@@ -188,7 +190,7 @@ export function NewRepositoryPage() {
             <DependenciesStep
               plugin={plugin}
               displayName={pluginManifest?.displayName ?? plugin.ecosystem}
-              fieldRenderers={getRepositoryUiPlugin(plugin.ecosystem)?.createFieldRenderers}
+              fieldRenderers={getRepositoryCreateFieldRenderers(plugin.ecosystem)}
               repositoryName={state.name.trim()}
               dependencies={state.dependencies}
               onChange={(dependencies) => updateState({ dependencies })}

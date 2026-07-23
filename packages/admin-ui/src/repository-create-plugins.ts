@@ -6,8 +6,8 @@ import type {
   RepositoryCreateStep,
 } from "./repository-ui-plugin-types";
 import {
-  getRepositoryUiPlugin,
-  repositoryCreatePluginOptionsFromUiRegistry,
+  getRepositoryCreateServerErrorMapper,
+  getRepositoryPluginManifest,
   repositoryCreatePluginsFromUiRegistry,
 } from "./repository-ui-plugins";
 
@@ -37,7 +37,7 @@ export function repositoryCreateStepForServerError(
   if (/^Repository already exists: /i.test(message) || message === "Repository name is required") {
     return plugin.steps.includes("basics") ? "basics" : undefined;
   }
-  const pluginStep = getRepositoryUiPlugin(plugin.ecosystem)?.mapCreateServerError?.(message);
+  const pluginStep = getRepositoryCreateServerErrorMapper(plugin.ecosystem)?.(message);
   return pluginStep && plugin.steps.includes(pluginStep) ? pluginStep : undefined;
 }
 
@@ -61,8 +61,25 @@ export function repositoryCreatePluginOptions(
   serverPlugins: RepositoryPlugin[],
   localPlugins: readonly RepositoryCreatePlugin[] = repositoryCreatePlugins,
 ): RepositoryCreatePluginOption[] {
-  const pluginEntries = localPlugins
-    .map((plugin) => getRepositoryUiPlugin(plugin.ecosystem))
-    .filter((plugin): plugin is NonNullable<typeof plugin> => Boolean(plugin));
-  return repositoryCreatePluginOptionsFromUiRegistry(serverPlugins, pluginEntries);
+  return serverPlugins.map((serverPlugin) => {
+    const localPlugin = localPlugins.find((plugin) => plugin.ecosystem === serverPlugin.ecosystem);
+    if (!localPlugin) {
+      return {
+        ecosystem: serverPlugin.ecosystem,
+        displayName: serverPlugin.ecosystem,
+        description: "Server plugin is enabled, but this admin UI cannot create it yet.",
+        capabilities: [...serverPlugin.capabilities],
+        supported: false,
+      };
+    }
+    const manifest = getRepositoryPluginManifest(serverPlugin.ecosystem);
+    return {
+      ecosystem: serverPlugin.ecosystem,
+      displayName: manifest?.displayName ?? serverPlugin.ecosystem,
+      description: manifest?.description ?? "Repository plugin supported by this admin UI.",
+      capabilities: [...serverPlugin.capabilities],
+      supported: true,
+      plugin: localPlugin,
+    };
+  });
 }

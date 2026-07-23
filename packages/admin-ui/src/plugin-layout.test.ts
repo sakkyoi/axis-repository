@@ -33,4 +33,20 @@ describe("admin UI plugin layout", () => {
     expect(existsSync(join(srcDir, "plugins", "apt", "publish-model.test.ts"))).toBe(true);
     expect(existsSync(join(srcDir, "plugins", "pypi", "publish.tsx"))).toBe(true);
   });
+
+  it("keeps app consumers behind UI plugin capability accessors", () => {
+    const consumerFiles = [
+      join(srcDir, "pages", "NewRepositoryPage.tsx"),
+      join(srcDir, "pages", "RepositoriesPage.tsx"),
+      join(srcDir, "pages", "TokensPage.tsx"),
+      join(srcDir, "repository-create-plugins.ts"),
+      join(srcDir, "repository-detail-plugins.tsx"),
+    ];
+
+    for (const file of consumerFiles) {
+      const content = readFileSync(file, "utf8");
+      expect(content).not.toContain("getRepositoryUiPlugin");
+      expect(content).not.toContain("repositoryUiPlugins");
+    }
+  });
 });

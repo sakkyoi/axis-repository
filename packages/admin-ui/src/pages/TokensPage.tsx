@@ -12,7 +12,7 @@ import {
   tokenScopeSummary,
   type PublishTokenPermissionState,
 } from "../publish-token-form-model";
-import { repositoryUiPlugins } from "../repository-ui-plugins";
+import { getPublishTokenScopeExtension } from "../repository-ui-plugins";
 import { asJson, EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 export function TokensPage() {
@@ -128,9 +128,14 @@ function CreateTokenDialog({
   const [signingKeySelections, setSigningKeySelections] = useState<Record<string, string>>({});
   const [scopeError, setScopeError] = useState("");
   const createToken = useCreatePublishToken();
-  const publishTokenScopeExtensions = repositoryUiPlugins
-    .map((plugin) => plugin.publishTokenScope)
-    .filter((scope): scope is NonNullable<typeof scope> => Boolean(scope));
+  const publishTokenScopeExtensions = [
+    ...new Map(
+      repositories
+        .map((repository) => [repository.ecosystem, getPublishTokenScopeExtension(repository.ecosystem)] as const)
+        .filter((entry): entry is readonly [string, NonNullable<ReturnType<typeof getPublishTokenScopeExtension>>] =>
+          Boolean(entry[1])),
+    ).values(),
+  ];
 
   function toggleRepository(repositoryName: string, selected: boolean) {
     setSelectedRepositories((current) =>

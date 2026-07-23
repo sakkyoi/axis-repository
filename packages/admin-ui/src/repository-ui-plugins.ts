@@ -1,8 +1,13 @@
+import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { RepositoryPlugin } from "./api/schemas";
 import type {
+  PublishTokenScopeExtension,
+  RepositoryCreateFieldRendererMap,
   RepositoryCreatePlugin,
   RepositoryCreatePluginOption,
+  RepositoryCreateStep,
   RepositoryDetailPlugin,
+  RepositoryPublishPlugin,
   RepositoryUiPlugin,
 } from "./repository-ui-plugin-types";
 import { aptRepositoryUiPlugin } from "./plugins/apt";
@@ -15,8 +20,38 @@ export const repositoryUiPlugins = [
   pypiRepositoryUiPlugin,
 ] satisfies NonEmptyArray<RepositoryUiPlugin>;
 
-export function getRepositoryUiPlugin(ecosystem: string): RepositoryUiPlugin | undefined {
+function getRepositoryUiPlugin(ecosystem: string): RepositoryUiPlugin | undefined {
   return repositoryUiPlugins.find((plugin) => plugin.manifest.ecosystem === ecosystem);
+}
+
+export function getRepositoryPluginManifest(ecosystem: string): RepositoryPluginManifest | undefined {
+  return getRepositoryUiPlugin(ecosystem)?.manifest;
+}
+
+export function getRepositoryCreatePlugin(ecosystem: string): RepositoryCreatePlugin | undefined {
+  return getRepositoryUiPlugin(ecosystem)?.create;
+}
+
+export function getRepositoryDetailPlugin(ecosystem: string): RepositoryDetailPlugin | undefined {
+  return getRepositoryUiPlugin(ecosystem)?.detail;
+}
+
+export function getRepositoryPublishPlugin(ecosystem: string): RepositoryPublishPlugin | undefined {
+  return getRepositoryUiPlugin(ecosystem)?.publish;
+}
+
+export function getPublishTokenScopeExtension(ecosystem: string): PublishTokenScopeExtension | undefined {
+  return getRepositoryUiPlugin(ecosystem)?.publishTokenScope;
+}
+
+export function getRepositoryCreateFieldRenderers(ecosystem: string): RepositoryCreateFieldRendererMap | undefined {
+  return getRepositoryUiPlugin(ecosystem)?.createFieldRenderers;
+}
+
+export function getRepositoryCreateServerErrorMapper(
+  ecosystem: string,
+): ((message: string) => RepositoryCreateStep | undefined) | undefined {
+  return getRepositoryUiPlugin(ecosystem)?.mapCreateServerError;
 }
 
 export function repositoryCreatePluginsFromUiRegistry(): NonEmptyArray<RepositoryCreatePlugin> {

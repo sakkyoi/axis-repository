@@ -7,7 +7,10 @@ import {
   repositoryClientHelperDisplayText,
 } from "./repository-detail-shared";
 import type { RepositoryDetailPlugin, RepositoryDetailSection } from "./repository-ui-plugin-types";
-import { getRepositoryUiPlugin, repositoryDetailPluginsFromUiRegistry } from "./repository-ui-plugins";
+import {
+  getRepositoryDetailPlugin as getRepositoryDetailPluginFromRegistry,
+  repositoryDetailPluginsFromUiRegistry,
+} from "./repository-ui-plugins";
 
 export type { RepositoryDetailPlugin, RepositoryDetailSection, RepositoryDetailSectionProps } from "./repository-ui-plugin-types";
 
@@ -20,7 +23,7 @@ export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
 ];
 
 export function getRepositoryDetailPlugin(ecosystem: string): RepositoryDetailPlugin | undefined {
-  return getRepositoryUiPlugin(ecosystem)?.detail;
+  return getRepositoryDetailPluginFromRegistry(ecosystem);
 }
 
 export {

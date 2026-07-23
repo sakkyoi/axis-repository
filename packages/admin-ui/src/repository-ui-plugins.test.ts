@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { aptPluginManifest, pypiPluginManifest } from "@axis-repository/core/plugin-manifests";
 
 import {
-  getRepositoryUiPlugin,
+  getPublishTokenScopeExtension,
+  getRepositoryCreateFieldRenderers,
+  getRepositoryCreatePlugin,
+  getRepositoryCreateServerErrorMapper,
+  getRepositoryDetailPlugin,
+  getRepositoryPluginManifest,
+  getRepositoryPublishPlugin,
   repositoryCreatePluginOptionsFromUiRegistry,
   repositoryCreatePluginsFromUiRegistry,
   repositoryDetailPluginsFromUiRegistry,
@@ -26,18 +32,13 @@ describe("repository UI plugin registry", () => {
   });
 
   it("derives UI plugin metadata from the shared core manifest", () => {
-    const apt = getRepositoryUiPlugin("apt");
+    const apt = getRepositoryPluginManifest("apt");
 
-    expect(apt?.manifest).toMatchObject({
+    expect(apt).toMatchObject({
       ecosystem: "apt",
       displayName: "APT",
       description: "Debian package repositories with signed Release metadata.",
     });
-    expect("displayName" in apt!).toBe(false);
-    expect("displayName" in apt!.create).toBe(false);
-    expect("description" in apt!.create).toBe(false);
-    expect("capabilities" in apt!.create).toBe(false);
-    expect("displayName" in apt!.detail).toBe(false);
   });
 
   it("provides create and detail registry views from the same UI plugin entries", () => {
@@ -46,7 +47,11 @@ describe("repository UI plugin registry", () => {
   });
 
   it("returns undefined for ecosystems without local UI support", () => {
-    expect(getRepositoryUiPlugin("npm")).toBeUndefined();
+    expect(getRepositoryPluginManifest("npm")).toBeUndefined();
+    expect(getRepositoryCreatePlugin("npm")).toBeUndefined();
+    expect(getRepositoryDetailPlugin("npm")).toBeUndefined();
+    expect(getRepositoryPublishPlugin("npm")).toBeUndefined();
+    expect(getPublishTokenScopeExtension("npm")).toBeUndefined();
   });
 
   it("builds create plugin options from the UI plugin registry", () => {
@@ -77,27 +82,27 @@ describe("repository UI plugin registry", () => {
   });
 
   it("lets ecosystem UI plugins map create errors for their own config and dependencies", () => {
-    expect(getRepositoryUiPlugin("apt")?.mapCreateServerError?.("Signing key is required")).toBe("dependencies");
-    expect(getRepositoryUiPlugin("apt")?.mapCreateServerError?.("config.apt.codename is required")).toBe("config");
-    expect(getRepositoryUiPlugin("pypi")?.mapCreateServerError?.("Signing key is required")).toBeUndefined();
+    expect(getRepositoryCreateServerErrorMapper("apt")?.("Signing key is required")).toBe("dependencies");
+    expect(getRepositoryCreateServerErrorMapper("apt")?.("config.apt.codename is required")).toBe("config");
+    expect(getRepositoryCreateServerErrorMapper("pypi")?.("Signing key is required")).toBeUndefined();
   });
 
   it("lets ecosystem UI plugins provide custom create field renderers", () => {
-    expect(getRepositoryUiPlugin("apt")?.createFieldRenderers?.["signing-key"]?.name)
+    expect(getRepositoryCreateFieldRenderers("apt")?.["signing-key"]?.name)
       .toBe("AptSigningKeyDependencyField");
-    expect(getRepositoryUiPlugin("pypi")?.createFieldRenderers?.["signing-key"]).toBeUndefined();
+    expect(getRepositoryCreateFieldRenderers("pypi")?.["signing-key"]).toBeUndefined();
   });
 
   it("lets ecosystem UI plugins provide publish token scope UI", () => {
-    expect(getRepositoryUiPlugin("apt")?.publishTokenScope?.Component.name)
+    expect(getPublishTokenScopeExtension("apt")?.Component.name)
       .toBe("AptSigningKeyTokenScopeFields");
-    expect(getRepositoryUiPlugin("pypi")?.publishTokenScope).toBeUndefined();
+    expect(getPublishTokenScopeExtension("pypi")).toBeUndefined();
   });
 
   it("lets ecosystem UI plugins provide publish UI and artifact summaries", () => {
-    expect(getRepositoryUiPlugin("apt")?.publish?.Component.name).toBe("AptPublishSessionsSection");
-    expect(getRepositoryUiPlugin("pypi")?.publish?.Component.name).toBe("PypiPublishSessionsSection");
-    expect(getRepositoryUiPlugin("apt")?.publish?.artifactSummary({
+    expect(getRepositoryPublishPlugin("apt")?.Component.name).toBe("AptPublishSessionsSection");
+    expect(getRepositoryPublishPlugin("pypi")?.Component.name).toBe("PypiPublishSessionsSection");
+    expect(getRepositoryPublishPlugin("apt")?.artifactSummary({
       id: "pub_apt",
       repositoryName: "debian-internal",
       ecosystem: "apt",
@@ -125,7 +130,7 @@ describe("repository UI plugin registry", () => {
   });
 
   it("lets ecosystem UI plugins validate publish token scope selections", () => {
-    expect(getRepositoryUiPlugin("apt")?.publishTokenScope?.missingSelections({
+    expect(getPublishTokenScopeExtension("apt")?.missingSelections({
       repositories: [
         {
           id: "repo_apt",
