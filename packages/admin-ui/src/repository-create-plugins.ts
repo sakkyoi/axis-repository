@@ -1,7 +1,11 @@
 import type { PluginRepositoryConfigManifest } from "@axis-repository/core/plugin-manifests";
 import type { CreateRepositoryInput } from "./api/client";
 import type { RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
-import { getRepositoryUiPlugin, repositoryCreatePluginsFromUiRegistry } from "./repository-ui-plugins";
+import {
+  getRepositoryUiPlugin,
+  repositoryCreatePluginOptionsFromUiRegistry,
+  repositoryCreatePluginsFromUiRegistry,
+} from "./repository-ui-plugins";
 
 export type RepositoryCreateStep = "plugin" | "basics" | "config" | "dependencies" | "review";
 
@@ -87,24 +91,8 @@ export function repositoryCreatePluginOptions(
   serverPlugins: RepositoryPlugin[],
   localPlugins: readonly RepositoryCreatePlugin[] = repositoryCreatePlugins,
 ): RepositoryCreatePluginOption[] {
-  return serverPlugins.map((serverPlugin) => {
-    const localPlugin = localPlugins.find((candidate) => candidate.ecosystem === serverPlugin.ecosystem);
-    if (localPlugin) {
-      return {
-        ecosystem: serverPlugin.ecosystem,
-        displayName: localPlugin.displayName,
-        description: localPlugin.description,
-        capabilities: [...serverPlugin.capabilities],
-        supported: true,
-        plugin: localPlugin,
-      };
-    }
-    return {
-      ecosystem: serverPlugin.ecosystem,
-      displayName: serverPlugin.ecosystem,
-      description: "Server plugin is enabled, but this admin UI cannot create it yet.",
-      capabilities: [...serverPlugin.capabilities],
-      supported: false,
-    };
-  });
+  const pluginEntries = localPlugins
+    .map((plugin) => getRepositoryUiPlugin(plugin.ecosystem))
+    .filter((plugin): plugin is NonNullable<typeof plugin> => Boolean(plugin));
+  return repositoryCreatePluginOptionsFromUiRegistry(serverPlugins, pluginEntries);
 }

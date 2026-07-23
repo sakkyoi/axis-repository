@@ -276,6 +276,21 @@ export function RepositoryClientHelperSetup({
   );
 }
 
+export function RepositoryClientHelpersSection({
+  repository,
+  pluginMetadata,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  return (
+    <RepositoryClientHelperSetup
+      repositoryName={repository.name}
+      clientHelpers={pluginMetadata?.clientHelpers}
+    />
+  );
+}
+
 export function RepositoryClientHelperItem({
   repositoryName,
   namespace,

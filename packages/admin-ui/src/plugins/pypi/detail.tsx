@@ -4,7 +4,7 @@ import { usePypiClientInfo, useUpdateRepository } from "../../api/hooks";
 import type { Repository, RepositoryPlugin, RepositoryVisibility } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
 import { ErrorState } from "../../pages/shared";
-import { RepositoryClientHelperItem, VisibilitySelect } from "../../repository-detail-shared";
+import { VisibilitySelect } from "../../repository-detail-shared";
 
 export function pypiSimpleIndexUrl(repository: Repository): string {
   return `/repositories/${repository.name}/simple/`;
@@ -74,27 +74,6 @@ export function PypiSettingsSection({
       </Button>
       {updateRepository.isError && <ErrorState error={updateRepository.error} />}
     </div>
-  );
-}
-
-export function PypiClientHelpersSection({
-  repository,
-  pluginMetadata,
-}: {
-  repository: Repository;
-  pluginMetadata: RepositoryPlugin | undefined;
-}) {
-  return (
-    <>
-      {pluginMetadata?.clientHelpers?.actions.map((action) => (
-        <RepositoryClientHelperItem
-          key={action.name}
-          repositoryName={repository.name}
-          namespace={pluginMetadata.clientHelpers!.namespace}
-          action={action}
-        />
-      ))}
-    </>
   );
 }
 

@@ -7,8 +7,9 @@ import { useRepositories, useRepositoryPlugins } from "../api/hooks";
 import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { ADMIN_UI_PATHS } from "../navigation";
 import { repositoryDetailBodyClass, repositoryRowStateClass } from "../repository-page-model";
-import { genericRepositoryDetailSections, getRepositoryDetailPlugin } from "../repository-detail-plugins";
+import { genericRepositoryDetailSections } from "../repository-detail-plugins";
 import { RepositoryDetailSections } from "../repository-detail-shared";
+import { getRepositoryUiPlugin } from "../repository-ui-plugins";
 import { EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 export function RepositoriesPage() {
@@ -109,7 +110,7 @@ function RepositoryDetail({
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
 }) {
-  const plugin = getRepositoryDetailPlugin(repository.ecosystem);
+  const plugin = getRepositoryUiPlugin(repository.ecosystem)?.detail;
   const sections = plugin?.sections ?? genericRepositoryDetailSections;
 
   return (

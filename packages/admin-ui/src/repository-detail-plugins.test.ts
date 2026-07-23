@@ -47,6 +47,14 @@ describe("repository detail plugins", () => {
     expect(publishSection?.Component.name).toBe("AptPublishSessionsSection");
   });
 
+  it("renders plugin client helpers through the same shared section", () => {
+    const aptClientHelpers = getRepositoryDetailPlugin("apt")?.sections.find((section) => section.id === "client-helpers");
+    const pypiClientHelpers = getRepositoryDetailPlugin("pypi")?.sections.find((section) => section.id === "client-helpers");
+
+    expect(aptClientHelpers?.Component).toBe(pypiClientHelpers?.Component);
+    expect(aptClientHelpers?.Component.name).toBe("RepositoryClientHelpersSection");
+  });
+
   it("provides generic fallback sections for unknown ecosystems", () => {
     expect(genericRepositoryDetailSections.map((section) => section.id)).toEqual([
       "settings",

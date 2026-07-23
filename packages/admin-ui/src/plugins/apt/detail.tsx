@@ -7,7 +7,7 @@ import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { AptSigningKeyDialog, AptSigningKeyList } from "../../pages/SigningKeysPage";
 import { EmptyState, ErrorState } from "../../pages/shared";
-import { RepositoryClientHelperSetup, VisibilitySelect } from "../../repository-detail-shared";
+import { VisibilitySelect } from "../../repository-detail-shared";
 import {
   activeSigningKeys,
   buildAptRepositoryFormValues,
@@ -79,21 +79,6 @@ export function AptSigningKeysSection({
       <AptSigningKeyList repositoryName={repository.name} signingKeys={signingKeys} />
       {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
     </div>
-  );
-}
-
-export function AptClientHelpersSection({
-  repository,
-  pluginMetadata,
-}: {
-  repository: Repository;
-  pluginMetadata: RepositoryPlugin | undefined;
-}) {
-  return (
-    <RepositoryClientHelperSetup
-      repositoryName={repository.name}
-      clientHelpers={pluginMetadata?.clientHelpers}
-    />
   );
 }
 

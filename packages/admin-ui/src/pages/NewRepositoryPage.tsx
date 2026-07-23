@@ -14,11 +14,8 @@ import { cn } from "../lib/utils";
 import { ADMIN_UI_PATHS } from "../navigation";
 import { RepositoryDependencyFields } from "../repository-create-dependency-renderer";
 import {
-  getRepositoryCreatePlugin,
   repositoryCreateAvailabilityError,
   repositoryCreateFieldErrors,
-  repositoryCreatePluginOptions,
-  repositoryCreatePlugins,
   repositoryCreateStepForServerError,
   type RepositoryCreatePluginOption,
   type RepositoryCreateFieldErrors,
@@ -26,6 +23,11 @@ import {
   type RepositoryCreateStep,
   type RepositoryCreateWizardState,
 } from "../repository-create-plugins";
+import {
+  getRepositoryUiPlugin,
+  repositoryCreatePluginOptionsFromUiRegistry,
+  repositoryCreatePluginsFromUiRegistry,
+} from "../repository-ui-plugins";
 import { repositoryConfigFieldsForStep } from "../repository-create-field-model";
 import { RepositoryConfigFields } from "../repository-create-field-renderer";
 import { asJson, ErrorState, PageHeader } from "./shared";
@@ -44,9 +46,10 @@ export function NewRepositoryPage() {
   const repositories = useRepositories();
   const repositoryPlugins = useRepositoryPlugins();
   const pluginOptions = useMemo(
-    () => repositoryCreatePluginOptions(repositoryPlugins.data ?? []),
+    () => repositoryCreatePluginOptionsFromUiRegistry(repositoryPlugins.data ?? []),
     [repositoryPlugins.data],
   );
+  const repositoryCreatePlugins = repositoryCreatePluginsFromUiRegistry();
   const firstSupportedPlugin = pluginOptions.find((option) => option.supported)?.plugin ?? repositoryCreatePlugins[0];
   const [selectedEcosystem, setSelectedEcosystem] = useState(firstSupportedPlugin.ecosystem);
   const selectedOption = pluginOptions.find((option) => option.ecosystem === selectedEcosystem && option.supported);
@@ -76,7 +79,10 @@ export function NewRepositoryPage() {
   }, [plugin, state]);
 
   function selectPlugin(ecosystem: string) {
-    const nextPlugin = getRepositoryCreatePlugin(ecosystem);
+    const nextPlugin = getRepositoryUiPlugin(ecosystem)?.create;
+    if (!nextPlugin) {
+      throw new Error(`Repository UI plugin is not configured: ${ecosystem}`);
+    }
     setSelectedEcosystem(ecosystem);
     setState(nextPlugin.defaults);
     setStepIndex(1);
