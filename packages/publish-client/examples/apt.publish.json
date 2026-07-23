@@ -1,0 +1,22 @@
+{
+  "baseUrl": "https://axis.example",
+  "tokenEnv": "AXIS_PUBLISH_TOKEN",
+  "repository": "debian-internal",
+  "artifacts": [
+    {
+      "path": "./dist/myapp_1.2.3_amd64.deb",
+      "filename": "myapp_1.2.3_amd64.deb",
+      "contentType": "application/vnd.debian.binary-package",
+      "metadata": {
+        "package": "myapp",
+        "version": "1.2.3",
+        "architecture": "amd64",
+        "component": "main",
+        "description": "My internal app",
+        "maintainer": "Axis Repository <axis@example.local>",
+        "section": "utils",
+        "priority": "optional"
+      }
+    }
+  ]
+}

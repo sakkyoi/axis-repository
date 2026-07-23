@@ -90,6 +90,12 @@ importers:
 
   packages/core: {}
 
+  packages/publish-client:
+    dependencies:
+      '@axis-repository/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/runtime-cloudflare:
     dependencies:
       '@axis-repository/core':

@@ -1,0 +1,22 @@
+name: Publish package to Axis Repository
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      AXIS_PUBLISH_TOKEN: ${{ secrets.AXIS_PUBLISH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @axis-repository/publish-client build
+      - run: node packages/publish-client/dist/cli.js --request packages/publish-client/examples/apt.publish.json
