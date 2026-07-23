@@ -535,4 +535,108 @@ describe("createAxisClient", () => {
     expect(requests).toEqual(["GET /admin/publish-sessions"]);
     expect(sessions).toMatchObject([{ id: "pub_1", repositoryName: "debian-internal" }]);
   });
+
+  it("creates, uploads, verifies, and finalizes admin publish sessions", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: Array<{ method: string; url: string; data?: unknown; headers?: unknown }> = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push({
+        method: config.method?.toUpperCase() ?? "",
+        url: config.url ?? "",
+        data: typeof config.data === "string" ? JSON.parse(config.data) : undefined,
+        headers: config.headers,
+      });
+      if (config.url === "https://uploads.example/upl_1") {
+        return { data: "", status: 200, statusText: "OK", headers: {}, config };
+      }
+      if (config.url === "/admin/publish-sessions") {
+        return {
+          data: {
+            id: "pub_1",
+            repositoryName: "debian-internal",
+            ecosystem: "apt",
+            status: "pending_uploads",
+            requestedBy: {
+              tokenId: "admin",
+              name: "admin",
+              permissions: ["publish"],
+              repositories: ["debian-internal"],
+              ecosystemScopes: {},
+              signingKeyIds: ["signing_key_1"],
+            },
+            artifacts: [],
+            uploads: [{
+              uploadId: "upl_1",
+              filename: "myapp_1.2.3_amd64.deb",
+              objectKey: "_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+              method: "PUT",
+              url: "https://uploads.example/upl_1",
+              headers: { "content-type": "application/vnd.debian.binary-package" },
+              expiresAt: "2026-07-23T00:10:00.000Z",
+            }],
+            verifiedUploads: [],
+            createdAt: "2026-07-23T00:00:00.000Z",
+            expiresAt: "2026-07-23T00:10:00.000Z",
+          },
+          status: 201,
+          statusText: "Created",
+          headers: {},
+          config,
+        };
+      }
+      return {
+        data: {
+          session: {
+            id: "pub_1",
+            repositoryName: "debian-internal",
+            ecosystem: "apt",
+            status: "finalized",
+            requestedBy: {
+              tokenId: "admin",
+              name: "admin",
+              permissions: ["publish"],
+              repositories: ["debian-internal"],
+              ecosystemScopes: {},
+              signingKeyIds: ["signing_key_1"],
+            },
+            artifacts: [],
+            uploads: [],
+            verifiedUploads: [],
+            createdAt: "2026-07-23T00:00:00.000Z",
+            expiresAt: "2026-07-23T00:10:00.000Z",
+          },
+          result: { publishedAt: "2026-07-23T00:01:00.000Z", objects: [] },
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    const session = await client.createAdminPublishSession({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      artifacts: [{
+        filename: "myapp_1.2.3_amd64.deb",
+        size: 3,
+        sha256: "a".repeat(64),
+        contentType: "application/vnd.debian.binary-package",
+        metadata: { package: "myapp" },
+      }],
+    });
+    await client.uploadPublishArtifact(session.uploads[0]!, new Blob(["deb"]));
+    await client.verifyAdminPublishUpload(session.id, "upl_1");
+    await client.finalizeAdminPublishSession(session.id);
+
+    expect(requests.map((request) => `${request.method} ${request.url}`)).toEqual([
+      "POST /admin/publish-sessions",
+      "PUT https://uploads.example/upl_1",
+      "POST /admin/publish-sessions/pub_1/uploads/upl_1/verify",
+      "POST /admin/publish-sessions/pub_1/finalize",
+    ]);
+  });
 });

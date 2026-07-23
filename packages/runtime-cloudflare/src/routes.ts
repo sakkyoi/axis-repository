@@ -702,6 +702,44 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const sessions = await dependencies.publishSessionService.listAll();
     return jsonResponse({ sessions });
   }
+  if (url.pathname === "/admin/publish-sessions" && request.method === "POST") {
+    requireAdmin(request, dependencies.adminToken);
+    const body = await readJsonObject(request);
+    const artifacts = parseArtifacts(body);
+    const session = await dependencies.publishSessionService.createAsAdmin({
+      repositoryName: stringField(body, "repositoryName"),
+      ecosystem: stringField(body, "ecosystem"),
+      artifacts,
+    });
+    return jsonResponse(session, { status: 201 });
+  }
+  const adminVerifyUploadMatch = url.pathname.match(
+    /^\/admin\/publish-sessions\/([^/]+)\/uploads\/([^/]+)\/verify$/,
+  );
+  if (adminVerifyUploadMatch && request.method === "POST") {
+    requireAdmin(request, dependencies.adminToken);
+    const [, sessionId, uploadId] = adminVerifyUploadMatch;
+    if (!sessionId || !uploadId) {
+      throw new NotFoundError();
+    }
+    const result = await dependencies.publishSessionService.verifyUploadAsAdmin({
+      sessionId,
+      uploadId,
+    });
+    return jsonResponse(result);
+  }
+  const adminFinalizeMatch = url.pathname.match(/^\/admin\/publish-sessions\/([^/]+)\/finalize$/);
+  if (adminFinalizeMatch && request.method === "POST") {
+    requireAdmin(request, dependencies.adminToken);
+    const [, sessionId] = adminFinalizeMatch;
+    if (!sessionId) {
+      throw new NotFoundError();
+    }
+    const result = await dependencies.publishSessionService.finalizeAsAdmin({
+      sessionId,
+    });
+    return jsonResponse(result);
+  }
   if (url.pathname === "/api/publish-sessions" && request.method === "GET") {
     const secret = requireBearer(request);
     const principal = await dependencies.publishTokenService.verify(secret);

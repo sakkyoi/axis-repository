@@ -1915,13 +1915,86 @@ describe("Cloudflare runtime routes", () => {
     const unauthorizedResponse = await app.fetch(new Request("https://axis.example/admin/publish-sessions"));
 
     expect(adminListResponse.status).toBe(200);
-    await expect(adminListResponse.json()).resolves.toMatchObject({
-      sessions: [
-        { id: stagingSession.id, repositoryName: "debian-staging" },
-        { id: internalSession.id, repositoryName: "debian-internal" },
-      ],
-    });
+    const adminListBody = (await adminListResponse.json()) as { sessions: Array<{ id: string; repositoryName: string }> };
+    expect(adminListBody.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: stagingSession.id, repositoryName: "debian-staging" }),
+        expect.objectContaining({ id: internalSession.id, repositoryName: "debian-internal" }),
+      ]),
+    );
     expect(unauthorizedResponse.status).toBe(401);
+  });
+
+  it("publishes an artifact through admin-scoped publish session routes", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: validAptConfig(signingKey.id),
+    });
+
+    const createResponse = await app.fetch(new Request("https://axis.example/admin/publish-sessions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "myapp_1.2.3_amd64.deb",
+          size: 1234,
+          sha256: "a".repeat(64),
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "myapp",
+            version: "1.2.3",
+            architecture: "amd64",
+            component: "main",
+            description: "Example package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    expect(createResponse.status).toBe(201);
+    const session = (await createResponse.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string; objectKey: string }>;
+    };
+    const upload = session.uploads[0]!;
+    await harness.repositoryObjectStore.putBytes(upload.objectKey, new Uint8Array(1234), "application/vnd.debian.binary-package");
+
+    const verifyResponse = await app.fetch(new Request(
+      `https://axis.example/admin/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+      {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      },
+    ));
+    expect(verifyResponse.status).toBe(200);
+
+    const finalizeResponse = await app.fetch(new Request(
+      `https://axis.example/admin/publish-sessions/${session.id}/finalize`,
+      {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      },
+    ));
+    expect(finalizeResponse.status).toBe(200);
+    const finalizeBody = (await finalizeResponse.json()) as {
+      session: { id: string; status: string };
+      result: { objects: Array<{ key: string }> };
+    };
+    expect(finalizeBody.session).toMatchObject({ id: session.id, status: "finalized" });
+    expect(finalizeBody.result.objects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" }),
+      ]),
+    );
   });
 
   it("gets a publish session by id and rejects tokens outside the repository scope", async () => {

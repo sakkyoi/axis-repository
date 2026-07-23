@@ -1,4 +1,4 @@
-import type { AxiosInstance } from "axios";
+import axios, { type AxiosInstance } from "axios";
 import { createHttpClient, type HttpOptions } from "./http";
 import {
   aptSourceInfoSchema,
@@ -6,6 +6,7 @@ import {
   adminSessionSchema,
   pypiClientInfoSchema,
   publishSessionsResponseSchema,
+  publishSessionSchema,
   publishTokenCreateResponseSchema,
   publishTokenSchema,
   publishTokensResponseSchema,
@@ -23,6 +24,8 @@ import {
   type InstallInstructions,
   type PypiClientInfo,
   type PublishSession,
+  type PublishArtifact,
+  type UploadTarget,
 } from "./schemas";
 
 export interface CreatePublishTokenInput {
@@ -58,6 +61,12 @@ export interface UpdateRepositoryInput {
   config?: Record<string, unknown>;
 }
 
+export interface CreateAdminPublishSessionInput {
+  repositoryName: string;
+  ecosystem: string;
+  artifacts: PublishArtifact[];
+}
+
 export interface AxisClient {
   http: AxiosInstance;
   verifyAdminToken(): Promise<void>;
@@ -72,6 +81,10 @@ export interface AxisClient {
   getPypiClientInfo(name: string): Promise<PypiClientInfo>;
   getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown>;
   listPublishSessions(): Promise<PublishSession[]>;
+  createAdminPublishSession(input: CreateAdminPublishSessionInput): Promise<PublishSession>;
+  uploadPublishArtifact(target: UploadTarget, body: Blob): Promise<void>;
+  verifyAdminPublishUpload(sessionId: string, uploadId: string): Promise<PublishSession>;
+  finalizeAdminPublishSession(sessionId: string): Promise<PublishSession>;
   listPublishTokens(): Promise<ReturnType<typeof publishTokensResponseSchema.parse>["publishTokens"]>;
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
   createPublishToken(input: CreatePublishTokenInput): Promise<PublishTokenCreateResponse>;
@@ -140,6 +153,29 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async listPublishSessions() {
       const response = await http.get("/admin/publish-sessions");
       return publishSessionsResponseSchema.parse(response.data).sessions;
+    },
+    async createAdminPublishSession(input: CreateAdminPublishSessionInput) {
+      const response = await http.post("/admin/publish-sessions", input);
+      return publishSessionSchema.parse(response.data);
+    },
+    async uploadPublishArtifact(target: UploadTarget, body: Blob) {
+      await axios.request({
+        method: target.method,
+        url: target.url,
+        data: body,
+        headers: target.headers,
+        ...(http.defaults.adapter ? { adapter: http.defaults.adapter } : {}),
+      });
+    },
+    async verifyAdminPublishUpload(sessionId: string, uploadId: string) {
+      const response = await http.post(
+        `/admin/publish-sessions/${encodePathSegment(sessionId)}/uploads/${encodePathSegment(uploadId)}/verify`,
+      );
+      return publishSessionSchema.parse(response.data.session);
+    },
+    async finalizeAdminPublishSession(sessionId: string) {
+      const response = await http.post(`/admin/publish-sessions/${encodePathSegment(sessionId)}/finalize`);
+      return publishSessionSchema.parse(response.data.session);
     },
     async listPublishTokens() {
       const response = await http.get("/admin/publish-tokens");

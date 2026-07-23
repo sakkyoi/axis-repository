@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAxisClient,
+  type CreateAdminPublishSessionInput,
   type GenerateAptSigningKeyInput,
   type ImportAptSigningKeyInput,
   type CreatePublishTokenInput,
@@ -107,6 +108,34 @@ export function usePublishSessions() {
   return useQuery({
     queryKey: ["publish-sessions"],
     queryFn: () => client.listPublishSessions(),
+  });
+}
+
+export function useCreateAdminPublishSession() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateAdminPublishSessionInput) => client.createAdminPublishSession(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["publish-sessions"] }),
+  });
+}
+
+export function useVerifyAdminPublishUpload() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, uploadId }: { sessionId: string; uploadId: string }) =>
+      client.verifyAdminPublishUpload(sessionId, uploadId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["publish-sessions"] }),
+  });
+}
+
+export function useFinalizeAdminPublishSession() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) => client.finalizeAdminPublishSession(sessionId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["publish-sessions"] }),
   });
 }
 
