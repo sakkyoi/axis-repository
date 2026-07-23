@@ -23,6 +23,23 @@ describe("repository create plugins", () => {
     });
   });
 
+  it("derives create steps from repository config field steps", () => {
+    expect(getRepositoryCreatePlugin("apt").steps).toEqual(["plugin", "basics", "config", "dependencies", "review"]);
+    expect(getRepositoryCreatePlugin("pypi").steps).toEqual(["plugin", "basics", "review"]);
+  });
+
+  it("exposes repository config fields to the wizard renderer", () => {
+    const plugin = getRepositoryCreatePlugin("apt");
+
+    expect(plugin.repositoryConfig.namespace).toBe("apt");
+    expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step])).toEqual([
+      ["codename", "text", "config"],
+      ["components", "string-list", "config"],
+      ["architectures", "string-list", "config"],
+      ["signingKeyId", "signing-key", "dependencies"],
+    ]);
+  });
+
   it("builds an APT repository create payload from wizard state", () => {
     const plugin = getRepositoryCreatePlugin("apt");
 

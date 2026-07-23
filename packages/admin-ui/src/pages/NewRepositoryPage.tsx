@@ -1,22 +1,18 @@
-import { type FormEvent, useMemo, useState } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, KeyRound, Package, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
-  useAptSigningKeys,
   useCreateRepository,
-  useGenerateAptSigningKey,
-  useImportAptSigningKey,
   useRepositories,
   useRepositoryPlugins,
 } from "../api/hooks";
-import type { RepositoryVisibility, SigningKey } from "../api/schemas";
+import type { RepositoryVisibility } from "../api/schemas";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Textarea } from "../components/ui/textarea";
 import { cn } from "../lib/utils";
 import { ADMIN_UI_PATHS } from "../navigation";
+import { RepositoryDependencyFields } from "../repository-create-dependency-renderer";
 import {
   getRepositoryCreatePlugin,
   repositoryCreateAvailabilityError,
@@ -26,11 +22,13 @@ import {
   repositoryCreateStepForServerError,
   type RepositoryCreatePluginOption,
   type RepositoryCreateFieldErrors,
+  type RepositoryCreatePlugin,
   type RepositoryCreateStep,
   type RepositoryCreateWizardState,
 } from "../repository-create-plugins";
-import { activeSigningKeys } from "../repository-forms";
-import { asJson, ErrorState, PageHeader, formatDate } from "./shared";
+import { repositoryConfigFieldsForStep } from "../repository-create-field-model";
+import { RepositoryConfigFields } from "../repository-create-field-renderer";
+import { asJson, ErrorState, PageHeader } from "./shared";
 
 const stepLabels: Record<RepositoryCreateStep, string> = {
   plugin: "Plugin",
@@ -166,17 +164,19 @@ export function NewRepositoryPage() {
               onVisibilityChange={(visibility) => updateState({ visibility })}
             />
           )}
-          {currentStep === "config" && selectedEcosystem === "apt" && (
-            <AptConfigStep
+          {currentStep === "config" && (
+            <ConfigStep
+              plugin={plugin}
               config={state.config}
               onChange={(config) => updateState({ config })}
             />
           )}
-          {currentStep === "dependencies" && selectedEcosystem === "apt" && (
-            <AptDependenciesStep
+          {currentStep === "dependencies" && (
+            <DependenciesStep
+              plugin={plugin}
               repositoryName={state.name.trim()}
-              signingKeyId={state.dependencies.signingKeyId ?? ""}
-              onSigningKeyChange={(signingKeyId) => updateState({ dependencies: { ...state.dependencies, signingKeyId } })}
+              dependencies={state.dependencies}
+              onChange={(dependencies) => updateState({ dependencies })}
             />
           )}
           {currentStep === "review" && (
@@ -360,209 +360,48 @@ function BasicsStep({
   );
 }
 
-function AptConfigStep({
+function ConfigStep({
+  plugin,
   config,
   onChange,
 }: {
+  plugin: RepositoryCreatePlugin;
   config: Record<string, string>;
   onChange: (config: Record<string, string>) => void;
 }) {
-  function update(field: string, value: string) {
-    onChange({ ...config, [field]: value });
-  }
+  const fields = repositoryConfigFieldsForStep(plugin.repositoryConfig, "config");
 
   return (
     <div className="grid gap-4">
       <div>
-        <h2 className="text-base font-semibold">APT config</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Define the Debian distribution metadata this repository will publish.</p>
+        <h2 className="text-base font-semibold">{plugin.displayName} config</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Configure the repository fields provided by this plugin.</p>
       </div>
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Codename</span>
-        <Input value={config.codename ?? ""} onChange={(event) => update("codename", event.target.value)} placeholder="noble" required />
-      </label>
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Components</span>
-        <Input value={config.components ?? ""} onChange={(event) => update("components", event.target.value)} placeholder="main contrib" required />
-      </label>
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Architectures</span>
-        <Input value={config.architectures ?? ""} onChange={(event) => update("architectures", event.target.value)} placeholder="amd64 arm64" required />
-      </label>
+      <RepositoryConfigFields fields={fields} values={config} onChange={onChange} />
     </div>
   );
 }
 
-function AptDependenciesStep({
+function DependenciesStep({
+  plugin,
   repositoryName,
-  signingKeyId,
-  onSigningKeyChange,
+  dependencies,
+  onChange,
 }: {
+  plugin: RepositoryCreatePlugin;
   repositoryName: string;
-  signingKeyId: string;
-  onSigningKeyChange: (id: string) => void;
+  dependencies: Record<string, string>;
+  onChange: (dependencies: Record<string, string>) => void;
 }) {
-  const signingKeysQuery = useAptSigningKeys(repositoryName, Boolean(repositoryName));
-  const signingKeys = signingKeysQuery.data ?? [];
-  const activeKeys = activeSigningKeys(signingKeys);
+  const fields = repositoryConfigFieldsForStep(plugin.repositoryConfig, "dependencies");
 
   return (
     <div className="grid gap-4">
       <div>
-        <h2 className="text-base font-semibold">APT dependencies</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          APT repositories need an OpenPGP key scoped to this repository name. Keys from other repositories are not reusable.
-        </p>
+        <h2 className="text-base font-semibold">{plugin.displayName} dependencies</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Satisfy the resources this plugin needs before creation.</p>
       </div>
-      {!repositoryName ? (
-        <ErrorState title="Repository name required" error={new Error("Go back and enter a repository name before configuring dependencies.")} />
-      ) : (
-        <>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium">Signing key</span>
-            {activeKeys.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-                No active signing key is scoped to {repositoryName}. Generate or import one below.
-              </div>
-            ) : (
-              <Select value={signingKeyId} onValueChange={onSigningKeyChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select signing key" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeKeys.map((key) => (
-                    <SelectItem key={key.id} value={key.id}>{key.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </label>
-          <InlineAptSigningKeyForm repositoryName={repositoryName} onCreated={(key) => onSigningKeyChange(key.id)} />
-          {signingKeys.length > 0 && <SigningKeySummary signingKeys={signingKeys} />}
-          {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
-        </>
-      )}
-    </div>
-  );
-}
-
-function InlineAptSigningKeyForm({
-  repositoryName,
-  onCreated,
-}: {
-  repositoryName: string;
-  onCreated: (key: SigningKey) => void;
-}) {
-  const generateKey = useGenerateAptSigningKey();
-  const importKey = useImportAptSigningKey();
-  const [error, setError] = useState("");
-
-  async function generate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    try {
-      const key = await generateKey.mutateAsync({
-        repositoryName,
-        input: {
-          name: String(form.get("name") ?? ""),
-          userIdName: String(form.get("userIdName") ?? ""),
-          userIdEmail: String(form.get("userIdEmail") ?? ""),
-        },
-      });
-      setError("");
-      onCreated(key);
-      formElement.reset();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Signing key could not be generated");
-    }
-  }
-
-  async function importSigningKey(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    try {
-      const key = await importKey.mutateAsync({
-        repositoryName,
-        input: {
-          name: String(form.get("name") ?? ""),
-          privateKeyArmored: String(form.get("privateKeyArmored") ?? ""),
-          passphrase: String(form.get("passphrase") ?? ""),
-        },
-      });
-      setError("");
-      onCreated(key);
-      formElement.reset();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Signing key could not be imported");
-    }
-  }
-
-  return (
-    <div className="rounded-lg border border-border bg-background p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <KeyRound className="h-4 w-4 text-primary" />
-        <h3 className="text-sm font-semibold">Create signing key</h3>
-      </div>
-      <Tabs defaultValue="generate">
-        <TabsList>
-          <TabsTrigger value="generate">Generate</TabsTrigger>
-          <TabsTrigger value="import">Import</TabsTrigger>
-        </TabsList>
-        <TabsContent value="generate">
-          <form className="grid gap-3" onSubmit={generate}>
-            <Input name="name" placeholder="release" required />
-            <Input name="userIdName" placeholder="Axis Repository" required />
-            <Input name="userIdEmail" type="email" placeholder="axis@example.local" required />
-            <Button type="submit" disabled={generateKey.isPending}>
-              <Plus className="mr-2 h-4 w-4" />
-              Generate key
-            </Button>
-          </form>
-        </TabsContent>
-        <TabsContent value="import">
-          <form className="grid gap-3" onSubmit={importSigningKey}>
-            <Input name="name" placeholder="release" required />
-            <Textarea name="privateKeyArmored" placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----" required />
-            <Input name="passphrase" type="password" placeholder="Passphrase" required />
-            <Button type="submit" disabled={importKey.isPending}>
-              <Plus className="mr-2 h-4 w-4" />
-              Import key
-            </Button>
-          </form>
-        </TabsContent>
-      </Tabs>
-      {(error || generateKey.isError || importKey.isError) && (
-        <div className="mt-3">
-          <ErrorState error={error || generateKey.error || importKey.error} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SigningKeySummary({ signingKeys }: { signingKeys: SigningKey[] }) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <table className="w-full border-collapse text-sm">
-        <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
-          <tr>
-            <th className="px-3 py-2">Name</th>
-            <th className="px-3 py-2">Key ID</th>
-            <th className="px-3 py-2">Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          {signingKeys.map((key) => (
-            <tr key={key.id} className="border-t border-border">
-              <td className="px-3 py-2 font-medium">{key.name}</td>
-              <td className="px-3 py-2 font-mono text-xs">{key.keyId}</td>
-              <td className="px-3 py-2 text-muted-foreground">{formatDate(key.createdAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <RepositoryDependencyFields fields={fields} repositoryName={repositoryName} values={dependencies} onChange={onChange} />
     </div>
   );
 }

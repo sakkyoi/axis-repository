@@ -1,5 +1,6 @@
 import { aptPluginManifest, type PluginRepositoryConfigFieldManifest } from "@axis-repository/core/plugin-manifests";
 import type { RepositoryCreatePlugin, RepositoryCreateWizardState } from "../../repository-create-plugins";
+import { repositoryCreateStepsForConfig } from "../../repository-create-steps";
 import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "../../repository-forms";
 
 function splitList(value: string): string[] {
@@ -65,7 +66,8 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
   displayName: aptPluginManifest.displayName,
   description: aptPluginManifest.description,
   capabilities: [...aptPluginManifest.capabilities],
-  steps: ["plugin", "basics", "config", "dependencies", "review"],
+  repositoryConfig: aptPluginManifest.repositoryConfig,
+  steps: repositoryCreateStepsForConfig(aptPluginManifest.repositoryConfig),
   defaults: {
     name: "",
     visibility: "private",

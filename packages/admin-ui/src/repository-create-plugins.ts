@@ -1,3 +1,4 @@
+import type { PluginRepositoryConfigManifest } from "@axis-repository/core/plugin-manifests";
 import type { CreateRepositoryInput } from "./api/client";
 import type { RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
 import { aptRepositoryCreatePlugin } from "./plugins/apt/create";
@@ -17,6 +18,7 @@ export interface RepositoryCreatePlugin {
   displayName: string;
   description: string;
   capabilities: string[];
+  repositoryConfig: PluginRepositoryConfigManifest;
   steps: RepositoryCreateStep[];
   defaults: RepositoryCreateWizardState;
   validateStep(step: RepositoryCreateStep, state: RepositoryCreateWizardState): string[];
@@ -45,6 +47,7 @@ export type RepositoryCreatePluginOption =
     };
 
 export const repositoryCreatePlugins = [aptRepositoryCreatePlugin, pypiRepositoryCreatePlugin] as const;
+export { repositoryCreateStepsForConfig } from "./repository-create-steps";
 
 export function getRepositoryCreatePlugin(ecosystem: string): RepositoryCreatePlugin {
   const plugin = repositoryCreatePlugins.find((candidate) => candidate.ecosystem === ecosystem);

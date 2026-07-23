@@ -1,0 +1,17 @@
+import { aptPluginManifest, pypiPluginManifest } from "@axis-repository/core/plugin-manifests";
+import { describe, expect, it } from "vitest";
+import { repositoryConfigFieldsForStep } from "./repository-create-field-model";
+
+describe("repository create field model", () => {
+  it("selects manifest fields for the requested wizard step", () => {
+    expect(repositoryConfigFieldsForStep(aptPluginManifest.repositoryConfig, "config").map((field) => field.name))
+      .toEqual(["codename", "components", "architectures"]);
+    expect(repositoryConfigFieldsForStep(aptPluginManifest.repositoryConfig, "dependencies").map((field) => field.name))
+      .toEqual(["signingKeyId"]);
+  });
+
+  it("returns no fields for plugins without config fields", () => {
+    expect(repositoryConfigFieldsForStep(pypiPluginManifest.repositoryConfig, "config")).toEqual([]);
+    expect(repositoryConfigFieldsForStep(pypiPluginManifest.repositoryConfig, "dependencies")).toEqual([]);
+  });
+});
