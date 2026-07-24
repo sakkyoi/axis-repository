@@ -20,6 +20,8 @@ describe("repository page model", () => {
 
   it("keeps short repository details packed at the top of the scroll area", () => {
     expect(repositoryDetailBodyClass()).toContain("content-start");
+    expect(repositoryDetailBodyClass()).toContain("h-full");
+    expect(repositoryDetailBodyClass()).toContain("overflow-y-auto");
   });
 
   it("formats readonly repository summary items", () => {

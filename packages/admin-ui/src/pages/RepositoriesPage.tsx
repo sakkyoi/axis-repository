@@ -125,6 +125,33 @@ function RepositoryDetail({
       </div>
       <div className={repositoryDetailBodyClass()}>
         <div className="grid gap-3">
+          <Button type="button" onClick={() => navigate(repositoryWorkspacePath(repository.name))}>
+            <ArrowRight className="mr-2 h-4 w-4" />
+            Open repository
+          </Button>
+          <Button type="button" variant="outline" onClick={() => navigate(repositorySettingsPath(repository.name))}>
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </Button>
+        </div>
+        {pluginMetadata?.clientHelpers && pluginMetadata.clientHelpers.actions.length > 0 && (
+          <div className="grid gap-2 rounded-md border border-border bg-background/40 p-3">
+            <h3 className="text-sm font-semibold">Client setup</h3>
+            <div className="grid gap-1">
+              {pluginMetadata.clientHelpers.actions.map((action) => (
+                <button
+                  key={action.name}
+                  type="button"
+                  className="rounded-md px-2 py-1 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  onClick={() => navigate(repositoryWorkspacePath(repository.name))}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="grid gap-3">
           {summaryItems.map(([label, value]) => (
             <div key={label} className="grid gap-1 rounded-md border border-border bg-background/40 p-3">
               <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
@@ -134,16 +161,6 @@ function RepositoryDetail({
             </div>
           ))}
           {lifecycle && <p className="text-sm text-muted-foreground">{lifecycle.description}</p>}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={() => navigate(repositoryWorkspacePath(repository.name))}>
-            <ArrowRight className="mr-2 h-4 w-4" />
-            Open repository
-          </Button>
-          <Button type="button" variant="outline" onClick={() => navigate(repositorySettingsPath(repository.name))}>
-            <Settings className="mr-2 h-4 w-4" />
-            Settings
-          </Button>
         </div>
       </div>
     </aside>
