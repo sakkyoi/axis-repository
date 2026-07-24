@@ -16,7 +16,7 @@ import MemoryUploadBroker from "./memory-upload-broker";
 import { MemoryRepositoryObjectStore } from "./repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "./secret-encryption";
-import { SigningKeyService } from "./signing-key-service";
+import { RepositorySecretService } from "./repository-secret-service";
 
 export interface AppDependencies {
   adminToken: string;
@@ -25,7 +25,7 @@ export interface AppDependencies {
   publishTokenService: PublishTokenService;
   publishSessionService: PluginPublishSessionService;
   pluginPolicyService: PluginPolicyService;
-  signingKeyService: SigningKeyService;
+  repositorySecrets: RepositorySecretService;
   repositoryObjectStore: RepositoryObjectStore;
   repositoryRuntimePlugins: RepositoryRuntimePluginRegistry;
 }
@@ -61,13 +61,13 @@ export function createDevDependencyHarness(
   };
   const uploadBroker = new MemoryUploadBroker();
   const objectStore = new MemoryRepositoryObjectStore();
-  const signingKeyService = new SigningKeyService({
+  const repositorySecrets = new RepositorySecretService({
     state,
     clock,
     randomId,
     encryption: new SecretEncryption(signingKeyEncryptionSecret),
   });
-  const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, signingKeyService });
+  const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, secrets: repositorySecrets });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const pluginPolicyService = new PluginPolicyService({ state });
   const publishSessionService = new PublishSessionService({
@@ -95,7 +95,7 @@ export function createDevDependencyHarness(
         pluginPolicyService,
       }),
       pluginPolicyService,
-      signingKeyService,
+      repositorySecrets,
       repositoryObjectStore: objectStore,
       repositoryRuntimePlugins,
     },

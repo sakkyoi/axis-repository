@@ -14,10 +14,6 @@ import type {
   PluginClientHelperResponseKind,
 } from "@axis-repository/core/plugin-manifests";
 
-export interface RepositoryClientHelperSigningKey {
-  publicKeyArmored: string;
-}
-
 export interface RepositoryPublicSigningKey {
   id: string;
   repositoryName: string;
@@ -55,6 +51,35 @@ export interface RepositorySigningKeyCapability {
   getPublicKey(id: string): Promise<RepositoryPublicSigningKey>;
   getActivePrivateKey(id: string): Promise<RepositoryActivePrivateSigningKey>;
   revoke(id: string): Promise<RepositoryPublicSigningKey>;
+}
+
+export interface RepositorySecretRecord {
+  id: string;
+  namespace: string;
+  repositoryName: string;
+  name: string;
+  publicMetadata: Record<string, unknown>;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export interface RepositoryActiveSecret extends RepositorySecretRecord {
+  secrets: Record<string, string>;
+}
+
+export interface RepositorySecretCapability {
+  createSecretValue(prefix: string): string;
+  create(input: {
+    namespace: string;
+    repositoryName: string;
+    name: string;
+    publicMetadata: Record<string, unknown>;
+    secrets: Record<string, string>;
+  }): Promise<RepositorySecretRecord>;
+  list(input: { namespace: string; repositoryName?: string }): Promise<RepositorySecretRecord[]>;
+  get(id: string): Promise<RepositorySecretRecord>;
+  getActive(id: string): Promise<RepositoryActiveSecret>;
+  revoke(id: string): Promise<RepositorySecretRecord>;
 }
 
 export type RepositoryClientHelperResponseKind = PluginClientHelperResponseKind;
@@ -98,9 +123,6 @@ export interface DerivedPublishPrincipalScope {
 
 export interface RepositoryClientHelperContext {
   origin: string;
-  signingKeys: {
-    getPublicKey(id: string): Promise<RepositoryClientHelperSigningKey>;
-  };
 }
 
 export interface RepositoryClientHelperInput extends RepositoryClientHelperContext {
@@ -120,7 +142,7 @@ export interface RepositoryClientHelpers {
 }
 
 export interface RepositoryRuntimePluginServices {
-  signingKeys?: RepositorySigningKeyCapability;
+  secrets?: RepositorySecretCapability;
 }
 
 export type RepositoryAdminResourceServices = RepositoryRuntimePluginServices;
@@ -284,7 +306,6 @@ export async function dispatchRepositoryClientHelper(
   return action.handle({
     repository: input.repository,
     origin: input.origin,
-    signingKeys: input.signingKeys,
   });
 }
 

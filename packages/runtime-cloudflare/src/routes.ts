@@ -496,12 +496,9 @@ function repositoryClientHelperAction(
   return helpers.actions.find((helperAction) => helperAction.name === action);
 }
 
-function repositoryClientHelperContext(dependencies: AppDependencies, origin: string) {
+function repositoryClientHelperContext(_dependencies: AppDependencies, origin: string) {
   return {
     origin,
-    signingKeys: {
-      getPublicKey: (id: string) => dependencies.signingKeyService.getPublicKey(id),
-    },
   };
 }
 
@@ -789,7 +786,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       request,
       path: adminPluginResourcePath.path,
       services: {
-        signingKeys: dependencies.signingKeyService,
+        secrets: dependencies.repositorySecrets,
       },
     });
   }

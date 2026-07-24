@@ -56,9 +56,6 @@ describe("PyPI plugin lifecycle", () => {
       },
       action: "simple-url",
       origin: "https://axis.example",
-      signingKeys: {
-        getPublicKey: async () => ({ publicKeyArmored: "unused" }),
-      },
     });
 
     await expect(response?.json()).resolves.toEqual({

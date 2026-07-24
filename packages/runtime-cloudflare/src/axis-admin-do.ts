@@ -15,7 +15,7 @@ import { R2PresignedUploadBroker } from "./r2-upload-broker";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "./repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "./secret-encryption";
-import { SigningKeyService } from "./signing-key-service";
+import { RepositorySecretService } from "./repository-secret-service";
 
 export interface AxisEnv {
   AXIS_ADMIN?: DurableObjectNamespace;
@@ -86,7 +86,7 @@ export function createDurableObjectDependencies(
   const randomId = new WebCryptoRandomId();
   const hasher = new Sha256SecretHasher(env.TOKEN_HASH_PEPPER);
   const encryption = new SecretEncryption(env.SIGNING_KEY_ENCRYPTION_SECRET);
-  const signingKeyService = new SigningKeyService({
+  const repositorySecrets = new RepositorySecretService({
     state,
     clock,
     randomId,
@@ -107,7 +107,7 @@ export function createDurableObjectDependencies(
   const objectStore = uploadBackend === "memory"
     ? new MemoryRepositoryObjectStore()
     : new R2RepositoryObjectStore(requiredR2Bucket(env.AXIS_OBJECTS));
-  const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, signingKeyService });
+  const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, secrets: repositorySecrets });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const pluginPolicyService = new PluginPolicyService({ state });
   const publishSessionService = new PublishSessionService({
@@ -134,7 +134,7 @@ export function createDurableObjectDependencies(
       pluginPolicyService,
     }),
     pluginPolicyService,
-    signingKeyService,
+    repositorySecrets,
     repositoryObjectStore: objectStore,
     repositoryRuntimePlugins,
   };

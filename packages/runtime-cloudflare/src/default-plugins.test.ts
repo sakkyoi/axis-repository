@@ -7,7 +7,7 @@ describe("default artifact plugins", () => {
   it("keeps runtime plugin ecosystems aligned with shared core manifests", () => {
     const registry = createDefaultArtifactPlugins({
       objectStore: {} as never,
-      signingKeyService: {} as never,
+      secrets: {} as never,
     });
 
     expect(registry.list().map((plugin) => plugin.ecosystem)).toEqual([

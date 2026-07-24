@@ -2,6 +2,7 @@ import { ValidationError, type Repository, type TokenPrincipal } from "@axis-rep
 import {
   dispatchRepositoryAdminResource,
   dispatchRepositoryClientHelper,
+  type RepositorySigningKeyCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { describe, expect, it } from "vitest";
 import { createAptPlugin } from "./runtime";
@@ -34,11 +35,46 @@ const principal: TokenPrincipal = {
   signingKeyIds: ["signing_key_prod"],
 };
 
+const defaultSigningKey = {
+  id: "signing_key_prod",
+  repositoryName: "debian-internal",
+  name: "release",
+  publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+  fingerprint: "FINGERPRINT",
+  keyId: "KEYID",
+  createdAt: "2026-07-22T00:00:00.000Z",
+  revokedAt: null,
+};
+
+function signingKeys(overrides: Partial<RepositorySigningKeyCapability> = {}): RepositorySigningKeyCapability {
+  return {
+    listForRepository: async () => [defaultSigningKey],
+    create: async () => defaultSigningKey,
+    generate: async () => defaultSigningKey,
+    getPublicKey: async () => defaultSigningKey,
+    getActivePrivateKey: async (id) => ({
+      id,
+      repositoryName: "debian-internal",
+      privateKeyArmored: "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+      passphrase: "passphrase",
+      fingerprint: "FINGERPRINT",
+      keyId: "KEYID",
+    }),
+    revoke: async () => ({ ...defaultSigningKey, revokedAt: "2026-07-23T00:00:00.000Z" }),
+    ...overrides,
+  };
+}
+
+function createTestAptPlugin(options: Partial<RepositorySigningKeyCapability> = {}) {
+  return createAptPlugin({
+    publisher: { publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }) },
+    signingKeys: signingKeys(options),
+  });
+}
+
 describe("APT plugin lifecycle", () => {
   it("validates repository config", () => {
-    const plugin = createAptPlugin({
-      publisher: { publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }) },
-    });
+    const plugin = createTestAptPlugin();
 
     expect(() =>
       plugin.validateRepositoryConfig({
@@ -55,9 +91,7 @@ describe("APT plugin lifecycle", () => {
   });
 
   it("authorizes publish tokens against the repository signing key", () => {
-    const plugin = createAptPlugin({
-      publisher: { publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }) },
-    });
+    const plugin = createTestAptPlugin();
 
     expect(() =>
       plugin.publish.authorize({
@@ -76,8 +110,11 @@ describe("APT plugin lifecycle", () => {
   });
 
   it("serves APT client helpers from plugin policy", async () => {
-    const plugin = createAptPlugin({
-      publisher: { publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }) },
+    const plugin = createTestAptPlugin({
+      getPublicKey: async () => ({
+        ...defaultSigningKey,
+        publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+      }),
     });
 
     expect(plugin.clientHelpers?.namespace).toBe("apt");
@@ -112,21 +149,11 @@ describe("APT plugin lifecycle", () => {
       repository: repository(),
       action: "key.gpg",
       origin: "https://axis.example",
-      signingKeys: {
-        getPublicKey: async () => ({
-          publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
-        }),
-      },
     });
     const installResponse = await dispatchRepositoryClientHelper(plugin.clientHelpers!, {
       repository: repository(),
       action: "install",
       origin: "https://axis.example",
-      signingKeys: {
-        getPublicKey: async () => ({
-          publicKeyArmored: "unused",
-        }),
-      },
     });
 
     expect(keyResponse?.headers.get("content-type")).toBe("application/pgp-keys");
@@ -139,54 +166,29 @@ describe("APT plugin lifecycle", () => {
 
   it("serves APT signing keys from plugin admin resources", async () => {
     const calls: Array<{ method: string; input?: unknown }> = [];
-    const signingKey = {
-      id: "signing_key_prod",
-      repositoryName: "debian-internal",
-      name: "release",
-      publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
-      fingerprint: "FINGERPRINT",
-      keyId: "KEYID",
-      createdAt: "2026-07-22T00:00:00.000Z",
-      revokedAt: null,
-    };
-    const plugin = createAptPlugin({
-      publisher: { publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }) },
-    });
-    const services = {
-      signingKeys: {
-        listForRepository: async (repositoryName: string) => {
-          calls.push({ method: "listForRepository", input: repositoryName });
-          return [signingKey];
-        },
-        generate: async (input: unknown) => {
-          calls.push({ method: "generate", input });
-          return signingKey;
-        },
-        create: async (input: unknown) => {
-          calls.push({ method: "create", input });
-          return signingKey;
-        },
-        getPublicKey: async (id: string) => {
-          calls.push({ method: "getPublicKey", input: id });
-          return signingKey;
-        },
-        getActivePrivateKey: async (id: string) => {
-          calls.push({ method: "getActivePrivateKey", input: id });
-          return {
-            id,
-            repositoryName: "debian-internal",
-            privateKeyArmored: "-----BEGIN PGP PRIVATE KEY BLOCK-----",
-            passphrase: "passphrase",
-            fingerprint: "FINGERPRINT",
-            keyId: "KEYID",
-          };
-        },
-        revoke: async (id: string) => {
-          calls.push({ method: "revoke", input: id });
-          return { ...signingKey, revokedAt: "2026-07-23T00:00:00.000Z" };
-        },
+    const plugin = createTestAptPlugin({
+      listForRepository: async (repositoryName: string) => {
+        calls.push({ method: "listForRepository", input: repositoryName });
+        return [defaultSigningKey];
       },
-    };
+      generate: async (input: unknown) => {
+        calls.push({ method: "generate", input });
+        return defaultSigningKey;
+      },
+      create: async (input: unknown) => {
+        calls.push({ method: "create", input });
+        return defaultSigningKey;
+      },
+      getPublicKey: async (id: string) => {
+        calls.push({ method: "getPublicKey", input: id });
+        return defaultSigningKey;
+      },
+      revoke: async (id: string) => {
+        calls.push({ method: "revoke", input: id });
+        return { ...defaultSigningKey, revokedAt: "2026-07-23T00:00:00.000Z" };
+      },
+    });
+    const services = {};
 
     expect(plugin.adminResources?.namespace).toBe("apt");
     await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
@@ -195,7 +197,7 @@ describe("APT plugin lifecycle", () => {
       request: new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys"),
       path: ["signing-keys"],
       services,
-    }).then((response) => response.json())).resolves.toEqual({ signingKeys: [signingKey] });
+    }).then((response) => response.json())).resolves.toEqual({ signingKeys: [defaultSigningKey] });
     await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
       repositoryName: "debian-internal",
       repository: repository(),

@@ -60,13 +60,6 @@ function aptClientHelperAction(name: string) {
   return { ...action };
 }
 
-function requireAptSigningKeys(services: { signingKeys?: RepositorySigningKeyCapability }): RepositorySigningKeyCapability {
-  if (!services.signingKeys) {
-    throw new ValidationError("APT signing key capability is not configured");
-  }
-  return services.signingKeys;
-}
-
 async function requireRepositoryScopedSigningKey(
   signingKeys: RepositorySigningKeyCapability,
   repositoryName: string,
@@ -79,7 +72,10 @@ async function requireRepositoryScopedSigningKey(
   return key;
 }
 
-export function createAptPlugin(input: { publisher: ArtifactPublisher }): ArtifactRepositoryPlugin {
+export function createAptPlugin(input: {
+  publisher: ArtifactPublisher;
+  signingKeys: RepositorySigningKeyCapability;
+}): ArtifactRepositoryPlugin {
   return {
     ecosystem: "apt",
     name: aptPluginManifest.runtimeName,
@@ -110,9 +106,9 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
       actions: [
         {
           ...aptClientHelperAction("key.gpg"),
-          handle: async ({ repository, signingKeys }) => {
+          handle: async ({ repository }) => {
             const config = parseAptRepositoryConfig(repository);
-            const key = await signingKeys.getPublicKey(config.signingKeyId);
+            const key = await input.signingKeys.getPublicKey(config.signingKeyId);
             return aptPublicKeyResponse(key.publicKeyArmored, repository);
           },
         },
@@ -134,20 +130,18 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
         {
           method: "GET",
           path: ["signing-keys"],
-          handle: async ({ repositoryName, services }) => {
-            const signingKeys = requireAptSigningKeys(services);
+          handle: async ({ repositoryName }) => {
             return jsonResponse({
-              signingKeys: await signingKeys.listForRepository(repositoryName),
+              signingKeys: await input.signingKeys.listForRepository(repositoryName),
             });
           },
         },
         {
           method: "POST",
           path: ["signing-keys", "import"],
-          handle: async ({ repositoryName, request, services }) => {
-            const signingKeys = requireAptSigningKeys(services);
+          handle: async ({ repositoryName, request }) => {
             const body = await readJsonObject(request);
-            const key = await signingKeys.create({
+            const key = await input.signingKeys.create({
               repositoryName,
               name: stringField(body, "name"),
               privateKeyArmored: stringField(body, "privateKeyArmored"),
@@ -159,10 +153,9 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
         {
           method: "POST",
           path: ["signing-keys", "generate"],
-          handle: async ({ repositoryName, request, services }) => {
-            const signingKeys = requireAptSigningKeys(services);
+          handle: async ({ repositoryName, request }) => {
             const body = await readJsonObject(request);
-            const key = await signingKeys.generate({
+            const key = await input.signingKeys.generate({
               repositoryName,
               name: stringField(body, "name"),
               userIdName: stringField(body, "userIdName"),
@@ -174,18 +167,16 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
         {
           method: "GET",
           path: ["signing-keys", ":id"],
-          handle: async ({ repositoryName, params, services }) => {
-            const signingKeys = requireAptSigningKeys(services);
-            return jsonResponse(await requireRepositoryScopedSigningKey(signingKeys, repositoryName, params.id!));
+          handle: async ({ repositoryName, params }) => {
+            return jsonResponse(await requireRepositoryScopedSigningKey(input.signingKeys, repositoryName, params.id!));
           },
         },
         {
           method: "POST",
           path: ["signing-keys", ":id", "revoke"],
-          handle: async ({ repositoryName, params, services }) => {
-            const signingKeys = requireAptSigningKeys(services);
-            await requireRepositoryScopedSigningKey(signingKeys, repositoryName, params.id!);
-            return jsonResponse(await signingKeys.revoke(params.id!));
+          handle: async ({ repositoryName, params }) => {
+            await requireRepositoryScopedSigningKey(input.signingKeys, repositoryName, params.id!);
+            return jsonResponse(await input.signingKeys.revoke(params.id!));
           },
         },
       ],

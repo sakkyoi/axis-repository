@@ -9,10 +9,11 @@ import {
 import {
   MemoryRepositoryObjectStore,
   OpenPgpSigner,
+  RepositorySecretService,
   SecretEncryption,
-  SigningKeyService,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
 import { AptPublisher } from "./publisher";
+import { AptSigningKeyResource } from "./signing-keys";
 
 async function createSigningKey(state: MemoryStateStore) {
   const key = await generateKey({
@@ -22,11 +23,13 @@ async function createSigningKey(state: MemoryStateStore) {
     passphrase: "correct-passphrase",
     date: new Date("2026-07-18T00:00:00.000Z"),
   });
-  const service = new SigningKeyService({
-    state,
-    clock: { now: () => new Date("2026-07-18T00:00:00.000Z") },
-    randomId: { create: () => "signing_key_prod" },
-    encryption: new SecretEncryption("local-test-secret"),
+  const service = new AptSigningKeyResource({
+    secrets: new RepositorySecretService({
+      state,
+      clock: { now: () => new Date("2026-07-18T00:00:00.000Z") },
+      randomId: { create: () => "signing_key_prod" },
+      encryption: new SecretEncryption("local-test-secret"),
+    }),
   });
   await service.create({
     repositoryName: "debian-internal",

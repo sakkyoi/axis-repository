@@ -418,9 +418,6 @@ describe("RepositoryRuntimePluginRegistry", () => {
       repository: publishInput("apt").repository,
       action: "install",
       origin: "https://axis.example",
-      signingKeys: {
-        getPublicKey: async () => ({ publicKeyArmored: "unused" }),
-      },
     });
 
     await expect(response.text()).resolves.toBe("install apt-internal");
@@ -430,9 +427,6 @@ describe("RepositoryRuntimePluginRegistry", () => {
       repository: publishInput("apt").repository,
       action: "missing",
       origin: "https://axis.example",
-      signingKeys: {
-        getPublicKey: async () => ({ publicKeyArmored: "unused" }),
-      },
     })).rejects.toThrow(new ValidationError("Repository client helper is not configured: missing"));
   });
 
