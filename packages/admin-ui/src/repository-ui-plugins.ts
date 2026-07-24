@@ -24,6 +24,47 @@ export const repositoryUiPlugins = [
   ...repositoryAdminUiPlugins,
 ] satisfies NonEmptyArray<RepositoryUiPlugin>;
 
+function assertJsonEqual(label: string, actual: unknown, expected: unknown): void {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`${label} does not match the shared plugin manifest`);
+  }
+}
+
+export function assertRepositoryUiPluginContracts(plugins: readonly RepositoryUiPlugin[]): void {
+  const ecosystems = new Set<string>();
+  for (const plugin of plugins) {
+    const ecosystem = plugin.manifest.ecosystem;
+    if (ecosystems.has(ecosystem)) {
+      throw new Error(`Duplicate repository UI plugin ecosystem: ${ecosystem}`);
+    }
+    ecosystems.add(ecosystem);
+    if (plugin.create.ecosystem !== ecosystem) {
+      throw new Error(`Create UI plugin ecosystem does not match manifest: ${plugin.create.ecosystem}`);
+    }
+    if (plugin.detail.ecosystem !== ecosystem) {
+      throw new Error(`Detail UI plugin ecosystem does not match manifest: ${plugin.detail.ecosystem}`);
+    }
+    if (plugin.publish && plugin.publish.ecosystem !== ecosystem) {
+      throw new Error(`Publish UI plugin ecosystem does not match manifest: ${plugin.publish.ecosystem}`);
+    }
+    assertJsonEqual("Create UI repository config", plugin.create.repositoryConfig, plugin.manifest.repositoryConfig);
+
+    const sectionIds = new Set<string>();
+    for (const section of plugin.detail.sections) {
+      if (sectionIds.has(section.id)) {
+        throw new Error(`Duplicate repository detail section id for ecosystem ${ecosystem}: ${section.id}`);
+      }
+      sectionIds.add(section.id);
+    }
+
+    for (const fieldKind of Object.keys(plugin.createFieldRenderers ?? {})) {
+      if (!plugin.manifest.repositoryConfig.fields.some((field) => field.kind === fieldKind)) {
+        throw new Error(`Create field renderer does not match a manifest field kind for ecosystem ${ecosystem}: ${fieldKind}`);
+      }
+    }
+  }
+}
+
 function getRepositoryUiPlugin(ecosystem: string): RepositoryUiPlugin | undefined {
   return repositoryUiPlugins.find((plugin) => plugin.manifest.ecosystem === ecosystem);
 }

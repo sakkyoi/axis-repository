@@ -55,8 +55,9 @@ plugin implementation dependencies.
 
 ## Manifest
 
-`manifest.ts` describes the ecosystem and repository configuration fields. It
-must export a `RepositoryPluginManifest`:
+`manifest.ts` describes the ecosystem, repository configuration fields, public
+client helpers, and plugin admin resources. It must export a
+`RepositoryPluginManifest`:
 
 ```ts
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
@@ -65,12 +66,31 @@ export const examplePluginManifest = {
   ecosystem: "example",
   displayName: "Example",
   description: "Example repository format.",
-  repositoryConfigFields: [],
+  runtimeName: "example-runtime",
+  version: "0.1.0",
+  capabilities: ["example"],
+  repositoryConfig: {
+    namespace: "example",
+    fields: [],
+  },
 } satisfies RepositoryPluginManifest;
 ```
 
 Keep the manifest free of runtime-only or UI-only dependencies. It should be
 safe to import from both the Worker runtime and the admin UI.
+
+The manifest is the shared metadata contract. Runtime and admin UI plugins
+should derive ecosystem names, versions, capabilities, repository config fields,
+client helper descriptors, and admin resource descriptors from it instead of
+duplicating literal values. Runtime handlers and UI components can contain
+implementation logic, but their public descriptors should stay aligned with the
+manifest.
+
+Use `clientHelpers` when an ecosystem exposes public repository setup data, such
+as install commands or index URLs. Use `adminResources` when an ecosystem needs
+repository-scoped admin-only APIs, such as signing key management. The host owns
+the outer route shell; the plugin owns the namespace, action names, methods,
+relative paths, response kinds, and handlers.
 
 ## Runtime Plugin
 
@@ -81,10 +101,24 @@ that returns an `ArtifactRepositoryPlugin` from
 Runtime plugins own:
 
 - repository config validation
-- publish authorization and artifact validation
+- publish lifecycle behavior
 - publish finalization
 - client helper data
+- plugin admin resource handlers
 - repository path serving rules
+
+The publish lifecycle is grouped under `publish`:
+
+- `validateArtifacts` checks ecosystem-specific upload metadata before a
+  publish session can proceed.
+- `derivePrincipalScope` optionally derives token scope requirements from a
+  repository, such as APT signing key IDs.
+- `authorize` checks the principal against ecosystem-specific requirements.
+- `finalize` writes repository objects and returns published object metadata.
+
+Client helpers and admin resources combine manifest descriptors with runtime
+handlers. The descriptor portion must match the shared manifest; the handler
+function belongs only to the runtime plugin.
 
 Runtime plugins are registered only in
 `plugins/runtime.ts`, and enabled ecosystem metadata is listed in
@@ -94,7 +128,20 @@ runtime implementations from routes, services, or other runtime modules.
 
 Runtime tests may use
 `@axis-repository/runtime-cloudflare/plugin-runtime/testing` for host test
-helpers.
+helpers. New runtime plugins should add a parity test:
+
+```ts
+import { assertRuntimePluginManifestParity } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
+
+assertRuntimePluginManifestParity({
+  manifest: examplePluginManifest,
+  plugin: createExamplePlugin(),
+});
+```
+
+The helper verifies the runtime plugin ecosystem, name, version, capabilities,
+client helper descriptors, and admin resource descriptors against the manifest.
+It intentionally ignores handler functions.
 
 ## Catalog Lifecycle
 
@@ -159,12 +206,24 @@ Admin UI plugins may provide:
 - publish token scope UI
 - server error mapping for create flows
 
+The admin UI plugin is a renderer and workflow adapter. It should not own
+repository-format policy that belongs in the manifest or runtime plugin. Create
+plugins must use the manifest repository config. Detail, publish, field
+renderer, and token-scope extensions must declare behavior for the same
+ecosystem as the manifest.
+
 Admin UI plugins are registered only in
 `plugins/admin-ui.ts`, and enabled ecosystem metadata is listed in
 `plugins/catalog.ts`. The admin UI host loads UI plugins through
 `packages/admin-ui/src/repository-ui-plugins.ts`. Pages and shared UI modules
 should ask the registry for plugin behavior instead of importing plugin
 implementations directly.
+
+The UI registry exposes `assertRepositoryUiPluginContracts()` for registry-level
+tests. It checks that UI plugin ecosystems are unique, create/detail/publish
+extensions match the manifest ecosystem, create plugins use the manifest
+repository config, detail section IDs are unique, and custom field renderers
+refer to field kinds declared by the manifest.
 
 ## Adding A Plugin
 

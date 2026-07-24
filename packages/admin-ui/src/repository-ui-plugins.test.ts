@@ -4,6 +4,7 @@ import { pypiPluginManifest } from "../../../plugins/pypi/manifest";
 import * as aptPublishUi from "../../../plugins/apt/admin-ui/publish";
 import * as pypiPublishUi from "../../../plugins/pypi/admin-ui/publish";
 
+import { assertRepositoryUiPluginContracts } from "./repository-ui-plugins";
 import {
   getPublishTokenScopeExtension,
   getRepositoryCreateFieldRenderers,
@@ -25,6 +26,10 @@ describe("repository UI plugin registry", () => {
       ["apt", "apt"],
       ["pypi", "pypi"],
     ]);
+  });
+
+  it("keeps UI plugin extensions aligned with their shared manifests", () => {
+    expect(() => assertRepositoryUiPluginContracts(repositoryUiPlugins)).not.toThrow();
   });
 
   it("keeps UI plugin ecosystems aligned with shared core manifests", () => {

@@ -4,6 +4,7 @@ import {
   dispatchRepositoryClientHelper,
   type RepositorySigningKeyCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { assertRuntimePluginManifestParity } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
 import { describe, expect, it } from "vitest";
 import { aptPluginManifest } from "../manifest";
 import { createAptPlugin } from "./runtime";
@@ -241,5 +242,12 @@ describe("APT plugin lifecycle", () => {
       { method: "getPublicKey", input: "signing_key_prod" },
       { method: "revoke", input: "signing_key_prod" },
     ]);
+  });
+
+  it("keeps runtime metadata aligned with the shared plugin manifest", () => {
+    assertRuntimePluginManifestParity({
+      manifest: aptPluginManifest,
+      plugin: createTestAptPlugin(),
+    });
   });
 });
