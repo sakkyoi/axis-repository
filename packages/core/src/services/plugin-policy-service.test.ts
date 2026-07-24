@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryStateStore, PluginPolicyService } from "./index";
+import { MemoryStateStore, PluginPolicyService } from "../index";
 
 describe("PluginPolicyService", () => {
   it("returns null when a repository plugin has no persisted policy", async () => {

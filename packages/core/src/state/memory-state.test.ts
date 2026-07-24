@@ -6,7 +6,7 @@ import {
   type RepositorySecretRecord,
   type RepositoryPluginPolicyRecord,
   type SigningKeyRecord,
-} from "./index";
+} from "../index";
 
 const token = (overrides: Partial<PublishTokenRecord>): PublishTokenRecord => ({
   id: "tok_1",

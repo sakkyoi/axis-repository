@@ -12,7 +12,7 @@
   "include": [
     "src",
     "vite.config.ts",
-    "../core/src/plugin-manifests.ts",
+    "../core/src/plugins/plugin-manifests.ts",
     "../../plugins/catalog.ts",
     "../../plugins/bundled.ts",
     "../../plugins/*/plugin.ts",

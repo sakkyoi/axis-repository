@@ -5,9 +5,9 @@ import type {
   PublishSession,
   TokenPrincipal,
   VerifiedUpload,
-} from "./domain";
-import { ForbiddenError, NotFoundError, ValidationError } from "./errors";
-import type { ArtifactPublisher, Clock, RandomId, StateStore, UploadBroker } from "./ports";
+} from "../domain/domain";
+import { ForbiddenError, NotFoundError, ValidationError } from "../domain/errors";
+import type { ArtifactPublisher, Clock, RandomId, StateStore, UploadBroker } from "../ports/ports";
 
 export interface CreatePublishSessionInput {
   repositoryName: string;

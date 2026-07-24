@@ -11,7 +11,7 @@ import type {
   PublishArtifactsInput,
   PublishResult,
   RepositoryPluginPolicyRecord,
-} from "./domain";
+} from "../domain/domain";
 
 export interface Clock {
   now(): Date;

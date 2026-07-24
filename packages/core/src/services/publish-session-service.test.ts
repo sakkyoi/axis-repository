@@ -13,7 +13,7 @@ import {
   type StateStore,
   type TokenPrincipal,
   type UploadBroker,
-} from "./index";
+} from "../index";
 
 const clock: Clock = {
   now: () => new Date("2026-07-12T00:00:00.000Z"),

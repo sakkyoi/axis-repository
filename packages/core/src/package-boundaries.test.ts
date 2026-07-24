@@ -297,4 +297,20 @@ describe("package boundaries", () => {
 
     expect(rootSourceFiles.sort()).toEqual(Array.from(allowedRootFiles).sort());
   });
+
+  test("core package keeps domain and service files grouped by architectural area", () => {
+    const coreSourceDir = path.join(rootDir, "packages/core/src");
+    const expectedDirs = ["domain", "plugins", "ports", "services", "state"];
+    for (const dir of expectedDirs) {
+      expect(existsSync(path.join(coreSourceDir, dir)), `core/src/${dir} must exist`).toBe(true);
+    }
+
+    const allowedRootFiles = new Set(["index.ts", "package-boundaries.test.ts"]);
+    const rootSourceFiles = readdirSync(coreSourceDir).filter((entry) => {
+      const absolutePath = path.join(coreSourceDir, entry);
+      return statSync(absolutePath).isFile() && /\.(?:ts|tsx)$/.test(entry);
+    });
+
+    expect(rootSourceFiles.sort()).toEqual(Array.from(allowedRootFiles).sort());
+  });
 });

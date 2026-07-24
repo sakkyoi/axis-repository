@@ -1,6 +1,6 @@
-import type { Ecosystem, Repository, RepositoryVisibility } from "./domain";
-import { NotFoundError, ValidationError } from "./errors";
-import type { Clock, RandomId, StateStore } from "./ports";
+import type { Ecosystem, Repository, RepositoryVisibility } from "../domain/domain";
+import { NotFoundError, ValidationError } from "../domain/errors";
+import type { Clock, RandomId, StateStore } from "../ports/ports";
 
 export interface CreateRepositoryInput {
   name: string;

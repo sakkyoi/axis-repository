@@ -5,8 +5,8 @@ import type {
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
   SigningKeyRecord,
-} from "./domain";
-import type { StateStore } from "./ports";
+} from "../domain/domain";
+import type { StateStore } from "../ports/ports";
 
 function clonePublishSession(session: PublishSession): PublishSession {
   return JSON.parse(JSON.stringify(session)) as PublishSession;

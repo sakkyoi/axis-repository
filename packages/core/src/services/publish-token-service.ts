@@ -1,6 +1,6 @@
-import type { PublishTokenRecord, TokenPrincipal } from "./domain";
-import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "./errors";
-import type { Clock, RandomId, SecretHasher, StateStore } from "./ports";
+import type { PublishTokenRecord, TokenPrincipal } from "../domain/domain";
+import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "../domain/errors";
+import type { Clock, RandomId, SecretHasher, StateStore } from "../ports/ports";
 
 function cloneRecord(input: Record<string, unknown>): Record<string, unknown> {
   return JSON.parse(JSON.stringify(input)) as Record<string, unknown>;

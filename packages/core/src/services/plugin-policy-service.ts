@@ -1,5 +1,5 @@
-import type { RepositoryPluginPolicyRecord } from "./domain";
-import type { StateStore } from "./ports";
+import type { RepositoryPluginPolicyRecord } from "../domain/domain";
+import type { StateStore } from "../ports/ports";
 
 export interface PluginPolicyServiceOptions {
   state: StateStore;

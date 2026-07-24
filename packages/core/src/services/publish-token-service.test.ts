@@ -10,7 +10,7 @@ import {
   type PublishTokenRecord,
   type RandomId,
   type SecretHasher,
-} from "./index";
+} from "../index";
 
 const clock: Clock = {
   now: () => new Date("2026-07-13T00:00:00.000Z"),
