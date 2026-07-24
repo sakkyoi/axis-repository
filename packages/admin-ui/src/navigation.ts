@@ -3,6 +3,8 @@ export const ADMIN_UI_PATHS = {
   login: "/ui/login",
   repositories: "/ui/repositories",
   newRepository: "/ui/repositories/new",
+  repositoryWorkspace: "/ui/repositories/:name",
+  repositorySettings: "/ui/repositories/:name/settings",
   tokens: "/ui/tokens",
   settings: "/ui/settings",
 } as const;
@@ -18,4 +20,12 @@ export function adminLoginPathFor(from: string) {
     pathname: ADMIN_UI_PATHS.login,
     state: { from },
   };
+}
+
+export function repositoryWorkspacePath(name: string): string {
+  return `${ADMIN_UI_PATHS.repositories}/${encodeURIComponent(name)}`;
+}
+
+export function repositorySettingsPath(name: string): string {
+  return `${repositoryWorkspacePath(name)}/settings`;
 }

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   genericRepositoryDetailSections,
   getRepositoryDetailPlugin,
+  repositorySettingsSectionsFor,
+  repositoryWorkspaceSectionsFor,
   repositoryClientHelperDisplayText,
   repositoryDetailPlugins,
 } from "./repository-detail-plugins";
@@ -57,6 +59,26 @@ describe("repository detail plugins", () => {
       "settings",
       "publish-sessions",
       "advanced-json",
+    ]);
+  });
+
+  it("splits repository workspace sections from settings sections", () => {
+    expect(repositoryWorkspaceSectionsFor("apt").map((section) => section.id)).toEqual([
+      "publish-sessions",
+      "client-helpers",
+    ]);
+    expect(repositorySettingsSectionsFor("apt").map((section) => section.id)).toEqual([
+      "settings",
+      "advanced-json",
+      "signing-keys",
+    ]);
+    expect(repositoryWorkspaceSectionsFor("pypi").map((section) => section.id)).toEqual([
+      "publish-sessions",
+      "client-helpers",
+      "install-hints",
+    ]);
+    expect(repositorySettingsSectionsFor("pypi").map((section) => section.id)).toEqual([
+      "settings",
     ]);
   });
 

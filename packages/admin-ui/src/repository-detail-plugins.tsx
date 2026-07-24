@@ -16,13 +16,25 @@ export type { RepositoryDetailPlugin, RepositoryDetailSection, RepositoryDetailS
 export const repositoryDetailPlugins = repositoryDetailPluginsFromUiRegistry();
 
 export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
-  { id: "settings", title: "Repository settings", Component: RepositorySettingsSection },
-  { id: "publish-sessions", title: "Publish sessions", Component: PublishSessionsSection },
-  { id: "advanced-json", title: "Advanced JSON config", Component: AdvancedJsonConfigSection },
+  { id: "settings", title: "Repository settings", placement: "settings", Component: RepositorySettingsSection },
+  { id: "publish-sessions", title: "Publish sessions", placement: "workspace", Component: PublishSessionsSection },
+  { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
 ];
 
 export function getRepositoryDetailPlugin(ecosystem: string): RepositoryDetailPlugin | undefined {
   return getRepositoryDetailPluginFromRegistry(ecosystem);
+}
+
+function repositoryDetailSectionsFor(ecosystem: string): RepositoryDetailSection[] {
+  return getRepositoryDetailPlugin(ecosystem)?.sections ?? genericRepositoryDetailSections;
+}
+
+export function repositoryWorkspaceSectionsFor(ecosystem: string): RepositoryDetailSection[] {
+  return repositoryDetailSectionsFor(ecosystem).filter((section) => section.placement === "workspace");
+}
+
+export function repositorySettingsSectionsFor(ecosystem: string): RepositoryDetailSection[] {
+  return repositoryDetailSectionsFor(ecosystem).filter((section) => section.placement === "settings");
 }
 
 export {

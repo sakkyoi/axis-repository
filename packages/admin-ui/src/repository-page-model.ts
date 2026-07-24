@@ -13,3 +13,12 @@ export function repositoryRowStateClass(repositoryName: string, selectedName: st
 export function repositoryDetailBodyClass(): string {
   return "grid min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4";
 }
+
+export function repositorySummaryItems(repository: Repository): Array<[string, string]> {
+  return [
+    ["Ecosystem", repository.ecosystem],
+    ["Visibility", repository.visibility],
+    ["Created", repository.createdAt],
+    ["Updated", repository.updatedAt],
+  ];
+}

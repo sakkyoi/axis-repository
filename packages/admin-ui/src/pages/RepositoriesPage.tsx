@@ -1,14 +1,13 @@
 import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { ArrowRight, Plus, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { useRepositories, useRepositoryPlugins } from "../api/hooks";
 import type { Repository, RepositoryPlugin } from "../api/schemas";
-import { ADMIN_UI_PATHS } from "../navigation";
-import { repositoryDetailBodyClass, repositoryRowStateClass } from "../repository-page-model";
-import { genericRepositoryDetailSections, getRepositoryDetailPlugin } from "../repository-detail-plugins";
-import { RepositoryDetailSections } from "../repository-detail-shared";
+import { ADMIN_UI_PATHS, repositorySettingsPath, repositoryWorkspacePath } from "../navigation";
+import { pluginLifecycleSummary } from "../plugin-lifecycle";
+import { repositoryDetailBodyClass, repositoryRowStateClass, repositorySummaryItems } from "../repository-page-model";
 import { EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 export function RepositoriesPage() {
@@ -95,7 +94,7 @@ function RepositoryDetailEmptyState() {
       <div className="max-w-xs text-center">
         <h2 className="text-sm font-semibold">Select a repository</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Choose an item from the repository list to inspect config, signing keys, and client setup.
+          Choose an item from the repository list to inspect its summary.
         </p>
       </div>
     </aside>
@@ -109,21 +108,43 @@ function RepositoryDetail({
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
 }) {
-  const plugin = getRepositoryDetailPlugin(repository.ecosystem);
-  const sections = plugin?.sections ?? genericRepositoryDetailSections;
+  const navigate = useNavigate();
+  const lifecycle = pluginMetadata ? pluginLifecycleSummary(pluginMetadata) : undefined;
+  const summaryItems = repositorySummaryItems(repository);
 
   return (
     <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
       <div className="sticky top-0 z-10 border-b border-border bg-panel p-4">
-        <h2 className="text-base font-semibold">{repository.name}</h2>
-        <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold">{repository.name}</h2>
+            <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
+          </div>
+          {lifecycle && <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>}
+        </div>
       </div>
       <div className={repositoryDetailBodyClass()}>
-        <RepositoryDetailSections
-          repository={repository}
-          pluginMetadata={pluginMetadata}
-          sections={sections}
-        />
+        <div className="grid gap-3">
+          {summaryItems.map(([label, value]) => (
+            <div key={label} className="grid gap-1 rounded-md border border-border bg-background/40 p-3">
+              <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
+              <span className="break-all text-sm">
+                {label === "Created" || label === "Updated" ? formatDate(value) : value}
+              </span>
+            </div>
+          ))}
+          {lifecycle && <p className="text-sm text-muted-foreground">{lifecycle.description}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={() => navigate(repositoryWorkspacePath(repository.name))}>
+            <ArrowRight className="mr-2 h-4 w-4" />
+            Open repository
+          </Button>
+          <Button type="button" variant="outline" onClick={() => navigate(repositorySettingsPath(repository.name))}>
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </Button>
+        </div>
       </div>
     </aside>
   );

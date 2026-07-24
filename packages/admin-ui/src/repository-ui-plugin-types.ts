@@ -60,6 +60,7 @@ export interface RepositoryDetailSectionProps {
 export interface RepositoryDetailSection {
   id: string;
   title: string;
+  placement: "workspace" | "settings";
   Component: ComponentType<RepositoryDetailSectionProps>;
 }
 
