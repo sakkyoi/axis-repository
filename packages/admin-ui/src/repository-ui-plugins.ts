@@ -1,6 +1,11 @@
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { RepositoryPlugin } from "./api/schemas";
-import { pluginLifecycleBadges, pluginLifecycleSummary } from "./plugin-lifecycle";
+import {
+  disabledPluginCreateDescription,
+  pluginLifecycleBadges,
+  pluginLifecycleSummary,
+  pluginPolicyDescription,
+} from "./plugin-lifecycle";
 import type {
   PublishTokenScopeExtension,
   RepositoryCreateFieldRendererMap,
@@ -73,8 +78,9 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
       return {
         ecosystem: serverPlugin.ecosystem,
         displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
-        description: "Server plugin is disabled.",
+        description: disabledPluginCreateDescription(serverPlugin),
         capabilities: [...serverPlugin.capabilities],
+        disabledReason: pluginPolicyDescription(serverPlugin),
         lifecycle,
         badges,
         supported: false,

@@ -49,6 +49,7 @@ export type RepositoryCreatePluginOption =
       lifecycle: PluginLifecycleSummary;
       badges: PluginLifecycleBadge[];
       supported: false;
+      disabledReason?: string;
     };
 
 export interface RepositoryDetailSectionProps {

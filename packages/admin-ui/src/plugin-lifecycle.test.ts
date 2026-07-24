@@ -97,6 +97,8 @@ describe("plugin lifecycle UI model", () => {
           variant: "destructive",
         },
         policySummary: "Override: disabled",
+        policySource: "Admin override",
+        policyDescription: "Effective policy is disabled by an admin override.",
         canResetPolicy: true,
         badges: [
           { label: "Disabled", variant: "destructive" },
@@ -119,7 +121,31 @@ describe("plugin lifecycle UI model", () => {
 
     expect(rows[0]).toMatchObject({
       policySummary: "Default: enabled",
+      policySource: "Catalog default",
+      policyDescription: "Effective policy follows the catalog default.",
       canResetPolicy: false,
+    });
+  });
+
+  it("describes admin-enabled catalog-disabled overrides", () => {
+    const rows = repositoryPluginStatusRows([
+      plugin({
+        ecosystem: "npm",
+        enabled: true,
+        catalogEnabled: false,
+        enabledOverride: true,
+      }),
+    ]);
+
+    expect(rows[0]).toMatchObject({
+      lifecycle: {
+        availability: "available",
+        label: "Available",
+      },
+      policySummary: "Override: enabled",
+      policySource: "Admin override",
+      policyDescription: "Effective policy is enabled by an admin override.",
+      canResetPolicy: true,
     });
   });
 });

@@ -5,7 +5,12 @@ import type {
   RepositoryCreatePluginOption,
   RepositoryCreateStep,
 } from "./repository-ui-plugin-types";
-import { pluginLifecycleBadges, pluginLifecycleSummary } from "./plugin-lifecycle";
+import {
+  disabledPluginCreateDescription,
+  pluginLifecycleBadges,
+  pluginLifecycleSummary,
+  pluginPolicyDescription,
+} from "./plugin-lifecycle";
 import {
   getRepositoryCreateServerErrorMapper,
   getRepositoryPluginManifest,
@@ -71,8 +76,9 @@ export function repositoryCreatePluginOptions(
       return {
         ecosystem: serverPlugin.ecosystem,
         displayName: manifest?.displayName ?? serverPlugin.ecosystem,
-        description: "Server plugin is disabled.",
+        description: disabledPluginCreateDescription(serverPlugin),
         capabilities: [...serverPlugin.capabilities],
+        disabledReason: pluginPolicyDescription(serverPlugin),
         lifecycle,
         badges,
         supported: false,

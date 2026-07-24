@@ -23,6 +23,8 @@ export interface RepositoryPluginStatusRow {
   clientHelperSummary: string;
   lifecycle: PluginLifecycleSummary;
   policySummary: string;
+  policySource: string;
+  policyDescription: string;
   canResetPolicy: boolean;
   badges: PluginLifecycleBadge[];
 }
@@ -95,6 +97,30 @@ function policySummary(plugin: RepositoryPlugin): string {
   return `Default: ${plugin.catalogEnabled === false ? "disabled" : "enabled"}`;
 }
 
+export function pluginPolicySource(plugin: Pick<RepositoryPlugin, "enabledOverride">): string {
+  return plugin.enabledOverride === undefined || plugin.enabledOverride === null
+    ? "Catalog default"
+    : "Admin override";
+}
+
+export function pluginPolicyDescription(
+  plugin: Pick<RepositoryPlugin, "enabled" | "enabledOverride">,
+): string {
+  if (plugin.enabledOverride === true) {
+    return "Effective policy is enabled by an admin override.";
+  }
+  if (plugin.enabledOverride === false) {
+    return "Effective policy is disabled by an admin override.";
+  }
+  return "Effective policy follows the catalog default.";
+}
+
+export function disabledPluginCreateDescription(plugin: RepositoryPlugin): string {
+  return plugin.enabledOverride === false
+    ? "Disabled by admin policy."
+    : "Disabled by catalog default.";
+}
+
 export function repositoryPluginStatusRows(plugins: RepositoryPlugin[]): RepositoryPluginStatusRow[] {
   return plugins.map((plugin) => ({
     ecosystem: plugin.ecosystem,
@@ -104,6 +130,8 @@ export function repositoryPluginStatusRows(plugins: RepositoryPlugin[]): Reposit
     clientHelperSummary: clientHelperSummary(plugin),
     lifecycle: pluginLifecycleSummary(plugin),
     policySummary: policySummary(plugin),
+    policySource: pluginPolicySource(plugin),
+    policyDescription: pluginPolicyDescription(plugin),
     canResetPolicy: plugin.enabledOverride !== undefined && plugin.enabledOverride !== null,
     badges: pluginLifecycleBadges(plugin),
   }));

@@ -337,6 +337,11 @@ function PluginStep({
                 <Badge variant={plugin.lifecycle.variant}>{plugin.lifecycle.label}</Badge>
               </span>
               <span className="text-sm text-muted-foreground">{plugin.description}</span>
+              {!plugin.supported && plugin.disabledReason && (
+                <span className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
+                  {plugin.disabledReason}
+                </span>
+              )}
               {detailBadges.length > 0 && (
                 <span className="flex flex-wrap gap-1.5">
                   {detailBadges.map((badge) => (

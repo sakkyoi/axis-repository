@@ -104,6 +104,8 @@ describe("repository create plugins", () => {
         name: "npm-registry",
         version: "0.1.0",
         enabled: false,
+        catalogEnabled: true,
+        enabledOverride: false,
         runtime: true,
         capabilities: ["package-index"],
       },
@@ -129,8 +131,34 @@ describe("repository create plugins", () => {
       {
         ecosystem: "npm",
         displayName: "npm",
-        description: "Server plugin is disabled.",
+        description: "Disabled by admin policy.",
         capabilities: ["package-index"],
+        disabledReason: "Effective policy is disabled by an admin override.",
+        supported: false,
+      },
+    ]);
+  });
+
+  it("explains create options disabled by catalog defaults", () => {
+    const options = repositoryCreatePluginOptions([
+      {
+        ecosystem: "npm",
+        name: "npm-registry",
+        version: "0.1.0",
+        enabled: false,
+        catalogEnabled: false,
+        enabledOverride: null,
+        runtime: true,
+        capabilities: ["package-index"],
+      },
+    ]);
+
+    expect(options).toMatchObject([
+      {
+        ecosystem: "npm",
+        displayName: "npm",
+        description: "Disabled by catalog default.",
+        disabledReason: "Effective policy follows the catalog default.",
         supported: false,
       },
     ]);

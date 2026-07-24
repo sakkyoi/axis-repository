@@ -1,4 +1,5 @@
 import { Ban, Power, RotateCcw } from "lucide-react";
+import { useState } from "react";
 import { getRuntimeConfig } from "../runtime-config";
 import { useRepositoryPlugins, useUpdateRepositoryPluginPolicy } from "../api/hooks";
 import { Badge } from "../components/ui/badge";
@@ -12,6 +13,7 @@ export function SettingsPage() {
   const repositoryPlugins = useRepositoryPlugins();
   const updatePluginPolicy = useUpdateRepositoryPluginPolicy();
   const pluginRows = repositoryPluginStatusRows(repositoryPlugins.data ?? []);
+  const [confirmDisableEcosystem, setConfirmDisableEcosystem] = useState<string | null>(null);
 
   return (
     <section className="grid h-full min-h-0 gap-5 overflow-y-auto pr-1">
@@ -86,7 +88,11 @@ export function SettingsPage() {
                       <Badge variant={plugin.lifecycle.variant}>{plugin.lifecycle.label}</Badge>
                       <p className="mt-2 text-xs text-muted-foreground">{plugin.lifecycle.description}</p>
                     </div>
-                    <div className="font-mono text-xs text-muted-foreground">{plugin.policySummary}</div>
+                    <div className="min-w-0 text-xs">
+                      <div className="font-medium">{plugin.policySummary}</div>
+                      <div className="mt-1 text-muted-foreground">{plugin.policySource}</div>
+                      <div className="mt-1 text-muted-foreground">{plugin.policyDescription}</div>
+                    </div>
                     <div className="flex min-w-0 flex-wrap content-start gap-1.5">
                       {plugin.capabilities.map((capability) => (
                         <span key={capability} className="rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
@@ -101,27 +107,60 @@ export function SettingsPage() {
                         size="sm"
                         variant="outline"
                         disabled={updatePluginPolicy.isPending}
-                        onClick={() => updatePluginPolicy.mutate({ ecosystem: plugin.ecosystem, input: { enabled: true } })}
+                        onClick={() => {
+                          setConfirmDisableEcosystem(null);
+                          updatePluginPolicy.mutate({ ecosystem: plugin.ecosystem, input: { enabled: true } });
+                        }}
                       >
                         <Power className="mr-1.5 size-3.5" aria-hidden="true" />
                         Enable
                       </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={updatePluginPolicy.isPending}
-                        onClick={() => updatePluginPolicy.mutate({ ecosystem: plugin.ecosystem, input: { enabled: false } })}
-                      >
-                        <Ban className="mr-1.5 size-3.5" aria-hidden="true" />
-                        Disable
-                      </Button>
+                      {confirmDisableEcosystem === plugin.ecosystem ? (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            disabled={updatePluginPolicy.isPending}
+                            onClick={() => {
+                              updatePluginPolicy.mutate({ ecosystem: plugin.ecosystem, input: { enabled: false } });
+                              setConfirmDisableEcosystem(null);
+                            }}
+                          >
+                            <Ban className="mr-1.5 size-3.5" aria-hidden="true" />
+                            Confirm
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={updatePluginPolicy.isPending}
+                            onClick={() => setConfirmDisableEcosystem(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={updatePluginPolicy.isPending}
+                          onClick={() => setConfirmDisableEcosystem(plugin.ecosystem)}
+                        >
+                          <Ban className="mr-1.5 size-3.5" aria-hidden="true" />
+                          Disable
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
                         disabled={updatePluginPolicy.isPending || !plugin.canResetPolicy}
-                        onClick={() => updatePluginPolicy.mutate({ ecosystem: plugin.ecosystem, input: { enabled: null } })}
+                        onClick={() => {
+                          setConfirmDisableEcosystem(null);
+                          updatePluginPolicy.mutate({ ecosystem: plugin.ecosystem, input: { enabled: null } });
+                        }}
                       >
                         <RotateCcw className="mr-1.5 size-3.5" aria-hidden="true" />
                         Reset

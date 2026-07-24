@@ -111,21 +111,38 @@ shared source for plugin lifecycle and host support metadata:
 }
 ```
 
-`enabled` controls whether the host registries should load the plugin.
-`experimental` is metadata exposed to clients for UI labeling and rollout
-policy. `runtime` means the ecosystem has Worker/runtime behavior wired in
-`plugins/runtime.ts`. `adminUi` means the admin UI behavior is wired in
-`plugins/admin-ui.ts`.
+`enabled` is the deployment catalog default. `experimental` is metadata exposed
+to clients for UI labeling and rollout policy. `runtime` means the ecosystem has
+Worker/runtime behavior wired in `plugins/runtime.ts`. `adminUi` means the admin
+UI behavior is wired in `plugins/admin-ui.ts`.
 
-The runtime and admin UI registries both filter disabled plugins. The admin API
-exposes lifecycle metadata from the catalog through
-`GET /admin/repository-plugins`, and the admin UI combines that server catalog
-with its local UI registry before showing create options.
+The runtime and admin UI registries both filter catalog-disabled plugins at
+startup, but repository plugin availability is resolved through the admin policy
+surface. `GET /admin/repository-plugins` returns:
 
-Lifecycle policy is static for now and comes from the bundled catalog. If Axis
-adds persisted enablement policy later, it should attach to the same
-`/admin/repository-plugins` surface so create flows and plugin status UI keep
-the same input contract.
+- `catalogEnabled`: the bundled catalog default
+- `enabledOverride`: the persisted admin override, or `null` to inherit
+- `enabled`: the effective result, resolved as `enabledOverride ?? catalogEnabled`
+- `experimental`, `runtime`, and `adminUi`: catalog lifecycle metadata
+
+Admins can update the persisted override with:
+
+```http
+PATCH /admin/repository-plugins/:ecosystem
+content-type: application/json
+
+{ "enabled": false }
+```
+
+`enabled` may be `true`, `false`, or `null`. `null` resets the ecosystem back to
+the catalog default. The route accepts ecosystems from either the catalog or the
+runtime plugin registry.
+
+Effective disabled plugins fail closed before repository creation, repository
+updates, publish session creation, publish finalization, repository object
+serving, client helper handling, and plugin admin resource handling. The admin UI
+uses the same metadata to disable create options and to show whether availability
+comes from the catalog default or an admin override.
 
 ## Admin UI Plugin
 

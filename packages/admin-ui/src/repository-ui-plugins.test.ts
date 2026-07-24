@@ -72,6 +72,8 @@ describe("repository UI plugin registry", () => {
         name: "npm-registry",
         version: "0.1.0",
         enabled: false,
+        catalogEnabled: true,
+        enabledOverride: false,
         experimental: true,
         runtime: true,
         adminUi: false,
@@ -97,7 +99,8 @@ describe("repository UI plugin registry", () => {
     expect(options[1]).toMatchObject({
       ecosystem: "npm",
       supported: false,
-      description: "Server plugin is disabled.",
+      description: "Disabled by admin policy.",
+      disabledReason: "Effective policy is disabled by an admin override.",
       lifecycle: { availability: "disabled", label: "Disabled" },
       badges: [
         { label: "Disabled", variant: "destructive" },
