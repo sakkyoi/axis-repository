@@ -9,14 +9,14 @@ export type {
   RepositoryServingContext,
   ValidatePublishArtifactsInput,
   ValidateRepositoryConfigInput,
-} from "./repository-plugin-contract";
+} from "./plugins/repository-plugin-contract";
 export type {
   RepositoryAdminResourceInput,
   RepositoryAdminResourceRoute,
   RepositoryAdminResourceRouteInput,
   RepositoryAdminResources,
   RepositoryAdminResourceServices,
-} from "./repository-plugin-admin-resources";
+} from "./plugins/repository-plugin-admin-resources";
 export type {
   RepositoryClientHelperAction,
   RepositoryClientHelperActionHandlerInput,
@@ -24,7 +24,7 @@ export type {
   RepositoryClientHelperInput,
   RepositoryClientHelpers,
   RepositoryClientHelperResponseKind,
-} from "./repository-plugin-client-helpers";
+} from "./plugins/repository-plugin-client-helpers";
 export type {
   RepositoryActivePrivateSigningKey,
   RepositoryActiveSecret,
@@ -33,16 +33,16 @@ export type {
   RepositorySecretRecord,
   RepositorySigningKeyCapability,
   RepositoryRuntimePluginServices,
-} from "./repository-plugin-capabilities";
+} from "./plugins/repository-plugin-capabilities";
 export {
   createPrefixServingPredicate,
-} from "./repository-plugin-contract";
+} from "./plugins/repository-plugin-contract";
 export {
   dispatchRepositoryAdminResource,
-} from "./repository-plugin-admin-resources";
+} from "./plugins/repository-plugin-admin-resources";
 export {
   dispatchRepositoryClientHelper,
-} from "./repository-plugin-client-helpers";
-export { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
-export { GenericManifestPublisher } from "./generic-manifest-publisher";
+} from "./plugins/repository-plugin-client-helpers";
+export { RepositoryRuntimePluginRegistry } from "./plugins/repository-runtime-plugin-registry";
+export { GenericManifestPublisher } from "./plugins/generic-manifest-publisher";
 export { readJsonObject, stringField } from "./http";

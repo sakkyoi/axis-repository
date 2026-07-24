@@ -4,7 +4,7 @@ import type {
   PublishResult,
   RepositoryObjectStore,
 } from "@axis-repository/core";
-import { JSON_CONTENT_TYPE } from "./repository-object-store";
+import { JSON_CONTENT_TYPE } from "../storage/repository-object-store";
 
 export interface GenericManifestPublisherOptions {
   objectStore: RepositoryObjectStore;

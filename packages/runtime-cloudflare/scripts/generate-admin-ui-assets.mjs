@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const distRoot = resolve(packageRoot, "../admin-ui/dist");
-const outputFile = resolve(packageRoot, "src/admin-ui-assets.generated.ts");
+const outputFile = resolve(packageRoot, "src/admin-ui-assets/generated.ts");
 
 const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"],

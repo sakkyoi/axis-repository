@@ -1,7 +1,7 @@
 import type { PublishArtifactsInput, RepositoryObjectStore } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
 import { GenericManifestPublisher } from "./generic-manifest-publisher";
-import { JSON_CONTENT_TYPE, MemoryRepositoryObjectStore } from "./repository-object-store";
+import { JSON_CONTENT_TYPE, MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 
 class FailingPublishObjectStore implements RepositoryObjectStore {
   readonly keys: string[] = [];

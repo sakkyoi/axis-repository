@@ -1,6 +1,6 @@
-import { createApp } from "./app";
-import { AxisAdminDO, type AxisEnv } from "./axis-admin-do";
-import { createDevDependencies } from "./dev-dependencies";
+import { createApp } from "./worker/app";
+import { AxisAdminDO, type AxisEnv } from "./worker/axis-admin-do";
+import { createDevDependencies } from "./worker/dev-dependencies";
 
 export { AxisAdminDO };
 

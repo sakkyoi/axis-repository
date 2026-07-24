@@ -12,7 +12,7 @@ import {
   type UploadBroker,
 } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
-import { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
+import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { PluginPublishSessionService } from "./runtime-services";
 
 const clock: Clock = {

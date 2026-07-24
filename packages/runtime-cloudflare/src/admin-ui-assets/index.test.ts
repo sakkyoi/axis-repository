@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { injectAdminUiRuntimeConfig } from "./admin-ui-assets";
+import { injectAdminUiRuntimeConfig } from ".";
 
 describe("admin UI assets", () => {
   it("escapes runtime config before injecting it into inline script", () => {

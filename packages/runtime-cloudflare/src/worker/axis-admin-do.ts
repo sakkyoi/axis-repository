@@ -6,16 +6,16 @@ import {
   type Clock,
 } from "@axis-repository/core";
 import { createApp } from "./app";
-import { WebCryptoRandomId, Sha256SecretHasher } from "./crypto";
-import { createDefaultArtifactPlugins } from "./default-plugins";
-import { DurableStateStore, type DurableStorage } from "./durable-state";
+import { WebCryptoRandomId, Sha256SecretHasher } from "../crypto";
+import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
+import { DurableStateStore, type DurableStorage } from "../storage/durable-state";
 import type { AppDependencies } from "./dev-dependencies";
-import { MemoryUploadBroker } from "./memory-upload-broker";
-import { R2PresignedUploadBroker } from "./r2-upload-broker";
-import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "./repository-object-store";
+import { MemoryUploadBroker } from "../uploads/memory-upload-broker";
+import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
+import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
-import { SecretEncryption } from "./secret-encryption";
-import { RepositorySecretService } from "./repository-secret-service";
+import { SecretEncryption } from "../storage/secret-encryption";
+import { RepositorySecretService } from "../storage/repository-secret-service";
 
 export interface AxisEnv {
   AXIS_ADMIN?: DurableObjectNamespace;

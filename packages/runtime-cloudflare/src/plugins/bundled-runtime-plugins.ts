@@ -3,11 +3,11 @@ import type {
   ArtifactRepositoryPlugin,
   RepositorySecretCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { bundledRepositoryPlugins } from "../../../plugins/bundled";
-import { AptPublisher } from "../../../plugins/apt/runtime/publisher";
-import { createAptPlugin } from "../../../plugins/apt/runtime/runtime";
-import { AptSigningKeyResource } from "../../../plugins/apt/runtime/signing-keys";
-import { createPypiPlugin } from "../../../plugins/pypi/runtime/runtime";
+import { bundledRepositoryPlugins } from "../../../../plugins/bundled";
+import { AptPublisher } from "../../../../plugins/apt/runtime/publisher";
+import { createAptPlugin } from "../../../../plugins/apt/runtime/runtime";
+import { AptSigningKeyResource } from "../../../../plugins/apt/runtime/signing-keys";
+import { createPypiPlugin } from "../../../../plugins/pypi/runtime/runtime";
 
 interface AptReleaseSigner {
   clearSign(input: {

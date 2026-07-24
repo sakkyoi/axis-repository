@@ -1,5 +1,5 @@
-import { aptPluginManifest } from "../../../plugins/apt/manifest";
-import { pypiPluginManifest } from "../../../plugins/pypi/manifest";
+import { aptPluginManifest } from "../../../../plugins/apt/manifest";
+import { pypiPluginManifest } from "../../../../plugins/pypi/manifest";
 import { describe, expect, it } from "vitest";
 import { createDefaultArtifactPlugins } from "./default-plugins";
 

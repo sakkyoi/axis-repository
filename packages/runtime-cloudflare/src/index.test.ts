@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import worker, { AxisAdminDO } from "./index";
-import type { AxisEnv } from "./axis-admin-do";
-import type { DurableStorage } from "./durable-state";
+import type { AxisEnv } from "./worker/axis-admin-do";
+import type { DurableStorage } from "./storage/durable-state";
 
 class FakeNamespace {
   readonly object: AxisAdminDO;

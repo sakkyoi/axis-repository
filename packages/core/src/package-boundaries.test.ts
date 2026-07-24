@@ -138,7 +138,7 @@ describe("package boundaries", () => {
       }
 
       expect(
-        normalizedPath === path.normalize("packages/runtime-cloudflare/src/bundled-runtime-plugins.ts") ||
+        normalizedPath === path.normalize("packages/runtime-cloudflare/src/plugins/bundled-runtime-plugins.ts") ||
           normalizedPath === path.normalize("packages/admin-ui/src/repository-ui-plugins.ts") ||
           normalizedPath.endsWith(".test.ts") ||
           normalizedPath.endsWith(".test.tsx"),
@@ -149,7 +149,7 @@ describe("package boundaries", () => {
 
   test("host registries load package-owned plugin loaders instead of plugin registry entrypoints", () => {
     const runtimeRegistrySource = readFileSync(
-      path.join(rootDir, "packages/runtime-cloudflare/src/default-plugins.ts"),
+      path.join(rootDir, "packages/runtime-cloudflare/src/plugins/default-plugins.ts"),
       "utf8",
     );
     const adminUiRegistrySource = readFileSync(
@@ -201,7 +201,7 @@ describe("package boundaries", () => {
 
   test("package host loaders own runtime and admin UI implementation wiring", () => {
     const runtimeLoaderSource = readFileSync(
-      path.join(rootDir, "packages/runtime-cloudflare/src/bundled-runtime-plugins.ts"),
+      path.join(rootDir, "packages/runtime-cloudflare/src/plugins/bundled-runtime-plugins.ts"),
       "utf8",
     );
     const adminUiRegistrySource = readFileSync(
@@ -211,9 +211,9 @@ describe("package boundaries", () => {
     const runtimeImports = importSpecifiers(runtimeLoaderSource);
     const adminUiImports = importSpecifiers(adminUiRegistrySource);
 
-    expect(runtimeImports).toContain("../../../plugins/bundled");
-    expect(runtimeImports.some((specifier) => /^..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(true);
-    expect(runtimeImports.some((specifier) => /^..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(false);
+    expect(runtimeImports).toContain("../../../../plugins/bundled");
+    expect(runtimeImports.some((specifier) => /^..\/..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(true);
+    expect(runtimeImports.some((specifier) => /^..\/..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(false);
     expect(adminUiImports).toContain("../../../plugins/bundled");
     expect(adminUiImports.some((specifier) => /^..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(true);
     expect(adminUiImports.some((specifier) => /^..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(false);
@@ -253,7 +253,7 @@ describe("package boundaries", () => {
   });
 
   test("runtime plugin contracts stay split from the registry implementation", () => {
-    const runtimeSourceDir = path.join(rootDir, "packages/runtime-cloudflare/src");
+    const runtimeSourceDir = path.join(rootDir, "packages/runtime-cloudflare/src/plugins");
     for (const contractFile of [
       "repository-plugin-contract.ts",
       "repository-plugin-client-helpers.ts",
@@ -272,5 +272,29 @@ describe("package boundaries", () => {
     expect(registrySource).not.toContain("export interface RepositoryAdminResourceInput");
     expect(registrySource).not.toContain("export async function dispatchRepositoryClientHelper");
     expect(registrySource).not.toContain("export async function dispatchRepositoryAdminResource");
+  });
+
+  test("runtime-cloudflare package keeps feature files grouped by architectural area", () => {
+    const runtimeSourceDir = path.join(rootDir, "packages/runtime-cloudflare/src");
+    const expectedDirs = ["admin-ui-assets", "plugins", "signing", "storage", "uploads", "worker"];
+    for (const dir of expectedDirs) {
+      expect(existsSync(path.join(runtimeSourceDir, dir)), `runtime-cloudflare/src/${dir} must exist`).toBe(true);
+    }
+
+    const allowedRootFiles = new Set([
+      "crypto.test.ts",
+      "crypto.ts",
+      "http.ts",
+      "index.test.ts",
+      "index.ts",
+      "plugin-runtime-testing.ts",
+      "plugin-runtime.ts",
+    ]);
+    const rootSourceFiles = readdirSync(runtimeSourceDir).filter((entry) => {
+      const absolutePath = path.join(runtimeSourceDir, entry);
+      return statSync(absolutePath).isFile() && /\.(?:ts|tsx)$/.test(entry);
+    });
+
+    expect(rootSourceFiles.sort()).toEqual(Array.from(allowedRootFiles).sort());
   });
 });

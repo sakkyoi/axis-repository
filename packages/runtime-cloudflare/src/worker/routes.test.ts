@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
-import { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
+import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { createDevDependencyHarness } from "./dev-dependencies";
-import type { MemoryRepositoryObjectStore } from "./repository-object-store";
+import type { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 
 afterEach(() => {
   vi.doUnmock("./app");
@@ -320,7 +320,7 @@ describe("Cloudflare runtime routes", () => {
     const createApp = vi.fn(() => ({ fetch }));
     vi.doMock("./app", () => ({ createApp }));
 
-    const worker = (await import("./index")).default;
+    const worker = (await import("../index")).default;
     await worker.fetch(new Request("https://axis.example/first"));
     await worker.fetch(new Request("https://axis.example/second"));
 

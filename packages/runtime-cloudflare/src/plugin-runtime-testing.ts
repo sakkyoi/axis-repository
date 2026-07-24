@@ -1,10 +1,10 @@
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
-import type { ArtifactRepositoryPlugin } from "./repository-plugin-contract";
+import type { ArtifactRepositoryPlugin } from "./plugins/repository-plugin-contract";
 
-export { OpenPgpSigner } from "./openpgp-signer";
-export { MemoryRepositoryObjectStore } from "./repository-object-store";
-export { SecretEncryption } from "./secret-encryption";
-export { RepositorySecretService } from "./repository-secret-service";
+export { OpenPgpSigner } from "./signing/openpgp-signer";
+export { MemoryRepositoryObjectStore } from "./storage/repository-object-store";
+export { SecretEncryption } from "./storage/secret-encryption";
+export { RepositorySecretService } from "./storage/repository-secret-service";
 
 function assertJsonEqual(label: string, actual: unknown, expected: unknown): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {

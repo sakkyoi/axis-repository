@@ -12,16 +12,16 @@ import {
   type RepositoryObjectMetadata,
   type RepositoryObjectRange,
 } from "@axis-repository/core";
-import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "../../../plugins/catalog";
-import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "./admin-ui-assets";
+import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "../../../../plugins/catalog";
+import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "../admin-ui-assets";
 import type { AppDependencies } from "./dev-dependencies";
-import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "./http";
+import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "../http";
 import {
   ensureRepositoryPluginEnabled as ensureEffectiveRepositoryPluginEnabled,
   repositoryPluginPolicyFields,
-} from "./repository-plugin-policy";
-import { dispatchRepositoryAdminResource } from "./repository-plugin-admin-resources";
-import { dispatchRepositoryClientHelper } from "./repository-plugin-client-helpers";
+} from "../plugins/repository-plugin-policy";
+import { dispatchRepositoryAdminResource } from "../plugins/repository-plugin-admin-resources";
+import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;

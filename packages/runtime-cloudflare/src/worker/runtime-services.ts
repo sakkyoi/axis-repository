@@ -17,9 +17,9 @@ import {
   type VerifyPublishUploadInput,
   type VerifyPublishUploadResult,
 } from "@axis-repository/core";
-import { getRepositoryPluginCatalogEntry } from "../../../plugins/catalog";
-import type { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
-import { ensureRepositoryPluginEnabled } from "./repository-plugin-policy";
+import { getRepositoryPluginCatalogEntry } from "../../../../plugins/catalog";
+import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
+import { ensureRepositoryPluginEnabled } from "../plugins/repository-plugin-policy";
 
 export class PluginRepositoryService {
   constructor(

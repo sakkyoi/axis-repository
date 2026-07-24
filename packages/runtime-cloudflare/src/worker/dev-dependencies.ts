@@ -9,14 +9,14 @@ import {
   type RepositoryObjectStore,
   type SecretHasher,
 } from "@axis-repository/core";
-import type { AdminUiRuntimeConfig } from "./admin-ui-assets";
-import { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
-import { createDefaultArtifactPlugins } from "./default-plugins";
-import MemoryUploadBroker from "./memory-upload-broker";
-import { MemoryRepositoryObjectStore } from "./repository-object-store";
+import type { AdminUiRuntimeConfig } from "../admin-ui-assets";
+import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
+import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
+import MemoryUploadBroker from "../uploads/memory-upload-broker";
+import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
-import { SecretEncryption } from "./secret-encryption";
-import { RepositorySecretService } from "./repository-secret-service";
+import { SecretEncryption } from "../storage/secret-encryption";
+import { RepositorySecretService } from "../storage/repository-secret-service";
 
 export interface AppDependencies {
   adminToken: string;

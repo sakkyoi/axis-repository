@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AxisAdminDO, type AxisEnv } from "./axis-admin-do";
-import type { DurableStorage } from "./durable-state";
+import type { DurableStorage } from "../storage/durable-state";
 
 class FakeDurableStorage implements DurableStorage {
   readonly values = new Map<string, unknown>();
