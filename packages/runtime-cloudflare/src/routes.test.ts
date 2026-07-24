@@ -600,11 +600,13 @@ describe("Cloudflare runtime routes", () => {
       name: "demo-plugin",
       version: "0.1.0",
       capabilities: ["admin-resources"],
-      publisher: { publish: async () => ({ publishedAt: "2026-07-23T00:00:00.000Z", objects: [] }) },
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: "2026-07-23T00:00:00.000Z", objects: [] }),
+      },
     });
     const app = createApp(harness.dependencies);
 
@@ -707,11 +709,13 @@ describe("Cloudflare runtime routes", () => {
       name: "demo-plugin",
       version: "0.1.0",
       capabilities: ["admin-resources"],
-      publisher: { publish: async () => ({ publishedAt: "2026-07-23T00:00:00.000Z", objects: [] }) },
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: "2026-07-23T00:00:00.000Z", objects: [] }),
+      },
       adminResources: {
         namespace: "demo",
         handle: async ({ repository, path }) => new Response(JSON.stringify({
@@ -1146,14 +1150,14 @@ describe("Cloudflare runtime routes", () => {
       name: "gems-simple",
       version: "0.1.0",
       capabilities: ["serve:simple"],
-      publisher: {
-        publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }),
-      },
       canServeRepositoryPath: ({ relativePath }) =>
         relativePath === "simple" || relativePath.startsWith("simple/"),
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }),
+      },
     });
     const app = createApp(harness.dependencies);
     await createRepository(app, {
@@ -1176,13 +1180,13 @@ describe("Cloudflare runtime routes", () => {
       name: "gems-simple",
       version: "0.1.0",
       capabilities: ["client-helpers"],
-      publisher: {
-        publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }),
-      },
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }),
+      },
       clientHelpers: {
         namespace: "simple",
         actions: [
@@ -1243,13 +1247,13 @@ describe("Cloudflare runtime routes", () => {
       name: "gems-simple",
       version: "0.1.0",
       capabilities: ["client-helpers"],
-      publisher: {
-        publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }),
-      },
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }),
+      },
       clientHelpers: {
         namespace: "simple",
         actions: [
@@ -1368,17 +1372,17 @@ describe("Cloudflare runtime routes", () => {
       name: "gems-simple",
       version: "0.1.0",
       capabilities: ["serve:simple"],
-      publisher: {
-        publish: async () => ({
+      canServeRepositoryPath: ({ relativePath }) =>
+        relativePath === "simple" || relativePath.startsWith("simple/"),
+      validateRepositoryConfig: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({
           publishedAt: "2026-07-18T00:00:30.000Z",
           objects: [],
         }),
       },
-      canServeRepositoryPath: ({ relativePath }) =>
-        relativePath === "simple" || relativePath.startsWith("simple/"),
-      validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
     });
     const app = createApp(harness.dependencies);
     await createRepository(app, {

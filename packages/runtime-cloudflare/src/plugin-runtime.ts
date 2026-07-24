@@ -8,6 +8,7 @@ export type {
   RepositoryClientHelpers,
   RepositoryClientHelperSigningKey,
   RepositoryPathServingRule,
+  RepositoryPublishLifecycle,
   RepositoryServingContext,
   ValidatePublishArtifactsInput,
   ValidateRepositoryConfigInput,

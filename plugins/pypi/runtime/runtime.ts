@@ -32,11 +32,13 @@ export function createPypiPlugin(input?: { objectStore?: RepositoryObjectStore }
     name: pypiPluginManifest.runtimeName,
     version: pypiPluginManifest.version,
     capabilities: [...pypiPluginManifest.capabilities],
-    publisher,
     canServeRepositoryPath: createPrefixServingPredicate(["simple"]),
     validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
-    validatePublishArtifacts: () => {},
-    authorizePublish: () => {},
+    publish: {
+      validateArtifacts: () => {},
+      authorize: () => {},
+      finalize: (publishInput) => publisher.publish(publishInput),
+    },
     clientHelpers: {
       namespace: pypiPluginManifest.clientHelpers.namespace,
       actions: pypiPluginManifest.clientHelpers.actions.map((action) => ({ ...action })),

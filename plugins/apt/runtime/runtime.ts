@@ -95,23 +95,25 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
     name: aptPluginManifest.runtimeName,
     version: aptPluginManifest.version,
     capabilities: [...aptPluginManifest.capabilities],
-    publisher: input.publisher,
     canServeRepositoryPath: createPrefixServingPredicate(["dists", "pool"]),
     validateRepositoryConfig: (configInput) => {
       parseAptRepositoryConfig(repositoryForConfig(configInput));
     },
-    validatePublishArtifacts: validateAptPublishArtifacts,
-    derivePublishPrincipalScope: (repository) => {
-      const config = parseAptRepositoryConfig(repository);
-      return {
-        signingKeyIds: [config.signingKeyId],
-      };
-    },
-    authorizePublish: ({ repository, principal }) => {
-      const config = parseAptRepositoryConfig(repository);
-      if (!principal.signingKeyIds.includes(config.signingKeyId)) {
-        throw new ValidationError("Publish token is not scoped to the repository signing key");
-      }
+    publish: {
+      validateArtifacts: validateAptPublishArtifacts,
+      derivePrincipalScope: (repository) => {
+        const config = parseAptRepositoryConfig(repository);
+        return {
+          signingKeyIds: [config.signingKeyId],
+        };
+      },
+      authorize: ({ repository, principal }) => {
+        const config = parseAptRepositoryConfig(repository);
+        if (!principal.signingKeyIds.includes(config.signingKeyId)) {
+          throw new ValidationError("Publish token is not scoped to the repository signing key");
+        }
+      },
+      finalize: (publishInput) => input.publisher.publish(publishInput),
     },
     clientHelpers: {
       namespace: aptPluginManifest.clientHelpers.namespace,

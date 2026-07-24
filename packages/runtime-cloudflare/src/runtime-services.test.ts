@@ -84,12 +84,14 @@ describe("PluginPublishSessionService", () => {
       name: "apt-test",
       version: "0.0.0",
       capabilities: ["publish"],
-      publisher,
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {
-        throw new ValidationError("plugin denied publish");
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {
+          throw new ValidationError("plugin denied publish");
+        },
+        finalize: (input) => publisher.publish(input),
       },
     });
     const corePublishSessionService = new PublishSessionService({
@@ -146,20 +148,20 @@ describe("PluginPublishSessionService", () => {
       name: "apt-test",
       version: "0.0.0",
       capabilities: ["publish"],
-      publisher: {
-        publish: async () => ({
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        derivePrincipalScope: () => ({
+          signingKeyIds: ["plugin_key"],
+        }),
+        authorize: ({ principal }) => {
+          authorizeSigningKeyIds = principal.signingKeyIds;
+        },
+        finalize: async () => ({
           publishedAt: "2026-07-24T00:00:00.000Z",
           objects: [],
         }),
-      },
-      canServeRepositoryPath: () => false,
-      validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      derivePublishPrincipalScope: () => ({
-        signingKeyIds: ["plugin_key"],
-      }),
-      authorizePublish: ({ principal }) => {
-        authorizeSigningKeyIds = principal.signingKeyIds;
       },
     });
     const corePublishSessionService = new PublishSessionService({
@@ -210,20 +212,20 @@ describe("PluginPublishSessionService", () => {
       name: "apt-test",
       version: "0.0.0",
       capabilities: ["publish"],
-      publisher: {
-        publish: async () => ({
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        derivePrincipalScope: () => ({
+          ecosystemScopes: { apt: { component: "main" } },
+          signingKeyIds: ["plugin_key"],
+        }),
+        authorize: () => {},
+        finalize: async () => ({
           publishedAt: "2026-07-24T00:00:00.000Z",
           objects: [],
         }),
       },
-      canServeRepositoryPath: () => false,
-      validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      derivePublishPrincipalScope: () => ({
-        ecosystemScopes: { apt: { component: "main" } },
-        signingKeyIds: ["plugin_key"],
-      }),
-      authorizePublish: () => {},
     });
     const service = new PluginPublishSessionService({
       publishSessionService: new PublishSessionService({

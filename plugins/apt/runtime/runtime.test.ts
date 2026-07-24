@@ -56,14 +56,14 @@ describe("APT plugin lifecycle", () => {
     });
 
     expect(() =>
-      plugin.authorizePublish({
+      plugin.publish.authorize({
         repository: repository(),
         principal,
         artifacts: [],
       }),
     ).not.toThrow();
     expect(() =>
-      plugin.authorizePublish({
+      plugin.publish.authorize({
         repository: repository(),
         principal: { ...principal, signingKeyIds: [] },
         artifacts: [],

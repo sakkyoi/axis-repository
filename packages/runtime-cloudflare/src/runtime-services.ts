@@ -83,11 +83,11 @@ export class PluginPublishSessionService {
     const repository = await this.options.repositoryService.getByName(input.repositoryName);
     await this.ensurePluginEnabled(repository.ecosystem);
     const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
-    plugin.validatePublishArtifacts({
+    plugin.publish.validateArtifacts({
       repository,
       artifacts: input.artifacts,
     });
-    plugin.authorizePublish({
+    plugin.publish.authorize({
       repository,
       principal: input.principal,
       artifacts: input.artifacts,
@@ -99,12 +99,12 @@ export class PluginPublishSessionService {
     const repository = await this.options.repositoryService.getByName(input.repositoryName);
     await this.ensurePluginEnabled(repository.ecosystem);
     const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
-    plugin.validatePublishArtifacts({
+    plugin.publish.validateArtifacts({
       repository,
       artifacts: input.artifacts,
     });
-    const principal = adminPublishPrincipal(repository, plugin.derivePublishPrincipalScope?.(repository));
-    plugin.authorizePublish({
+    const principal = adminPublishPrincipal(repository, plugin.publish.derivePrincipalScope?.(repository));
+    plugin.publish.authorize({
       repository,
       principal,
       artifacts: input.artifacts,
@@ -144,8 +144,8 @@ export class PluginPublishSessionService {
     const repository = await this.options.repositoryService.getByName(session.repositoryName);
     await this.ensurePluginEnabled(repository.ecosystem);
     const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
-    const principal = adminPublishPrincipal(repository, plugin.derivePublishPrincipalScope?.(repository));
-    plugin.authorizePublish({
+    const principal = adminPublishPrincipal(repository, plugin.publish.derivePrincipalScope?.(repository));
+    plugin.publish.authorize({
       repository,
       principal,
       artifacts: session.artifacts,
@@ -160,7 +160,7 @@ export class PluginPublishSessionService {
     const session = await this.getExistingSession(input.sessionId);
     const repository = await this.options.repositoryService.getByName(session.repositoryName);
     await this.ensurePluginEnabled(repository.ecosystem);
-    this.options.plugins.requirePlugin(repository.ecosystem).authorizePublish({
+    this.options.plugins.requirePlugin(repository.ecosystem).publish.authorize({
       repository,
       principal: input.principal,
       artifacts: session.artifacts,

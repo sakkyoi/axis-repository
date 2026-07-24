@@ -58,6 +58,20 @@ function publisherReturning(key: string): {
   };
 }
 
+function publishLifecycle(
+  publisher: ArtifactPublisher,
+  hooks: {
+    validateArtifacts?: () => void;
+    authorize?: () => void;
+  } = {},
+) {
+  return {
+    validateArtifacts: hooks.validateArtifacts ?? (() => {}),
+    authorize: hooks.authorize ?? (() => {}),
+    finalize: (input: PublishArtifactsInput) => publisher.publish(input),
+  };
+}
+
 describe("RepositoryRuntimePluginRegistry", () => {
   it("dispatches publish calls to the publisher registered for the repository ecosystem", async () => {
     const registry = new RepositoryRuntimePluginRegistry();
@@ -68,22 +82,18 @@ describe("RepositoryRuntimePluginRegistry", () => {
       name: "apt-test",
       version: "0.0.0",
       capabilities: ["package-index"],
-      publisher: apt.publisher,
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: publishLifecycle(apt.publisher),
     });
     registry.register({
       ecosystem: "pypi",
       name: "pypi-test",
       version: "0.0.0",
       capabilities: ["simple-api"],
-      publisher: pypi.publisher,
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: publishLifecycle(pypi.publisher),
     });
 
     await expect(registry.publish(publishInput("pypi"))).resolves.toEqual({
@@ -114,11 +124,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
       name: "apt-first",
       version: "1.0.0",
       capabilities: ["generic-manifest"],
-      publisher: first.publisher,
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: publishLifecycle(first.publisher),
     });
 
     expect(() =>
@@ -127,11 +135,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
         name: "apt-second",
         version: "2.0.0",
         capabilities: ["package-index"],
-        publisher: second.publisher,
         canServeRepositoryPath: () => false,
         validateRepositoryConfig: () => {},
-        validatePublishArtifacts: () => {},
-        authorizePublish: () => {},
+        publish: publishLifecycle(second.publisher),
       }),
     ).toThrow(new ValidationError("Artifact publisher is already registered for ecosystem: apt"));
   });
@@ -144,11 +150,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
       name: "generic-manifest",
       version: "0.0.0",
       capabilities: ["generic-manifest", "client-helpers"],
-      publisher: apt.publisher,
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: publishLifecycle(apt.publisher),
       clientHelpers: {
         namespace: "apt",
         actions: [
@@ -197,11 +201,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
       name: "apt-signed",
       version: "0.1.0",
       capabilities: ["package-index"],
-      publisher: apt.publisher,
       canServeRepositoryPath: () => true,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: publishLifecycle(apt.publisher),
     });
 
     const plugin = registry.getPlugin("apt");
@@ -246,27 +248,76 @@ describe("RepositoryRuntimePluginRegistry", () => {
       name: "apt-test",
       version: "0.0.0",
       capabilities: ["package-index"],
-      publisher: publisher.publisher,
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => calls.push("config"),
-      validatePublishArtifacts: () => calls.push("artifacts"),
-      authorizePublish: () => calls.push("authorize"),
+      publish: publishLifecycle(publisher.publisher, {
+        validateArtifacts: () => calls.push("artifacts"),
+        authorize: () => calls.push("authorize"),
+      }),
     });
 
     const input = publishInput("apt");
     const plugin = registry.requirePlugin("apt");
     plugin.validateRepositoryConfig({ ecosystem: "apt", config: {} });
-    plugin.validatePublishArtifacts({
+    plugin.publish.validateArtifacts({
       repository: input.repository,
       artifacts: input.session.artifacts,
     });
-    plugin.authorizePublish({
+    plugin.publish.authorize({
       repository: input.repository,
       principal: input.session.requestedBy,
       artifacts: input.session.artifacts,
     });
 
     expect(calls).toEqual(["config", "artifacts", "authorize"]);
+  });
+
+  it("keeps publish lifecycle hooks grouped under the publish capability", async () => {
+    const registry = new RepositoryRuntimePluginRegistry();
+    const calls: string[] = [];
+    registry.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["package-index"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => calls.push("config"),
+      publish: {
+        validateArtifacts: () => calls.push("artifacts"),
+        derivePrincipalScope: () => {
+          calls.push("scope");
+          return { signingKeyIds: ["key_1"] };
+        },
+        authorize: () => calls.push("authorize"),
+        finalize: async () => {
+          calls.push("finalize");
+          return {
+            publishedAt: "2026-07-18T00:00:30.000Z",
+            objects: [{ key: "apt.json", contentType: "application/json; charset=utf-8" }],
+          };
+        },
+      },
+    });
+
+    const input = publishInput("apt");
+    const plugin = registry.requirePlugin("apt");
+    plugin.validateRepositoryConfig({ ecosystem: "apt", config: {} });
+    plugin.publish.validateArtifacts({
+      repository: input.repository,
+      artifacts: input.session.artifacts,
+    });
+    expect(plugin.publish.derivePrincipalScope?.(input.repository)).toEqual({ signingKeyIds: ["key_1"] });
+    plugin.publish.authorize({
+      repository: input.repository,
+      principal: input.session.requestedBy,
+      artifacts: input.session.artifacts,
+    });
+
+    await expect(registry.publish(input)).resolves.toEqual({
+      publishedAt: "2026-07-18T00:00:30.000Z",
+      objects: [{ key: "apt.json", contentType: "application/json; charset=utf-8" }],
+    });
+    expect(calls).toEqual(["config", "artifacts", "scope", "authorize", "finalize"]);
   });
 
   it("keeps client helper metadata on registered plugins without exposing mutable action lists", () => {
@@ -277,11 +328,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
       name: "apt-test",
       version: "0.0.0",
       capabilities: ["client-helpers"],
-      publisher: publisher.publisher,
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: publishLifecycle(publisher.publisher),
       clientHelpers: {
         namespace: "apt",
         actions: [
@@ -327,11 +376,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
       name: "apt-test",
       version: "0.0.0",
       capabilities: ["admin-resources"],
-      publisher: publisher.publisher,
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: publishLifecycle(publisher.publisher),
       adminResources: {
         namespace: "apt",
         handle: async () => new Response("handled"),
@@ -359,11 +406,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
       name: "apt-test",
       version: "0.0.0",
       capabilities: ["admin-resources"],
-      publisher: publisher.publisher,
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
-      validatePublishArtifacts: () => {},
-      authorizePublish: () => {},
+      publish: publishLifecycle(publisher.publisher),
       adminResources: {
         namespace: "apt",
         handle: async () => new Response("handled"),

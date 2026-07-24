@@ -92,13 +92,17 @@ export interface RepositoryAdminResources {
   handle(input: RepositoryAdminResourceInput): Promise<Response>;
 }
 
+export interface RepositoryPublishLifecycle {
+  validateArtifacts(input: ValidatePublishArtifactsInput): void;
+  derivePrincipalScope?(repository: Repository): DerivedPublishPrincipalScope;
+  authorize(input: AuthorizePublishInput): void;
+  finalize(input: PublishArtifactsInput): Promise<PublishResult>;
+}
+
 export interface ArtifactRepositoryPlugin extends PublisherMetadata {
-  publisher: ArtifactPublisher;
+  publish: RepositoryPublishLifecycle;
   canServeRepositoryPath: RepositoryPathServingRule;
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
-  validatePublishArtifacts(input: ValidatePublishArtifactsInput): void;
-  derivePublishPrincipalScope?(repository: Repository): DerivedPublishPrincipalScope;
-  authorizePublish(input: AuthorizePublishInput): void;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;
 }
@@ -194,6 +198,6 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
         `Artifact publisher is not configured for ecosystem: ${input.repository.ecosystem}`,
       );
     }
-    return descriptor.publisher.publish(input);
+    return descriptor.publish.finalize(input);
   }
 }
