@@ -9,7 +9,7 @@ import {
   PypiInstallHintsSection,
   PypiSettingsSection,
 } from "./detail";
-import { PypiPublishSessionsSection, pypiPublishSessionArtifactSummary } from "./publish";
+import { PypiPublishSessionDetail, PypiPublishSessionsSection, pypiPublishSessionArtifactSummary } from "./publish";
 
 export const pypiRepositoryDetailPlugin: RepositoryDetailPlugin = {
   ecosystem: pypiPluginManifest.ecosystem,
@@ -27,7 +27,7 @@ export const pypiRepositoryUiPlugin: RepositoryUiPlugin = {
   detail: pypiRepositoryDetailPlugin,
   publish: {
     ecosystem: pypiPluginManifest.ecosystem,
-    Component: PypiPublishSessionsSection,
+    SessionDetailComponent: PypiPublishSessionDetail,
     artifactSummary: pypiPublishSessionArtifactSummary,
   },
 };

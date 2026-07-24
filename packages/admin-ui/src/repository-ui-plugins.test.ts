@@ -129,8 +129,10 @@ describe("repository UI plugin registry", () => {
   });
 
   it("lets ecosystem UI plugins provide publish UI and artifact summaries", () => {
-    expect(getRepositoryPublishPlugin("apt")?.Component.name).toBe("AptPublishSessionsSection");
-    expect(getRepositoryPublishPlugin("pypi")?.Component.name).toBe("PypiPublishSessionsSection");
+    expect(getRepositoryPublishPlugin("apt")?.FormComponent?.name).toBe("AptPublishArtifactForm");
+    expect(getRepositoryPublishPlugin("apt")?.SessionDetailComponent?.name).toBe("AptPublishSessionDetail");
+    expect(getRepositoryPublishPlugin("pypi")?.FormComponent).toBeUndefined();
+    expect(getRepositoryPublishPlugin("pypi")?.SessionDetailComponent?.name).toBe("PypiPublishSessionDetail");
     expect(getRepositoryPublishPlugin("apt")?.artifactSummary({
       id: "pub_apt",
       repositoryName: "debian-internal",

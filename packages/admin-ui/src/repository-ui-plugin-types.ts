@@ -99,9 +99,15 @@ export interface PublishTokenScopeExtension {
   missingSelections(input: PublishTokenScopeInput): string[];
 }
 
+export interface PublishSessionDetailComponentProps {
+  session: PublishSession;
+  artifactSummary: (session: PublishSession) => string;
+}
+
 export interface RepositoryPublishPlugin {
   ecosystem: string;
-  Component: ComponentType<RepositoryDetailSectionProps>;
+  FormComponent?: ComponentType<RepositoryDetailSectionProps>;
+  SessionDetailComponent?: ComponentType<PublishSessionDetailComponentProps>;
   artifactSummary(session: PublishSession): string;
 }
 

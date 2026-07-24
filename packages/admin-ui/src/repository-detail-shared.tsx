@@ -16,7 +16,7 @@ import {
   publishSessionStatusMeta,
   repositoryPublishSessionsView,
 } from "./repository-publish-sessions-model";
-import type { RepositoryDetailSection } from "./repository-ui-plugin-types";
+import type { PublishSessionDetailComponentProps, RepositoryDetailSection } from "./repository-ui-plugin-types";
 
 export function GenericRepositoryDetail({ repository }: { repository: Repository; pluginMetadata: RepositoryPlugin | undefined }) {
   return (
@@ -82,10 +82,12 @@ export function RepositorySettingsSection({
 export function PublishSessionsSection({
   repository,
   artifactSummary = publishSessionArtifactSummary,
+  SessionDetailComponent = GenericPublishSessionDetail,
 }: {
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
   artifactSummary?: (session: PublishSession) => string;
+  SessionDetailComponent?: React.ComponentType<PublishSessionDetailComponentProps>;
 }) {
   const publishSessions = usePublishSessions();
   const publishSessionsView = repositoryPublishSessionsView(repository, publishSessions.data ?? []);
@@ -103,7 +105,12 @@ export function PublishSessionsSection({
       {!publishSessions.isLoading &&
         !publishSessions.isError &&
         sessions.map((session) => (
-          <PublishSessionItem key={session.id} session={session} artifactSummary={artifactSummary} />
+          <PublishSessionItem
+            key={session.id}
+            session={session}
+            artifactSummary={artifactSummary}
+            SessionDetailComponent={SessionDetailComponent}
+          />
         ))}
     </div>
   );
@@ -112,9 +119,11 @@ export function PublishSessionsSection({
 function PublishSessionItem({
   session,
   artifactSummary,
+  SessionDetailComponent,
 }: {
   session: PublishSession;
   artifactSummary: (session: PublishSession) => string;
+  SessionDetailComponent: React.ComponentType<PublishSessionDetailComponentProps>;
 }) {
   const status = publishSessionStatusMeta(session.status);
   return (
@@ -132,30 +141,38 @@ function PublishSessionItem({
           </div>
         </div>
       </summary>
-      <div className="mt-3 grid gap-3 text-xs">
-        <SessionList title="Artifacts" items={session.artifacts.map((artifact) => artifact.filename)} />
-        <SessionList title="Uploads" items={session.uploads.map((upload) => `${upload.uploadId} · ${upload.filename}`)} />
-        <SessionList
-          title="Verified uploads"
-          items={session.verifiedUploads.map((upload) => `${upload.uploadId} · ${upload.size} bytes`)}
-        />
-        {session.publishResult && (
-          <SessionList
-            title="Published objects"
-            items={session.publishResult.objects.map((object) => object.key)}
-          />
-        )}
-        {session.failure && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive">
-            {session.failure.message}
-          </div>
-        )}
-      </div>
+      <SessionDetailComponent session={session} artifactSummary={artifactSummary} />
     </details>
   );
 }
 
-function SessionList({ title, items }: { title: string; items: string[] }) {
+export function GenericPublishSessionDetail({
+  session,
+}: PublishSessionDetailComponentProps) {
+  return (
+    <div className="mt-3 grid gap-3 text-xs">
+      <PublishSessionDetailList title="Artifacts" items={session.artifacts.map((artifact) => artifact.filename)} />
+      <PublishSessionDetailList title="Uploads" items={session.uploads.map((upload) => `${upload.uploadId} · ${upload.filename}`)} />
+      <PublishSessionDetailList
+        title="Verified uploads"
+        items={session.verifiedUploads.map((upload) => `${upload.uploadId} · ${upload.size} bytes`)}
+      />
+      {session.publishResult && (
+        <PublishSessionDetailList
+          title="Published objects"
+          items={session.publishResult.objects.map((object) => object.key)}
+        />
+      )}
+      {session.failure && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive">
+          {session.failure.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function PublishSessionDetailList({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="grid gap-1">
       <div className="font-medium text-muted-foreground">{title}</div>

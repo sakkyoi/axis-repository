@@ -20,7 +20,9 @@ export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 export { Textarea } from "./components/ui/textarea";
 export {
   AdvancedJsonConfigSection,
+  GenericPublishSessionDetail,
   PublishSessionsSection,
+  PublishSessionDetailList,
   RepositoryClientHelpersSection,
   VisibilitySelect,
 } from "./repository-detail-shared";
@@ -32,6 +34,7 @@ export { asJson, EmptyState, ErrorState, formatDate } from "./pages/shared";
 export type {
   PublishTokenScopeComponentProps,
   PublishTokenScopeInput,
+  PublishSessionDetailComponentProps,
   RepositoryCreateFieldRendererProps,
   RepositoryCreatePlugin,
   RepositoryCreateWizardState,

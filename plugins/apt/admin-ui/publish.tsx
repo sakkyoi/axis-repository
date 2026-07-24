@@ -4,8 +4,10 @@ import {
   Button,
   ErrorState,
   Input,
+  PublishSessionDetailList,
   PublishSessionsSection,
   useRepositoryArtifactPublisher,
+  type PublishSessionDetailComponentProps,
   type Repository,
   type RepositoryPlugin,
 } from "@axis-repository/admin-ui/plugin-ui";
@@ -30,12 +32,13 @@ export function AptPublishSessionsSection({
         repository={repository}
         pluginMetadata={pluginMetadata}
         artifactSummary={aptPublishSessionArtifactSummary}
+        SessionDetailComponent={AptPublishSessionDetail}
       />
     </div>
   );
 }
 
-function AptPublishArtifactForm({ repository }: { repository: Repository }) {
+export function AptPublishArtifactForm({ repository }: { repository: Repository }) {
   const publisher = useRepositoryArtifactPublisher(repository);
   const [file, setFile] = useState<File>();
   const [values, setValues] = useState<AptPublishFormValues>(() => defaultAptPublishFormValues());
@@ -96,6 +99,38 @@ function AptPublishArtifactForm({ repository }: { repository: Repository }) {
       </Button>
       {publisher.status && <p className="text-sm text-muted-foreground">{publisher.status}</p>}
       {(error || publisher.error) && <ErrorState title="Publish failed" error={error || publisher.error} />}
+    </div>
+  );
+}
+
+export function AptPublishSessionDetail({
+  session,
+}: PublishSessionDetailComponentProps) {
+  return (
+    <div className="mt-3 grid gap-3 text-xs">
+      <PublishSessionDetailList
+        title="APT artifacts"
+        items={session.artifacts.map((artifact) => {
+          const metadata = artifact.metadata;
+          const packageName = typeof metadata.package === "string" ? metadata.package : artifact.filename;
+          const version = typeof metadata.version === "string" ? metadata.version : "-";
+          const architecture = typeof metadata.architecture === "string" ? metadata.architecture : "-";
+          return `${packageName} ${version} ${architecture} · ${artifact.filename}`;
+        })}
+      />
+      <PublishSessionDetailList title="Uploads" items={session.uploads.map((upload) => `${upload.uploadId} · ${upload.filename}`)} />
+      <PublishSessionDetailList
+        title="Verified uploads"
+        items={session.verifiedUploads.map((upload) => `${upload.uploadId} · ${upload.size} bytes`)}
+      />
+      {session.publishResult && (
+        <PublishSessionDetailList title="Published repository objects" items={session.publishResult.objects.map((object) => object.key)} />
+      )}
+      {session.failure && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive">
+          {session.failure.message}
+        </div>
+      )}
     </div>
   );
 }

@@ -10,7 +10,7 @@ import {
 import { aptRepositoryCreatePlugin } from "./create";
 import { AptSigningKeyDependencyField } from "./create-field-renderers";
 import { AptSettingsSection, AptSigningKeysSection } from "./detail";
-import { AptPublishSessionsSection } from "./publish";
+import { AptPublishArtifactForm, AptPublishSessionDetail, AptPublishSessionsSection } from "./publish";
 import { aptPublishSessionArtifactSummary } from "./publish-model";
 import { AptSigningKeyTokenScopeFields, aptPublishTokenMissingSigningKeySelections } from "./token-scope";
 
@@ -31,7 +31,8 @@ export const aptRepositoryUiPlugin: RepositoryUiPlugin = {
   detail: aptRepositoryDetailPlugin,
   publish: {
     ecosystem: aptPluginManifest.ecosystem,
-    Component: AptPublishSessionsSection,
+    FormComponent: AptPublishArtifactForm,
+    SessionDetailComponent: AptPublishSessionDetail,
     artifactSummary: aptPublishSessionArtifactSummary,
   },
   createFieldRenderers: {
