@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @axis-repository/core build && pnpm --filter @axis-repository/admin-ui build && pnpm --filter @axis-repository/publish-client build && pnpm --filter @axis-repository/runtime-cloudflare build:worker",
     "dev:ui": "pnpm --filter @axis-repository/admin-ui dev",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && pnpm -r typecheck"
@@ -12,6 +12,7 @@
   "devDependencies": {
     "@axis-repository/admin-ui": "workspace:^",
     "@axis-repository/core": "workspace:^",
+    "@axis-repository/publish-client": "workspace:^",
     "@axis-repository/runtime-cloudflare": "workspace:^",
     "@radix-ui/react-dialog": "^1.1.20",
     "@radix-ui/react-select": "^2.3.4",

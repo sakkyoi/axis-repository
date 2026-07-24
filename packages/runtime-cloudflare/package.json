@@ -23,7 +23,8 @@
     }
   },
   "scripts": {
-    "build": "node scripts/generate-admin-ui-assets.mjs && tsup src/index.ts src/plugin-runtime.ts src/plugin-runtime-testing.ts --format esm --dts",
+    "build": "pnpm --filter @axis-repository/admin-ui build && pnpm run build:worker",
+    "build:worker": "node scripts/generate-admin-ui-assets.mjs && tsup src/index.ts src/plugin-runtime.ts src/plugin-runtime-testing.ts --format esm --dts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -32,7 +33,6 @@
     "openpgp": "^6.3.1"
   },
   "devDependencies": {
-    "@axis-repository/admin-ui": "workspace:*",
     "@cloudflare/workers-types": "^4.20241218.0"
   }
 }
