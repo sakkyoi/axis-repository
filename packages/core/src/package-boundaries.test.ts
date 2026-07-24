@@ -130,11 +130,6 @@ describe("package boundaries", () => {
 
   test("plugin implementation imports stay centralized in registries and tests", () => {
     const packageSourceFiles = Object.values(packageDirs).flatMap((packageDir) => listSourceFiles(`${packageDir}/src`));
-    const allowedImporters = new Set([
-      path.normalize("plugins/runtime.ts"),
-      path.normalize("plugins/admin-ui.ts"),
-    ]);
-
     for (const filePath of [...packageSourceFiles, ...listSourceFiles("plugins")]) {
       const normalizedPath = path.normalize(filePath);
       const source = readFileSync(path.join(rootDir, filePath), "utf8");
@@ -143,13 +138,16 @@ describe("package boundaries", () => {
       }
 
       expect(
-        allowedImporters.has(normalizedPath) || normalizedPath.endsWith(".test.ts") || normalizedPath.endsWith(".test.tsx"),
-        `${filePath} must import plugin implementations through a registry or a focused test`,
+        normalizedPath === path.normalize("packages/runtime-cloudflare/src/bundled-runtime-plugins.ts") ||
+          normalizedPath === path.normalize("packages/admin-ui/src/repository-ui-plugins.ts") ||
+          normalizedPath.endsWith(".test.ts") ||
+          normalizedPath.endsWith(".test.tsx"),
+        `${filePath} must import plugin implementations through a package host loader or a focused test`,
       ).toBe(true);
     }
   });
 
-  test("host registries load plugins from plugin registry entrypoints", () => {
+  test("host registries load package-owned plugin loaders instead of plugin registry entrypoints", () => {
     const runtimeRegistrySource = readFileSync(
       path.join(rootDir, "packages/runtime-cloudflare/src/default-plugins.ts"),
       "utf8",
@@ -159,42 +157,66 @@ describe("package boundaries", () => {
       "utf8",
     );
 
-    expect(importSpecifiers(runtimeRegistrySource)).toContain("../../../plugins/runtime");
-    expect(importSpecifiers(adminUiRegistrySource)).toContain("../../../plugins/admin-ui");
+    expect(importSpecifiers(runtimeRegistrySource)).toContain("./bundled-runtime-plugins");
+    expect(importSpecifiers(adminUiRegistrySource)).toContain("../../../plugins/bundled");
+    expect(importSpecifiers(runtimeRegistrySource)).not.toContain("../../../plugins/runtime");
+    expect(importSpecifiers(adminUiRegistrySource)).not.toContain("../../../plugins/admin-ui");
     expect(runtimeRegistrySource).not.toMatch(pluginImplementationImportPattern);
     expect(adminUiRegistrySource).not.toMatch(pluginImplementationImportPattern);
   });
 
-  test("plugin catalog is the shared source for enabled ecosystem metadata", () => {
-    for (const catalogPath of ["plugins/catalog.ts", "plugins/runtime.ts", "plugins/admin-ui.ts"]) {
+  test("plugin bundles are the shared source for enabled ecosystem metadata", () => {
+    for (const catalogPath of ["plugins/catalog.ts", "plugins/bundled.ts"]) {
       expect(existsSync(path.join(rootDir, catalogPath)), `${catalogPath} must exist`).toBe(true);
     }
+    expect(existsSync(path.join(rootDir, "plugins/runtime.ts")), "runtime registration belongs in the host loader").toBe(false);
+    expect(existsSync(path.join(rootDir, "plugins/admin-ui.ts")), "admin UI registration belongs in the host loader").toBe(false);
 
     const catalogSource = readFileSync(path.join(rootDir, "plugins/catalog.ts"), "utf8");
-    const runtimePluginRegistrySource = readFileSync(path.join(rootDir, "plugins/runtime.ts"), "utf8");
-    const adminUiPluginRegistrySource = readFileSync(path.join(rootDir, "plugins/admin-ui.ts"), "utf8");
+    const bundledPluginsSource = readFileSync(path.join(rootDir, "plugins/bundled.ts"), "utf8");
     expect(catalogSource).toContain("repositoryPluginCatalog");
     expect(catalogSource).toContain("enabled");
     expect(catalogSource).toContain("experimental");
     expect(catalogSource).toContain("runtime");
     expect(catalogSource).toContain("adminUi");
-    expect(catalogSource).toContain("aptPluginManifest");
-    expect(catalogSource).toContain("pypiPluginManifest");
     expect(catalogSource).not.toMatch(pluginImplementationImportPattern);
-    expect(runtimePluginRegistrySource).toContain("./catalog");
-    expect(adminUiPluginRegistrySource).toContain("./catalog");
+    expect(bundledPluginsSource).toContain("bundledRepositoryPlugins");
+    expect(bundledPluginsSource).toContain("aptRepositoryPluginBundle");
+    expect(bundledPluginsSource).toContain("pypiRepositoryPluginBundle");
   });
 
-  test("plugin runtime and admin UI registries do not import each other's implementations", () => {
-    const runtimePluginRegistrySource = readFileSync(path.join(rootDir, "plugins/runtime.ts"), "utf8");
-    const adminUiPluginRegistrySource = readFileSync(path.join(rootDir, "plugins/admin-ui.ts"), "utf8");
-    const runtimeImports = importSpecifiers(runtimePluginRegistrySource);
-    const adminUiImports = importSpecifiers(adminUiPluginRegistrySource);
+  test("plugin bundles declare capabilities without importing host-specific implementations", () => {
+    const bundleSources = [
+      readFileSync(path.join(rootDir, "plugins/apt/plugin.ts"), "utf8"),
+      readFileSync(path.join(rootDir, "plugins/pypi/plugin.ts"), "utf8"),
+    ];
 
-    expect(runtimeImports.some((specifier) => /^\.\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(true);
-    expect(runtimeImports.some((specifier) => /^\.\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(false);
-    expect(adminUiImports.some((specifier) => /^\.\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(true);
-    expect(adminUiImports.some((specifier) => /^\.\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(false);
+    for (const source of bundleSources) {
+      expect(source).toContain("satisfies RepositoryPluginBundle");
+      expect(source).toContain("runtime: true");
+      expect(source).toContain("adminUi: true");
+      expect(source).not.toMatch(pluginImplementationImportPattern);
+    }
+  });
+
+  test("package host loaders own runtime and admin UI implementation wiring", () => {
+    const runtimeLoaderSource = readFileSync(
+      path.join(rootDir, "packages/runtime-cloudflare/src/bundled-runtime-plugins.ts"),
+      "utf8",
+    );
+    const adminUiRegistrySource = readFileSync(
+      path.join(rootDir, "packages/admin-ui/src/repository-ui-plugins.ts"),
+      "utf8",
+    );
+    const runtimeImports = importSpecifiers(runtimeLoaderSource);
+    const adminUiImports = importSpecifiers(adminUiRegistrySource);
+
+    expect(runtimeImports).toContain("../../../plugins/bundled");
+    expect(runtimeImports.some((specifier) => /^..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(true);
+    expect(runtimeImports.some((specifier) => /^..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(false);
+    expect(adminUiImports).toContain("../../../plugins/bundled");
+    expect(adminUiImports.some((specifier) => /^..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(true);
+    expect(adminUiImports.some((specifier) => /^..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(false);
   });
 
   test("plugin authoring guide documents the enforced contract", () => {
@@ -207,8 +229,8 @@ describe("package boundaries", () => {
     expect(guide).toContain("@axis-repository/runtime-cloudflare/plugin-runtime");
     expect(guide).toContain("@axis-repository/admin-ui/plugin-ui");
     expect(guide).toContain("plugins/catalog.ts");
-    expect(guide).toContain("plugins/runtime.ts");
-    expect(guide).toContain("plugins/admin-ui.ts");
+    expect(guide).toContain("plugins/bundled.ts");
+    expect(guide).toContain("RepositoryPluginBundle");
     expect(guide).toContain("pnpm test");
   });
 

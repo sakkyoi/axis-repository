@@ -6,7 +6,8 @@
   "include": [
     "src/**/*.ts",
     "../../plugins/catalog.ts",
-    "../../plugins/runtime.ts",
+    "../../plugins/bundled.ts",
+    "../../plugins/*/plugin.ts",
     "../../plugins/*/manifest.ts",
     "../../plugins/*/runtime/**/*.ts"
   ]

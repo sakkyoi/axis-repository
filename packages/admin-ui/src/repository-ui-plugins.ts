@@ -16,13 +16,26 @@ import type {
   RepositoryPublishPlugin,
   RepositoryUiPlugin,
 } from "./repository-ui-plugin-types";
-import { repositoryAdminUiPlugins } from "../../../plugins/admin-ui";
+import { bundledRepositoryPlugins } from "../../../plugins/bundled";
+import { aptRepositoryUiPlugin } from "../../../plugins/apt/admin-ui";
+import { pypiRepositoryUiPlugin } from "../../../plugins/pypi/admin-ui";
 
 type NonEmptyArray<T> = [T, ...T[]];
 
-export const repositoryUiPlugins = [
-  ...repositoryAdminUiPlugins,
-] satisfies NonEmptyArray<RepositoryUiPlugin>;
+const bundledAdminUiPlugins: Record<string, RepositoryUiPlugin> = {
+  apt: aptRepositoryUiPlugin,
+  pypi: pypiRepositoryUiPlugin,
+};
+
+export const repositoryUiPlugins = bundledRepositoryPlugins
+  .filter((plugin) => plugin.catalog.enabled && plugin.adminUi)
+  .map((plugin) => {
+    const uiPlugin = bundledAdminUiPlugins[plugin.manifest.ecosystem];
+    if (!uiPlugin) {
+      throw new Error(`Admin UI plugin is not wired for ecosystem: ${plugin.manifest.ecosystem}`);
+    }
+    return uiPlugin;
+  }) as NonEmptyArray<RepositoryUiPlugin>;
 
 function assertJsonEqual(label: string, actual: unknown, expected: unknown): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {

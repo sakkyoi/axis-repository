@@ -14,7 +14,8 @@
     "vite.config.ts",
     "../core/src/plugin-manifests.ts",
     "../../plugins/catalog.ts",
-    "../../plugins/admin-ui.ts",
+    "../../plugins/bundled.ts",
+    "../../plugins/*/plugin.ts",
     "../../plugins/*/manifest.ts",
     "../../plugins/*/admin-ui"
   ]

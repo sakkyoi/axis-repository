@@ -11,6 +11,7 @@ Put each plugin under `plugins/<ecosystem>/`:
 
 ```text
 plugins/<ecosystem>/
+  plugin.ts
   manifest.ts
   runtime/
     runtime.ts
@@ -121,10 +122,10 @@ handlers. The descriptor portion must match the shared manifest; the handler
 function belongs only to the runtime plugin.
 
 Runtime plugins are registered only in
-`plugins/runtime.ts`, and enabled ecosystem metadata is listed in
-`plugins/catalog.ts`. The Cloudflare Worker host loads runtime plugins through
-`packages/runtime-cloudflare/src/default-plugins.ts`; do not import plugin
-runtime implementations from routes, services, or other runtime modules.
+`plugins/<ecosystem>/plugin.ts`. The Cloudflare Worker host loads bundled
+runtime capabilities through `packages/runtime-cloudflare/src/default-plugins.ts`;
+do not import plugin runtime implementations from routes, services, or other
+runtime modules.
 
 Runtime tests may use
 `@axis-repository/runtime-cloudflare/plugin-runtime/testing` for host test
@@ -143,25 +144,36 @@ The helper verifies the runtime plugin ecosystem, name, version, capabilities,
 client helper descriptors, and admin resource descriptors against the manifest.
 It intentionally ignores handler functions.
 
-## Catalog Lifecycle
+## Bundle And Catalog Lifecycle
 
-Every plugin must have one entry in `plugins/catalog.ts`. The catalog is the
-shared source for plugin lifecycle and host support metadata:
+Every plugin must export one `RepositoryPluginBundle` from
+`plugins/<ecosystem>/plugin.ts`. The bundle is the plugin's self-description:
 
 ```ts
-{
+export const exampleRepositoryPluginBundle = {
   manifest: examplePluginManifest,
-  enabled: true,
-  experimental: true,
-  runtime: true,
-  adminUi: false,
-}
+  catalog: {
+    enabled: true,
+    experimental: true,
+  },
+  runtime: {
+    create: (input) => createExamplePlugin(input),
+  },
+  adminUi: exampleRepositoryUiPlugin,
+} satisfies RepositoryPluginBundle;
 ```
 
-`enabled` is the deployment catalog default. `experimental` is metadata exposed
-to clients for UI labeling and rollout policy. `runtime` means the ecosystem has
-Worker/runtime behavior wired in `plugins/runtime.ts`. `adminUi` means the admin
-UI behavior is wired in `plugins/admin-ui.ts`.
+Add the bundle to `plugins/bundled.ts`. This is the only static bundled plugin
+list. TypeScript and Worker builds should not discover plugins by scanning the
+filesystem.
+
+`catalog.enabled` is the deployment catalog default. `catalog.experimental` is
+metadata exposed to clients for UI labeling and rollout policy. `runtime` means
+the ecosystem provides Worker/runtime behavior. `adminUi` means the ecosystem
+provides admin UI behavior.
+
+`plugins/catalog.ts` projects policy metadata from bundled plugin descriptors.
+It should not hand-maintain a second ecosystem list.
 
 The runtime and admin UI registries both filter catalog-disabled plugins at
 startup, but repository plugin availability is resolved through the admin policy
@@ -213,10 +225,9 @@ renderer, and token-scope extensions must declare behavior for the same
 ecosystem as the manifest.
 
 Admin UI plugins are registered only in
-`plugins/admin-ui.ts`, and enabled ecosystem metadata is listed in
-`plugins/catalog.ts`. The admin UI host loads UI plugins through
-`packages/admin-ui/src/repository-ui-plugins.ts`. Pages and shared UI modules
-should ask the registry for plugin behavior instead of importing plugin
+`plugins/<ecosystem>/plugin.ts`. The admin UI host loads bundled UI capabilities
+through `packages/admin-ui/src/repository-ui-plugins.ts`. Pages and shared UI
+modules should ask the registry for plugin behavior instead of importing plugin
 implementations directly.
 
 The UI registry exposes `assertRepositoryUiPluginContracts()` for registry-level
@@ -230,9 +241,9 @@ refer to field kinds declared by the manifest.
 1. Add `plugins/<ecosystem>/manifest.ts`.
 2. Add runtime behavior under `plugins/<ecosystem>/runtime/`.
 3. Add admin UI behavior under `plugins/<ecosystem>/admin-ui/` if needed.
-4. Add the ecosystem manifest and lifecycle metadata to `plugins/catalog.ts`.
-5. Wire runtime behavior in `plugins/runtime.ts`.
-6. Wire admin UI behavior in `plugins/admin-ui.ts`.
+4. Add `plugins/<ecosystem>/plugin.ts` with a `RepositoryPluginBundle`.
+5. Add the bundle to `plugins/bundled.ts`.
+6. Let package host loaders register runtime and admin UI capabilities from the bundle contract.
 7. Add focused tests beside the new plugin code.
 8. Run:
 

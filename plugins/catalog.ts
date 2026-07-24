@@ -1,6 +1,5 @@
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
-import { aptPluginManifest } from "./apt/manifest";
-import { pypiPluginManifest } from "./pypi/manifest";
+import { bundledRepositoryPlugins } from "./bundled";
 
 export interface RepositoryPluginCatalogEntry {
   manifest: RepositoryPluginManifest;
@@ -18,22 +17,13 @@ export interface RepositoryPluginCatalogMetadata {
   adminUi: boolean;
 }
 
-export const repositoryPluginCatalog = [
-  {
-    manifest: aptPluginManifest,
-    enabled: true,
-    experimental: false,
-    runtime: true,
-    adminUi: true,
-  },
-  {
-    manifest: pypiPluginManifest,
-    enabled: true,
-    experimental: true,
-    runtime: true,
-    adminUi: true,
-  },
-] as const satisfies readonly RepositoryPluginCatalogEntry[];
+export const repositoryPluginCatalog = bundledRepositoryPlugins.map((plugin) => ({
+  manifest: plugin.manifest,
+  enabled: plugin.catalog.enabled,
+  experimental: plugin.catalog.experimental,
+  runtime: plugin.runtime,
+  adminUi: plugin.adminUi,
+})) satisfies readonly RepositoryPluginCatalogEntry[];
 
 export function repositoryPluginCatalogEcosystems(): string[] {
   return repositoryPluginCatalog.map((entry) => entry.manifest.ecosystem);
