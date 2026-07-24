@@ -87,11 +87,23 @@ describe("repository UI plugin registry", () => {
       ecosystem: "apt",
       displayName: "APT",
       supported: true,
+      lifecycle: { availability: "available", label: "Available" },
+      badges: [
+        { label: "Available", variant: "success" },
+        { label: "Runtime", variant: "default" },
+        { label: "Admin UI", variant: "default" },
+      ],
     });
     expect(options[1]).toMatchObject({
       ecosystem: "npm",
       supported: false,
       description: "Server plugin is disabled.",
+      lifecycle: { availability: "disabled", label: "Disabled" },
+      badges: [
+        { label: "Disabled", variant: "destructive" },
+        { label: "Experimental", variant: "warning" },
+        { label: "Runtime", variant: "default" },
+      ],
     });
   });
 

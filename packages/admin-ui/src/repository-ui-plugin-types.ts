@@ -6,6 +6,7 @@ import type {
 import type { ComponentType } from "react";
 import type { CreateRepositoryInput } from "./api/client";
 import type { PublishSession, Repository, RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
+import type { PluginLifecycleBadge, PluginLifecycleSummary } from "./plugin-lifecycle";
 
 export type RepositoryCreateStep = "plugin" | "basics" | "config" | "dependencies" | "review";
 
@@ -35,6 +36,8 @@ export type RepositoryCreatePluginOption =
       displayName: string;
       description: string;
       capabilities: string[];
+      lifecycle: PluginLifecycleSummary;
+      badges: PluginLifecycleBadge[];
       supported: true;
       plugin: RepositoryCreatePlugin;
     }
@@ -43,6 +46,8 @@ export type RepositoryCreatePluginOption =
       displayName: string;
       description: string;
       capabilities: string[];
+      lifecycle: PluginLifecycleSummary;
+      badges: PluginLifecycleBadge[];
       supported: false;
     };
 

@@ -1,5 +1,6 @@
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
 import type { RepositoryPlugin } from "./api/schemas";
+import { pluginLifecycleBadges, pluginLifecycleSummary } from "./plugin-lifecycle";
 import type {
   PublishTokenScopeExtension,
   RepositoryCreateFieldRendererMap,
@@ -66,12 +67,16 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
 ): RepositoryCreatePluginOption[] {
   return serverPlugins.map((serverPlugin) => {
     const localPlugin = localPlugins.find((candidate) => candidate.manifest.ecosystem === serverPlugin.ecosystem);
+    const lifecycle = pluginLifecycleSummary(serverPlugin);
+    const badges = pluginLifecycleBadges(serverPlugin);
     if (serverPlugin.enabled === false) {
       return {
         ecosystem: serverPlugin.ecosystem,
         displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
         description: "Server plugin is disabled.",
         capabilities: [...serverPlugin.capabilities],
+        lifecycle,
+        badges,
         supported: false,
       };
     }
@@ -81,6 +86,8 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
         displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
         description: "Server plugin has no runtime support.",
         capabilities: [...serverPlugin.capabilities],
+        lifecycle,
+        badges,
         supported: false,
       };
     }
@@ -90,6 +97,8 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
         displayName: localPlugin.manifest.displayName,
         description: localPlugin.manifest.description,
         capabilities: [...serverPlugin.capabilities],
+        lifecycle,
+        badges,
         supported: true,
         plugin: localPlugin.create,
       };
@@ -99,6 +108,8 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
       displayName: serverPlugin.ecosystem,
       description: "Server plugin is enabled, but this admin UI cannot create it yet.",
       capabilities: [...serverPlugin.capabilities],
+      lifecycle,
+      badges,
       supported: false,
     };
   });

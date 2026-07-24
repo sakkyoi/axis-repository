@@ -122,6 +122,11 @@ exposes lifecycle metadata from the catalog through
 `GET /admin/repository-plugins`, and the admin UI combines that server catalog
 with its local UI registry before showing create options.
 
+Lifecycle policy is static for now and comes from the bundled catalog. If Axis
+adds persisted enablement policy later, it should attach to the same
+`/admin/repository-plugins` surface so create flows and plugin status UI keep
+the same input contract.
+
 ## Admin UI Plugin
 
 Admin UI behavior belongs under `plugins/<ecosystem>/admin-ui/`. Export a

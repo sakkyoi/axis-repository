@@ -5,6 +5,7 @@ import type {
   RepositoryCreatePluginOption,
   RepositoryCreateStep,
 } from "./repository-ui-plugin-types";
+import { pluginLifecycleBadges, pluginLifecycleSummary } from "./plugin-lifecycle";
 import {
   getRepositoryCreateServerErrorMapper,
   getRepositoryPluginManifest,
@@ -64,12 +65,16 @@ export function repositoryCreatePluginOptions(
   return serverPlugins.map((serverPlugin) => {
     const localPlugin = localPlugins.find((plugin) => plugin.ecosystem === serverPlugin.ecosystem);
     const manifest = getRepositoryPluginManifest(serverPlugin.ecosystem);
+    const lifecycle = pluginLifecycleSummary(serverPlugin);
+    const badges = pluginLifecycleBadges(serverPlugin);
     if (serverPlugin.enabled === false) {
       return {
         ecosystem: serverPlugin.ecosystem,
         displayName: manifest?.displayName ?? serverPlugin.ecosystem,
         description: "Server plugin is disabled.",
         capabilities: [...serverPlugin.capabilities],
+        lifecycle,
+        badges,
         supported: false,
       };
     }
@@ -79,6 +84,8 @@ export function repositoryCreatePluginOptions(
         displayName: manifest?.displayName ?? serverPlugin.ecosystem,
         description: "Server plugin has no runtime support.",
         capabilities: [...serverPlugin.capabilities],
+        lifecycle,
+        badges,
         supported: false,
       };
     }
@@ -88,6 +95,8 @@ export function repositoryCreatePluginOptions(
         displayName: serverPlugin.ecosystem,
         description: "Server plugin is enabled, but this admin UI cannot create it yet.",
         capabilities: [...serverPlugin.capabilities],
+        lifecycle,
+        badges,
         supported: false,
       };
     }
@@ -96,6 +105,8 @@ export function repositoryCreatePluginOptions(
       displayName: manifest?.displayName ?? serverPlugin.ecosystem,
       description: manifest?.description ?? "Repository plugin supported by this admin UI.",
       capabilities: [...serverPlugin.capabilities],
+      lifecycle,
+      badges,
       supported: true,
       plugin: localPlugin,
     };

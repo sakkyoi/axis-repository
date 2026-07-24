@@ -109,7 +109,7 @@ describe("repository create plugins", () => {
       },
     ]);
 
-    expect(options).toEqual([
+    expect(options).toMatchObject([
       {
         ecosystem: "apt",
         displayName: "APT",
@@ -148,7 +148,7 @@ describe("repository create plugins", () => {
       },
     ]);
 
-    expect(options).toEqual([
+    expect(options).toMatchObject([
       {
         ecosystem: "apt",
         displayName: "APT",

@@ -8,6 +8,7 @@ import {
 } from "../api/hooks";
 import type { RepositoryVisibility } from "../api/schemas";
 import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { cn } from "../lib/utils";
@@ -70,6 +71,7 @@ export function NewRepositoryPage() {
       ? selectedOption.description
       : "This server has no repository plugin that the current admin UI can create.";
   const summaryCapabilities = selectedOption?.capabilities ?? [];
+  const summaryBadges = selectedOption?.badges ?? [];
   const [stepIndex, setStepIndex] = useState(0);
   const [state, setState] = useState<RepositoryCreateWizardState>(plugin.defaults);
   const [error, setError] = useState("");
@@ -212,6 +214,9 @@ export function NewRepositoryPage() {
           </div>
           <p className="mt-2 text-sm text-muted-foreground">{summaryDescription}</p>
           <div className="mt-4 flex flex-wrap gap-2">
+            {summaryBadges.map((badge) => (
+              <Badge key={badge.label} variant={badge.variant}>{badge.label}</Badge>
+            ))}
             {summaryCapabilities.map((capability) => (
               <span key={capability} className="rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
                 {capability}
@@ -311,27 +316,37 @@ function PluginStep({
         </div>
       )}
       <div className="grid gap-3 md:grid-cols-2">
-        {options.map((plugin) => (
-          <button
-            key={plugin.ecosystem}
-            type="button"
-            disabled={!plugin.supported}
-            className={cn(
-              "grid gap-2 rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-primary hover:bg-muted",
-              selectedEcosystem === plugin.ecosystem && "border-primary bg-primary/10",
-              !plugin.supported && "cursor-not-allowed opacity-60 hover:border-border hover:bg-background",
-            )}
-            onClick={() => {
-              if (plugin.supported) onSelect(plugin.ecosystem);
-            }}
-          >
-            <span className="flex items-center justify-between gap-2 text-sm font-semibold">
-              {plugin.displayName}
-              {!plugin.supported && <span className="text-xs font-medium text-muted-foreground">Unsupported</span>}
-            </span>
-            <span className="text-sm text-muted-foreground">{plugin.description}</span>
-          </button>
-        ))}
+        {options.map((plugin) => {
+          const detailBadges = plugin.badges.filter((badge) => badge.label !== plugin.lifecycle.label);
+          return (
+            <button
+              key={plugin.ecosystem}
+              type="button"
+              disabled={!plugin.supported}
+              className={cn(
+                "grid gap-2 rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-primary hover:bg-muted",
+                selectedEcosystem === plugin.ecosystem && "border-primary bg-primary/10",
+                !plugin.supported && "cursor-not-allowed opacity-60 hover:border-border hover:bg-background",
+              )}
+              onClick={() => {
+                if (plugin.supported) onSelect(plugin.ecosystem);
+              }}
+            >
+              <span className="flex items-center justify-between gap-2 text-sm font-semibold">
+                {plugin.displayName}
+                <Badge variant={plugin.lifecycle.variant}>{plugin.lifecycle.label}</Badge>
+              </span>
+              <span className="text-sm text-muted-foreground">{plugin.description}</span>
+              {detailBadges.length > 0 && (
+                <span className="flex flex-wrap gap-1.5">
+                  {detailBadges.map((badge) => (
+                    <Badge key={badge.label} variant={badge.variant}>{badge.label}</Badge>
+                  ))}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
