@@ -9,6 +9,7 @@ export type {
   RepositoryClientHelperSigningKey,
   RepositoryPathServingRule,
   RepositoryPublishLifecycle,
+  RepositoryRuntimePluginServices,
   RepositoryServingContext,
   RepositoryActivePrivateSigningKey,
   RepositoryPublicSigningKey,

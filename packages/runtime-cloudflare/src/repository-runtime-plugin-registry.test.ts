@@ -1,7 +1,16 @@
 import type { ArtifactPublisher, PublishArtifactsInput } from "@axis-repository/core";
 import { ValidationError } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
-import { RepositoryRuntimePluginRegistry, createPrefixServingPredicate } from "./repository-runtime-plugin-registry";
+import {
+  RepositoryRuntimePluginRegistry,
+  createPrefixServingPredicate,
+  type RepositoryAdminResourceServices,
+} from "./repository-runtime-plugin-registry";
+
+function acceptsPluginServices(_services: RepositoryAdminResourceServices): void {}
+
+// @ts-expect-error plugin services must be explicit capabilities, not arbitrary host service bags.
+acceptsPluginServices({ signingKeyService: {} });
 
 function publishInput(ecosystem: string): PublishArtifactsInput {
   return {

@@ -114,10 +114,11 @@ export interface RepositoryClientHelpers {
   handle(input: RepositoryClientHelperInput): Promise<Response>;
 }
 
-export interface RepositoryAdminResourceServices {
+export interface RepositoryRuntimePluginServices {
   signingKeys?: RepositorySigningKeyCapability;
-  [name: string]: unknown;
 }
+
+export type RepositoryAdminResourceServices = RepositoryRuntimePluginServices;
 
 export interface RepositoryAdminResourceInput {
   repositoryName: string;
