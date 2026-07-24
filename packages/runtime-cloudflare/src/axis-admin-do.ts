@@ -1,6 +1,7 @@
 import {
   PublishSessionService,
   PublishTokenService,
+  PluginPolicyService,
   RepositoryService,
   type Clock,
 } from "@axis-repository/core";
@@ -108,6 +109,7 @@ export function createDurableObjectDependencies(
     : new R2RepositoryObjectStore(requiredR2Bucket(env.AXIS_OBJECTS));
   const artifactPublisher = createDefaultArtifactPlugins({ objectStore, signingKeyService });
   const repositoryService = new RepositoryService({ state, clock, randomId });
+  const pluginPolicyService = new PluginPolicyService({ state });
   const publishSessionService = new PublishSessionService({
     state,
     uploadBroker,
@@ -122,13 +124,16 @@ export function createDurableObjectDependencies(
     repositoryService: new PluginRepositoryService({
       repositoryService,
       plugins: artifactPublisher,
+      pluginPolicyService,
     }),
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
     publishSessionService: new PluginPublishSessionService({
       publishSessionService,
       repositoryService,
       plugins: artifactPublisher,
+      pluginPolicyService,
     }),
+    pluginPolicyService,
     signingKeyService,
     repositoryObjectStore: objectStore,
     artifactPublisherRegistry: artifactPublisher,

@@ -5,6 +5,7 @@ import {
   type CreateAdminPublishSessionInput,
   type CreatePublishTokenInput,
   type CreateRepositoryInput,
+  type UpdateRepositoryPluginPolicyInput,
   type UpdateRepositoryInput,
 } from "./client";
 import { useAuth } from "../auth";
@@ -29,6 +30,16 @@ export function useRepositoryPlugins() {
   return useQuery({
     queryKey: ["repository-plugins"],
     queryFn: () => client.listRepositoryPlugins(),
+  });
+}
+
+export function useUpdateRepositoryPluginPolicy() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ecosystem, input }: { ecosystem: string; input: UpdateRepositoryPluginPolicyInput }) =>
+      client.updateRepositoryPluginPolicy(ecosystem, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["repository-plugins"] }),
   });
 }
 

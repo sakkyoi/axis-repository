@@ -6,26 +6,32 @@ import {
   type GetPublishSessionInput,
   type ListPublishSessionsInput,
   NotFoundError,
+  PluginPolicyService,
   type PublishSession,
   PublishSessionService,
   type Repository,
   RepositoryService,
   type TokenPrincipal,
   type UpdateRepositoryInput,
+  ValidationError,
   type VerifyPublishUploadInput,
   type VerifyPublishUploadResult,
 } from "@axis-repository/core";
+import { getRepositoryPluginCatalogEntry } from "../../../plugins/catalog";
 import type { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
+import { ensureRepositoryPluginEnabled } from "./repository-plugin-policy";
 
 export class PluginRepositoryService {
   constructor(
     private readonly options: {
       repositoryService: RepositoryService;
       plugins: ArtifactPublisherRegistry;
+      pluginPolicyService: PluginPolicyService;
     },
   ) {}
 
-  create(input: CreateRepositoryInput): Promise<Repository> {
+  async create(input: CreateRepositoryInput): Promise<Repository> {
+    await this.ensurePluginEnabled(input.ecosystem);
     const plugin = this.options.plugins.requirePlugin(input.ecosystem);
     plugin.validateRepositoryConfig({
       ecosystem: input.ecosystem,
@@ -44,6 +50,7 @@ export class PluginRepositoryService {
 
   async update(name: string, input: UpdateRepositoryInput): Promise<Repository> {
     const current = await this.options.repositoryService.getByName(name);
+    await this.ensurePluginEnabled(current.ecosystem);
     const nextConfig = input.config ?? current.config;
     const plugin = this.options.plugins.requirePlugin(current.ecosystem);
     plugin.validateRepositoryConfig({
@@ -51,6 +58,14 @@ export class PluginRepositoryService {
       config: nextConfig,
     });
     return this.options.repositoryService.update(name, input);
+  }
+
+  private async ensurePluginEnabled(ecosystem: string): Promise<void> {
+    await ensureRepositoryPluginEnabled({
+      pluginPolicyService: this.options.pluginPolicyService,
+      ecosystem,
+      catalogEnabled: getRepositoryPluginCatalogEntry(ecosystem)?.enabled ?? true,
+    });
   }
 }
 
@@ -60,11 +75,13 @@ export class PluginPublishSessionService {
       publishSessionService: PublishSessionService;
       repositoryService: RepositoryService;
       plugins: ArtifactPublisherRegistry;
+      pluginPolicyService: PluginPolicyService;
     },
   ) {}
 
   async create(input: CreatePublishSessionInput): Promise<PublishSession> {
     const repository = await this.options.repositoryService.getByName(input.repositoryName);
+    await this.ensurePluginEnabled(repository.ecosystem);
     const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
     plugin.validatePublishArtifacts({
       repository,
@@ -80,6 +97,7 @@ export class PluginPublishSessionService {
 
   async createAsAdmin(input: Omit<CreatePublishSessionInput, "principal">): Promise<PublishSession> {
     const repository = await this.options.repositoryService.getByName(input.repositoryName);
+    await this.ensurePluginEnabled(repository.ecosystem);
     const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
     plugin.validatePublishArtifacts({
       repository,
@@ -117,13 +135,18 @@ export class PluginPublishSessionService {
 
   async finalizeAsAdmin(input: Omit<FinalizePublishSessionInput, "principal">): Promise<FinalizePublishSessionResult> {
     const session = await this.getExistingSession(input.sessionId);
+    const repository = await this.options.repositoryService.getByName(session.repositoryName);
+    await this.ensurePluginEnabled(repository.ecosystem);
     return this.options.publishSessionService.finalize({
       ...input,
-      principal: adminPublishPrincipal({ name: session.repositoryName, config: session.repositoryName ? {} : {} }),
+      principal: adminPublishPrincipal(repository),
     });
   }
 
-  finalize(input: FinalizePublishSessionInput): Promise<FinalizePublishSessionResult> {
+  async finalize(input: FinalizePublishSessionInput): Promise<FinalizePublishSessionResult> {
+    const session = await this.getExistingSession(input.sessionId);
+    const repository = await this.options.repositoryService.getByName(session.repositoryName);
+    await this.ensurePluginEnabled(repository.ecosystem);
     return this.options.publishSessionService.finalize(input);
   }
 
@@ -133,6 +156,14 @@ export class PluginPublishSessionService {
       throw new NotFoundError(`Publish session not found: ${sessionId}`);
     }
     return session;
+  }
+
+  private async ensurePluginEnabled(ecosystem: string): Promise<void> {
+    await ensureRepositoryPluginEnabled({
+      pluginPolicyService: this.options.pluginPolicyService,
+      ecosystem,
+      catalogEnabled: getRepositoryPluginCatalogEntry(ecosystem)?.enabled ?? true,
+    });
   }
 }
 

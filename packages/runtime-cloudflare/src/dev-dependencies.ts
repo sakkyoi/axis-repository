@@ -1,5 +1,6 @@
 import {
   MemoryStateStore,
+  PluginPolicyService,
   PublishSessionService,
   PublishTokenService,
   RepositoryService,
@@ -23,6 +24,7 @@ export interface AppDependencies {
   repositoryService: PluginRepositoryService;
   publishTokenService: PublishTokenService;
   publishSessionService: PluginPublishSessionService;
+  pluginPolicyService: PluginPolicyService;
   signingKeyService: SigningKeyService;
   repositoryObjectStore: RepositoryObjectStore;
   artifactPublisherRegistry: ArtifactPublisherRegistry;
@@ -67,6 +69,7 @@ export function createDevDependencyHarness(
   });
   const artifactPublisher = createDefaultArtifactPlugins({ objectStore, signingKeyService });
   const repositoryService = new RepositoryService({ state, clock, randomId });
+  const pluginPolicyService = new PluginPolicyService({ state });
   const publishSessionService = new PublishSessionService({
     state,
     uploadBroker,
@@ -82,13 +85,16 @@ export function createDevDependencyHarness(
       repositoryService: new PluginRepositoryService({
         repositoryService,
         plugins: artifactPublisher,
+        pluginPolicyService,
       }),
       publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
       publishSessionService: new PluginPublishSessionService({
         publishSessionService,
         repositoryService,
         plugins: artifactPublisher,
+        pluginPolicyService,
       }),
+      pluginPolicyService,
       signingKeyService,
       repositoryObjectStore: objectStore,
       artifactPublisherRegistry: artifactPublisher,

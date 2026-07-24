@@ -3,6 +3,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  RepositoryPluginPolicyRecord,
   SigningKeyRecord,
 } from "@axis-repository/core";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
@@ -263,5 +264,17 @@ describe("DurableStateStore", () => {
     await expect(state.signingKeys.getByName("release", "debian-staging")).resolves.toMatchObject({
       id: "signing_key_2",
     });
+  });
+
+  it("persists repository plugin policies by ecosystem and lists them sorted", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    const apt: RepositoryPluginPolicyRecord = { ecosystem: "apt", enabledOverride: false };
+    const pypi: RepositoryPluginPolicyRecord = { ecosystem: "pypi", enabledOverride: null };
+
+    await state.repositoryPluginPolicies.save(pypi);
+    await state.repositoryPluginPolicies.save(apt);
+
+    await expect(state.repositoryPluginPolicies.getByEcosystem("apt")).resolves.toEqual(apt);
+    await expect(state.repositoryPluginPolicies.list()).resolves.toEqual([apt, pypi]);
   });
 });

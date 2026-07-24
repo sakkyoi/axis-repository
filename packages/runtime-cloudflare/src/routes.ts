@@ -16,6 +16,10 @@ import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "../../
 import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "./admin-ui-assets";
 import type { AppDependencies } from "./dev-dependencies";
 import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "./http";
+import {
+  ensureRepositoryPluginEnabled as ensureEffectiveRepositoryPluginEnabled,
+  repositoryPluginPolicyFields,
+} from "./repository-plugin-policy";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;
@@ -58,13 +62,18 @@ function publicPublishToken(record: PublishTokenRecord): Omit<PublishTokenRecord
   return publicRecord;
 }
 
-function repositoryPluginMetadata(dependencies: AppDependencies) {
+async function repositoryPluginMetadata(dependencies: AppDependencies) {
   const registeredPlugins = dependencies.artifactPublisherRegistry.list();
   const registeredPluginsByEcosystem = new Map(
     registeredPlugins.map((plugin) => [plugin.ecosystem, plugin]),
   );
-  const catalogPlugins = repositoryPluginCatalog.map((catalogEntry) => {
+  const catalogPlugins = await Promise.all(repositoryPluginCatalog.map(async (catalogEntry) => {
     const plugin = registeredPluginsByEcosystem.get(catalogEntry.manifest.ecosystem);
+    const policy = await repositoryPluginPolicyFields({
+      pluginPolicyService: dependencies.pluginPolicyService,
+      ecosystem: catalogEntry.manifest.ecosystem,
+      catalogEnabled: catalogEntry.enabled,
+    });
     return {
       ecosystem: catalogEntry.manifest.ecosystem,
       name: catalogEntry.manifest.runtimeName,
@@ -79,26 +88,39 @@ function repositoryPluginMetadata(dependencies: AppDependencies) {
           }
         : {}),
       ...plugin,
-      enabled: catalogEntry.enabled,
+      ...policy,
       experimental: catalogEntry.experimental,
       runtime: catalogEntry.runtime,
       adminUi: catalogEntry.adminUi,
     };
-  });
+  }));
   const catalogEcosystems = new Set<string>(repositoryPluginCatalog.map((entry) => entry.manifest.ecosystem));
-  const uncatalogedPlugins = registeredPlugins
+  const uncatalogedPlugins = await Promise.all(registeredPlugins
     .filter((plugin) => !catalogEcosystems.has(plugin.ecosystem))
-    .map((plugin) => {
+    .map(async (plugin) => {
       const catalogEntry = getRepositoryPluginCatalogEntry(plugin.ecosystem);
+      const policy = await repositoryPluginPolicyFields({
+        pluginPolicyService: dependencies.pluginPolicyService,
+        ecosystem: plugin.ecosystem,
+        catalogEnabled: catalogEntry?.enabled ?? true,
+      });
       return {
         ...plugin,
-        enabled: catalogEntry?.enabled ?? true,
+        ...policy,
         experimental: catalogEntry?.experimental ?? false,
         runtime: catalogEntry?.runtime ?? true,
         adminUi: catalogEntry?.adminUi ?? false,
       };
-    });
+    }));
   return [...catalogPlugins, ...uncatalogedPlugins];
+}
+
+async function repositoryPluginMetadataByEcosystem(dependencies: AppDependencies, ecosystem: string) {
+  const plugin = (await repositoryPluginMetadata(dependencies)).find((candidate) => candidate.ecosystem === ecosystem);
+  if (!plugin) {
+    throw new NotFoundError(`Repository plugin not found: ${ecosystem}`);
+  }
+  return plugin;
 }
 
 function requiredStringValue(value: unknown, label: string): string {
@@ -410,6 +432,16 @@ function parseRepositoryUpdate(body: Record<string, unknown>): {
   };
 }
 
+function parseRepositoryPluginPolicyUpdate(body: Record<string, unknown>): boolean | null {
+  if (!Object.prototype.hasOwnProperty.call(body, "enabled")) {
+    throw new ValidationError("enabled must be boolean or null");
+  }
+  if (body.enabled === true || body.enabled === false || body.enabled === null) {
+    return body.enabled;
+  }
+  throw new ValidationError("enabled must be boolean or null");
+}
+
 function parseRepositoryClientHelperPath(requestUrl: string): {
   repositoryName: string;
   namespace: string;
@@ -470,6 +502,19 @@ function repositoryClientHelperContext(dependencies: AppDependencies, origin: st
       getPublicKey: (id: string) => dependencies.signingKeyService.getPublicKey(id),
     },
   };
+}
+
+async function ensureRepositoryPluginEnabled(
+  dependencies: AppDependencies,
+  ecosystem: string,
+  errorFactory: () => Error = () => new ValidationError(`Repository plugin is disabled: ${ecosystem}`),
+): Promise<void> {
+  await ensureEffectiveRepositoryPluginEnabled({
+    pluginPolicyService: dependencies.pluginPolicyService,
+    ecosystem,
+    catalogEnabled: getRepositoryPluginCatalogEntry(ecosystem)?.enabled ?? true,
+    errorFactory,
+  });
 }
 
 function parseAdminRepositoryClientHelperPath(pathname: string): {
@@ -533,11 +578,12 @@ function parseAdminRepositoryPluginResourcePath(requestUrl: string): {
   return { repositoryName, namespace, path };
 }
 
-function ensureRepositoryPathIsServable(
+async function ensureRepositoryPathIsServable(
   dependencies: AppDependencies,
   repository: Repository,
   relativePath: string,
-): void {
+): Promise<void> {
+  await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
   const plugin = dependencies.artifactPublisherRegistry.getPlugin(repository.ecosystem);
   if (!plugin?.canServeRepositoryPath({ relativePath })) {
     throw new NotFoundError();
@@ -622,7 +668,26 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (url.pathname === "/admin/repository-plugins") {
     requireAdmin(request, dependencies.adminToken);
     if (request.method === "GET") {
-      return jsonResponse({ plugins: repositoryPluginMetadata(dependencies) });
+      return jsonResponse({ plugins: await repositoryPluginMetadata(dependencies) });
+    }
+    throw new NotFoundError();
+  }
+  const adminRepositoryPluginEcosystem = parseAdminResourcePath(request.url, "repository-plugins");
+  if (adminRepositoryPluginEcosystem) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method === "PATCH") {
+      if (
+        !getRepositoryPluginCatalogEntry(adminRepositoryPluginEcosystem)
+        && !dependencies.artifactPublisherRegistry.getPlugin(adminRepositoryPluginEcosystem)
+      ) {
+        throw new NotFoundError(`Repository plugin not found: ${adminRepositoryPluginEcosystem}`);
+      }
+      const body = await readJsonObject(request);
+      await dependencies.pluginPolicyService.setEnabledOverride(
+        adminRepositoryPluginEcosystem,
+        parseRepositoryPluginPolicyUpdate(body),
+      );
+      return jsonResponse(await repositoryPluginMetadataByEcosystem(dependencies, adminRepositoryPluginEcosystem));
     }
     throw new NotFoundError();
   }
@@ -687,6 +752,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (adminClientHelperPath && request.method === "GET") {
     requireAdmin(request, dependencies.adminToken);
     const repository = await dependencies.repositoryService.getByName(adminClientHelperPath.repositoryName);
+    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     const helpers = repositoryClientHelpers(dependencies, repository, adminClientHelperPath.namespace);
     if (!helpers || !hasRepositoryClientHelperAction(helpers, adminClientHelperPath.action)) {
       throw new NotFoundError();
@@ -709,6 +775,9 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const plugin = repository
       ? dependencies.artifactPublisherRegistry.getPlugin(repository.ecosystem)
       : dependencies.artifactPublisherRegistry.getPluginByAdminResourceNamespace(adminPluginResourcePath.namespace);
+    if (plugin) {
+      await ensureRepositoryPluginEnabled(dependencies, plugin.ecosystem, () => new NotFoundError());
+    }
     const adminResources = plugin?.adminResources;
     if (!adminResources || adminResources.namespace !== adminPluginResourcePath.namespace) {
       throw new NotFoundError();
@@ -830,6 +899,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   const clientHelperPath = parseRepositoryClientHelperPath(request.url);
   if (clientHelperPath && request.method === "GET") {
     const repository = await dependencies.repositoryService.getByName(clientHelperPath.repositoryName);
+    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     const helpers = repositoryClientHelpers(dependencies, repository, clientHelperPath.namespace);
     if (helpers) {
       if (!hasRepositoryClientHelperAction(helpers, clientHelperPath.action)) {
@@ -849,7 +919,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (repositoryObjectPath && (request.method === "GET" || request.method === "HEAD")) {
     const { repositoryName, relativePath } = repositoryObjectPath;
     const repository = await dependencies.repositoryService.getByName(repositoryName);
-    ensureRepositoryPathIsServable(dependencies, repository, relativePath);
+    await ensureRepositoryPathIsServable(dependencies, repository, relativePath);
     await authorizeRepositoryRead(request, dependencies, repository);
     const objectKey = `repositories/${repositoryName}/${relativePath}`;
     const metadata = await dependencies.repositoryObjectStore.headObject(objectKey);

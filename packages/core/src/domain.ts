@@ -12,6 +12,11 @@ export interface Repository {
   updatedAt: string;
 }
 
+export interface RepositoryPluginPolicyRecord {
+  ecosystem: Ecosystem;
+  enabledOverride: boolean | null;
+}
+
 export interface EncryptedSecret {
   algorithm: "AES-GCM";
   iv: string;

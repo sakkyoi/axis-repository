@@ -33,6 +33,8 @@ export const repositoryPluginSchema = z.object({
   name: z.string(),
   version: z.string(),
   enabled: z.boolean().optional(),
+  catalogEnabled: z.boolean().optional(),
+  enabledOverride: z.boolean().nullable().optional(),
   experimental: z.boolean().optional(),
   runtime: z.boolean().optional(),
   adminUi: z.boolean().optional(),

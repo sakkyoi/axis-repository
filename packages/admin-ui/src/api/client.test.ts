@@ -64,6 +64,8 @@ describe("admin API schemas", () => {
       name: "apt-signed",
       version: "0.1.0",
       enabled: true,
+      catalogEnabled: true,
+      enabledOverride: null,
       experimental: false,
       runtime: true,
       adminUi: true,
@@ -91,6 +93,11 @@ describe("admin API schemas", () => {
         public: true,
       },
     ]);
+    expect(plugin).toMatchObject({
+      enabled: true,
+      catalogEnabled: true,
+      enabledOverride: null,
+    });
   });
 
   it("parses publish session responses", () => {
@@ -253,6 +260,8 @@ describe("createAxisClient", () => {
               name: "apt-signed",
               version: "0.1.0",
               enabled: true,
+              catalogEnabled: true,
+              enabledOverride: null,
               experimental: false,
               runtime: true,
               adminUi: true,
@@ -285,10 +294,55 @@ describe("createAxisClient", () => {
     expect(plugins.map((plugin) => plugin.ecosystem)).toEqual(["apt"]);
     expect(plugins[0]).toMatchObject({
       enabled: true,
+      catalogEnabled: true,
+      enabledOverride: null,
       experimental: false,
       runtime: true,
       adminUi: true,
     });
+  });
+
+  it("updates repository plugin policy overrides through the admin endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: Array<{ method: string; url: string; data: unknown }> = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push({
+        method: config.method?.toUpperCase() ?? "",
+        url: config.url ?? "",
+        data: config.data ? JSON.parse(String(config.data)) : undefined,
+      });
+      return {
+        data: {
+          ecosystem: "apt",
+          name: "apt-signed",
+          version: "0.1.0",
+          enabled: false,
+          catalogEnabled: true,
+          enabledOverride: false,
+          experimental: false,
+          runtime: true,
+          adminUi: true,
+          capabilities: ["signed-release"],
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.updateRepositoryPluginPolicy("apt", { enabled: false }))
+      .resolves.toMatchObject({ ecosystem: "apt", enabled: false, enabledOverride: false });
+    expect(requests).toEqual([
+      {
+        method: "PATCH",
+        url: "/admin/repository-plugins/apt",
+        data: { enabled: false },
+      },
+    ]);
   });
 
   it("uses a generic admin-scoped endpoint for repository client helpers", async () => {

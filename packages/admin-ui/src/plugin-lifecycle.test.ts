@@ -12,6 +12,8 @@ function plugin(input: Partial<RepositoryPlugin> & Pick<RepositoryPlugin, "ecosy
     name: input.name ?? `${input.ecosystem}-plugin`,
     version: input.version ?? "0.1.0",
     enabled: input.enabled,
+    catalogEnabled: input.catalogEnabled,
+    enabledOverride: input.enabledOverride,
     experimental: input.experimental,
     runtime: input.runtime,
     adminUi: input.adminUi,
@@ -66,6 +68,8 @@ describe("plugin lifecycle UI model", () => {
         name: "apt-signed",
         version: "0.1.0",
         enabled: true,
+        catalogEnabled: true,
+        enabledOverride: false,
         experimental: false,
         runtime: true,
         adminUi: true,
@@ -87,17 +91,35 @@ describe("plugin lifecycle UI model", () => {
         capabilities: ["signed-release"],
         clientHelperSummary: "apt: install",
         lifecycle: {
-          availability: "available",
-          label: "Available",
-          description: "Runtime and admin UI support are enabled.",
-          variant: "success",
+          availability: "disabled",
+          label: "Disabled",
+          description: "Admin policy disables this plugin.",
+          variant: "destructive",
         },
+        policySummary: "Override: disabled",
+        canResetPolicy: true,
         badges: [
-          { label: "Available", variant: "success" },
+          { label: "Disabled", variant: "destructive" },
           { label: "Runtime", variant: "default" },
           { label: "Admin UI", variant: "default" },
         ],
       },
     ]);
+  });
+
+  it("describes inherited plugin policy defaults", () => {
+    const rows = repositoryPluginStatusRows([
+      plugin({
+        ecosystem: "pypi",
+        enabled: true,
+        catalogEnabled: true,
+        enabledOverride: null,
+      }),
+    ]);
+
+    expect(rows[0]).toMatchObject({
+      policySummary: "Default: enabled",
+      canResetPolicy: false,
+    });
   });
 });

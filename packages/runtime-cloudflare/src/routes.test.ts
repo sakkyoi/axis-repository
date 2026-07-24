@@ -470,6 +470,8 @@ describe("Cloudflare runtime routes", () => {
           name: "apt-signed",
           version: "0.1.0",
           enabled: true,
+          catalogEnabled: true,
+          enabledOverride: null,
           experimental: false,
           runtime: true,
           adminUi: true,
@@ -506,6 +508,8 @@ describe("Cloudflare runtime routes", () => {
           name: "pypi-simple",
           version: "0.1.0",
           enabled: true,
+          catalogEnabled: true,
+          enabledOverride: null,
           experimental: true,
           runtime: true,
           adminUi: true,
@@ -526,6 +530,174 @@ describe("Cloudflare runtime routes", () => {
         },
       ],
     });
+  });
+
+  it("updates repository plugin policy overrides through admin routes", async () => {
+    const app = createApp();
+
+    const disableResponse = await app.fetch(
+      new Request("https://axis.example/admin/repository-plugins/apt", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ enabled: false }),
+      }),
+    );
+
+    expect(disableResponse.status).toBe(200);
+    await expect(disableResponse.json()).resolves.toMatchObject({
+      ecosystem: "apt",
+      enabled: false,
+      catalogEnabled: true,
+      enabledOverride: false,
+    });
+
+    const listResponse = await app.fetch(
+      new Request("https://axis.example/admin/repository-plugins", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(listResponse.status).toBe(200);
+    const listBody = (await listResponse.json()) as { plugins: Array<Record<string, unknown>> };
+    expect(listBody.plugins).toEqual(expect.arrayContaining([
+      expect.objectContaining(
+        {
+          ecosystem: "apt",
+          enabled: false,
+          catalogEnabled: true,
+          enabledOverride: false,
+        },
+      ),
+      ]));
+
+    const resetResponse = await app.fetch(
+      new Request("https://axis.example/admin/repository-plugins/apt", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ enabled: null }),
+      }),
+    );
+
+    expect(resetResponse.status).toBe(200);
+    await expect(resetResponse.json()).resolves.toMatchObject({
+      ecosystem: "apt",
+      enabled: true,
+      catalogEnabled: true,
+      enabledOverride: null,
+    });
+  });
+
+  it("allows policy overrides for uncataloged runtime plugins reported in repository plugin metadata", async () => {
+    const harness = createDevDependencyHarness();
+    harness.dependencies.artifactPublisherRegistry.register({
+      ecosystem: "demo",
+      name: "demo-plugin",
+      version: "0.1.0",
+      capabilities: ["admin-resources"],
+      publisher: { publish: async () => ({ publishedAt: "2026-07-23T00:00:00.000Z", objects: [] }) },
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      authorizePublish: () => {},
+    });
+    const app = createApp(harness.dependencies);
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repository-plugins/demo", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ enabled: false }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ecosystem: "demo",
+      enabled: false,
+      catalogEnabled: true,
+      enabledOverride: false,
+    });
+  });
+
+  it("fails closed for repository creation when a plugin is disabled by policy", async () => {
+    const app = createApp();
+
+    await app.fetch(
+      new Request("https://axis.example/admin/repository-plugins/apt", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ enabled: false }),
+      }),
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-internal",
+          ecosystem: "apt",
+          visibility: "private",
+          config: validAptConfig(),
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Repository plugin is disabled: apt",
+      },
+    });
+  });
+
+  it("fails closed for repository object serving when a plugin is disabled by policy", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+      config: validAptConfig(),
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/dists/noble/Release",
+      "Origin: Axis\n",
+      "text/plain; charset=utf-8",
+    );
+
+    await app.fetch(
+      new Request("https://axis.example/admin/repository-plugins/apt", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ enabled: false }),
+      }),
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/dists/noble/Release"),
+    );
+
+    expect(response.status).toBe(404);
   });
 
   it("dispatches admin repository plugin resources through the repository plugin", async () => {

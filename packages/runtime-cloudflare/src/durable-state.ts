@@ -2,6 +2,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  RepositoryPluginPolicyRecord,
   SigningKeyRecord,
   StateStore,
 } from "@axis-repository/core";
@@ -19,6 +20,7 @@ const tokenKey = (id: string) => `publish-token:${id}`;
 const tokenNameKey = (name: string) => `publish-token-name:${name}`;
 const signingKeyKey = (id: string) => `signing-key:${id}`;
 const signingKeyNameKey = (repositoryName: string, name: string) => `signing-key-name:${repositoryName}:${name}`;
+const repositoryPluginPolicyKey = (ecosystem: string) => `repository-plugin-policy:${ecosystem}`;
 
 function clonePublishSession(session: PublishSession): PublishSession {
   return JSON.parse(JSON.stringify(session)) as PublishSession;
@@ -170,6 +172,23 @@ export class DurableStateStore implements StateStore {
 
       await this.storage.put(signingKeyKey(record.id), record);
       await this.storage.put(signingKeyNameKey(record.repositoryName, record.name), record.id);
+    },
+  };
+
+  readonly repositoryPluginPolicies = {
+    getByEcosystem: async (ecosystem: string): Promise<RepositoryPluginPolicyRecord | null> => {
+      return (await this.storage.get<RepositoryPluginPolicyRecord>(repositoryPluginPolicyKey(ecosystem))) ?? null;
+    },
+    list: async (): Promise<RepositoryPluginPolicyRecord[]> => {
+      const values = await this.storage.list<RepositoryPluginPolicyRecord>({
+        prefix: "repository-plugin-policy:",
+      });
+      return [...values.values()].sort((left, right) =>
+        left.ecosystem.localeCompare(right.ecosystem),
+      );
+    },
+    save: async (record: RepositoryPluginPolicyRecord): Promise<void> => {
+      await this.storage.put(repositoryPluginPolicyKey(record.ecosystem), record);
     },
   };
 }

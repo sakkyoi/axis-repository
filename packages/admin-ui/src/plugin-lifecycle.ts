@@ -22,15 +22,20 @@ export interface RepositoryPluginStatusRow {
   capabilities: string[];
   clientHelperSummary: string;
   lifecycle: PluginLifecycleSummary;
+  policySummary: string;
+  canResetPolicy: boolean;
   badges: PluginLifecycleBadge[];
 }
 
 export function pluginLifecycleSummary(plugin: RepositoryPlugin): PluginLifecycleSummary {
-  if (plugin.enabled === false) {
+  if (plugin.enabledOverride === false || plugin.enabled === false) {
+    const description = plugin.enabledOverride === false
+      ? "Admin policy disables this plugin."
+      : "Catalog policy disables this plugin.";
     return {
       availability: "disabled",
       label: "Disabled",
-      description: "Catalog policy disables this plugin.",
+      description,
       variant: "destructive",
     };
   }
@@ -80,6 +85,16 @@ function clientHelperSummary(plugin: RepositoryPlugin): string {
   return `${plugin.clientHelpers.namespace}: ${plugin.clientHelpers.actions.map((action) => action.name).join(", ")}`;
 }
 
+function policySummary(plugin: RepositoryPlugin): string {
+  if (plugin.enabledOverride === true) {
+    return "Override: enabled";
+  }
+  if (plugin.enabledOverride === false) {
+    return "Override: disabled";
+  }
+  return `Default: ${plugin.catalogEnabled === false ? "disabled" : "enabled"}`;
+}
+
 export function repositoryPluginStatusRows(plugins: RepositoryPlugin[]): RepositoryPluginStatusRow[] {
   return plugins.map((plugin) => ({
     ecosystem: plugin.ecosystem,
@@ -88,6 +103,8 @@ export function repositoryPluginStatusRows(plugins: RepositoryPlugin[]): Reposit
     capabilities: [...plugin.capabilities],
     clientHelperSummary: clientHelperSummary(plugin),
     lifecycle: pluginLifecycleSummary(plugin),
+    policySummary: policySummary(plugin),
+    canResetPolicy: plugin.enabledOverride !== undefined && plugin.enabledOverride !== null,
     badges: pluginLifecycleBadges(plugin),
   }));
 }

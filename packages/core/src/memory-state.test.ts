@@ -3,6 +3,7 @@ import {
   MemoryStateStore,
   type PublishSession,
   type PublishTokenRecord,
+  type RepositoryPluginPolicyRecord,
   type SigningKeyRecord,
 } from "./index";
 
@@ -215,5 +216,19 @@ describe("MemoryStateStore signing keys", () => {
     await expect(state.signingKeys.getByName("release", "debian-staging")).resolves.toMatchObject({
       id: "signing_key_2",
     });
+  });
+});
+
+describe("MemoryStateStore repository plugin policies", () => {
+  it("persists plugin policies by ecosystem and lists them sorted", async () => {
+    const state = new MemoryStateStore();
+    const apt: RepositoryPluginPolicyRecord = { ecosystem: "apt", enabledOverride: false };
+    const pypi: RepositoryPluginPolicyRecord = { ecosystem: "pypi", enabledOverride: null };
+
+    await state.repositoryPluginPolicies.save(pypi);
+    await state.repositoryPluginPolicies.save(apt);
+
+    await expect(state.repositoryPluginPolicies.getByEcosystem("apt")).resolves.toEqual(apt);
+    await expect(state.repositoryPluginPolicies.list()).resolves.toEqual([apt, pypi]);
   });
 });

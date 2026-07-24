@@ -1,4 +1,10 @@
-import type { PublishSession, PublishTokenRecord, Repository, SigningKeyRecord } from "./domain";
+import type {
+  PublishSession,
+  PublishTokenRecord,
+  Repository,
+  RepositoryPluginPolicyRecord,
+  SigningKeyRecord,
+} from "./domain";
 import type { StateStore } from "./ports";
 
 function clonePublishSession(session: PublishSession): PublishSession {
@@ -12,6 +18,7 @@ export class MemoryStateStore implements StateStore {
   private readonly publishTokenIdByName = new Map<string, string>();
   private readonly signingKeyById = new Map<string, SigningKeyRecord>();
   private readonly signingKeyIdByName = new Map<string, string>();
+  private readonly repositoryPluginPolicyByEcosystem = new Map<string, RepositoryPluginPolicyRecord>();
 
   readonly repositories = {
     getByName: async (name: string): Promise<Repository | null> => {
@@ -122,6 +129,20 @@ export class MemoryStateStore implements StateStore {
 
       this.signingKeyById.set(record.id, record);
       this.signingKeyIdByName.set(nameIndex, record.id);
+    },
+  };
+
+  readonly repositoryPluginPolicies = {
+    getByEcosystem: async (ecosystem: string): Promise<RepositoryPluginPolicyRecord | null> => {
+      return this.repositoryPluginPolicyByEcosystem.get(ecosystem) ?? null;
+    },
+    list: async (): Promise<RepositoryPluginPolicyRecord[]> => {
+      return [...this.repositoryPluginPolicyByEcosystem.values()].sort((left, right) =>
+        left.ecosystem.localeCompare(right.ecosystem),
+      );
+    },
+    save: async (record: RepositoryPluginPolicyRecord): Promise<void> => {
+      this.repositoryPluginPolicyByEcosystem.set(record.ecosystem, record);
     },
   };
 }

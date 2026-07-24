@@ -7,6 +7,7 @@ import {
   publishTokenCreateResponseSchema,
   publishTokenSchema,
   publishTokensResponseSchema,
+  repositoryPluginSchema,
   repositoryPluginsResponseSchema,
   repositoriesResponseSchema,
   repositorySchema,
@@ -40,6 +41,10 @@ export interface UpdateRepositoryInput {
   config?: Record<string, unknown>;
 }
 
+export interface UpdateRepositoryPluginPolicyInput {
+  enabled: boolean | null;
+}
+
 export interface CreateAdminPublishSessionInput {
   repositoryName: string;
   ecosystem: string;
@@ -50,6 +55,7 @@ export interface AxisClient {
   http: AxiosInstance;
   verifyAdminToken(): Promise<void>;
   listRepositoryPlugins(): Promise<RepositoryPlugin[]>;
+  updateRepositoryPluginPolicy(ecosystem: string, input: UpdateRepositoryPluginPolicyInput): Promise<RepositoryPlugin>;
   listRepositories(): Promise<Repository[]>;
   createRepository(input: CreateRepositoryInput): Promise<Repository>;
   getRepository(name: string): Promise<Repository>;
@@ -93,6 +99,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async listRepositoryPlugins() {
       const response = await http.get("/admin/repository-plugins");
       return repositoryPluginsResponseSchema.parse(response.data).plugins;
+    },
+    async updateRepositoryPluginPolicy(ecosystem: string, input: UpdateRepositoryPluginPolicyInput) {
+      const response = await http.patch(`/admin/repository-plugins/${encodePathSegment(ecosystem)}`, input);
+      return repositoryPluginSchema.parse(response.data);
     },
     async createRepository(input: CreateRepositoryInput) {
       const response = await http.post("/admin/repositories", input);

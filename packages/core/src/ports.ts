@@ -9,6 +9,7 @@ import type {
   PublishArtifactRequest,
   PublishArtifactsInput,
   PublishResult,
+  RepositoryPluginPolicyRecord,
 } from "./domain";
 
 export interface Clock {
@@ -115,6 +116,12 @@ export interface SigningKeyStore {
   save(record: SigningKeyRecord): Promise<void>;
 }
 
+export interface RepositoryPluginPolicyStore {
+  getByEcosystem(ecosystem: string): Promise<RepositoryPluginPolicyRecord | null>;
+  list(): Promise<RepositoryPluginPolicyRecord[]>;
+  save(record: RepositoryPluginPolicyRecord): Promise<void>;
+}
+
 export interface TokenVerifier {
   verifyPublishToken(token: string): Promise<TokenPrincipal | null>;
 }
@@ -124,4 +131,5 @@ export interface StateStore {
   publishSessions: PublishSessionStore;
   publishTokens: PublishTokenStore;
   signingKeys: SigningKeyStore;
+  repositoryPluginPolicies: RepositoryPluginPolicyStore;
 }
