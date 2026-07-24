@@ -17,7 +17,7 @@ export const pypiRepositoryDetailPlugin: RepositoryDetailPlugin = {
     { id: "settings", title: "PyPI settings", placement: "settings", Component: PypiSettingsSection },
     { id: "publish-sessions", title: "Publish sessions", placement: "workspace", Component: PypiPublishSessionsSection },
     { id: "client-helpers", title: "PyPI client setup", placement: "workspace", Component: RepositoryClientHelpersSection },
-    { id: "install-hints", title: "Install hints", placement: "workspace", Component: PypiInstallHintsSection },
+    { id: "install-hints", title: "Install hints", placement: "workspace", summary: true, Component: PypiInstallHintsSection },
   ],
 };
 

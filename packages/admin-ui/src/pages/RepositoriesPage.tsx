@@ -7,8 +7,9 @@ import { useRepositories, useRepositoryPlugins } from "../api/hooks";
 import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { ADMIN_UI_PATHS, repositorySettingsPath, repositoryWorkspacePath } from "../navigation";
 import { pluginLifecycleSummary } from "../plugin-lifecycle";
+import { repositorySummarySectionsFor } from "../repository-detail-plugins";
+import { RepositoryDetailSections } from "../repository-detail-shared";
 import { repositoryDetailBodyClass, repositoryRowStateClass, repositorySummaryItems } from "../repository-page-model";
-import { RepositoryClientHelperSetup } from "../repository-detail-shared";
 import { EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 export function RepositoriesPage() {
@@ -112,6 +113,7 @@ function RepositoryDetail({
   const navigate = useNavigate();
   const lifecycle = pluginMetadata ? pluginLifecycleSummary(pluginMetadata) : undefined;
   const summaryItems = repositorySummaryItems(repository);
+  const summarySections = repositorySummarySectionsFor(repository.ecosystem);
 
   return (
     <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
@@ -135,12 +137,12 @@ function RepositoryDetail({
             Settings
           </Button>
         </div>
-        {pluginMetadata?.clientHelpers && pluginMetadata.clientHelpers.actions.length > 0 && (
-          <div className="grid gap-2 rounded-md border border-border bg-background/40 p-3">
-            <h3 className="text-sm font-semibold">Client setup</h3>
-            <RepositoryClientHelperSetup
-              repositoryName={repository.name}
-              clientHelpers={pluginMetadata.clientHelpers}
+        {summarySections.length > 0 && (
+          <div className="grid gap-3 rounded-md border border-border bg-background/40 p-3">
+            <RepositoryDetailSections
+              repository={repository}
+              pluginMetadata={pluginMetadata}
+              sections={summarySections}
             />
           </div>
         )}

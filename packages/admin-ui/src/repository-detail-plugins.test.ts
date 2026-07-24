@@ -3,6 +3,7 @@ import {
   genericRepositoryDetailSections,
   getRepositoryDetailPlugin,
   repositorySettingsSectionsFor,
+  repositorySummarySectionsFor,
   repositoryWorkspaceSectionsFor,
   repositoryClientHelperDisplayText,
   repositoryDetailPlugins,
@@ -80,6 +81,12 @@ describe("repository detail plugins", () => {
     expect(repositorySettingsSectionsFor("pypi").map((section) => section.id)).toEqual([
       "settings",
     ]);
+  });
+
+  it("lets plugins choose sections for the readonly repository summary", () => {
+    expect(repositorySummarySectionsFor("apt").map((section) => section.id)).toEqual(["client-helpers"]);
+    expect(repositorySummarySectionsFor("pypi").map((section) => section.id)).toEqual(["install-hints"]);
+    expect(repositorySummarySectionsFor("unknown").map((section) => section.id)).toEqual([]);
   });
 
   it("builds PyPI client setup text from a repository", () => {

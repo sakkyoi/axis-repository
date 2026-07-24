@@ -33,6 +33,10 @@ export function repositoryWorkspaceSectionsFor(ecosystem: string): RepositoryDet
   return repositoryDetailSectionsFor(ecosystem).filter((section) => section.placement === "workspace");
 }
 
+export function repositorySummarySectionsFor(ecosystem: string): RepositoryDetailSection[] {
+  return repositoryDetailSectionsFor(ecosystem).filter((section) => section.summary === true);
+}
+
 export function repositorySettingsSectionsFor(ecosystem: string): RepositoryDetailSection[] {
   return repositoryDetailSectionsFor(ecosystem).filter((section) => section.placement === "settings");
 }
