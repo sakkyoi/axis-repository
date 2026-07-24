@@ -137,9 +137,15 @@ export class PluginPublishSessionService {
     const session = await this.getExistingSession(input.sessionId);
     const repository = await this.options.repositoryService.getByName(session.repositoryName);
     await this.ensurePluginEnabled(repository.ecosystem);
+    const principal = adminPublishPrincipal(repository);
+    this.options.plugins.requirePlugin(repository.ecosystem).authorizePublish({
+      repository,
+      principal,
+      artifacts: session.artifacts,
+    });
     return this.options.publishSessionService.finalize({
       ...input,
-      principal: adminPublishPrincipal(repository),
+      principal,
     });
   }
 
@@ -147,6 +153,11 @@ export class PluginPublishSessionService {
     const session = await this.getExistingSession(input.sessionId);
     const repository = await this.options.repositoryService.getByName(session.repositoryName);
     await this.ensurePluginEnabled(repository.ecosystem);
+    this.options.plugins.requirePlugin(repository.ecosystem).authorizePublish({
+      repository,
+      principal: input.principal,
+      artifacts: session.artifacts,
+    });
     return this.options.publishSessionService.finalize(input);
   }
 
