@@ -8,6 +8,7 @@ import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { ADMIN_UI_PATHS, repositorySettingsPath, repositoryWorkspacePath } from "../navigation";
 import { pluginLifecycleSummary } from "../plugin-lifecycle";
 import { repositoryDetailBodyClass, repositoryRowStateClass, repositorySummaryItems } from "../repository-page-model";
+import { RepositoryClientHelperSetup } from "../repository-detail-shared";
 import { EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 export function RepositoriesPage() {
@@ -137,18 +138,10 @@ function RepositoryDetail({
         {pluginMetadata?.clientHelpers && pluginMetadata.clientHelpers.actions.length > 0 && (
           <div className="grid gap-2 rounded-md border border-border bg-background/40 p-3">
             <h3 className="text-sm font-semibold">Client setup</h3>
-            <div className="grid gap-1">
-              {pluginMetadata.clientHelpers.actions.map((action) => (
-                <button
-                  key={action.name}
-                  type="button"
-                  className="rounded-md px-2 py-1 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  onClick={() => navigate(repositoryWorkspacePath(repository.name))}
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
+            <RepositoryClientHelperSetup
+              repositoryName={repository.name}
+              clientHelpers={pluginMetadata.clientHelpers}
+            />
           </div>
         )}
         <div className="grid gap-3">
