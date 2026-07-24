@@ -34,6 +34,9 @@ const forbiddenWorkspaceDependencies: Record<keyof typeof packageDirs, string[]>
 };
 
 const pluginImplementationImportPattern = /(?:^|[\\/])plugins[\\/][^\\/]+[\\/](?:runtime|admin-ui)(?:[\\/]|$)/;
+const runtimePluginImplementationImportPattern = /(?:^|[\\/])plugins[\\/][^\\/]+[\\/]runtime(?:[\\/]|$)/;
+const adminUiPluginImplementationImportPattern = /(?:^|[\\/])plugins[\\/][^\\/]+[\\/]admin-ui(?:[\\/]|$)/;
+const sourceImportPattern = /(?:import|export)\s+(?:type\s+)?(?:[^"']*\s+from\s+)?["']([^"']+)["']/g;
 
 function readPackageJson(packageDir: string): PackageJson {
   return JSON.parse(readFileSync(path.join(rootDir, packageDir, "package.json"), "utf8")) as PackageJson;
@@ -55,7 +58,6 @@ function listSourceFiles(dir: string): string[] {
 }
 
 function assertOnlyUsesExportedPackageSubpaths(filePath: string, source: string) {
-  const importPattern = /(?:import|export)\s+(?:type\s+)?(?:[^"']*\s+from\s+)?["'](@axis-repository\/[^"']+)["']/g;
   const allowedImports = new Set([
     "@axis-repository/admin-ui/plugin-ui",
     "@axis-repository/core",
@@ -64,10 +66,19 @@ function assertOnlyUsesExportedPackageSubpaths(filePath: string, source: string)
     "@axis-repository/runtime-cloudflare/plugin-runtime/testing",
   ]);
 
-  for (const match of source.matchAll(importPattern)) {
+  for (const match of source.matchAll(sourceImportPattern)) {
     const specifier = match[1];
+    if (!specifier?.startsWith("@axis-repository/")) {
+      continue;
+    }
     expect(allowedImports, `${filePath} imports non-public package entrypoint ${specifier}`).toContain(specifier);
   }
+}
+
+function importSpecifiers(source: string): string[] {
+  return Array.from(source.matchAll(sourceImportPattern), (match) => match[1]).filter((specifier): specifier is string =>
+    Boolean(specifier),
+  );
 }
 
 describe("package boundaries", () => {
@@ -120,11 +131,11 @@ describe("package boundaries", () => {
   test("plugin implementation imports stay centralized in registries and tests", () => {
     const packageSourceFiles = Object.values(packageDirs).flatMap((packageDir) => listSourceFiles(`${packageDir}/src`));
     const allowedImporters = new Set([
-      path.normalize("packages/runtime-cloudflare/src/default-plugins.ts"),
-      path.normalize("packages/admin-ui/src/repository-ui-plugins.ts"),
+      path.normalize("plugins/runtime.ts"),
+      path.normalize("plugins/admin-ui.ts"),
     ]);
 
-    for (const filePath of packageSourceFiles) {
+    for (const filePath of [...packageSourceFiles, ...listSourceFiles("plugins")]) {
       const normalizedPath = path.normalize(filePath);
       const source = readFileSync(path.join(rootDir, filePath), "utf8");
       if (!pluginImplementationImportPattern.test(source)) {
@@ -138,6 +149,50 @@ describe("package boundaries", () => {
     }
   });
 
+  test("host registries load plugins from plugin registry entrypoints", () => {
+    const runtimeRegistrySource = readFileSync(
+      path.join(rootDir, "packages/runtime-cloudflare/src/default-plugins.ts"),
+      "utf8",
+    );
+    const adminUiRegistrySource = readFileSync(
+      path.join(rootDir, "packages/admin-ui/src/repository-ui-plugins.ts"),
+      "utf8",
+    );
+
+    expect(importSpecifiers(runtimeRegistrySource)).toContain("../../../plugins/runtime");
+    expect(importSpecifiers(adminUiRegistrySource)).toContain("../../../plugins/admin-ui");
+    expect(runtimeRegistrySource).not.toMatch(pluginImplementationImportPattern);
+    expect(adminUiRegistrySource).not.toMatch(pluginImplementationImportPattern);
+  });
+
+  test("plugin catalog is the shared source for enabled ecosystem metadata", () => {
+    for (const catalogPath of ["plugins/catalog.ts", "plugins/runtime.ts", "plugins/admin-ui.ts"]) {
+      expect(existsSync(path.join(rootDir, catalogPath)), `${catalogPath} must exist`).toBe(true);
+    }
+
+    const catalogSource = readFileSync(path.join(rootDir, "plugins/catalog.ts"), "utf8");
+    const runtimePluginRegistrySource = readFileSync(path.join(rootDir, "plugins/runtime.ts"), "utf8");
+    const adminUiPluginRegistrySource = readFileSync(path.join(rootDir, "plugins/admin-ui.ts"), "utf8");
+    expect(catalogSource).toContain("repositoryPluginCatalog");
+    expect(catalogSource).toContain("aptPluginManifest");
+    expect(catalogSource).toContain("pypiPluginManifest");
+    expect(catalogSource).not.toMatch(pluginImplementationImportPattern);
+    expect(runtimePluginRegistrySource).toContain("./catalog");
+    expect(adminUiPluginRegistrySource).toContain("./catalog");
+  });
+
+  test("plugin runtime and admin UI registries do not import each other's implementations", () => {
+    const runtimePluginRegistrySource = readFileSync(path.join(rootDir, "plugins/runtime.ts"), "utf8");
+    const adminUiPluginRegistrySource = readFileSync(path.join(rootDir, "plugins/admin-ui.ts"), "utf8");
+    const runtimeImports = importSpecifiers(runtimePluginRegistrySource);
+    const adminUiImports = importSpecifiers(adminUiPluginRegistrySource);
+
+    expect(runtimeImports.some((specifier) => /^\.\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(true);
+    expect(runtimeImports.some((specifier) => /^\.\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(false);
+    expect(adminUiImports.some((specifier) => /^\.\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(true);
+    expect(adminUiImports.some((specifier) => /^\.\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(false);
+  });
+
   test("plugin authoring guide documents the enforced contract", () => {
     const guidePath = path.join(rootDir, "docs/plugin-authoring.md");
 
@@ -147,8 +202,9 @@ describe("package boundaries", () => {
     expect(guide).toContain("@axis-repository/core/plugin-manifests");
     expect(guide).toContain("@axis-repository/runtime-cloudflare/plugin-runtime");
     expect(guide).toContain("@axis-repository/admin-ui/plugin-ui");
-    expect(guide).toContain("packages/runtime-cloudflare/src/default-plugins.ts");
-    expect(guide).toContain("packages/admin-ui/src/repository-ui-plugins.ts");
+    expect(guide).toContain("plugins/catalog.ts");
+    expect(guide).toContain("plugins/runtime.ts");
+    expect(guide).toContain("plugins/admin-ui.ts");
     expect(guide).toContain("pnpm test");
   });
 

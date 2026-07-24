@@ -10,14 +10,12 @@ import type {
   RepositoryPublishPlugin,
   RepositoryUiPlugin,
 } from "./repository-ui-plugin-types";
-import { aptRepositoryUiPlugin } from "../../../plugins/apt/admin-ui";
-import { pypiRepositoryUiPlugin } from "../../../plugins/pypi/admin-ui";
+import { repositoryAdminUiPlugins } from "../../../plugins/admin-ui";
 
 type NonEmptyArray<T> = [T, ...T[]];
 
 export const repositoryUiPlugins = [
-  aptRepositoryUiPlugin,
-  pypiRepositoryUiPlugin,
+  ...repositoryAdminUiPlugins,
 ] satisfies NonEmptyArray<RepositoryUiPlugin>;
 
 function getRepositoryUiPlugin(ecosystem: string): RepositoryUiPlugin | undefined {

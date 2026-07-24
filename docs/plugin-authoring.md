@@ -87,7 +87,9 @@ Runtime plugins own:
 - repository path serving rules
 
 Runtime plugins are registered only in
-`packages/runtime-cloudflare/src/default-plugins.ts`. Do not import plugin
+`plugins/runtime.ts`, and enabled ecosystem metadata is listed in
+`plugins/catalog.ts`. The Cloudflare Worker host loads runtime plugins through
+`packages/runtime-cloudflare/src/default-plugins.ts`; do not import plugin
 runtime implementations from routes, services, or other runtime modules.
 
 Runtime tests may use
@@ -110,6 +112,8 @@ Admin UI plugins may provide:
 - server error mapping for create flows
 
 Admin UI plugins are registered only in
+`plugins/admin-ui.ts`, and enabled ecosystem metadata is listed in
+`plugins/catalog.ts`. The admin UI host loads UI plugins through
 `packages/admin-ui/src/repository-ui-plugins.ts`. Pages and shared UI modules
 should ask the registry for plugin behavior instead of importing plugin
 implementations directly.
@@ -119,10 +123,11 @@ implementations directly.
 1. Add `plugins/<ecosystem>/manifest.ts`.
 2. Add runtime behavior under `plugins/<ecosystem>/runtime/`.
 3. Add admin UI behavior under `plugins/<ecosystem>/admin-ui/` if needed.
-4. Register runtime behavior in `packages/runtime-cloudflare/src/default-plugins.ts`.
-5. Register admin UI behavior in `packages/admin-ui/src/repository-ui-plugins.ts`.
-6. Add focused tests beside the new plugin code.
-7. Run:
+4. Add the ecosystem manifest to `plugins/catalog.ts`.
+5. Wire runtime behavior in `plugins/runtime.ts`.
+6. Wire admin UI behavior in `plugins/admin-ui.ts`.
+7. Add focused tests beside the new plugin code.
+8. Run:
 
 ```bash
 pnpm test

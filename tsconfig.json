@@ -6,5 +6,5 @@
     "noEmit": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["plugins/*/manifest.ts", "vitest.config.ts"]
+  "include": ["plugins/catalog.ts", "plugins/*/manifest.ts", "vitest.config.ts"]
 }

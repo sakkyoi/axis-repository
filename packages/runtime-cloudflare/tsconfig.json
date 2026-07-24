@@ -3,5 +3,11 @@
   "compilerOptions": {
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*.ts", "../../plugins/*/manifest.ts", "../../plugins/*/runtime/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "../../plugins/catalog.ts",
+    "../../plugins/runtime.ts",
+    "../../plugins/*/manifest.ts",
+    "../../plugins/*/runtime/**/*.ts"
+  ]
 }
