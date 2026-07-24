@@ -1,29 +1,9 @@
 import {
   PublishSessionDetailList,
-  PublishSessionsSection,
   publishSessionArtifactSummary,
   type PublishSessionDetailComponentProps,
   type PublishSession,
-  type Repository,
-  type RepositoryPlugin,
 } from "@axis-repository/admin-ui/plugin-ui";
-
-export function PypiPublishSessionsSection({
-  repository,
-  pluginMetadata,
-}: {
-  repository: Repository;
-  pluginMetadata: RepositoryPlugin | undefined;
-}) {
-  return (
-    <PublishSessionsSection
-      repository={repository}
-      pluginMetadata={pluginMetadata}
-      artifactSummary={pypiPublishSessionArtifactSummary}
-      SessionDetailComponent={PypiPublishSessionDetail}
-    />
-  );
-}
 
 export function pypiPublishSessionArtifactSummary(session: PublishSession): string {
   const artifact = session.artifacts[0];

@@ -5,38 +5,15 @@ import {
   ErrorState,
   Input,
   PublishSessionDetailList,
-  PublishSessionsSection,
   useRepositoryArtifactPublisher,
   type PublishSessionDetailComponentProps,
   type Repository,
-  type RepositoryPlugin,
 } from "@axis-repository/admin-ui/plugin-ui";
 import {
-  aptPublishSessionArtifactSummary,
   buildAptPublishArtifact,
   defaultAptPublishFormValues,
   type AptPublishFormValues,
 } from "./publish-model";
-
-export function AptPublishSessionsSection({
-  repository,
-  pluginMetadata,
-}: {
-  repository: Repository;
-  pluginMetadata: RepositoryPlugin | undefined;
-}) {
-  return (
-    <div className="grid gap-2">
-      <AptPublishArtifactForm repository={repository} />
-      <PublishSessionsSection
-        repository={repository}
-        pluginMetadata={pluginMetadata}
-        artifactSummary={aptPublishSessionArtifactSummary}
-        SessionDetailComponent={AptPublishSessionDetail}
-      />
-    </div>
-  );
-}
 
 export function AptPublishArtifactForm({ repository }: { repository: Repository }) {
   const publisher = useRepositoryArtifactPublisher(repository);

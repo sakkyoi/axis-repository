@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { aptPluginManifest } from "../../../plugins/apt/manifest";
 import { pypiPluginManifest } from "../../../plugins/pypi/manifest";
+import * as aptPublishUi from "../../../plugins/apt/admin-ui/publish";
+import * as pypiPublishUi from "../../../plugins/pypi/admin-ui/publish";
 
 import {
   getPublishTokenScopeExtension,
@@ -158,6 +160,11 @@ describe("repository UI plugin registry", () => {
       createdAt: "2026-07-23T00:00:00.000Z",
       expiresAt: "2026-07-23T00:10:00.000Z",
     })).toBe("myapp 1.2.3 amd64, 0 verified");
+  });
+
+  it("does not require plugins to export whole publish section wrappers", () => {
+    expect("AptPublishSessionsSection" in aptPublishUi).toBe(false);
+    expect("PypiPublishSessionsSection" in pypiPublishUi).toBe(false);
   });
 
   it("lets ecosystem UI plugins validate publish token scope selections", () => {

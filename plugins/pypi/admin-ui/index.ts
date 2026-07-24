@@ -9,13 +9,12 @@ import {
   PypiInstallHintsSection,
   PypiSettingsSection,
 } from "./detail";
-import { PypiPublishSessionDetail, PypiPublishSessionsSection, pypiPublishSessionArtifactSummary } from "./publish";
+import { PypiPublishSessionDetail, pypiPublishSessionArtifactSummary } from "./publish";
 
 export const pypiRepositoryDetailPlugin: RepositoryDetailPlugin = {
   ecosystem: pypiPluginManifest.ecosystem,
   sections: [
     { id: "settings", title: "PyPI settings", placement: "settings", Component: PypiSettingsSection },
-    { id: "publish-sessions", title: "Publish sessions", placement: "workspace", Component: PypiPublishSessionsSection },
     { id: "client-helpers", title: "PyPI client setup", placement: "workspace", Component: RepositoryClientHelpersSection },
     { id: "install-hints", title: "Install hints", placement: "workspace", summary: true, Component: PypiInstallHintsSection },
   ],

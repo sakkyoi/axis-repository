@@ -40,11 +40,26 @@ function normalizeRepositoryDetailPlugin(plugin: RepositoryDetailPlugin): Reposi
 }
 
 function normalizeRepositoryDetailSections(sections: RepositoryDetailSection[]): RepositoryDetailSection[] {
-  return sections.map((section) =>
+  const normalizedSections = sections.map((section) =>
     section.id === "publish-sessions"
       ? { ...section, Component: RepositoryPublishSection }
       : section,
   );
+  if (normalizedSections.some((section) => section.id === "publish-sessions")) {
+    return normalizedSections;
+  }
+  const publishSection: RepositoryDetailSection = {
+    id: "publish-sessions",
+    title: "Publish sessions",
+    placement: "workspace",
+    Component: RepositoryPublishSection,
+  };
+  const insertAt = normalizedSections.length > 0 ? 1 : 0;
+  return [
+    ...normalizedSections.slice(0, insertAt),
+    publishSection,
+    ...normalizedSections.slice(insertAt),
+  ];
 }
 
 export function repositoryWorkspaceSectionsFor(ecosystem: string): RepositoryDetailSection[] {
