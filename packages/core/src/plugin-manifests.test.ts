@@ -95,6 +95,41 @@ describe("shared plugin manifests", () => {
           },
         ],
       },
+      adminResources: {
+        namespace: "apt",
+        routes: [
+          {
+            name: "list-signing-keys",
+            method: "GET",
+            path: ["signing-keys"],
+            responseKind: "json",
+          },
+          {
+            name: "import-signing-key",
+            method: "POST",
+            path: ["signing-keys", "import"],
+            responseKind: "json",
+          },
+          {
+            name: "generate-signing-key",
+            method: "POST",
+            path: ["signing-keys", "generate"],
+            responseKind: "json",
+          },
+          {
+            name: "get-signing-key",
+            method: "GET",
+            path: ["signing-keys", ":id"],
+            responseKind: "json",
+          },
+          {
+            name: "revoke-signing-key",
+            method: "POST",
+            path: ["signing-keys", ":id", "revoke"],
+            responseKind: "json",
+          },
+        ],
+      },
     });
   });
 

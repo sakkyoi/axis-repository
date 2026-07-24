@@ -14,6 +14,20 @@ export interface PluginClientHelpersManifest {
   actions: PluginClientHelperActionManifest[];
 }
 
+export type PluginAdminResourceResponseKind = "json" | "text";
+
+export interface PluginAdminResourceRouteManifest {
+  name: string;
+  method: "GET" | "POST" | "PATCH" | "DELETE" | (string & {});
+  path: string[];
+  responseKind: PluginAdminResourceResponseKind;
+}
+
+export interface PluginAdminResourcesManifest {
+  namespace: string;
+  routes: PluginAdminResourceRouteManifest[];
+}
+
 export type PluginRepositoryConfigFieldKind = "text" | "string-list" | "signing-key";
 export type PluginRepositoryConfigDefaultValue = string | string[];
 export type PluginRepositoryConfigFieldStep = "config" | "dependencies";
@@ -43,4 +57,5 @@ export interface RepositoryPluginManifest {
   capabilities: string[];
   repositoryConfig: PluginRepositoryConfigManifest;
   clientHelpers?: PluginClientHelpersManifest;
+  adminResources?: PluginAdminResourcesManifest;
 }

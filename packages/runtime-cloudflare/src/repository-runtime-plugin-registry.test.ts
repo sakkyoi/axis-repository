@@ -451,8 +451,10 @@ describe("RepositoryRuntimePluginRegistry", () => {
         namespace: "apt",
         routes: [
           {
+            name: "revoke-signing-key",
             method: "POST",
             path: ["signing-keys", ":id", "revoke"],
+            responseKind: "text",
             handle: async ({ params }) => new Response(`revoked ${params.id}`),
           },
         ],
@@ -461,8 +463,10 @@ describe("RepositoryRuntimePluginRegistry", () => {
 
     registry.requirePlugin("apt").adminResources!.namespace = "mutated";
     registry.requirePlugin("apt").adminResources!.routes.push({
+      name: "mutated",
       method: "GET",
       path: ["mutated"],
+      responseKind: "text",
       handle: async () => new Response("mutated"),
     });
     const plugin = registry.requirePlugin("apt");
@@ -505,8 +509,10 @@ describe("RepositoryRuntimePluginRegistry", () => {
         namespace: "apt",
         routes: [
           {
+            name: "list-signing-keys",
             method: "GET",
             path: ["signing-keys"],
+            responseKind: "text",
             handle: async () => new Response("handled"),
           },
         ],

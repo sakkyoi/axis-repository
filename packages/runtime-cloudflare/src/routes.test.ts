@@ -720,8 +720,10 @@ describe("Cloudflare runtime routes", () => {
         namespace: "demo",
         routes: [
           {
+            name: "status",
             method: "GET",
             path: ["status"],
+            responseKind: "json",
             handle: async ({ repository, params }) => new Response(JSON.stringify({
               repository: repository!.name,
               params,

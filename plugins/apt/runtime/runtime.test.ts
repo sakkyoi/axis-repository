@@ -5,6 +5,7 @@ import {
   type RepositorySigningKeyCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { describe, expect, it } from "vitest";
+import { aptPluginManifest } from "../manifest";
 import { createAptPlugin } from "./runtime";
 
 function repository(config: Record<string, unknown> = {
@@ -191,6 +192,9 @@ describe("APT plugin lifecycle", () => {
     const services = {};
 
     expect(plugin.adminResources?.namespace).toBe("apt");
+    expect(plugin.adminResources?.routes.map(({ handle: _handle, ...route }) => route)).toEqual(
+      aptPluginManifest.adminResources?.routes,
+    );
     await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
       repositoryName: "debian-internal",
       repository: repository(),

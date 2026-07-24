@@ -60,6 +60,14 @@ function aptClientHelperAction(name: string) {
   return { ...action };
 }
 
+function aptAdminResourceRoute(name: string) {
+  const route = aptPluginManifest.adminResources.routes.find((candidate) => candidate.name === name);
+  if (!route) {
+    throw new Error(`APT admin resource manifest is not configured: ${name}`);
+  }
+  return { ...route, path: [...route.path] };
+}
+
 async function requireRepositoryScopedSigningKey(
   signingKeys: RepositorySigningKeyCapability,
   repositoryName: string,
@@ -125,11 +133,10 @@ export function createAptPlugin(input: {
       ],
     },
     adminResources: {
-      namespace: aptPluginManifest.repositoryConfig.namespace,
+      namespace: aptPluginManifest.adminResources.namespace,
       routes: [
         {
-          method: "GET",
-          path: ["signing-keys"],
+          ...aptAdminResourceRoute("list-signing-keys"),
           handle: async ({ repositoryName }) => {
             return jsonResponse({
               signingKeys: await input.signingKeys.listForRepository(repositoryName),
@@ -137,8 +144,7 @@ export function createAptPlugin(input: {
           },
         },
         {
-          method: "POST",
-          path: ["signing-keys", "import"],
+          ...aptAdminResourceRoute("import-signing-key"),
           handle: async ({ repositoryName, request }) => {
             const body = await readJsonObject(request);
             const key = await input.signingKeys.create({
@@ -151,8 +157,7 @@ export function createAptPlugin(input: {
           },
         },
         {
-          method: "POST",
-          path: ["signing-keys", "generate"],
+          ...aptAdminResourceRoute("generate-signing-key"),
           handle: async ({ repositoryName, request }) => {
             const body = await readJsonObject(request);
             const key = await input.signingKeys.generate({
@@ -165,15 +170,13 @@ export function createAptPlugin(input: {
           },
         },
         {
-          method: "GET",
-          path: ["signing-keys", ":id"],
+          ...aptAdminResourceRoute("get-signing-key"),
           handle: async ({ repositoryName, params }) => {
             return jsonResponse(await requireRepositoryScopedSigningKey(input.signingKeys, repositoryName, params.id!));
           },
         },
         {
-          method: "POST",
-          path: ["signing-keys", ":id", "revoke"],
+          ...aptAdminResourceRoute("revoke-signing-key"),
           handle: async ({ repositoryName, params }) => {
             await requireRepositoryScopedSigningKey(input.signingKeys, repositoryName, params.id!);
             return jsonResponse(await input.signingKeys.revoke(params.id!));

@@ -1,4 +1,5 @@
 import { NotFoundError, type Repository } from "@axis-repository/core";
+import type { PluginAdminResourceRouteManifest } from "@axis-repository/core/plugin-manifests";
 import type { RepositoryRuntimePluginServices } from "./repository-plugin-capabilities";
 
 export type RepositoryAdminResourceServices = RepositoryRuntimePluginServices;
@@ -15,9 +16,7 @@ export interface RepositoryAdminResourceRouteInput extends Omit<RepositoryAdminR
   params: Record<string, string>;
 }
 
-export interface RepositoryAdminResourceRoute {
-  method: string;
-  path: string[];
+export interface RepositoryAdminResourceRoute extends PluginAdminResourceRouteManifest {
   handle(input: RepositoryAdminResourceRouteInput): Promise<Response>;
 }
 
