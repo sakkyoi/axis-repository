@@ -11,7 +11,7 @@ import type {
   RepositoryActiveSecret,
   RepositorySecretCapability,
   RepositorySecretRecord,
-} from "./repository-runtime-plugin-registry";
+} from "./repository-plugin-capabilities";
 import type { SecretEncryption } from "./secret-encryption";
 
 const LEGACY_APT_SIGNING_KEY_NAMESPACE = "apt.signing-key";

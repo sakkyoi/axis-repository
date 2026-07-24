@@ -229,4 +229,26 @@ describe("package boundaries", () => {
       "host runtime must not expose an APT-specific signing key service",
     ).toBe(false);
   });
+
+  test("runtime plugin contracts stay split from the registry implementation", () => {
+    const runtimeSourceDir = path.join(rootDir, "packages/runtime-cloudflare/src");
+    for (const contractFile of [
+      "repository-plugin-contract.ts",
+      "repository-plugin-client-helpers.ts",
+      "repository-plugin-admin-resources.ts",
+      "repository-plugin-capabilities.ts",
+    ]) {
+      expect(existsSync(path.join(runtimeSourceDir, contractFile)), `${contractFile} must exist`).toBe(true);
+    }
+
+    const registrySource = readFileSync(
+      path.join(runtimeSourceDir, "repository-runtime-plugin-registry.ts"),
+      "utf8",
+    );
+    expect(registrySource).not.toContain("export interface RepositorySecretCapability");
+    expect(registrySource).not.toContain("export interface RepositoryClientHelperInput");
+    expect(registrySource).not.toContain("export interface RepositoryAdminResourceInput");
+    expect(registrySource).not.toContain("export async function dispatchRepositoryClientHelper");
+    expect(registrySource).not.toContain("export async function dispatchRepositoryAdminResource");
+  });
 });

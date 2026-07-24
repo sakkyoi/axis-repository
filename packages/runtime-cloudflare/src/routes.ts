@@ -20,7 +20,8 @@ import {
   ensureRepositoryPluginEnabled as ensureEffectiveRepositoryPluginEnabled,
   repositoryPluginPolicyFields,
 } from "./repository-plugin-policy";
-import { dispatchRepositoryAdminResource, dispatchRepositoryClientHelper } from "./repository-runtime-plugin-registry";
+import { dispatchRepositoryAdminResource } from "./repository-plugin-admin-resources";
+import { dispatchRepositoryClientHelper } from "./repository-plugin-client-helpers";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;

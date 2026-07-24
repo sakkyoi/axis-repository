@@ -3,11 +3,17 @@ import { ValidationError } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
 import {
   RepositoryRuntimePluginRegistry,
+} from "./repository-runtime-plugin-registry";
+import {
   createPrefixServingPredicate,
+} from "./repository-plugin-contract";
+import {
   dispatchRepositoryClientHelper,
+} from "./repository-plugin-client-helpers";
+import {
   dispatchRepositoryAdminResource,
   type RepositoryAdminResourceServices,
-} from "./repository-runtime-plugin-registry";
+} from "./repository-plugin-admin-resources";
 
 function acceptsPluginServices(_services: RepositoryAdminResourceServices): void {}
 
