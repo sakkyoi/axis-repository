@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const rootDir = process.cwd();
@@ -32,6 +32,8 @@ const forbiddenWorkspaceDependencies: Record<keyof typeof packageDirs, string[]>
   runtimeCloudflare: ["@axis-repository/admin-ui", "@axis-repository/publish-client"],
   publishClient: ["@axis-repository/admin-ui", "@axis-repository/runtime-cloudflare"],
 };
+
+const pluginImplementationImportPattern = /(?:^|[\\/])plugins[\\/][^\\/]+[\\/](?:runtime|admin-ui)(?:[\\/]|$)/;
 
 function readPackageJson(packageDir: string): PackageJson {
   return JSON.parse(readFileSync(path.join(rootDir, packageDir, "package.json"), "utf8")) as PackageJson;
@@ -108,6 +110,46 @@ describe("package boundaries", () => {
     expect(rootPackageJson.scripts?.build, "root build should avoid rebuilding admin-ui through runtime build").toContain(
       "pnpm --filter @axis-repository/runtime-cloudflare build:worker",
     );
+  });
+
+  test("plugin implementation import detection covers future ecosystems", () => {
+    expect(pluginImplementationImportPattern.test("../../../plugins/npm/runtime/runtime")).toBe(true);
+    expect(pluginImplementationImportPattern.test("../../../plugins/npm/admin-ui")).toBe(true);
+  });
+
+  test("plugin implementation imports stay centralized in registries and tests", () => {
+    const packageSourceFiles = Object.values(packageDirs).flatMap((packageDir) => listSourceFiles(`${packageDir}/src`));
+    const allowedImporters = new Set([
+      path.normalize("packages/runtime-cloudflare/src/default-plugins.ts"),
+      path.normalize("packages/admin-ui/src/repository-ui-plugins.ts"),
+    ]);
+
+    for (const filePath of packageSourceFiles) {
+      const normalizedPath = path.normalize(filePath);
+      const source = readFileSync(path.join(rootDir, filePath), "utf8");
+      if (!pluginImplementationImportPattern.test(source)) {
+        continue;
+      }
+
+      expect(
+        allowedImporters.has(normalizedPath) || normalizedPath.endsWith(".test.ts") || normalizedPath.endsWith(".test.tsx"),
+        `${filePath} must import plugin implementations through a registry or a focused test`,
+      ).toBe(true);
+    }
+  });
+
+  test("plugin authoring guide documents the enforced contract", () => {
+    const guidePath = path.join(rootDir, "docs/plugin-authoring.md");
+
+    expect(existsSync(guidePath), "docs/plugin-authoring.md must describe the plugin contract").toBe(true);
+
+    const guide = readFileSync(guidePath, "utf8");
+    expect(guide).toContain("@axis-repository/core/plugin-manifests");
+    expect(guide).toContain("@axis-repository/runtime-cloudflare/plugin-runtime");
+    expect(guide).toContain("@axis-repository/admin-ui/plugin-ui");
+    expect(guide).toContain("packages/runtime-cloudflare/src/default-plugins.ts");
+    expect(guide).toContain("packages/admin-ui/src/repository-ui-plugins.ts");
+    expect(guide).toContain("pnpm test");
   });
 
   test("plugins use package public entrypoints instead of package source paths", () => {

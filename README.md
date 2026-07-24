@@ -10,6 +10,10 @@ pnpm typecheck
 pnpm build
 ```
 
+## Plugin Development
+
+Repository format plugins are documented in [docs/plugin-authoring.md](docs/plugin-authoring.md).
+
 ## Local Worker
 
 Copy the example Wrangler configuration:
