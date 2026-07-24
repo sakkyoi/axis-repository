@@ -1,4 +1,5 @@
 import { ValidationError, type Repository, type TokenPrincipal } from "@axis-repository/core";
+import { dispatchRepositoryAdminResource } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { describe, expect, it } from "vitest";
 import { createAptPlugin } from "./runtime";
 
@@ -182,14 +183,14 @@ describe("APT plugin lifecycle", () => {
     };
 
     expect(plugin.adminResources?.namespace).toBe("apt");
-    await expect(plugin.adminResources?.handle({
+    await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
       repositoryName: "debian-internal",
       repository: repository(),
       request: new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys"),
       path: ["signing-keys"],
       services,
     }).then((response) => response.json())).resolves.toEqual({ signingKeys: [signingKey] });
-    await expect(plugin.adminResources?.handle({
+    await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
       repositoryName: "debian-internal",
       repository: repository(),
       request: new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys/generate", {
@@ -204,7 +205,7 @@ describe("APT plugin lifecycle", () => {
       path: ["signing-keys", "generate"],
       services,
     }).then((response) => response.status)).resolves.toBe(201);
-    await expect(plugin.adminResources?.handle({
+    await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
       repositoryName: "debian-internal",
       repository: repository(),
       request: new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys/signing_key_prod/revoke", {

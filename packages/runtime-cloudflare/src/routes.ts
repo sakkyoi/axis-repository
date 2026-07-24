@@ -20,6 +20,7 @@ import {
   ensureRepositoryPluginEnabled as ensureEffectiveRepositoryPluginEnabled,
   repositoryPluginPolicyFields,
 } from "./repository-plugin-policy";
+import { dispatchRepositoryAdminResource } from "./repository-runtime-plugin-registry";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;
@@ -782,7 +783,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     if (!adminResources || adminResources.namespace !== adminPluginResourcePath.namespace) {
       throw new NotFoundError();
     }
-    return adminResources.handle({
+    return dispatchRepositoryAdminResource(adminResources, {
       repositoryName: adminPluginResourcePath.repositoryName,
       ...(repository ? { repository } : {}),
       request,

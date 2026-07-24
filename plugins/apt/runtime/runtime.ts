@@ -119,42 +119,65 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
     },
     adminResources: {
       namespace: aptPluginManifest.repositoryConfig.namespace,
-      handle: async ({ repositoryName, repository, request, path, services }) => {
-        const signingKeys = requireAptSigningKeys(services);
-        if (path.length === 1 && path[0] === "signing-keys" && request.method === "GET") {
-          return jsonResponse({
-            signingKeys: await signingKeys.listForRepository(repositoryName),
-          });
-        }
-        if (path.length === 2 && path[0] === "signing-keys" && path[1] === "import" && request.method === "POST") {
-          const body = await readJsonObject(request);
-          const key = await signingKeys.create({
-            repositoryName,
-            name: stringField(body, "name"),
-            privateKeyArmored: stringField(body, "privateKeyArmored"),
-            passphrase: stringField(body, "passphrase"),
-          });
-          return jsonResponse(key, { status: 201 });
-        }
-        if (path.length === 2 && path[0] === "signing-keys" && path[1] === "generate" && request.method === "POST") {
-          const body = await readJsonObject(request);
-          const key = await signingKeys.generate({
-            repositoryName,
-            name: stringField(body, "name"),
-            userIdName: stringField(body, "userIdName"),
-            userIdEmail: stringField(body, "userIdEmail"),
-          });
-          return jsonResponse(key, { status: 201 });
-        }
-        if (path.length === 2 && path[0] === "signing-keys" && request.method === "GET") {
-          return jsonResponse(await requireRepositoryScopedSigningKey(signingKeys, repositoryName, path[1]!));
-        }
-        if (path.length === 3 && path[0] === "signing-keys" && path[2] === "revoke" && request.method === "POST") {
-          await requireRepositoryScopedSigningKey(signingKeys, repositoryName, path[1]!);
-          return jsonResponse(await signingKeys.revoke(path[1]!));
-        }
-        throw new NotFoundError();
-      },
+      routes: [
+        {
+          method: "GET",
+          path: ["signing-keys"],
+          handle: async ({ repositoryName, services }) => {
+            const signingKeys = requireAptSigningKeys(services);
+            return jsonResponse({
+              signingKeys: await signingKeys.listForRepository(repositoryName),
+            });
+          },
+        },
+        {
+          method: "POST",
+          path: ["signing-keys", "import"],
+          handle: async ({ repositoryName, request, services }) => {
+            const signingKeys = requireAptSigningKeys(services);
+            const body = await readJsonObject(request);
+            const key = await signingKeys.create({
+              repositoryName,
+              name: stringField(body, "name"),
+              privateKeyArmored: stringField(body, "privateKeyArmored"),
+              passphrase: stringField(body, "passphrase"),
+            });
+            return jsonResponse(key, { status: 201 });
+          },
+        },
+        {
+          method: "POST",
+          path: ["signing-keys", "generate"],
+          handle: async ({ repositoryName, request, services }) => {
+            const signingKeys = requireAptSigningKeys(services);
+            const body = await readJsonObject(request);
+            const key = await signingKeys.generate({
+              repositoryName,
+              name: stringField(body, "name"),
+              userIdName: stringField(body, "userIdName"),
+              userIdEmail: stringField(body, "userIdEmail"),
+            });
+            return jsonResponse(key, { status: 201 });
+          },
+        },
+        {
+          method: "GET",
+          path: ["signing-keys", ":id"],
+          handle: async ({ repositoryName, params, services }) => {
+            const signingKeys = requireAptSigningKeys(services);
+            return jsonResponse(await requireRepositoryScopedSigningKey(signingKeys, repositoryName, params.id!));
+          },
+        },
+        {
+          method: "POST",
+          path: ["signing-keys", ":id", "revoke"],
+          handle: async ({ repositoryName, params, services }) => {
+            const signingKeys = requireAptSigningKeys(services);
+            await requireRepositoryScopedSigningKey(signingKeys, repositoryName, params.id!);
+            return jsonResponse(await signingKeys.revoke(params.id!));
+          },
+        },
+      ],
     },
   };
 }

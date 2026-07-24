@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   RepositoryRuntimePluginRegistry,
   createPrefixServingPredicate,
+  dispatchRepositoryAdminResource,
   type RepositoryAdminResourceServices,
 } from "./repository-runtime-plugin-registry";
 
@@ -377,7 +378,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     ]);
   });
 
-  it("keeps admin resource handlers on registered plugins without exposing mutable metadata", async () => {
+  it("keeps admin resource routes on registered plugins without exposing mutable metadata", async () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");
     registry.register({
@@ -390,21 +391,45 @@ describe("RepositoryRuntimePluginRegistry", () => {
       publish: publishLifecycle(publisher.publisher),
       adminResources: {
         namespace: "apt",
-        handle: async () => new Response("handled"),
+        routes: [
+          {
+            method: "POST",
+            path: ["signing-keys", ":id", "revoke"],
+            handle: async ({ params }) => new Response(`revoked ${params.id}`),
+          },
+        ],
       },
     });
 
     registry.requirePlugin("apt").adminResources!.namespace = "mutated";
+    registry.requirePlugin("apt").adminResources!.routes.push({
+      method: "GET",
+      path: ["mutated"],
+      handle: async () => new Response("mutated"),
+    });
     const plugin = registry.requirePlugin("apt");
 
     expect(plugin.adminResources?.namespace).toBe("apt");
-    await expect(plugin.adminResources?.handle({
+    expect(plugin.adminResources?.routes).toHaveLength(1);
+    const response = await dispatchRepositoryAdminResource(plugin.adminResources!, {
       repositoryName: "apt-internal",
       repository: publishInput("apt").repository,
-      request: new Request("https://axis.example/admin/repositories/apt-internal/apt/signing-keys"),
-      path: ["signing-keys"],
+      request: new Request("https://axis.example/admin/repositories/apt-internal/apt/signing-keys/key_1/revoke", {
+        method: "POST",
+      }),
+      path: ["signing-keys", "key_1", "revoke"],
       services: {},
-    })).resolves.toMatchObject({ status: 200 });
+    });
+    await expect(response.text()).resolves.toBe("revoked key_1");
+    await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
+      repositoryName: "apt-internal",
+      repository: publishInput("apt").repository,
+      request: new Request("https://axis.example/admin/repositories/apt-internal/apt/signing-keys/key_1", {
+        method: "DELETE",
+      }),
+      path: ["signing-keys", "key_1"],
+      services: {},
+    })).rejects.toThrow(new ValidationError("Repository admin resource route is not configured: DELETE signing-keys/key_1"));
   });
 
   it("finds plugins by admin resource namespace", () => {
@@ -420,7 +445,13 @@ describe("RepositoryRuntimePluginRegistry", () => {
       publish: publishLifecycle(publisher.publisher),
       adminResources: {
         namespace: "apt",
-        handle: async () => new Response("handled"),
+        routes: [
+          {
+            method: "GET",
+            path: ["signing-keys"],
+            handle: async () => new Response("handled"),
+          },
+        ],
       },
     });
 

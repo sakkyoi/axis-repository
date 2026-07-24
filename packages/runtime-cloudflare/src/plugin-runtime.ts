@@ -3,6 +3,8 @@ export type {
   AuthorizePublishInput,
   DerivedPublishPrincipalScope,
   RepositoryAdminResourceInput,
+  RepositoryAdminResourceRoute,
+  RepositoryAdminResourceRouteInput,
   RepositoryAdminResources,
   RepositoryClientHelperInput,
   RepositoryClientHelpers,
@@ -17,6 +19,6 @@ export type {
   ValidatePublishArtifactsInput,
   ValidateRepositoryConfigInput,
 } from "./repository-runtime-plugin-registry";
-export { createPrefixServingPredicate } from "./repository-runtime-plugin-registry";
+export { createPrefixServingPredicate, dispatchRepositoryAdminResource } from "./repository-runtime-plugin-registry";
 export { GenericManifestPublisher } from "./generic-manifest-publisher";
 export { readJsonObject, stringField } from "./http";

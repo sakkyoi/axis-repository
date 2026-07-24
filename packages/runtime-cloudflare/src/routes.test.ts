@@ -718,12 +718,18 @@ describe("Cloudflare runtime routes", () => {
       },
       adminResources: {
         namespace: "demo",
-        handle: async ({ repository, path }) => new Response(JSON.stringify({
-          repository: repository!.name,
-          path,
-        }), {
-          headers: { "content-type": "application/json; charset=utf-8" },
-        }),
+        routes: [
+          {
+            method: "GET",
+            path: ["status"],
+            handle: async ({ repository, params }) => new Response(JSON.stringify({
+              repository: repository!.name,
+              params,
+            }), {
+              headers: { "content-type": "application/json; charset=utf-8" },
+            }),
+          },
+        ],
       },
     });
     const app = createApp(harness.dependencies);
@@ -736,7 +742,7 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       repository: "demo-repo",
-      path: ["status"],
+      params: {},
     });
   });
 
