@@ -52,6 +52,14 @@ function aptPublicKeyResponse(publicKeyArmored: string, repository: Repository):
   return new Response(publicKeyArmored, { headers });
 }
 
+function aptClientHelperAction(name: string) {
+  const action = aptPluginManifest.clientHelpers.actions.find((candidate) => candidate.name === name);
+  if (!action) {
+    throw new Error(`APT client helper manifest is not configured: ${name}`);
+  }
+  return { ...action };
+}
+
 function requireAptSigningKeys(services: { signingKeys?: RepositorySigningKeyCapability }): RepositorySigningKeyCapability {
   if (!services.signingKeys) {
     throw new ValidationError("APT signing key capability is not configured");
@@ -99,23 +107,26 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
     },
     clientHelpers: {
       namespace: aptPluginManifest.clientHelpers.namespace,
-      actions: aptPluginManifest.clientHelpers.actions.map((action) => ({ ...action })),
-      isPublic: (action) => action === "key.gpg" || action === "source" || action === "install",
-      handle: async ({ repository, action, origin, signingKeys }) => {
-        const repositoryInfo = aptClientRepositoryInfo(repository);
-        if (action === "key.gpg") {
-          const config = parseAptRepositoryConfig(repository);
-          const key = await signingKeys.getPublicKey(config.signingKeyId);
-          return aptPublicKeyResponse(key.publicKeyArmored, repository);
-        }
-        if (action === "source") {
-          return jsonResponse(buildAptSourceInfo({ origin, repository: repositoryInfo }));
-        }
-        if (action === "install") {
-          return jsonResponse(buildAptInstallInfo({ origin, repository: repositoryInfo }));
-        }
-        throw new ValidationError(`APT client helper is not configured: ${action}`);
-      },
+      actions: [
+        {
+          ...aptClientHelperAction("key.gpg"),
+          handle: async ({ repository, signingKeys }) => {
+            const config = parseAptRepositoryConfig(repository);
+            const key = await signingKeys.getPublicKey(config.signingKeyId);
+            return aptPublicKeyResponse(key.publicKeyArmored, repository);
+          },
+        },
+        {
+          ...aptClientHelperAction("source"),
+          handle: async ({ repository, origin }) =>
+            jsonResponse(buildAptSourceInfo({ origin, repository: aptClientRepositoryInfo(repository) })),
+        },
+        {
+          ...aptClientHelperAction("install"),
+          handle: async ({ repository, origin }) =>
+            jsonResponse(buildAptInstallInfo({ origin, repository: aptClientRepositoryInfo(repository) })),
+        },
+      ],
     },
     adminResources: {
       namespace: aptPluginManifest.repositoryConfig.namespace,

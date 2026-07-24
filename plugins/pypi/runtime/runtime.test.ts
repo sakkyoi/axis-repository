@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { dispatchRepositoryClientHelper } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { createPypiPlugin } from "./runtime";
 
 describe("PyPI plugin lifecycle", () => {
@@ -32,17 +33,18 @@ describe("PyPI plugin lifecycle", () => {
 
     expect(plugin.clientHelpers?.namespace).toBe("pypi");
     expect(plugin.clientHelpers?.actions).toEqual([
-      {
+      expect.objectContaining({
         name: "simple-url",
         label: "Simple API URL",
         responseKind: "text",
         defaultOpen: true,
         public: true,
         displayPath: "simpleUrl",
-      },
+        handle: expect.any(Function),
+      }),
     ]);
-    expect(plugin.clientHelpers?.isPublic("simple-url")).toBe(true);
-    const response = await plugin.clientHelpers?.handle({
+    expect(plugin.clientHelpers?.actions.find((action) => action.name === "simple-url")?.public).toBe(true);
+    const response = await dispatchRepositoryClientHelper(plugin.clientHelpers!, {
       repository: {
         id: "repo_1",
         name: "python-internal",

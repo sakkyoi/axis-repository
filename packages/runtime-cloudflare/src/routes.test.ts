@@ -1202,11 +1202,10 @@ describe("Cloudflare runtime routes", () => {
             responseKind: "text",
             defaultOpen: true,
             public: true,
+            handle: async ({ repository }) =>
+              new Response(`${repository.ecosystem}:${repository.name}:install`),
           },
         ],
-        isPublic: () => true,
-        handle: async ({ repository, action }) =>
-          new Response(`${repository.ecosystem}:${repository.name}:${action}`),
       },
     });
     const app = createApp(harness.dependencies);
@@ -1269,10 +1268,9 @@ describe("Cloudflare runtime routes", () => {
             responseKind: "text",
             defaultOpen: true,
             public: false,
+            handle: async () => new Response("private-helper"),
           },
         ],
-        isPublic: () => false,
-        handle: async () => new Response("private-helper"),
       },
     });
     const app = createApp(harness.dependencies);

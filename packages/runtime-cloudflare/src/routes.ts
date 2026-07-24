@@ -20,7 +20,7 @@ import {
   ensureRepositoryPluginEnabled as ensureEffectiveRepositoryPluginEnabled,
   repositoryPluginPolicyFields,
 } from "./repository-plugin-policy";
-import { dispatchRepositoryAdminResource } from "./repository-runtime-plugin-registry";
+import { dispatchRepositoryAdminResource, dispatchRepositoryClientHelper } from "./repository-runtime-plugin-registry";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;
@@ -489,11 +489,11 @@ function repositoryClientHelpers(dependencies: AppDependencies, repository: Repo
   return helpers;
 }
 
-function hasRepositoryClientHelperAction(
+function repositoryClientHelperAction(
   helpers: NonNullable<ReturnType<typeof repositoryClientHelpers>>,
   action: string,
-): boolean {
-  return helpers.actions.some((helperAction) => helperAction.name === action);
+) {
+  return helpers.actions.find((helperAction) => helperAction.name === action);
 }
 
 function repositoryClientHelperContext(dependencies: AppDependencies, origin: string) {
@@ -755,10 +755,10 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const repository = await dependencies.repositoryService.getByName(adminClientHelperPath.repositoryName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     const helpers = repositoryClientHelpers(dependencies, repository, adminClientHelperPath.namespace);
-    if (!helpers || !hasRepositoryClientHelperAction(helpers, adminClientHelperPath.action)) {
+    if (!helpers || !repositoryClientHelperAction(helpers, adminClientHelperPath.action)) {
       throw new NotFoundError();
     }
-    return helpers.handle({
+    return dispatchRepositoryClientHelper(helpers, {
       repository,
       action: adminClientHelperPath.action,
       ...repositoryClientHelperContext(dependencies, url.origin),
@@ -903,13 +903,14 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     const helpers = repositoryClientHelpers(dependencies, repository, clientHelperPath.namespace);
     if (helpers) {
-      if (!hasRepositoryClientHelperAction(helpers, clientHelperPath.action)) {
+      const action = repositoryClientHelperAction(helpers, clientHelperPath.action);
+      if (!action) {
         throw new NotFoundError();
       }
-      if (!helpers.isPublic(clientHelperPath.action)) {
+      if (!action.public) {
         await authorizeRepositoryRead(request, dependencies, repository);
       }
-      return helpers.handle({
+      return dispatchRepositoryClientHelper(helpers, {
         repository,
         action: clientHelperPath.action,
         ...repositoryClientHelperContext(dependencies, url.origin),

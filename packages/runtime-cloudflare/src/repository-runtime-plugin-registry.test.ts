@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   RepositoryRuntimePluginRegistry,
   createPrefixServingPredicate,
+  dispatchRepositoryClientHelper,
   dispatchRepositoryAdminResource,
   type RepositoryAdminResourceServices,
 } from "./repository-runtime-plugin-registry";
@@ -172,10 +173,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
             responseKind: "shell",
             defaultOpen: true,
             public: true,
+            handle: async () => new Response("ok"),
           },
         ],
-        isPublic: () => true,
-        handle: async () => new Response("ok"),
       },
     });
 
@@ -350,10 +350,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
             responseKind: "shell",
             defaultOpen: true,
             public: true,
+            handle: async () => new Response("install"),
           },
         ],
-        isPublic: () => true,
-        handle: async () => new Response("ok"),
       },
     });
 
@@ -363,19 +362,78 @@ describe("RepositoryRuntimePluginRegistry", () => {
       responseKind: "text",
       defaultOpen: false,
       public: true,
+      handle: async () => new Response("mutated"),
     });
 
     registry.requirePlugin("apt").clientHelpers!.actions[0]!.label = "Mutated";
 
     expect(registry.requirePlugin("apt").clientHelpers?.actions).toEqual([
-      {
+      expect.objectContaining({
         name: "install",
         label: "Install",
         responseKind: "shell",
         defaultOpen: true,
         public: true,
-      },
+      }),
     ]);
+    expect(registry.list()[0]?.clientHelpers?.actions[0]).not.toHaveProperty("handle");
+  });
+
+  it("dispatches client helper actions through action-level handlers", async () => {
+    const registry = new RepositoryRuntimePluginRegistry();
+    const publisher = publisherReturning("apt.json");
+    registry.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["client-helpers"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: publishLifecycle(publisher.publisher),
+      clientHelpers: {
+        namespace: "apt",
+        actions: [
+          {
+            name: "install",
+            label: "Install",
+            responseKind: "shell",
+            defaultOpen: true,
+            public: true,
+            handle: async ({ repository }) => new Response(`install ${repository.name}`),
+          },
+          {
+            name: "private-diagnostic",
+            label: "Private diagnostic",
+            responseKind: "json",
+            defaultOpen: false,
+            public: false,
+            handle: async () => new Response("private"),
+          },
+        ],
+      },
+    });
+
+    const helpers = registry.requirePlugin("apt").clientHelpers!;
+    const response = await dispatchRepositoryClientHelper(helpers, {
+      repository: publishInput("apt").repository,
+      action: "install",
+      origin: "https://axis.example",
+      signingKeys: {
+        getPublicKey: async () => ({ publicKeyArmored: "unused" }),
+      },
+    });
+
+    await expect(response.text()).resolves.toBe("install apt-internal");
+    expect(helpers.actions.find((action) => action.name === "install")?.public).toBe(true);
+    expect(helpers.actions.find((action) => action.name === "private-diagnostic")?.public).toBe(false);
+    await expect(dispatchRepositoryClientHelper(helpers, {
+      repository: publishInput("apt").repository,
+      action: "missing",
+      origin: "https://axis.example",
+      signingKeys: {
+        getPublicKey: async () => ({ publicKeyArmored: "unused" }),
+      },
+    })).rejects.toThrow(new ValidationError("Repository client helper is not configured: missing"));
   });
 
   it("keeps admin resource routes on registered plugins without exposing mutable metadata", async () => {

@@ -23,6 +23,14 @@ function simpleUrl(origin: string, repository: Repository): string {
   return `${origin.replace(/\/+$/g, "")}/repositories/${repository.name}/simple/`;
 }
 
+function pypiClientHelperAction(name: string) {
+  const action = pypiPluginManifest.clientHelpers.actions.find((candidate) => candidate.name === name);
+  if (!action) {
+    throw new Error(`PyPI client helper manifest is not configured: ${name}`);
+  }
+  return { ...action };
+}
+
 export function createPypiPlugin(input?: { objectStore?: RepositoryObjectStore }): ArtifactRepositoryPlugin {
   const publisher = input?.objectStore
     ? new GenericManifestPublisher({ objectStore: input.objectStore })
@@ -41,20 +49,20 @@ export function createPypiPlugin(input?: { objectStore?: RepositoryObjectStore }
     },
     clientHelpers: {
       namespace: pypiPluginManifest.clientHelpers.namespace,
-      actions: pypiPluginManifest.clientHelpers.actions.map((action) => ({ ...action })),
-      isPublic: (action) => action === "simple-url",
-      handle: async ({ repository, action, origin }) => {
-        if (action !== "simple-url") {
-          throw new ValidationError(`PyPI client helper is not configured: ${action}`);
-        }
-        const url = simpleUrl(origin, repository);
-        return jsonResponse({
-          repository: repository.name,
-          ecosystem: "pypi",
-          simpleUrl: url,
-          pipIndexUrl: url,
-        });
-      },
+      actions: [
+        {
+          ...pypiClientHelperAction("simple-url"),
+          handle: async ({ repository, origin }) => {
+            const url = simpleUrl(origin, repository);
+            return jsonResponse({
+              repository: repository.name,
+              ecosystem: "pypi",
+              simpleUrl: url,
+              pipIndexUrl: url,
+            });
+          },
+        },
+      ],
     },
   };
 }

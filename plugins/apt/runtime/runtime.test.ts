@@ -1,5 +1,8 @@
 import { ValidationError, type Repository, type TokenPrincipal } from "@axis-repository/core";
-import { dispatchRepositoryAdminResource } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import {
+  dispatchRepositoryAdminResource,
+  dispatchRepositoryClientHelper,
+} from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { describe, expect, it } from "vitest";
 import { createAptPlugin } from "./runtime";
 
@@ -79,30 +82,33 @@ describe("APT plugin lifecycle", () => {
 
     expect(plugin.clientHelpers?.namespace).toBe("apt");
     expect(plugin.clientHelpers?.actions).toEqual([
-      {
+      expect.objectContaining({
         name: "key.gpg",
         label: "key.gpg",
         responseKind: "text",
         defaultOpen: false,
         public: true,
-      },
-      {
+        handle: expect.any(Function),
+      }),
+      expect.objectContaining({
         name: "source",
         label: "source",
         responseKind: "json",
         defaultOpen: false,
         public: true,
-      },
-      {
+        handle: expect.any(Function),
+      }),
+      expect.objectContaining({
         name: "install",
         label: "install",
         responseKind: "shell",
         defaultOpen: true,
         public: true,
-      },
+        handle: expect.any(Function),
+      }),
     ]);
-    expect(plugin.clientHelpers?.isPublic("key.gpg")).toBe(true);
-    const keyResponse = await plugin.clientHelpers?.handle({
+    expect(plugin.clientHelpers?.actions.find((action) => action.name === "key.gpg")?.public).toBe(true);
+    const keyResponse = await dispatchRepositoryClientHelper(plugin.clientHelpers!, {
       repository: repository(),
       action: "key.gpg",
       origin: "https://axis.example",
@@ -112,7 +118,7 @@ describe("APT plugin lifecycle", () => {
         }),
       },
     });
-    const installResponse = await plugin.clientHelpers?.handle({
+    const installResponse = await dispatchRepositoryClientHelper(plugin.clientHelpers!, {
       repository: repository(),
       action: "install",
       origin: "https://axis.example",

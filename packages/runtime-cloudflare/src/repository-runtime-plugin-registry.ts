@@ -108,11 +108,15 @@ export interface RepositoryClientHelperInput extends RepositoryClientHelperConte
   action: string;
 }
 
+export type RepositoryClientHelperActionHandlerInput = Omit<RepositoryClientHelperInput, "action">;
+
+export interface RepositoryClientHelperActionDescriptor extends RepositoryClientHelperAction {
+  handle(input: RepositoryClientHelperActionHandlerInput): Promise<Response>;
+}
+
 export interface RepositoryClientHelpers {
   namespace: string;
-  actions: RepositoryClientHelperAction[];
-  isPublic(action: string): boolean;
-  handle(input: RepositoryClientHelperInput): Promise<Response>;
+  actions: RepositoryClientHelperActionDescriptor[];
 }
 
 export interface RepositoryRuntimePluginServices {
@@ -193,6 +197,17 @@ export function createPrefixServingPredicate(prefixes: string[]): RepositoryPath
     normalizedPrefixes.some((prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`));
 }
 
+function publicClientHelperAction(action: RepositoryClientHelperActionDescriptor): RepositoryClientHelperAction {
+  return {
+    name: action.name,
+    label: action.label,
+    responseKind: action.responseKind,
+    defaultOpen: action.defaultOpen,
+    public: action.public,
+    ...(action.displayPath === undefined ? {} : { displayPath: action.displayPath }),
+  };
+}
+
 export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
   private readonly plugins = new Map<Ecosystem, ArtifactRepositoryPlugin>();
 
@@ -216,7 +231,7 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
       if (descriptor.clientHelpers) {
         metadata.clientHelpers = {
           namespace: descriptor.clientHelpers.namespace,
-          actions: descriptor.clientHelpers.actions.map((action) => ({ ...action })),
+          actions: descriptor.clientHelpers.actions.map(publicClientHelperAction),
         };
       }
       return metadata;
@@ -256,6 +271,21 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
     }
     return descriptor.publish.finalize(input);
   }
+}
+
+export async function dispatchRepositoryClientHelper(
+  clientHelpers: RepositoryClientHelpers,
+  input: RepositoryClientHelperInput,
+): Promise<Response> {
+  const action = clientHelpers.actions.find((candidate) => candidate.name === input.action);
+  if (!action) {
+    throw new NotFoundError(`Repository client helper is not configured: ${input.action}`);
+  }
+  return action.handle({
+    repository: input.repository,
+    origin: input.origin,
+    signingKeys: input.signingKeys,
+  });
 }
 
 function matchAdminResourceRoute(
