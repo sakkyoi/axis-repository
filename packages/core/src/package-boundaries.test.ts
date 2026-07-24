@@ -174,6 +174,10 @@ describe("package boundaries", () => {
     const runtimePluginRegistrySource = readFileSync(path.join(rootDir, "plugins/runtime.ts"), "utf8");
     const adminUiPluginRegistrySource = readFileSync(path.join(rootDir, "plugins/admin-ui.ts"), "utf8");
     expect(catalogSource).toContain("repositoryPluginCatalog");
+    expect(catalogSource).toContain("enabled");
+    expect(catalogSource).toContain("experimental");
+    expect(catalogSource).toContain("runtime");
+    expect(catalogSource).toContain("adminUi");
     expect(catalogSource).toContain("aptPluginManifest");
     expect(catalogSource).toContain("pypiPluginManifest");
     expect(catalogSource).not.toMatch(pluginImplementationImportPattern);

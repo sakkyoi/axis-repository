@@ -63,6 +63,10 @@ describe("admin API schemas", () => {
       ecosystem: "apt",
       name: "apt-signed",
       version: "0.1.0",
+      enabled: true,
+      experimental: false,
+      runtime: true,
+      adminUi: true,
       capabilities: ["signed-release", "client-helpers"],
       clientHelpers: {
         namespace: "apt",
@@ -248,6 +252,10 @@ describe("createAxisClient", () => {
               ecosystem: "apt",
               name: "apt-signed",
               version: "0.1.0",
+              enabled: true,
+              experimental: false,
+              runtime: true,
+              adminUi: true,
               capabilities: ["signed-release", "client-helpers"],
               clientHelpers: {
                 namespace: "apt",
@@ -275,6 +283,12 @@ describe("createAxisClient", () => {
 
     expect(requests).toEqual(["GET /admin/repository-plugins"]);
     expect(plugins.map((plugin) => plugin.ecosystem)).toEqual(["apt"]);
+    expect(plugins[0]).toMatchObject({
+      enabled: true,
+      experimental: false,
+      runtime: true,
+      adminUi: true,
+    });
   });
 
   it("uses a generic admin-scoped endpoint for repository client helpers", async () => {

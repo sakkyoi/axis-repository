@@ -63,6 +63,25 @@ export function repositoryCreatePluginOptions(
 ): RepositoryCreatePluginOption[] {
   return serverPlugins.map((serverPlugin) => {
     const localPlugin = localPlugins.find((plugin) => plugin.ecosystem === serverPlugin.ecosystem);
+    const manifest = getRepositoryPluginManifest(serverPlugin.ecosystem);
+    if (serverPlugin.enabled === false) {
+      return {
+        ecosystem: serverPlugin.ecosystem,
+        displayName: manifest?.displayName ?? serverPlugin.ecosystem,
+        description: "Server plugin is disabled.",
+        capabilities: [...serverPlugin.capabilities],
+        supported: false,
+      };
+    }
+    if (serverPlugin.runtime === false) {
+      return {
+        ecosystem: serverPlugin.ecosystem,
+        displayName: manifest?.displayName ?? serverPlugin.ecosystem,
+        description: "Server plugin has no runtime support.",
+        capabilities: [...serverPlugin.capabilities],
+        supported: false,
+      };
+    }
     if (!localPlugin) {
       return {
         ecosystem: serverPlugin.ecosystem,
@@ -72,7 +91,6 @@ export function repositoryCreatePluginOptions(
         supported: false,
       };
     }
-    const manifest = getRepositoryPluginManifest(serverPlugin.ecosystem);
     return {
       ecosystem: serverPlugin.ecosystem,
       displayName: manifest?.displayName ?? serverPlugin.ecosystem,

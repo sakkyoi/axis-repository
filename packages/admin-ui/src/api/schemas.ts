@@ -32,6 +32,10 @@ export const repositoryPluginSchema = z.object({
   ecosystem: z.string(),
   name: z.string(),
   version: z.string(),
+  enabled: z.boolean().optional(),
+  experimental: z.boolean().optional(),
+  runtime: z.boolean().optional(),
+  adminUi: z.boolean().optional(),
   capabilities: z.array(z.string()),
   clientHelpers: z.object({
     namespace: z.string(),

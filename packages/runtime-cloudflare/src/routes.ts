@@ -12,6 +12,7 @@ import {
   type RepositoryObjectMetadata,
   type RepositoryObjectRange,
 } from "@axis-repository/core";
+import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "../../../plugins/catalog";
 import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "./admin-ui-assets";
 import type { AppDependencies } from "./dev-dependencies";
 import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "./http";
@@ -55,6 +56,49 @@ function optionalRepositoryVisibility(body: Record<string, unknown>): Repository
 function publicPublishToken(record: PublishTokenRecord): Omit<PublishTokenRecord, "tokenHash"> {
   const { tokenHash, ...publicRecord } = record;
   return publicRecord;
+}
+
+function repositoryPluginMetadata(dependencies: AppDependencies) {
+  const registeredPlugins = dependencies.artifactPublisherRegistry.list();
+  const registeredPluginsByEcosystem = new Map(
+    registeredPlugins.map((plugin) => [plugin.ecosystem, plugin]),
+  );
+  const catalogPlugins = repositoryPluginCatalog.map((catalogEntry) => {
+    const plugin = registeredPluginsByEcosystem.get(catalogEntry.manifest.ecosystem);
+    return {
+      ecosystem: catalogEntry.manifest.ecosystem,
+      name: catalogEntry.manifest.runtimeName,
+      version: catalogEntry.manifest.version,
+      capabilities: [...catalogEntry.manifest.capabilities],
+      ...(catalogEntry.manifest.clientHelpers
+        ? {
+            clientHelpers: {
+              namespace: catalogEntry.manifest.clientHelpers.namespace,
+              actions: catalogEntry.manifest.clientHelpers.actions.map((action) => ({ ...action })),
+            },
+          }
+        : {}),
+      ...plugin,
+      enabled: catalogEntry.enabled,
+      experimental: catalogEntry.experimental,
+      runtime: catalogEntry.runtime,
+      adminUi: catalogEntry.adminUi,
+    };
+  });
+  const catalogEcosystems = new Set<string>(repositoryPluginCatalog.map((entry) => entry.manifest.ecosystem));
+  const uncatalogedPlugins = registeredPlugins
+    .filter((plugin) => !catalogEcosystems.has(plugin.ecosystem))
+    .map((plugin) => {
+      const catalogEntry = getRepositoryPluginCatalogEntry(plugin.ecosystem);
+      return {
+        ...plugin,
+        enabled: catalogEntry?.enabled ?? true,
+        experimental: catalogEntry?.experimental ?? false,
+        runtime: catalogEntry?.runtime ?? true,
+        adminUi: catalogEntry?.adminUi ?? false,
+      };
+    });
+  return [...catalogPlugins, ...uncatalogedPlugins];
 }
 
 function requiredStringValue(value: unknown, label: string): string {
@@ -578,7 +622,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (url.pathname === "/admin/repository-plugins") {
     requireAdmin(request, dependencies.adminToken);
     if (request.method === "GET") {
-      return jsonResponse({ plugins: dependencies.artifactPublisherRegistry.list() });
+      return jsonResponse({ plugins: repositoryPluginMetadata(dependencies) });
     }
     throw new NotFoundError();
   }

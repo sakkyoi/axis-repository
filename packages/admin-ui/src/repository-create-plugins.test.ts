@@ -103,6 +103,8 @@ describe("repository create plugins", () => {
         ecosystem: "npm",
         name: "npm-registry",
         version: "0.1.0",
+        enabled: false,
+        runtime: true,
         capabilities: ["package-index"],
       },
     ]);
@@ -127,8 +129,31 @@ describe("repository create plugins", () => {
       {
         ecosystem: "npm",
         displayName: "npm",
-        description: "Server plugin is enabled, but this admin UI cannot create it yet.",
+        description: "Server plugin is disabled.",
         capabilities: ["package-index"],
+        supported: false,
+      },
+    ]);
+  });
+
+  it("does not offer server plugins without runtime support", () => {
+    const options = repositoryCreatePluginOptions([
+      {
+        ecosystem: "apt",
+        name: "apt-signed",
+        version: "0.1.0",
+        enabled: true,
+        runtime: false,
+        capabilities: ["signed-release"],
+      },
+    ]);
+
+    expect(options).toEqual([
+      {
+        ecosystem: "apt",
+        displayName: "APT",
+        description: "Server plugin has no runtime support.",
+        capabilities: ["signed-release"],
         supported: false,
       },
     ]);

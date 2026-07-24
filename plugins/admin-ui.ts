@@ -9,7 +9,7 @@ const adminUiPlugins: Record<string, RepositoryUiPlugin> = {
 };
 
 export const repositoryAdminUiPlugins = repositoryPluginCatalog
-  .filter((entry) => entry.adminUi)
+  .filter((entry) => entry.enabled && entry.adminUi)
   .map((entry) => {
     const plugin = adminUiPlugins[entry.manifest.ecosystem];
     if (!plugin) {

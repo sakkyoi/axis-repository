@@ -66,6 +66,24 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
 ): RepositoryCreatePluginOption[] {
   return serverPlugins.map((serverPlugin) => {
     const localPlugin = localPlugins.find((candidate) => candidate.manifest.ecosystem === serverPlugin.ecosystem);
+    if (serverPlugin.enabled === false) {
+      return {
+        ecosystem: serverPlugin.ecosystem,
+        displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
+        description: "Server plugin is disabled.",
+        capabilities: [...serverPlugin.capabilities],
+        supported: false,
+      };
+    }
+    if (serverPlugin.runtime === false) {
+      return {
+        ecosystem: serverPlugin.ecosystem,
+        displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
+        description: "Server plugin has no runtime support.",
+        capabilities: [...serverPlugin.capabilities],
+        supported: false,
+      };
+    }
     if (localPlugin) {
       return {
         ecosystem: serverPlugin.ecosystem,

@@ -96,6 +96,32 @@ Runtime tests may use
 `@axis-repository/runtime-cloudflare/plugin-runtime/testing` for host test
 helpers.
 
+## Catalog Lifecycle
+
+Every plugin must have one entry in `plugins/catalog.ts`. The catalog is the
+shared source for plugin lifecycle and host support metadata:
+
+```ts
+{
+  manifest: examplePluginManifest,
+  enabled: true,
+  experimental: true,
+  runtime: true,
+  adminUi: false,
+}
+```
+
+`enabled` controls whether the host registries should load the plugin.
+`experimental` is metadata exposed to clients for UI labeling and rollout
+policy. `runtime` means the ecosystem has Worker/runtime behavior wired in
+`plugins/runtime.ts`. `adminUi` means the admin UI behavior is wired in
+`plugins/admin-ui.ts`.
+
+The runtime and admin UI registries both filter disabled plugins. The admin API
+exposes lifecycle metadata from the catalog through
+`GET /admin/repository-plugins`, and the admin UI combines that server catalog
+with its local UI registry before showing create options.
+
 ## Admin UI Plugin
 
 Admin UI behavior belongs under `plugins/<ecosystem>/admin-ui/`. Export a
@@ -123,7 +149,7 @@ implementations directly.
 1. Add `plugins/<ecosystem>/manifest.ts`.
 2. Add runtime behavior under `plugins/<ecosystem>/runtime/`.
 3. Add admin UI behavior under `plugins/<ecosystem>/admin-ui/` if needed.
-4. Add the ecosystem manifest to `plugins/catalog.ts`.
+4. Add the ecosystem manifest and lifecycle metadata to `plugins/catalog.ts`.
 5. Wire runtime behavior in `plugins/runtime.ts`.
 6. Wire admin UI behavior in `plugins/admin-ui.ts`.
 7. Add focused tests beside the new plugin code.

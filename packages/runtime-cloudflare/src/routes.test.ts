@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
+import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
 import { createDevDependencyHarness } from "./dev-dependencies";
 import type { MemoryRepositoryObjectStore } from "./repository-object-store";
 
@@ -468,6 +469,10 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "apt",
           name: "apt-signed",
           version: "0.1.0",
+          enabled: true,
+          experimental: false,
+          runtime: true,
+          adminUi: true,
           capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
           clientHelpers: {
             namespace: "apt",
@@ -500,6 +505,10 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           name: "pypi-simple",
           version: "0.1.0",
+          enabled: true,
+          experimental: true,
+          runtime: true,
+          adminUi: true,
           capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
           clientHelpers: {
             namespace: "pypi",
@@ -561,6 +570,44 @@ describe("Cloudflare runtime routes", () => {
     const response = await app.fetch(new Request("https://axis.example/admin/repository-plugins"));
 
     expect(response.status).toBe(401);
+  });
+
+  it("lists catalog plugins even when runtime metadata is not registered", async () => {
+    const harness = createDevDependencyHarness();
+    harness.dependencies.artifactPublisherRegistry = new ArtifactPublisherRegistry();
+    const app = createApp(harness.dependencies);
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repository-plugins", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      plugins: [
+        {
+          ecosystem: "apt",
+          enabled: true,
+          experimental: false,
+          runtime: true,
+          adminUi: true,
+          name: "apt-signed",
+          version: "0.1.0",
+          capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
+        },
+        {
+          ecosystem: "pypi",
+          enabled: true,
+          experimental: true,
+          runtime: true,
+          adminUi: true,
+          name: "pypi-simple",
+          version: "0.1.0",
+          capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
+        },
+      ],
+    });
   });
 
   it("rejects creating apt repositories with invalid config", async () => {

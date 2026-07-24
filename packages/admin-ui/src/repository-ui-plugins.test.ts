@@ -61,12 +61,20 @@ describe("repository UI plugin registry", () => {
         ecosystem: "apt",
         name: "apt-signed",
         version: "0.1.0",
+        enabled: true,
+        experimental: false,
+        runtime: true,
+        adminUi: true,
         capabilities: ["signed-release"],
       },
       {
         ecosystem: "npm",
         name: "npm-registry",
         version: "0.1.0",
+        enabled: false,
+        experimental: true,
+        runtime: true,
+        adminUi: false,
         capabilities: ["package-index"],
       },
     ]);
@@ -79,6 +87,11 @@ describe("repository UI plugin registry", () => {
       ecosystem: "apt",
       displayName: "APT",
       supported: true,
+    });
+    expect(options[1]).toMatchObject({
+      ecosystem: "npm",
+      supported: false,
+      description: "Server plugin is disabled.",
     });
   });
 

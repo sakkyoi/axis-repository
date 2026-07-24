@@ -45,7 +45,7 @@ const runtimePluginFactories: Record<string, RuntimePluginFactory> = {
 
 export function createRepositoryRuntimePlugins(input: RepositoryRuntimePluginInput): ArtifactRepositoryPlugin[] {
   return repositoryPluginCatalog
-    .filter((entry) => entry.runtime)
+    .filter((entry) => entry.enabled && entry.runtime)
     .map((entry) => {
       const factory = runtimePluginFactories[entry.manifest.ecosystem];
       if (!factory) {
