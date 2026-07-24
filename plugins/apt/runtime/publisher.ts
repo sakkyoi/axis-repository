@@ -1,12 +1,16 @@
 import {
   ValidationError,
   type ArtifactPublisher,
+  type PublishedArtifactInput,
   type PublishArtifactsInput,
+  type PublishArtifactRequest,
   type PublishResult,
+  type RepositoryObject,
   type RepositoryObjectStore,
 } from "@axis-repository/core";
 import type { RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { buildAptRepositoryMetadata } from "./metadata";
+import { readDebControlMetadata, type DebControlMetadata } from "./deb-control";
+import { buildAptRepositoryMetadata, parseAptRepositoryConfig } from "./metadata";
 
 const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";
 const GZIP_CONTENT_TYPE = "application/gzip";
@@ -38,10 +42,12 @@ export class AptPublisher implements ArtifactPublisher {
   ) {}
 
   async publish(input: PublishArtifactsInput): Promise<PublishResult> {
-    const metadata = await buildAptRepositoryMetadata(input);
-    if (!input.session.requestedBy.signingKeyIds.includes(metadata.config.signingKeyId)) {
+    const config = parseAptRepositoryConfig(input.repository);
+    if (!input.session.requestedBy.signingKeyIds.includes(config.signingKeyId)) {
       throw new ValidationError("Publish token is not scoped to the repository signing key");
     }
+    const enrichedInput = await this.enrichArtifactsWithDebControlMetadata(input);
+    const metadata = await buildAptRepositoryMetadata(enrichedInput);
     const key = await this.options.signingKeys.getActivePrivateKey(metadata.config.signingKeyId);
     const publishedAt = input.session.publishStartedAt ?? input.session.finalizingStartedAt ?? input.session.createdAt;
     const signingDate = new Date(publishedAt);
@@ -86,4 +92,96 @@ export class AptPublisher implements ArtifactPublisher {
       ],
     };
   }
+
+  private async enrichArtifactsWithDebControlMetadata(input: PublishArtifactsInput): Promise<PublishArtifactsInput> {
+    return {
+      ...input,
+      artifacts: await Promise.all(input.artifacts.map((artifact) => this.enrichArtifact(input, artifact))),
+    };
+  }
+
+  private async enrichArtifact(
+    input: PublishArtifactsInput,
+    artifact: PublishedArtifactInput,
+  ): Promise<PublishedArtifactInput> {
+    const object = await this.options.objectStore.getObject(artifact.verified.objectKey);
+    if (!object) {
+      throw new ValidationError("APT artifact upload object could not be read for metadata parsing");
+    }
+
+    const control = await readDebControlMetadata(await objectBytes(object));
+    return {
+      ...artifact,
+      artifact: {
+        ...artifact.artifact,
+        metadata: aptArtifactMetadataFromDebControl({
+          repository: input.repository,
+          artifact: artifact.artifact,
+          control,
+        }),
+      },
+    };
+  }
+}
+
+function aptArtifactMetadataFromDebControl(input: {
+  repository: PublishArtifactsInput["repository"];
+  artifact: PublishArtifactRequest;
+  control: DebControlMetadata;
+}): Record<string, unknown> {
+  const existing = input.artifact.metadata;
+  const aptConfig = input.repository.config.apt;
+  const configuredComponents = aptConfig && typeof aptConfig === "object" && !Array.isArray(aptConfig)
+    ? (aptConfig as Record<string, unknown>).components
+    : undefined;
+  const defaultComponent = Array.isArray(configuredComponents) && configuredComponents.length === 1 && typeof configuredComponents[0] === "string"
+    ? configuredComponents[0]
+    : undefined;
+
+  return {
+    package: metadataString(existing, "package") ?? input.control.package,
+    version: metadataString(existing, "version") ?? input.control.version,
+    architecture: metadataString(existing, "architecture") ?? input.control.architecture,
+    component: metadataString(existing, "component") ?? defaultComponent,
+    description: metadataString(existing, "description") ?? input.control.description,
+    maintainer: metadataString(existing, "maintainer") ?? input.control.maintainer,
+    section: metadataString(existing, "section") ?? input.control.section,
+    priority: metadataString(existing, "priority") ?? input.control.priority,
+    homepage: metadataString(existing, "homepage") ?? input.control.homepage,
+    depends: metadataString(existing, "depends") ?? input.control.depends,
+    recommends: metadataString(existing, "recommends") ?? input.control.recommends,
+    suggests: metadataString(existing, "suggests") ?? input.control.suggests,
+    conflicts: metadataString(existing, "conflicts") ?? input.control.conflicts,
+    replaces: metadataString(existing, "replaces") ?? input.control.replaces,
+    provides: metadataString(existing, "provides") ?? input.control.provides,
+  };
+}
+
+function metadataString(metadata: Record<string, unknown>, field: string): string | undefined {
+  const value = metadata[field];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+async function objectBytes(object: RepositoryObject): Promise<Uint8Array> {
+  if (object.body instanceof Uint8Array) {
+    return object.body;
+  }
+  if (typeof object.body === "string") {
+    return new TextEncoder().encode(object.body);
+  }
+  const chunks: Uint8Array[] = [];
+  const reader = object.body.getReader();
+  while (true) {
+    const next = await reader.read();
+    if (next.done) break;
+    chunks.push(next.value);
+  }
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }

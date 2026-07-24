@@ -52,7 +52,10 @@ export function validateAptPublishArtifacts(input: {
   repository: Repository;
   artifacts: PublishArtifactRequest[];
 }): void {
-  validateAptArtifacts(input);
+  parseAptRepositoryConfig(input.repository);
+  for (const artifact of input.artifacts) {
+    validateArtifactFilename(artifact.filename);
+  }
 }
 
 export function validateAptArtifacts(input: {

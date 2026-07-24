@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { createDevDependencyHarness } from "./dev-dependencies";
+import { debArchive } from "../../../../plugins/apt/runtime/deb-fixtures.test-support";
 import type { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 
 afterEach(() => {
@@ -9,10 +10,29 @@ afterEach(() => {
   vi.resetModules();
 });
 
+function aptDebFixture(input: {
+  packageName?: string;
+  version?: string;
+  architecture?: string;
+  component?: string;
+} = {}): Uint8Array {
+  return debArchive({
+    control: [
+      `Package: ${input.packageName ?? "myapp"}`,
+      `Version: ${input.version ?? "1.2.3"}`,
+      `Architecture: ${input.architecture ?? "amd64"}`,
+      "Maintainer: Release Team <release@example.com>",
+      "Description: Example package",
+      `Section: ${input.component ?? "main"}`,
+    ].join("\n"),
+  });
+}
+
 async function createPublishSession(
   app: ReturnType<typeof createApp>,
   repositoryObjectStore?: MemoryRepositoryObjectStore,
 ) {
+  const debBytes = aptDebFixture();
   const { generateKey } = await import("openpgp");
   const key = await generateKey({
     type: "ecc",
@@ -93,7 +113,7 @@ async function createPublishSession(
         artifacts: [
           {
             filename: "myapp_1.2.3_amd64.deb",
-            size: 1234,
+            size: debBytes.byteLength,
             sha256: "a".repeat(64),
             contentType: "application/vnd.debian.binary-package",
             metadata: {
@@ -118,7 +138,7 @@ async function createPublishSession(
     for (const upload of session.uploads) {
       await repositoryObjectStore.putBytes(
         upload.objectKey,
-        new Uint8Array(1234),
+        debBytes,
         "application/vnd.debian.binary-package",
       );
     }
@@ -2193,6 +2213,7 @@ describe("Cloudflare runtime routes", () => {
   it("publishes an artifact through admin-scoped publish session routes", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
+    const debBytes = aptDebFixture();
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
       name: "debian-internal",
@@ -2211,7 +2232,7 @@ describe("Cloudflare runtime routes", () => {
         ecosystem: "apt",
         artifacts: [{
           filename: "myapp_1.2.3_amd64.deb",
-          size: 1234,
+          size: debBytes.byteLength,
           sha256: "a".repeat(64),
           contentType: "application/vnd.debian.binary-package",
           metadata: {
@@ -2231,7 +2252,7 @@ describe("Cloudflare runtime routes", () => {
       uploads: Array<{ uploadId: string; objectKey: string }>;
     };
     const upload = session.uploads[0]!;
-    await harness.repositoryObjectStore.putBytes(upload.objectKey, new Uint8Array(1234), "application/vnd.debian.binary-package");
+    await harness.repositoryObjectStore.putBytes(upload.objectKey, debBytes, "application/vnd.debian.binary-package");
 
     const verifyResponse = await app.fetch(new Request(
       `https://axis.example/admin/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
@@ -2422,8 +2443,9 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("rejects apt publish sessions with invalid artifact metadata before creating uploads", async () => {
-    const app = createApp();
+  it("rejects apt publish finalization when uploaded deb metadata cannot be parsed", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
     await createRepository(app, {
       name: "debian-internal",
       ecosystem: "apt",
@@ -2438,7 +2460,7 @@ describe("Cloudflare runtime routes", () => {
       signingKeyIds: ["signing_key_prod"],
     });
 
-    const response = await app.fetch(
+    const createResponse = await app.fetch(
       new Request("https://axis.example/api/publish-sessions", {
         method: "POST",
         headers: {
@@ -2467,9 +2489,38 @@ describe("Cloudflare runtime routes", () => {
       }),
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: { code: "validation_error", message: "artifact metadata package is required" },
+    expect(createResponse.status).toBe(201);
+    const session = (await createResponse.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string; objectKey: string }>;
+    };
+    const upload = session.uploads[0]!;
+    await harness.repositoryObjectStore.putBytes(
+      upload.objectKey,
+      new TextEncoder().encode("not a deb"),
+      "application/vnd.debian.binary-package",
+    );
+
+    const verifyResponse = await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      },
+    ));
+    expect(verifyResponse.status).toBe(200);
+
+    const finalizeResponse = await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/finalize`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      },
+    ));
+
+    expect(finalizeResponse.status).toBe(400);
+    await expect(finalizeResponse.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "APT artifact is not a Debian package archive" },
     });
   });
 

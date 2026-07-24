@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AxisAdminDO, type AxisEnv } from "./axis-admin-do";
+import { debArchive } from "../../../../plugins/apt/runtime/deb-fixtures.test-support";
 import type { DurableStorage } from "../storage/durable-state";
 
 class FakeDurableStorage implements DurableStorage {
@@ -140,6 +141,19 @@ function readBucketBytes(bucket: FakeR2Bucket, key: string): Uint8Array {
     throw new Error(`Expected stored R2 byte object: ${key}`);
   }
   return object.value;
+}
+
+function aptDebFixture(): Uint8Array {
+  return debArchive({
+    control: [
+      "Package: myapp",
+      "Version: 1.2.3",
+      "Architecture: amd64",
+      "Maintainer: Release Team <release@example.com>",
+      "Description: Example package",
+      "Section: main",
+    ].join("\n"),
+  });
 }
 
 function validAptConfig(signingKeyId = "signing_key_prod"): Record<string, unknown> {
@@ -413,6 +427,7 @@ describe("AxisAdminDO", () => {
       passphrase: "correct-passphrase",
     });
     const bucket = new FakeR2Bucket();
+    const debBytes = aptDebFixture();
     const object = createObject({
       AXIS_OBJECTS: bucket as unknown as R2Bucket,
       ADMIN_TOKEN: "test-admin-token",
@@ -490,7 +505,7 @@ describe("AxisAdminDO", () => {
           artifacts: [
             {
               filename: "myapp_1.2.3_amd64.deb",
-              size: 1234,
+              size: debBytes.byteLength,
               sha256: "a".repeat(64),
               contentType: "application/vnd.debian.binary-package",
               metadata: {
@@ -517,10 +532,10 @@ describe("AxisAdminDO", () => {
     }
     bucket.seedUpload(
       upload.objectKey,
-      new Uint8Array(1234),
+      debBytes,
       {
         contentType: "application/vnd.debian.binary-package",
-        size: 1234,
+        size: debBytes.byteLength,
         sha256: "a".repeat(64),
         uploadId: upload.uploadId,
       },
@@ -572,7 +587,7 @@ describe("AxisAdminDO", () => {
       },
     });
     expect(readBucketBytes(bucket, "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb"))
-      .toHaveLength(1234);
+      .toHaveLength(debBytes.byteLength);
     expect(readBucketText(bucket, "repositories/debian-internal/dists/noble/main/binary-amd64/Packages"))
       .toContain("Filename: pool/main/myapp/myapp_1.2.3_amd64.deb");
     expect(readBucketText(bucket, "repositories/debian-internal/dists/noble/Release"))

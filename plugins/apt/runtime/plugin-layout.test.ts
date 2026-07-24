@@ -7,7 +7,7 @@ const runtimeDir = dirname(fileURLToPath(import.meta.url));
 
 describe("APT runtime plugin layout", () => {
   it("keeps metadata generation split by responsibility", () => {
-    for (const file of ["config.ts", "packages.ts", "release.ts", "metadata.ts"]) {
+    for (const file of ["config.ts", "deb-control.ts", "packages.ts", "release.ts", "metadata.ts"]) {
       expect(existsSync(join(runtimeDir, file)), `plugins/apt/runtime/${file} must exist`).toBe(true);
     }
   });

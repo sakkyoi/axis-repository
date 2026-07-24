@@ -107,7 +107,7 @@ describe("APT metadata", () => {
     });
   });
 
-  it("validates APT publish artifact requests before uploads are verified", () => {
+  it("validates APT publish artifact request envelopes before uploads are verified", () => {
     const valid = input();
     expect(() =>
       validateAptPublishArtifacts({
@@ -124,7 +124,16 @@ describe("APT metadata", () => {
         repository: missing.repository,
         artifacts: missing.artifacts.map((published) => published.artifact),
       }),
-    ).toThrow("artifact metadata package is required");
+    ).not.toThrow();
+
+    const unsafe = input();
+    unsafe.artifacts[0]!.artifact.filename = "../myapp_1.2.3_amd64.deb";
+    expect(() =>
+      validateAptPublishArtifacts({
+        repository: unsafe.repository,
+        artifacts: unsafe.artifacts.map((published) => published.artifact),
+      }),
+    ).toThrow("artifact filename is not safe");
   });
 
   it("rejects invalid repository config with exact messages", () => {
