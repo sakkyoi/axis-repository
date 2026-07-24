@@ -11,7 +11,7 @@ export function createDefaultArtifactPlugins(input: {
   const registry = new RepositoryRuntimePluginRegistry();
   for (const plugin of createRepositoryRuntimePlugins({
     objectStore: input.objectStore,
-    signingKeyService: input.signingKeyService,
+    signingKeys: input.signingKeyService,
     aptReleaseSigner: new OpenPgpSigner(),
   })) {
     registry.register(plugin);

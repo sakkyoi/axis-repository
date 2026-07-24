@@ -2,6 +2,7 @@ import { NotFoundError, ValidationError, type ArtifactPublisher, type Repository
 import { aptPluginManifest } from "../manifest";
 import type {
   ArtifactRepositoryPlugin,
+  RepositorySigningKeyCapability,
   ValidateRepositoryConfigInput,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { createPrefixServingPredicate, readJsonObject, stringField } from "@axis-repository/runtime-cloudflare/plugin-runtime";
@@ -51,38 +52,19 @@ function aptPublicKeyResponse(publicKeyArmored: string, repository: Repository):
   return new Response(publicKeyArmored, { headers });
 }
 
-interface AptSigningKeyService {
-  listForRepository(repositoryName: string): Promise<unknown[]>;
-  create(input: {
-    repositoryName: string;
-    name: string;
-    privateKeyArmored: string;
-    passphrase: string;
-  }): Promise<unknown>;
-  generate(input: {
-    repositoryName: string;
-    name: string;
-    userIdName: string;
-    userIdEmail: string;
-  }): Promise<unknown>;
-  getPublicKey(id: string): Promise<{ repositoryName: string }>;
-  revoke(id: string): Promise<unknown>;
-}
-
-function requireAptSigningKeyService(services: Record<string, unknown>): AptSigningKeyService {
-  const service = services.signingKeyService;
-  if (!service || typeof service !== "object") {
-    throw new ValidationError("APT signing key service is not configured");
+function requireAptSigningKeys(services: { signingKeys?: RepositorySigningKeyCapability }): RepositorySigningKeyCapability {
+  if (!services.signingKeys) {
+    throw new ValidationError("APT signing key capability is not configured");
   }
-  return service as AptSigningKeyService;
+  return services.signingKeys;
 }
 
 async function requireRepositoryScopedSigningKey(
-  signingKeyService: AptSigningKeyService,
+  signingKeys: RepositorySigningKeyCapability,
   repositoryName: string,
   signingKeyId: string,
 ) {
-  const key = await signingKeyService.getPublicKey(signingKeyId);
+  const key = await signingKeys.getPublicKey(signingKeyId);
   if (key.repositoryName !== repositoryName) {
     throw new NotFoundError();
   }
@@ -138,15 +120,15 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
     adminResources: {
       namespace: aptPluginManifest.repositoryConfig.namespace,
       handle: async ({ repositoryName, repository, request, path, services }) => {
-        const signingKeyService = requireAptSigningKeyService(services);
+        const signingKeys = requireAptSigningKeys(services);
         if (path.length === 1 && path[0] === "signing-keys" && request.method === "GET") {
           return jsonResponse({
-            signingKeys: await signingKeyService.listForRepository(repositoryName),
+            signingKeys: await signingKeys.listForRepository(repositoryName),
           });
         }
         if (path.length === 2 && path[0] === "signing-keys" && path[1] === "import" && request.method === "POST") {
           const body = await readJsonObject(request);
-          const key = await signingKeyService.create({
+          const key = await signingKeys.create({
             repositoryName,
             name: stringField(body, "name"),
             privateKeyArmored: stringField(body, "privateKeyArmored"),
@@ -156,7 +138,7 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
         }
         if (path.length === 2 && path[0] === "signing-keys" && path[1] === "generate" && request.method === "POST") {
           const body = await readJsonObject(request);
-          const key = await signingKeyService.generate({
+          const key = await signingKeys.generate({
             repositoryName,
             name: stringField(body, "name"),
             userIdName: stringField(body, "userIdName"),
@@ -165,11 +147,11 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
           return jsonResponse(key, { status: 201 });
         }
         if (path.length === 2 && path[0] === "signing-keys" && request.method === "GET") {
-          return jsonResponse(await requireRepositoryScopedSigningKey(signingKeyService, repositoryName, path[1]!));
+          return jsonResponse(await requireRepositoryScopedSigningKey(signingKeys, repositoryName, path[1]!));
         }
         if (path.length === 3 && path[0] === "signing-keys" && path[2] === "revoke" && request.method === "POST") {
-          await requireRepositoryScopedSigningKey(signingKeyService, repositoryName, path[1]!);
-          return jsonResponse(await signingKeyService.revoke(path[1]!));
+          await requireRepositoryScopedSigningKey(signingKeys, repositoryName, path[1]!);
+          return jsonResponse(await signingKeys.revoke(path[1]!));
         }
         throw new NotFoundError();
       },

@@ -146,7 +146,7 @@ describe("APT plugin lifecycle", () => {
       publisher: { publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }) },
     });
     const services = {
-      signingKeyService: {
+      signingKeys: {
         listForRepository: async (repositoryName: string) => {
           calls.push({ method: "listForRepository", input: repositoryName });
           return [signingKey];
@@ -155,9 +155,24 @@ describe("APT plugin lifecycle", () => {
           calls.push({ method: "generate", input });
           return signingKey;
         },
+        create: async (input: unknown) => {
+          calls.push({ method: "create", input });
+          return signingKey;
+        },
         getPublicKey: async (id: string) => {
           calls.push({ method: "getPublicKey", input: id });
           return signingKey;
+        },
+        getActivePrivateKey: async (id: string) => {
+          calls.push({ method: "getActivePrivateKey", input: id });
+          return {
+            id,
+            repositoryName: "debian-internal",
+            privateKeyArmored: "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+            passphrase: "passphrase",
+            fingerprint: "FINGERPRINT",
+            keyId: "KEYID",
+          };
         },
         revoke: async (id: string) => {
           calls.push({ method: "revoke", input: id });

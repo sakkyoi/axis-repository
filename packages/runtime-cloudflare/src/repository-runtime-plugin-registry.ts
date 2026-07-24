@@ -17,6 +17,45 @@ export interface RepositoryClientHelperSigningKey {
   publicKeyArmored: string;
 }
 
+export interface RepositoryPublicSigningKey {
+  id: string;
+  repositoryName: string;
+  name: string;
+  publicKeyArmored: string;
+  fingerprint: string;
+  keyId: string;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export interface RepositoryActivePrivateSigningKey {
+  id: string;
+  repositoryName: string;
+  privateKeyArmored: string;
+  passphrase: string;
+  fingerprint: string;
+  keyId: string;
+}
+
+export interface RepositorySigningKeyCapability {
+  listForRepository(repositoryName: string): Promise<RepositoryPublicSigningKey[]>;
+  create(input: {
+    repositoryName: string;
+    name: string;
+    privateKeyArmored: string;
+    passphrase: string;
+  }): Promise<RepositoryPublicSigningKey>;
+  generate(input: {
+    repositoryName: string;
+    name: string;
+    userIdName: string;
+    userIdEmail: string;
+  }): Promise<RepositoryPublicSigningKey>;
+  getPublicKey(id: string): Promise<RepositoryPublicSigningKey>;
+  getActivePrivateKey(id: string): Promise<RepositoryActivePrivateSigningKey>;
+  revoke(id: string): Promise<RepositoryPublicSigningKey>;
+}
+
 export type RepositoryClientHelperResponseKind = PluginClientHelperResponseKind;
 export type RepositoryClientHelperAction = PluginClientHelperActionManifest;
 
@@ -76,6 +115,7 @@ export interface RepositoryClientHelpers {
 }
 
 export interface RepositoryAdminResourceServices {
+  signingKeys?: RepositorySigningKeyCapability;
   [name: string]: unknown;
 }
 

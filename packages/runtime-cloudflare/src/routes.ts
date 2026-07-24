@@ -788,7 +788,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       request,
       path: adminPluginResourcePath.path,
       services: {
-        signingKeyService: dependencies.signingKeyService,
+        signingKeys: dependencies.signingKeyService,
       },
     });
   }

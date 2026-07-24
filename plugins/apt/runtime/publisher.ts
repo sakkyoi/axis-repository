@@ -5,7 +5,7 @@ import {
   type PublishResult,
   type RepositoryObjectStore,
 } from "@axis-repository/core";
-import type { SigningKeyService } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import type { RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { buildAptRepositoryMetadata } from "./metadata";
 
 const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";
@@ -32,7 +32,7 @@ export class AptPublisher implements ArtifactPublisher {
   constructor(
     private readonly options: {
       objectStore: RepositoryObjectStore;
-      signingKeyService: SigningKeyService;
+      signingKeys: RepositorySigningKeyCapability;
       signer: AptReleaseSigner;
     },
   ) {}
@@ -42,7 +42,7 @@ export class AptPublisher implements ArtifactPublisher {
     if (!input.session.requestedBy.signingKeyIds.includes(metadata.config.signingKeyId)) {
       throw new ValidationError("Publish token is not scoped to the repository signing key");
     }
-    const key = await this.options.signingKeyService.getActivePrivateKey(metadata.config.signingKeyId);
+    const key = await this.options.signingKeys.getActivePrivateKey(metadata.config.signingKeyId);
     const publishedAt = input.session.publishStartedAt ?? input.session.finalizingStartedAt ?? input.session.createdAt;
     const signingDate = new Date(publishedAt);
     const inReleasePath = metadata.releasePath.replace(/\/Release$/, "/InRelease");

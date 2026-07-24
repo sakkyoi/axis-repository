@@ -1,7 +1,7 @@
 import type { RepositoryObjectStore } from "@axis-repository/core";
 import type {
   ArtifactRepositoryPlugin,
-  SigningKeyService,
+  RepositorySigningKeyCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { repositoryPluginCatalog } from "./catalog";
 import { AptPublisher } from "./apt/runtime/publisher";
@@ -25,7 +25,7 @@ interface AptReleaseSigner {
 
 export interface RepositoryRuntimePluginInput {
   objectStore: RepositoryObjectStore;
-  signingKeyService: SigningKeyService;
+  signingKeys: RepositorySigningKeyCapability;
   aptReleaseSigner: AptReleaseSigner;
 }
 
@@ -36,7 +36,7 @@ const runtimePluginFactories: Record<string, RuntimePluginFactory> = {
     createAptPlugin({
       publisher: new AptPublisher({
         objectStore: input.objectStore,
-        signingKeyService: input.signingKeyService,
+        signingKeys: input.signingKeys,
         signer: input.aptReleaseSigner,
       }),
     }),

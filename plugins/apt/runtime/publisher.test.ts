@@ -156,7 +156,7 @@ describe("AptPublisher", () => {
     );
     const publisher = new AptPublisher({
       objectStore,
-      signingKeyService,
+      signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
 
@@ -300,7 +300,7 @@ describe("AptPublisher", () => {
     }
     const publisher = new AptPublisher({
       objectStore,
-      signingKeyService,
+      signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
 
@@ -336,12 +336,12 @@ describe("AptPublisher", () => {
     }
     const firstPublisher = new AptPublisher({
       objectStore: firstStore,
-      signingKeyService,
+      signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
     const secondPublisher = new AptPublisher({
       objectStore: secondStore,
-      signingKeyService,
+      signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
 
@@ -357,7 +357,7 @@ describe("AptPublisher", () => {
     const { service: signingKeyService } = await createSigningKey(state);
     const publisher = new AptPublisher({
       objectStore: new MemoryRepositoryObjectStore(),
-      signingKeyService,
+      signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
 
@@ -371,7 +371,7 @@ describe("AptPublisher", () => {
     const objectStore = new MemoryRepositoryObjectStore();
     const publisher = new AptPublisher({
       objectStore,
-      signingKeyService,
+      signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
 
@@ -385,7 +385,7 @@ describe("AptPublisher", () => {
     const objectStore = new RecordingObjectStore();
     const publisher = new AptPublisher({
       objectStore,
-      signingKeyService,
+      signingKeys: signingKeyService,
       signer: {
         clearSign: async () => "-----BEGIN PGP SIGNED MESSAGE-----\n",
         detachSign: async () => {
