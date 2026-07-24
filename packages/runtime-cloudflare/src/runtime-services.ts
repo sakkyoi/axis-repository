@@ -18,14 +18,14 @@ import {
   type VerifyPublishUploadResult,
 } from "@axis-repository/core";
 import { getRepositoryPluginCatalogEntry } from "../../../plugins/catalog";
-import type { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
+import type { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
 import { ensureRepositoryPluginEnabled } from "./repository-plugin-policy";
 
 export class PluginRepositoryService {
   constructor(
     private readonly options: {
       repositoryService: RepositoryService;
-      plugins: ArtifactPublisherRegistry;
+      plugins: RepositoryRuntimePluginRegistry;
       pluginPolicyService: PluginPolicyService;
     },
   ) {}
@@ -74,7 +74,7 @@ export class PluginPublishSessionService {
     private readonly options: {
       publishSessionService: PublishSessionService;
       repositoryService: RepositoryService;
-      plugins: ArtifactPublisherRegistry;
+      plugins: RepositoryRuntimePluginRegistry;
       pluginPolicyService: PluginPolicyService;
     },
   ) {}
@@ -103,9 +103,15 @@ export class PluginPublishSessionService {
       repository,
       artifacts: input.artifacts,
     });
+    const principal = adminPublishPrincipal(repository, plugin.derivePublishPrincipalScope?.(repository));
+    plugin.authorizePublish({
+      repository,
+      principal,
+      artifacts: input.artifacts,
+    });
     return this.options.publishSessionService.create({
       ...input,
-      principal: adminPublishPrincipal(repository),
+      principal,
     });
   }
 
@@ -125,7 +131,7 @@ export class PluginPublishSessionService {
     const session = await this.getExistingSession(input.sessionId);
     return this.options.publishSessionService.verifyUpload({
       ...input,
-      principal: adminPublishPrincipal({ name: session.repositoryName, config: {} }),
+      principal: adminPublishPrincipal({ name: session.repositoryName }),
     });
   }
 
@@ -137,8 +143,9 @@ export class PluginPublishSessionService {
     const session = await this.getExistingSession(input.sessionId);
     const repository = await this.options.repositoryService.getByName(session.repositoryName);
     await this.ensurePluginEnabled(repository.ecosystem);
-    const principal = adminPublishPrincipal(repository);
-    this.options.plugins.requirePlugin(repository.ecosystem).authorizePublish({
+    const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
+    const principal = adminPublishPrincipal(repository, plugin.derivePublishPrincipalScope?.(repository));
+    plugin.authorizePublish({
       repository,
       principal,
       artifacts: session.artifacts,
@@ -178,22 +185,16 @@ export class PluginPublishSessionService {
   }
 }
 
-function adminPublishPrincipal(repository: Pick<Repository, "name" | "config">): TokenPrincipal {
+function adminPublishPrincipal(
+  repository: Pick<Repository, "name">,
+  scope: { ecosystemScopes?: Record<string, unknown>; signingKeyIds?: string[] } = {},
+): TokenPrincipal {
   return {
     tokenId: "admin",
     name: "admin",
     permissions: ["publish"],
     repositories: [repository.name],
-    ecosystemScopes: {},
-    signingKeyIds: signingKeyIdsFromConfig(repository.config),
+    ecosystemScopes: scope.ecosystemScopes ?? {},
+    signingKeyIds: scope.signingKeyIds ?? [],
   };
-}
-
-function signingKeyIdsFromConfig(config: Record<string, unknown>): string[] {
-  const aptConfig = config.apt;
-  if (!aptConfig || typeof aptConfig !== "object" || Array.isArray(aptConfig)) {
-    return [];
-  }
-  const signingKeyId = (aptConfig as Record<string, unknown>).signingKeyId;
-  return typeof signingKeyId === "string" ? [signingKeyId] : [];
 }

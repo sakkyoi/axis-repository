@@ -12,7 +12,7 @@ import {
   type UploadBroker,
 } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
-import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
+import { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
 import { PluginPublishSessionService } from "./runtime-services";
 
 const clock: Clock = {
@@ -78,7 +78,7 @@ describe("PluginPublishSessionService", () => {
         };
       },
     };
-    const plugins = new ArtifactPublisherRegistry();
+    const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       ecosystem: "apt",
       name: "apt-test",
@@ -135,12 +135,12 @@ describe("PluginPublishSessionService", () => {
       ecosystem: "apt",
       config: {
         apt: {
-          signingKeyId: "key_1",
+          signingKeyId: "legacy_config_key",
         },
       },
     });
     let authorizeSigningKeyIds: string[] | undefined;
-    const plugins = new ArtifactPublisherRegistry();
+    const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       ecosystem: "apt",
       name: "apt-test",
@@ -155,6 +155,9 @@ describe("PluginPublishSessionService", () => {
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
       validatePublishArtifacts: () => {},
+      derivePublishPrincipalScope: () => ({
+        signingKeyIds: ["plugin_key"],
+      }),
       authorizePublish: ({ principal }) => {
         authorizeSigningKeyIds = principal.signingKeyIds;
       },
@@ -186,6 +189,62 @@ describe("PluginPublishSessionService", () => {
 
     await service.finalizeAsAdmin({ sessionId: session.id });
 
-    expect(authorizeSigningKeyIds).toEqual(["key_1"]);
+    expect(authorizeSigningKeyIds).toEqual(["plugin_key"]);
+  });
+
+  it("creates admin publish sessions with plugin-derived principal scopes", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock, randomId });
+    await repositoryService.create({
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: {
+        apt: {
+          signingKeyId: "legacy_config_key",
+        },
+      },
+    });
+    const plugins = new RepositoryRuntimePluginRegistry();
+    plugins.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["publish"],
+      publisher: {
+        publish: async () => ({
+          publishedAt: "2026-07-24T00:00:00.000Z",
+          objects: [],
+        }),
+      },
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      validatePublishArtifacts: () => {},
+      derivePublishPrincipalScope: () => ({
+        ecosystemScopes: { apt: { component: "main" } },
+        signingKeyIds: ["plugin_key"],
+      }),
+      authorizePublish: () => {},
+    });
+    const service = new PluginPublishSessionService({
+      publishSessionService: new PublishSessionService({
+        state,
+        uploadBroker,
+        artifactPublisher: plugins,
+        clock,
+        randomId,
+      }),
+      repositoryService,
+      plugins,
+      pluginPolicyService: new PluginPolicyService({ state }),
+    });
+
+    const session = await service.createAsAdmin({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      artifacts: [artifact],
+    });
+
+    expect(session.requestedBy.signingKeyIds).toEqual(["plugin_key"]);
+    expect(session.requestedBy.ecosystemScopes).toEqual({ apt: { component: "main" } });
   });
 });

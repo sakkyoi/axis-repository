@@ -1,7 +1,7 @@
 import type { ArtifactPublisher, PublishArtifactsInput } from "@axis-repository/core";
 import { ValidationError } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
-import { ArtifactPublisherRegistry, createPrefixServingPredicate } from "./artifact-publisher-registry";
+import { RepositoryRuntimePluginRegistry, createPrefixServingPredicate } from "./repository-runtime-plugin-registry";
 
 function publishInput(ecosystem: string): PublishArtifactsInput {
   return {
@@ -58,9 +58,9 @@ function publisherReturning(key: string): {
   };
 }
 
-describe("ArtifactPublisherRegistry", () => {
+describe("RepositoryRuntimePluginRegistry", () => {
   it("dispatches publish calls to the publisher registered for the repository ecosystem", async () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
     const apt = publisherReturning("apt.json");
     const pypi = publisherReturning("pypi.json");
     registry.register({
@@ -97,7 +97,7 @@ describe("ArtifactPublisherRegistry", () => {
   });
 
   it("fails closed when no publisher is registered for the repository ecosystem", async () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
 
     await expect(registry.publish(publishInput("npm"))).rejects.toThrow(
       new ValidationError("Artifact publisher is not configured for ecosystem: npm"),
@@ -105,7 +105,7 @@ describe("ArtifactPublisherRegistry", () => {
   });
 
   it("rejects duplicate ecosystem registrations", () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
     const first = publisherReturning("first.json");
     const second = publisherReturning("second.json");
 
@@ -137,7 +137,7 @@ describe("ArtifactPublisherRegistry", () => {
   });
 
   it("lists diagnostic metadata without exposing publisher instances", () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
     const apt = publisherReturning("apt.json");
     registry.register({
       ecosystem: "apt",
@@ -190,7 +190,7 @@ describe("ArtifactPublisherRegistry", () => {
   });
 
   it("returns the plugin registered for an ecosystem", () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
     const apt = publisherReturning("apt.json");
     registry.register({
       ecosystem: "apt",
@@ -212,7 +212,7 @@ describe("ArtifactPublisherRegistry", () => {
   });
 
   it("returns undefined for ecosystems without a plugin", () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
 
     expect(registry.getPlugin("pypi")).toBeUndefined();
   });
@@ -230,7 +230,7 @@ describe("ArtifactPublisherRegistry", () => {
   });
 
   it("fails closed when requiring an unregistered plugin", () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
 
     expect(() => registry.requirePlugin("npm")).toThrow(
       new ValidationError("Artifact repository plugin is not configured for ecosystem: npm"),
@@ -238,7 +238,7 @@ describe("ArtifactPublisherRegistry", () => {
   });
 
   it("keeps lifecycle hooks on registered plugins", () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");
     const calls: string[] = [];
     registry.register({
@@ -270,7 +270,7 @@ describe("ArtifactPublisherRegistry", () => {
   });
 
   it("keeps client helper metadata on registered plugins without exposing mutable action lists", () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");
     registry.register({
       ecosystem: "apt",
@@ -320,7 +320,7 @@ describe("ArtifactPublisherRegistry", () => {
   });
 
   it("keeps admin resource handlers on registered plugins without exposing mutable metadata", async () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");
     registry.register({
       ecosystem: "apt",
@@ -352,7 +352,7 @@ describe("ArtifactPublisherRegistry", () => {
   });
 
   it("finds plugins by admin resource namespace", () => {
-    const registry = new ArtifactPublisherRegistry();
+    const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");
     registry.register({
       ecosystem: "apt",

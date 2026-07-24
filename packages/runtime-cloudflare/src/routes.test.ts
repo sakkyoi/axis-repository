@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
-import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
+import { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
 import { createDevDependencyHarness } from "./dev-dependencies";
 import type { MemoryRepositoryObjectStore } from "./repository-object-store";
 
@@ -595,7 +595,7 @@ describe("Cloudflare runtime routes", () => {
 
   it("allows policy overrides for uncataloged runtime plugins reported in repository plugin metadata", async () => {
     const harness = createDevDependencyHarness();
-    harness.dependencies.artifactPublisherRegistry.register({
+    harness.dependencies.repositoryRuntimePlugins.register({
       ecosystem: "demo",
       name: "demo-plugin",
       version: "0.1.0",
@@ -702,7 +702,7 @@ describe("Cloudflare runtime routes", () => {
 
   it("dispatches admin repository plugin resources through the repository plugin", async () => {
     const harness = createDevDependencyHarness();
-    harness.dependencies.artifactPublisherRegistry.register({
+    harness.dependencies.repositoryRuntimePlugins.register({
       ecosystem: "demo",
       name: "demo-plugin",
       version: "0.1.0",
@@ -746,7 +746,7 @@ describe("Cloudflare runtime routes", () => {
 
   it("lists catalog plugins even when runtime metadata is not registered", async () => {
     const harness = createDevDependencyHarness();
-    harness.dependencies.artifactPublisherRegistry = new ArtifactPublisherRegistry();
+    harness.dependencies.repositoryRuntimePlugins = new RepositoryRuntimePluginRegistry();
     const app = createApp(harness.dependencies);
 
     const response = await app.fetch(
@@ -1141,7 +1141,7 @@ describe("Cloudflare runtime routes", () => {
 
   it("rejects apt helper routes for non-apt repositories", async () => {
     const harness = createDevDependencyHarness();
-    harness.dependencies.artifactPublisherRegistry.register({
+    harness.dependencies.repositoryRuntimePlugins.register({
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",
@@ -1171,7 +1171,7 @@ describe("Cloudflare runtime routes", () => {
 
   it("serves repository client helpers through the repository plugin namespace", async () => {
     const harness = createDevDependencyHarness();
-    harness.dependencies.artifactPublisherRegistry.register({
+    harness.dependencies.repositoryRuntimePlugins.register({
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",
@@ -1238,7 +1238,7 @@ describe("Cloudflare runtime routes", () => {
 
   it("applies repository read auth to plugin client helpers that are not public", async () => {
     const harness = createDevDependencyHarness();
-    harness.dependencies.artifactPublisherRegistry.register({
+    harness.dependencies.repositoryRuntimePlugins.register({
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",
@@ -1363,7 +1363,7 @@ describe("Cloudflare runtime routes", () => {
 
   it("serves repository objects through a non-apt registered plugin", async () => {
     const harness = createDevDependencyHarness();
-    harness.dependencies.artifactPublisherRegistry.register({
+    harness.dependencies.repositoryRuntimePlugins.register({
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",

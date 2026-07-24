@@ -51,6 +51,11 @@ export interface AuthorizePublishInput extends ValidatePublishArtifactsInput {
   principal: TokenPrincipal;
 }
 
+export interface DerivedPublishPrincipalScope {
+  ecosystemScopes?: Record<string, unknown>;
+  signingKeyIds?: string[];
+}
+
 export interface RepositoryClientHelperContext {
   origin: string;
   signingKeys: {
@@ -92,12 +97,13 @@ export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   canServeRepositoryPath: RepositoryPathServingRule;
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
   validatePublishArtifacts(input: ValidatePublishArtifactsInput): void;
+  derivePublishPrincipalScope?(repository: Repository): DerivedPublishPrincipalScope;
   authorizePublish(input: AuthorizePublishInput): void;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;
 }
 
-export type PublisherDescriptor = ArtifactRepositoryPlugin;
+export type RepositoryRuntimePluginDescriptor = ArtifactRepositoryPlugin;
 
 function clonePlugin(descriptor: ArtifactRepositoryPlugin): ArtifactRepositoryPlugin {
   return {
@@ -127,10 +133,10 @@ export function createPrefixServingPredicate(prefixes: string[]): RepositoryPath
     normalizedPrefixes.some((prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`));
 }
 
-export class ArtifactPublisherRegistry implements ArtifactPublisher {
+export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
   private readonly plugins = new Map<Ecosystem, ArtifactRepositoryPlugin>();
 
-  register(descriptor: PublisherDescriptor): void {
+  register(descriptor: RepositoryRuntimePluginDescriptor): void {
     if (this.plugins.has(descriptor.ecosystem)) {
       throw new ValidationError(
         `Artifact publisher is already registered for ecosystem: ${descriptor.ecosystem}`,

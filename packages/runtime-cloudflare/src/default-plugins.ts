@@ -1,5 +1,5 @@
 import type { RepositoryObjectStore } from "@axis-repository/core";
-import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
+import { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
 import { OpenPgpSigner } from "./openpgp-signer";
 import { createRepositoryRuntimePlugins } from "../../../plugins/runtime";
 import type { SigningKeyService } from "./signing-key-service";
@@ -7,8 +7,8 @@ import type { SigningKeyService } from "./signing-key-service";
 export function createDefaultArtifactPlugins(input: {
   objectStore: RepositoryObjectStore;
   signingKeyService: SigningKeyService;
-}): ArtifactPublisherRegistry {
-  const registry = new ArtifactPublisherRegistry();
+}): RepositoryRuntimePluginRegistry {
+  const registry = new RepositoryRuntimePluginRegistry();
   for (const plugin of createRepositoryRuntimePlugins({
     objectStore: input.objectStore,
     signingKeyService: input.signingKeyService,

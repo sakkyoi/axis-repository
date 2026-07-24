@@ -107,13 +107,13 @@ export function createDurableObjectDependencies(
   const objectStore = uploadBackend === "memory"
     ? new MemoryRepositoryObjectStore()
     : new R2RepositoryObjectStore(requiredR2Bucket(env.AXIS_OBJECTS));
-  const artifactPublisher = createDefaultArtifactPlugins({ objectStore, signingKeyService });
+  const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, signingKeyService });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const pluginPolicyService = new PluginPolicyService({ state });
   const publishSessionService = new PublishSessionService({
     state,
     uploadBroker,
-    artifactPublisher,
+    artifactPublisher: repositoryRuntimePlugins,
     clock,
     randomId,
   });
@@ -123,20 +123,20 @@ export function createDurableObjectDependencies(
     adminUiRuntimeConfig: { apiBaseUrl: env.ADMIN_UI_API_BASE_URL ?? "" },
     repositoryService: new PluginRepositoryService({
       repositoryService,
-      plugins: artifactPublisher,
+      plugins: repositoryRuntimePlugins,
       pluginPolicyService,
     }),
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
     publishSessionService: new PluginPublishSessionService({
       publishSessionService,
       repositoryService,
-      plugins: artifactPublisher,
+      plugins: repositoryRuntimePlugins,
       pluginPolicyService,
     }),
     pluginPolicyService,
     signingKeyService,
     repositoryObjectStore: objectStore,
-    artifactPublisherRegistry: artifactPublisher,
+    repositoryRuntimePlugins,
   };
 }
 

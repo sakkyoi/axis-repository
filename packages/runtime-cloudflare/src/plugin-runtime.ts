@@ -1,6 +1,7 @@
 export type {
   ArtifactRepositoryPlugin,
   AuthorizePublishInput,
+  DerivedPublishPrincipalScope,
   RepositoryAdminResourceInput,
   RepositoryAdminResources,
   RepositoryClientHelperInput,
@@ -10,8 +11,8 @@ export type {
   RepositoryServingContext,
   ValidatePublishArtifactsInput,
   ValidateRepositoryConfigInput,
-} from "./artifact-publisher-registry";
-export { createPrefixServingPredicate } from "./artifact-publisher-registry";
+} from "./repository-runtime-plugin-registry";
+export { createPrefixServingPredicate } from "./repository-runtime-plugin-registry";
 export { GenericManifestPublisher } from "./generic-manifest-publisher";
 export { readJsonObject, stringField } from "./http";
 export type { SigningKeyService } from "./signing-key-service";

@@ -101,6 +101,12 @@ export function createAptPlugin(input: { publisher: ArtifactPublisher }): Artifa
       parseAptRepositoryConfig(repositoryForConfig(configInput));
     },
     validatePublishArtifacts: validateAptPublishArtifacts,
+    derivePublishPrincipalScope: (repository) => {
+      const config = parseAptRepositoryConfig(repository);
+      return {
+        signingKeyIds: [config.signingKeyId],
+      };
+    },
     authorizePublish: ({ repository, principal }) => {
       const config = parseAptRepositoryConfig(repository);
       if (!principal.signingKeyIds.includes(config.signingKeyId)) {

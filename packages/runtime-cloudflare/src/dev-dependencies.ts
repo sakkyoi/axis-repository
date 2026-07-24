@@ -10,7 +10,7 @@ import {
   type SecretHasher,
 } from "@axis-repository/core";
 import type { AdminUiRuntimeConfig } from "./admin-ui-assets";
-import { ArtifactPublisherRegistry } from "./artifact-publisher-registry";
+import { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
 import { createDefaultArtifactPlugins } from "./default-plugins";
 import MemoryUploadBroker from "./memory-upload-broker";
 import { MemoryRepositoryObjectStore } from "./repository-object-store";
@@ -27,7 +27,7 @@ export interface AppDependencies {
   pluginPolicyService: PluginPolicyService;
   signingKeyService: SigningKeyService;
   repositoryObjectStore: RepositoryObjectStore;
-  artifactPublisherRegistry: ArtifactPublisherRegistry;
+  repositoryRuntimePlugins: RepositoryRuntimePluginRegistry;
 }
 
 export interface DevDependencyHarness {
@@ -67,13 +67,13 @@ export function createDevDependencyHarness(
     randomId,
     encryption: new SecretEncryption(signingKeyEncryptionSecret),
   });
-  const artifactPublisher = createDefaultArtifactPlugins({ objectStore, signingKeyService });
+  const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, signingKeyService });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const pluginPolicyService = new PluginPolicyService({ state });
   const publishSessionService = new PublishSessionService({
     state,
     uploadBroker,
-    artifactPublisher,
+    artifactPublisher: repositoryRuntimePlugins,
     clock,
     randomId,
   });
@@ -84,20 +84,20 @@ export function createDevDependencyHarness(
       adminUiRuntimeConfig,
       repositoryService: new PluginRepositoryService({
         repositoryService,
-        plugins: artifactPublisher,
+        plugins: repositoryRuntimePlugins,
         pluginPolicyService,
       }),
       publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
       publishSessionService: new PluginPublishSessionService({
         publishSessionService,
         repositoryService,
-        plugins: artifactPublisher,
+        plugins: repositoryRuntimePlugins,
         pluginPolicyService,
       }),
       pluginPolicyService,
       signingKeyService,
       repositoryObjectStore: objectStore,
-      artifactPublisherRegistry: artifactPublisher,
+      repositoryRuntimePlugins,
     },
     repositoryObjectStore: objectStore,
   };

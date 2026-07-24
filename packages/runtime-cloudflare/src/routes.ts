@@ -63,7 +63,7 @@ function publicPublishToken(record: PublishTokenRecord): Omit<PublishTokenRecord
 }
 
 async function repositoryPluginMetadata(dependencies: AppDependencies) {
-  const registeredPlugins = dependencies.artifactPublisherRegistry.list();
+  const registeredPlugins = dependencies.repositoryRuntimePlugins.list();
   const registeredPluginsByEcosystem = new Map(
     registeredPlugins.map((plugin) => [plugin.ecosystem, plugin]),
   );
@@ -480,7 +480,7 @@ function parseRepositoryClientHelperPath(requestUrl: string): {
 }
 
 function repositoryClientHelpers(dependencies: AppDependencies, repository: Repository, namespace: string) {
-  const plugin = dependencies.artifactPublisherRegistry.getPlugin(repository.ecosystem);
+  const plugin = dependencies.repositoryRuntimePlugins.getPlugin(repository.ecosystem);
   const helpers = plugin?.clientHelpers;
   if (!helpers || helpers.namespace !== namespace) {
     return undefined;
@@ -584,7 +584,7 @@ async function ensureRepositoryPathIsServable(
   relativePath: string,
 ): Promise<void> {
   await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
-  const plugin = dependencies.artifactPublisherRegistry.getPlugin(repository.ecosystem);
+  const plugin = dependencies.repositoryRuntimePlugins.getPlugin(repository.ecosystem);
   if (!plugin?.canServeRepositoryPath({ relativePath })) {
     throw new NotFoundError();
   }
@@ -678,7 +678,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     if (request.method === "PATCH") {
       if (
         !getRepositoryPluginCatalogEntry(adminRepositoryPluginEcosystem)
-        && !dependencies.artifactPublisherRegistry.getPlugin(adminRepositoryPluginEcosystem)
+        && !dependencies.repositoryRuntimePlugins.getPlugin(adminRepositoryPluginEcosystem)
       ) {
         throw new NotFoundError(`Repository plugin not found: ${adminRepositoryPluginEcosystem}`);
       }
@@ -773,8 +773,8 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       if (!(error instanceof NotFoundError)) throw error;
     }
     const plugin = repository
-      ? dependencies.artifactPublisherRegistry.getPlugin(repository.ecosystem)
-      : dependencies.artifactPublisherRegistry.getPluginByAdminResourceNamespace(adminPluginResourcePath.namespace);
+      ? dependencies.repositoryRuntimePlugins.getPlugin(repository.ecosystem)
+      : dependencies.repositoryRuntimePlugins.getPluginByAdminResourceNamespace(adminPluginResourcePath.namespace);
     if (plugin) {
       await ensureRepositoryPluginEnabled(dependencies, plugin.ecosystem, () => new NotFoundError());
     }
