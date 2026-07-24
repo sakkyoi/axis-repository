@@ -494,6 +494,93 @@ describe("RepositoryRuntimePluginRegistry", () => {
     })).rejects.toThrow(new ValidationError("Repository admin resource route is not configured: DELETE signing-keys/key_1"));
   });
 
+  it("rejects invalid admin resource route metadata at registration time", () => {
+    const registry = new RepositoryRuntimePluginRegistry();
+    const publisher = publisherReturning("apt.json");
+
+    expect(() =>
+      registry.register({
+        ecosystem: "apt",
+        name: "apt-test",
+        version: "0.0.0",
+        capabilities: ["admin-resources"],
+        canServeRepositoryPath: () => false,
+        validateRepositoryConfig: () => {},
+        publish: publishLifecycle(publisher.publisher),
+        adminResources: {
+          namespace: "apt",
+          routes: [
+            {
+              name: "list-signing-keys",
+              method: "GET",
+              path: ["signing-keys"],
+              responseKind: "json",
+              handle: async () => new Response("ok"),
+            },
+            {
+              name: "list-signing-keys",
+              method: "POST",
+              path: ["signing-keys"],
+              responseKind: "json",
+              handle: async () => new Response("ok"),
+            },
+          ],
+        },
+      }),
+    ).toThrow(new ValidationError("Duplicate admin resource route name for ecosystem apt: list-signing-keys"));
+  });
+
+  it("rejects duplicate admin resource namespaces across plugins", () => {
+    const registry = new RepositoryRuntimePluginRegistry();
+    const apt = publisherReturning("apt.json");
+    const npm = publisherReturning("npm.json");
+    registry.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["admin-resources"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: publishLifecycle(apt.publisher),
+      adminResources: {
+        namespace: "packages",
+        routes: [
+          {
+            name: "apt-status",
+            method: "GET",
+            path: ["status"],
+            responseKind: "json",
+            handle: async () => new Response("ok"),
+          },
+        ],
+      },
+    });
+
+    expect(() =>
+      registry.register({
+        ecosystem: "npm",
+        name: "npm-test",
+        version: "0.0.0",
+        capabilities: ["admin-resources"],
+        canServeRepositoryPath: () => false,
+        validateRepositoryConfig: () => {},
+        publish: publishLifecycle(npm.publisher),
+        adminResources: {
+          namespace: "packages",
+          routes: [
+            {
+              name: "npm-status",
+              method: "GET",
+              path: ["status"],
+              responseKind: "json",
+              handle: async () => new Response("ok"),
+            },
+          ],
+        },
+      }),
+    ).toThrow(new ValidationError("Admin resource namespace is already registered: packages"));
+  });
+
   it("finds plugins by admin resource namespace", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");

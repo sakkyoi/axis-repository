@@ -38,6 +38,18 @@ function clonePlugin(descriptor: ArtifactRepositoryPlugin): ArtifactRepositoryPl
   };
 }
 
+function validateAdminResourceRoutes(descriptor: RepositoryRuntimePluginDescriptor): void {
+  const seenRouteNames = new Set<string>();
+  for (const route of descriptor.adminResources?.routes ?? []) {
+    if (seenRouteNames.has(route.name)) {
+      throw new ValidationError(
+        `Duplicate admin resource route name for ecosystem ${descriptor.ecosystem}: ${route.name}`,
+      );
+    }
+    seenRouteNames.add(route.name);
+  }
+}
+
 export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
   private readonly plugins = new Map<Ecosystem, ArtifactRepositoryPlugin>();
 
@@ -47,6 +59,17 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
         `Artifact publisher is already registered for ecosystem: ${descriptor.ecosystem}`,
       );
     }
+    if (
+      descriptor.adminResources &&
+      Array.from(this.plugins.values()).some((plugin) =>
+        plugin.adminResources?.namespace === descriptor.adminResources?.namespace,
+      )
+    ) {
+      throw new ValidationError(
+        `Admin resource namespace is already registered: ${descriptor.adminResources.namespace}`,
+      );
+    }
+    validateAdminResourceRoutes(descriptor);
     this.plugins.set(descriptor.ecosystem, clonePlugin(descriptor));
   }
 
