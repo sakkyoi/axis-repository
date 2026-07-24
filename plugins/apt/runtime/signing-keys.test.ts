@@ -25,7 +25,7 @@ describe("AptSigningKeyResource", () => {
     });
 
     expect(generated).toMatchObject({
-      id: "signing_key_fixed",
+      id: "repository_secret_fixed",
       repositoryName: "debian-prod",
       name: "release",
       publicKeyArmored: expect.stringContaining("BEGIN PGP PUBLIC KEY BLOCK"),
@@ -34,7 +34,7 @@ describe("AptSigningKeyResource", () => {
       createdAt: "2026-07-18T00:00:00.000Z",
       revokedAt: null,
     });
-    await expect(resource.getActivePrivateKey("signing_key_fixed")).resolves.toMatchObject({
+    await expect(resource.getActivePrivateKey(generated.id)).resolves.toMatchObject({
       privateKeyArmored: expect.stringContaining("BEGIN PGP PRIVATE KEY BLOCK"),
       passphrase: "pgp_passphrase_fixed",
     });

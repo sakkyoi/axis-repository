@@ -2991,7 +2991,7 @@ describe("Cloudflare runtime routes", () => {
       privateKeyArmored?: string;
       passphrase?: string;
     };
-    expect(created.id).toMatch(/^signing_key_/);
+    expect(created.id).toMatch(/^repository_secret_/);
     expect(created).toMatchObject({ repositoryName: "debian-prod" });
     expect(created).not.toHaveProperty("privateKeyArmored");
     expect(created).not.toHaveProperty("passphrase");

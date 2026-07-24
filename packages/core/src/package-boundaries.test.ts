@@ -222,4 +222,11 @@ describe("package boundaries", () => {
       assertOnlyUsesExportedPackageSubpaths(filePath, source);
     }
   });
+
+  test("runtime signing key behavior stays owned by repository plugins", () => {
+    expect(
+      existsSync(path.join(rootDir, "packages/runtime-cloudflare/src/signing-key-service.ts")),
+      "host runtime must not expose an APT-specific signing key service",
+    ).toBe(false);
+  });
 });

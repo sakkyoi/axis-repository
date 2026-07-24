@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryStateStore, NotFoundError, ValidationError, type Clock, type RandomId } from "@axis-repository/core";
+import { MemoryStateStore, NotFoundError, type Clock, type RandomId } from "@axis-repository/core";
 import { SecretEncryption } from "./secret-encryption";
 import { RepositorySecretService } from "./repository-secret-service";
 
@@ -17,60 +17,48 @@ describe("RepositorySecretService", () => {
     });
 
     const created = await service.create({
-      namespace: "apt.signing-key",
-      repositoryName: "debian-prod",
-      name: "release",
+      namespace: "npm.token",
+      repositoryName: "npm-prod",
+      name: "publish-token",
       publicMetadata: {
-        publicKeyArmored: "public-key",
-        fingerprint: "FINGERPRINT",
-        keyId: "KEYID",
+        scope: "publish",
+        label: "automation",
       },
       secrets: {
-        privateKeyArmored: "private-key",
-        passphrase: "passphrase",
+        token: "secret-token",
       },
     });
 
     expect(created).toEqual({
-      id: "signing_key_fixed",
-      namespace: "apt.signing-key",
-      repositoryName: "debian-prod",
-      name: "release",
+      id: "repository_secret_fixed",
+      namespace: "npm.token",
+      repositoryName: "npm-prod",
+      name: "publish-token",
       publicMetadata: {
-        publicKeyArmored: "public-key",
-        fingerprint: "FINGERPRINT",
-        keyId: "KEYID",
+        scope: "publish",
+        label: "automation",
       },
       createdAt: "2026-07-18T00:00:00.000Z",
       revokedAt: null,
     });
-    expect(JSON.stringify(await state.signingKeys.getById("signing_key_fixed"))).not.toContain("private-key");
-    await expect(service.getActive("signing_key_fixed")).resolves.toMatchObject({
+    expect(JSON.stringify(await state.signingKeys.getById("repository_secret_fixed"))).not.toContain("secret-token");
+    await expect(service.getActive("repository_secret_fixed")).resolves.toMatchObject({
       secrets: {
-        privateKeyArmored: "private-key",
-        passphrase: "passphrase",
+        token: "secret-token",
       },
     });
-    await expect(service.list({ namespace: "apt.signing-key", repositoryName: "debian-prod" })).resolves.toEqual([
+    await expect(service.list({ namespace: "npm.token", repositoryName: "npm-prod" })).resolves.toEqual([
       created,
     ]);
   });
 
-  it("fails closed for unsupported secret namespaces and revoked active secrets", async () => {
+  it("fails closed for missing active secrets", async () => {
     const service = new RepositorySecretService({
       state: new MemoryStateStore(),
       clock,
       randomId,
       encryption: new SecretEncryption("local-test-secret"),
     });
-
-    await expect(service.create({
-      namespace: "npm.token",
-      repositoryName: "npm-prod",
-      name: "release",
-      publicMetadata: {},
-      secrets: { token: "secret" },
-    })).rejects.toThrow(new ValidationError("Repository secret namespace is not supported: npm.token"));
 
     await expect(service.getActive("missing")).rejects.toBeInstanceOf(NotFoundError);
   });
