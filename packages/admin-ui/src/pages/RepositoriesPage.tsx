@@ -6,10 +6,10 @@ import { Button } from "../components/ui/button";
 import { useRepositories, useRepositoryPlugins } from "../api/hooks";
 import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { ADMIN_UI_PATHS, repositorySettingsPath, repositoryWorkspacePath } from "../navigation";
-import { pluginLifecycleSummary } from "../plugin-lifecycle";
-import { repositorySummarySectionsFor } from "../repository-detail-plugins";
-import { RepositoryDetailSections } from "../repository-detail-shared";
-import { repositoryDetailBodyClass, repositoryRowStateClass, repositorySummaryItems } from "../repository-page-model";
+import { pluginLifecycleSummary } from "../repositories/plugins/plugin-lifecycle";
+import { repositorySummarySectionsFor } from "../repositories/plugins/repository-detail-plugins";
+import { RepositoryDetailSections } from "../repositories/detail/repository-detail-shared";
+import { repositoryDetailBodyClass, repositoryRowStateClass, repositorySummaryItems } from "../repositories/detail/repository-page-model";
 import { EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 export function RepositoriesPage() {

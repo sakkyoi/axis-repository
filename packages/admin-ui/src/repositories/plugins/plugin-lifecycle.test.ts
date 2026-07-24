@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RepositoryPlugin } from "./api/schemas";
+import type { RepositoryPlugin } from "../../api/schemas";
 import {
   pluginLifecycleBadges,
   pluginLifecycleSummary,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Repository } from "./api/schemas";
+import type { Repository } from "../api/schemas";
 import {
   buildCreatePublishTokenInput,
   repositoryDisplayLabel,

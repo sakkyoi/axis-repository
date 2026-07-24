@@ -5,8 +5,8 @@ import {
   useCreateAdminPublishSession,
   useFinalizeAdminPublishSession,
   useVerifyAdminPublishUpload,
-} from "./api/hooks";
-import type { PublishArtifact, PublishSession, Repository } from "./api/schemas";
+} from "../../api/hooks";
+import type { PublishArtifact, PublishSession, Repository } from "../../api/schemas";
 
 export interface RepositoryPublishFlowInput {
   repositoryName: string;

@@ -1,6 +1,6 @@
-import { PublishSessionsSection } from "./repository-detail-shared";
-import { getRepositoryPublishPlugin } from "./repository-ui-plugins";
-import type { RepositoryDetailSectionProps } from "./repository-ui-plugin-types";
+import { PublishSessionsSection } from "../detail/repository-detail-shared";
+import { getRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
+import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 
 export function RepositoryPublishSection({
   repository,

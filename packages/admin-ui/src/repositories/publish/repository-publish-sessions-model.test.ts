@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { PublishSession } from "./api/schemas";
+import type { PublishSession } from "../../api/schemas";
 import {
   publishSessionArtifactSummary,
   publishSessionStatusMeta,

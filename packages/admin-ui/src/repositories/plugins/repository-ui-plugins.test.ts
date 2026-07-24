@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { aptPluginManifest } from "../../../plugins/apt/manifest";
-import { pypiPluginManifest } from "../../../plugins/pypi/manifest";
-import * as aptPublishUi from "../../../plugins/apt/admin-ui/publish";
-import * as pypiPublishUi from "../../../plugins/pypi/admin-ui/publish";
+import { aptPluginManifest } from "../../../../../plugins/apt/manifest";
+import { pypiPluginManifest } from "../../../../../plugins/pypi/manifest";
+import * as aptPublishUi from "../../../../../plugins/apt/admin-ui/publish";
+import * as pypiPublishUi from "../../../../../plugins/pypi/admin-ui/publish";
 
 import { assertRepositoryUiPluginContracts } from "./repository-ui-plugins";
 import {

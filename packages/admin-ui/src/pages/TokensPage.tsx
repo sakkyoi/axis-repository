@@ -11,8 +11,8 @@ import {
   repositoryDisplayLabel,
   tokenScopeSummary,
   type PublishTokenPermissionState,
-} from "../publish-token-form-model";
-import { getPublishTokenScopeExtension } from "../repository-ui-plugins";
+} from "../tokens/publish-token-form-model";
+import { getPublishTokenScopeExtension } from "../repositories/plugins/repository-ui-plugins";
 import { asJson, EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
 
 export function TokensPage() {

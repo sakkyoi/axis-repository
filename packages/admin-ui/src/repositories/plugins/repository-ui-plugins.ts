@@ -1,5 +1,5 @@
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
-import type { RepositoryPlugin } from "./api/schemas";
+import type { RepositoryPlugin } from "../../api/schemas";
 import {
   disabledPluginCreateDescription,
   pluginLifecycleBadges,
@@ -16,9 +16,9 @@ import type {
   RepositoryPublishPlugin,
   RepositoryUiPlugin,
 } from "./repository-ui-plugin-types";
-import { bundledRepositoryPlugins } from "../../../plugins/bundled";
-import { aptRepositoryUiPlugin } from "../../../plugins/apt/admin-ui";
-import { pypiRepositoryUiPlugin } from "../../../plugins/pypi/admin-ui";
+import { bundledRepositoryPlugins } from "../../../../../plugins/bundled";
+import { aptRepositoryUiPlugin } from "../../../../../plugins/apt/admin-ui";
+import { pypiRepositoryUiPlugin } from "../../../../../plugins/pypi/admin-ui";
 
 type NonEmptyArray<T> = [T, ...T[]];
 

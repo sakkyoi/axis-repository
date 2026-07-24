@@ -1,4 +1,4 @@
-import type { Repository } from "./api/schemas";
+import type { Repository } from "../../api/schemas";
 
 export function initialRepositorySelection(_repositories: Repository[]): string | undefined {
   return undefined;

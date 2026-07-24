@@ -25,11 +25,11 @@ export {
   PublishSessionDetailList,
   RepositoryClientHelpersSection,
   VisibilitySelect,
-} from "./repository-detail-shared";
-export { repositoryCreateStepsForConfig } from "./repository-create-steps";
-export { sha256Hex } from "./admin-publish-form-model";
-export { publishSessionArtifactSummary } from "./repository-publish-sessions-model";
-export { useRepositoryArtifactPublisher } from "./repository-publish-flow";
+} from "./repositories/detail/repository-detail-shared";
+export { repositoryCreateStepsForConfig } from "./repositories/create/repository-create-steps";
+export { sha256Hex } from "./repositories/publish/admin-publish-form-model";
+export { publishSessionArtifactSummary } from "./repositories/publish/repository-publish-sessions-model";
+export { useRepositoryArtifactPublisher } from "./repositories/publish/repository-publish-flow";
 export { asJson, EmptyState, ErrorState, formatDate } from "./pages/shared";
 export type {
   PublishTokenScopeComponentProps,
@@ -42,4 +42,4 @@ export type {
   RepositoryDetailSectionProps,
   RepositoryPublishPlugin,
   RepositoryUiPlugin,
-} from "./repository-ui-plugin-types";
+} from "./repositories/plugins/repository-ui-plugin-types";

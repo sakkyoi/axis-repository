@@ -13,12 +13,12 @@ import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { cn } from "../lib/utils";
 import { ADMIN_UI_PATHS } from "../navigation";
-import { RepositoryDependencyFields } from "../repository-create-dependency-renderer";
+import { RepositoryDependencyFields } from "../repositories/create/repository-create-dependency-renderer";
 import {
   repositoryCreateAvailabilityError,
   repositoryCreateFieldErrors,
   repositoryCreateStepForServerError,
-} from "../repository-create-plugins";
+} from "../repositories/plugins/repository-create-plugins";
 import type {
   RepositoryCreateFieldErrors,
   RepositoryCreateFieldRendererMap,
@@ -26,16 +26,16 @@ import type {
   RepositoryCreatePluginOption,
   RepositoryCreateStep,
   RepositoryCreateWizardState,
-} from "../repository-ui-plugin-types";
+} from "../repositories/plugins/repository-ui-plugin-types";
 import {
   getRepositoryCreateFieldRenderers,
   getRepositoryCreatePlugin,
   getRepositoryPluginManifest,
   repositoryCreatePluginOptionsFromUiRegistry,
   repositoryCreatePluginsFromUiRegistry,
-} from "../repository-ui-plugins";
-import { repositoryConfigFieldsForStep } from "../repository-create-field-model";
-import { RepositoryConfigFields } from "../repository-create-field-renderer";
+} from "../repositories/plugins/repository-ui-plugins";
+import { repositoryConfigFieldsForStep } from "../repositories/create/repository-create-field-model";
+import { RepositoryConfigFields } from "../repositories/create/repository-create-field-renderer";
 import { asJson, ErrorState, PageHeader } from "./shared";
 
 const stepLabels: Record<RepositoryCreateStep, string> = {

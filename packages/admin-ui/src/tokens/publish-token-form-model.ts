@@ -1,5 +1,5 @@
-import type { CreatePublishTokenInput } from "./api/client";
-import type { PublishToken, Repository } from "./api/schemas";
+import type { CreatePublishTokenInput } from "../api/client";
+import type { PublishToken, Repository } from "../api/schemas";
 
 export interface PublishTokenPermissionState {
   read: boolean;

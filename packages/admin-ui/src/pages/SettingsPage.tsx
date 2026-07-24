@@ -4,7 +4,7 @@ import { getRuntimeConfig } from "../runtime-config";
 import { useRepositoryPlugins, useUpdateRepositoryPluginPolicy } from "../api/hooks";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { repositoryPluginStatusRows } from "../plugin-lifecycle";
+import { repositoryPluginStatusRows } from "../repositories/plugins/plugin-lifecycle";
 import { ErrorState, PageHeader } from "./shared";
 
 export function SettingsPage() {

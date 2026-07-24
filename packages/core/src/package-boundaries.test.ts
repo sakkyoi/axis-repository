@@ -139,7 +139,7 @@ describe("package boundaries", () => {
 
       expect(
         normalizedPath === path.normalize("packages/runtime-cloudflare/src/plugins/bundled-runtime-plugins.ts") ||
-          normalizedPath === path.normalize("packages/admin-ui/src/repository-ui-plugins.ts") ||
+          normalizedPath === path.normalize("packages/admin-ui/src/repositories/plugins/repository-ui-plugins.ts") ||
           normalizedPath.endsWith(".test.ts") ||
           normalizedPath.endsWith(".test.tsx"),
         `${filePath} must import plugin implementations through a package host loader or a focused test`,
@@ -153,12 +153,12 @@ describe("package boundaries", () => {
       "utf8",
     );
     const adminUiRegistrySource = readFileSync(
-      path.join(rootDir, "packages/admin-ui/src/repository-ui-plugins.ts"),
+      path.join(rootDir, "packages/admin-ui/src/repositories/plugins/repository-ui-plugins.ts"),
       "utf8",
     );
 
     expect(importSpecifiers(runtimeRegistrySource)).toContain("./bundled-runtime-plugins");
-    expect(importSpecifiers(adminUiRegistrySource)).toContain("../../../plugins/bundled");
+    expect(importSpecifiers(adminUiRegistrySource)).toContain("../../../../../plugins/bundled");
     expect(importSpecifiers(runtimeRegistrySource)).not.toContain("../../../plugins/runtime");
     expect(importSpecifiers(adminUiRegistrySource)).not.toContain("../../../plugins/admin-ui");
     expect(runtimeRegistrySource).not.toMatch(pluginImplementationImportPattern);
@@ -205,7 +205,7 @@ describe("package boundaries", () => {
       "utf8",
     );
     const adminUiRegistrySource = readFileSync(
-      path.join(rootDir, "packages/admin-ui/src/repository-ui-plugins.ts"),
+      path.join(rootDir, "packages/admin-ui/src/repositories/plugins/repository-ui-plugins.ts"),
       "utf8",
     );
     const runtimeImports = importSpecifiers(runtimeLoaderSource);
@@ -214,9 +214,9 @@ describe("package boundaries", () => {
     expect(runtimeImports).toContain("../../../../plugins/bundled");
     expect(runtimeImports.some((specifier) => /^..\/..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(true);
     expect(runtimeImports.some((specifier) => /^..\/..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(false);
-    expect(adminUiImports).toContain("../../../plugins/bundled");
-    expect(adminUiImports.some((specifier) => /^..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(true);
-    expect(adminUiImports.some((specifier) => /^..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(false);
+    expect(adminUiImports).toContain("../../../../../plugins/bundled");
+    expect(adminUiImports.some((specifier) => /^..\/..\/..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(true);
+    expect(adminUiImports.some((specifier) => /^..\/..\/..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(false);
   });
 
   test("plugin authoring guide documents the enforced contract", () => {

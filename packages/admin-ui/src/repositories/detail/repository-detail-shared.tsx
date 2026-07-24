@@ -4,19 +4,19 @@ import {
   usePublishSessions,
   useRepositoryClientHelper,
   useUpdateRepository,
-} from "./api/hooks";
-import type { PublishSession, Repository, RepositoryClientHelperAction, RepositoryPlugin, RepositoryVisibility } from "./api/schemas";
-import { Badge } from "./components/ui/badge";
-import { Button } from "./components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
-import { Textarea } from "./components/ui/textarea";
-import { asJson, ErrorState } from "./pages/shared";
+} from "../../api/hooks";
+import type { PublishSession, Repository, RepositoryClientHelperAction, RepositoryPlugin, RepositoryVisibility } from "../../api/schemas";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { Textarea } from "../../components/ui/textarea";
+import { asJson, ErrorState } from "../../pages/shared";
 import {
   publishSessionArtifactSummary,
   publishSessionStatusMeta,
   repositoryPublishSessionsView,
-} from "./repository-publish-sessions-model";
-import type { PublishSessionDetailComponentProps, RepositoryDetailSection } from "./repository-ui-plugin-types";
+} from "../publish/repository-publish-sessions-model";
+import type { PublishSessionDetailComponentProps, RepositoryDetailSection } from "../plugins/repository-ui-plugin-types";
 
 export function GenericRepositoryDetail({ repository }: { repository: Repository; pluginMetadata: RepositoryPlugin | undefined }) {
   return (

@@ -1,5 +1,5 @@
-import type { BadgeProps } from "./components/ui/badge";
-import type { RepositoryPlugin } from "./api/schemas";
+import type { BadgeProps } from "../../components/ui/badge";
+import type { RepositoryPlugin } from "../../api/schemas";
 
 export type PluginLifecycleAvailability = "available" | "disabled" | "missing-runtime" | "missing-ui";
 

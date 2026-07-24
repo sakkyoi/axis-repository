@@ -5,7 +5,7 @@ import {
   repositorySummaryItems,
   repositoryRowStateClass,
 } from "./repository-page-model";
-import type { Repository } from "./api/schemas";
+import type { Repository } from "../../api/schemas";
 
 describe("repository page model", () => {
   it("does not preselect a repository", () => {

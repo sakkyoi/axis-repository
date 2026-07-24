@@ -5,10 +5,10 @@ import { useRepositories, useRepositoryPlugins } from "../api/hooks";
 import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { Button } from "../components/ui/button";
 import { ADMIN_UI_PATHS, repositorySettingsPath, repositoryWorkspacePath } from "../navigation";
-import { repositorySettingsSectionsFor, repositoryWorkspaceSectionsFor } from "../repository-detail-plugins";
-import { RepositoryDetailSections } from "../repository-detail-shared";
-import type { RepositoryDetailSection } from "../repository-ui-plugin-types";
-import { repositoryDetailBodyClass } from "../repository-page-model";
+import { repositorySettingsSectionsFor, repositoryWorkspaceSectionsFor } from "../repositories/plugins/repository-detail-plugins";
+import { RepositoryDetailSections } from "../repositories/detail/repository-detail-shared";
+import type { RepositoryDetailSection } from "../repositories/plugins/repository-ui-plugin-types";
+import { repositoryDetailBodyClass } from "../repositories/detail/repository-page-model";
 import { EmptyState, ErrorState, PageHeader } from "./shared";
 
 export function RepositoryWorkspacePage() {

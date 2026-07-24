@@ -1,6 +1,6 @@
 import type { PluginRepositoryConfigFieldManifest } from "@axis-repository/core/plugin-manifests";
-import { ErrorState } from "./pages/shared";
-import type { RepositoryCreateFieldRendererMap } from "./repository-ui-plugin-types";
+import { ErrorState } from "../../pages/shared";
+import type { RepositoryCreateFieldRendererMap } from "../plugins/repository-ui-plugin-types";
 
 export function RepositoryDependencyFields({
   fields,

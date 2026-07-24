@@ -1,4 +1,4 @@
-import type { RepositoryPlugin } from "./api/schemas";
+import type { RepositoryPlugin } from "../../api/schemas";
 import type {
   RepositoryCreateFieldErrors,
   RepositoryCreatePlugin,
@@ -26,7 +26,7 @@ export type {
 } from "./repository-ui-plugin-types";
 
 export const repositoryCreatePlugins = repositoryCreatePluginsFromUiRegistry();
-export { repositoryCreateStepsForConfig } from "./repository-create-steps";
+export { repositoryCreateStepsForConfig } from "../create/repository-create-steps";
 
 export function getRepositoryCreatePlugin(ecosystem: string): RepositoryCreatePlugin {
   const plugin = repositoryCreatePlugins.find((candidate) => candidate.ecosystem === ecosystem);

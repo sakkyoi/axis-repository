@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PublishArtifact, PublishSession } from "./api/schemas";
+import type { PublishArtifact, PublishSession } from "../../api/schemas";
 import { publishRepositoryArtifacts } from "./repository-publish-flow";
 
 const artifact: PublishArtifact = {

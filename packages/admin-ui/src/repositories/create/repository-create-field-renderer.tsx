@@ -1,7 +1,7 @@
 import type { PluginRepositoryConfigFieldManifest } from "@axis-repository/core/plugin-manifests";
-import { Input } from "./components/ui/input";
-import { ErrorState } from "./pages/shared";
-import type { RepositoryCreateFieldRendererMap } from "./repository-ui-plugin-types";
+import { Input } from "../../components/ui/input";
+import { ErrorState } from "../../pages/shared";
+import type { RepositoryCreateFieldRendererMap } from "../plugins/repository-ui-plugin-types";
 
 export function RepositoryConfigFields({
   fields,

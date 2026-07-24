@@ -4,8 +4,8 @@ import {
   PublishSessionsSection,
   RepositorySettingsSection,
   repositoryClientHelperDisplayText,
-} from "./repository-detail-shared";
-import { RepositoryPublishSection } from "./repository-publish-section";
+} from "../detail/repository-detail-shared";
+import { RepositoryPublishSection } from "../publish/repository-publish-section";
 import type { RepositoryDetailPlugin, RepositoryDetailSection } from "./repository-ui-plugin-types";
 import {
   getRepositoryDetailPlugin as getRepositoryDetailPluginFromRegistry,

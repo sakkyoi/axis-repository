@@ -1,4 +1,4 @@
-import type { PublishSession, PublishSessionStatus, Repository } from "./api/schemas";
+import type { PublishSession, PublishSessionStatus, Repository } from "../../api/schemas";
 
 export type PublishSessionStatusVariant = "default" | "success" | "warning" | "destructive";
 
