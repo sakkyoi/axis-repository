@@ -41,10 +41,12 @@ describe("repository detail plugins", () => {
     ]);
   });
 
-  it("lets the APT UI plugin provide the publish section renderer", () => {
-    const publishSection = getRepositoryDetailPlugin("apt")?.sections.find((section) => section.id === "publish-sessions");
+  it("uses the shared publish section while plugins provide publish pieces", () => {
+    const aptPublishSection = getRepositoryDetailPlugin("apt")?.sections.find((section) => section.id === "publish-sessions");
+    const pypiPublishSection = getRepositoryDetailPlugin("pypi")?.sections.find((section) => section.id === "publish-sessions");
 
-    expect(publishSection?.Component.name).toBe("AptPublishSessionsSection");
+    expect(aptPublishSection?.Component.name).toBe("RepositoryPublishSection");
+    expect(pypiPublishSection?.Component.name).toBe("RepositoryPublishSection");
   });
 
   it("renders plugin client helpers through the same shared section", () => {

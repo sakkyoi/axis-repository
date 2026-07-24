@@ -5,6 +5,7 @@ import {
   RepositorySettingsSection,
   repositoryClientHelperDisplayText,
 } from "./repository-detail-shared";
+import { RepositoryPublishSection } from "./repository-publish-section";
 import type { RepositoryDetailPlugin, RepositoryDetailSection } from "./repository-ui-plugin-types";
 import {
   getRepositoryDetailPlugin as getRepositoryDetailPluginFromRegistry,
@@ -22,11 +23,28 @@ export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
 ];
 
 export function getRepositoryDetailPlugin(ecosystem: string): RepositoryDetailPlugin | undefined {
-  return getRepositoryDetailPluginFromRegistry(ecosystem);
+  const plugin = getRepositoryDetailPluginFromRegistry(ecosystem);
+  return plugin ? normalizeRepositoryDetailPlugin(plugin) : undefined;
 }
 
 function repositoryDetailSectionsFor(ecosystem: string): RepositoryDetailSection[] {
-  return getRepositoryDetailPlugin(ecosystem)?.sections ?? genericRepositoryDetailSections;
+  const sections = getRepositoryDetailPlugin(ecosystem)?.sections ?? genericRepositoryDetailSections;
+  return normalizeRepositoryDetailSections(sections);
+}
+
+function normalizeRepositoryDetailPlugin(plugin: RepositoryDetailPlugin): RepositoryDetailPlugin {
+  return {
+    ...plugin,
+    sections: normalizeRepositoryDetailSections(plugin.sections),
+  };
+}
+
+function normalizeRepositoryDetailSections(sections: RepositoryDetailSection[]): RepositoryDetailSection[] {
+  return sections.map((section) =>
+    section.id === "publish-sessions"
+      ? { ...section, Component: RepositoryPublishSection }
+      : section,
+  );
 }
 
 export function repositoryWorkspaceSectionsFor(ecosystem: string): RepositoryDetailSection[] {
@@ -43,5 +61,6 @@ export function repositorySettingsSectionsFor(ecosystem: string): RepositoryDeta
 
 export {
   GenericRepositoryDetail,
+  RepositoryPublishSection,
   repositoryClientHelperDisplayText,
 };
