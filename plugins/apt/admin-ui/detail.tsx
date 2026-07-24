@@ -1,14 +1,23 @@
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
-import { useUpdateRepository } from "../../../packages/admin-ui/src/api/hooks";
-import type { Repository, RepositoryPlugin, SigningKey } from "../../../packages/admin-ui/src/api/schemas";
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  useUpdateRepository,
+  VisibilitySelect,
+  type Repository,
+  type RepositoryPlugin,
+  type SigningKey,
+} from "@axis-repository/admin-ui/plugin-ui";
 import { useAptSigningKeys } from "./api";
-import { Button } from "../../../packages/admin-ui/src/components/ui/button";
-import { Input } from "../../../packages/admin-ui/src/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../packages/admin-ui/src/components/ui/select";
 import { AptSigningKeyDialog, AptSigningKeyList } from "./signing-keys";
-import { EmptyState, ErrorState } from "../../../packages/admin-ui/src/pages/shared";
-import { VisibilitySelect } from "../../../packages/admin-ui/src/repository-detail-shared";
 import {
   activeSigningKeys,
   buildAptRepositoryFormValues,

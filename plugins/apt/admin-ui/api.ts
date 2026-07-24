@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAxisClient } from "../../../packages/admin-ui/src/api/hooks";
+import { useAxisClient } from "@axis-repository/admin-ui/plugin-ui";
 import {
   signingKeySchema,
   signingKeysResponseSchema,
   type SigningKey,
-} from "../../../packages/admin-ui/src/api/schemas";
+} from "@axis-repository/admin-ui/plugin-ui";
 
 const aptNamespace = "apt";
 const aptSigningKeysQueryKey = "apt-signing-keys";

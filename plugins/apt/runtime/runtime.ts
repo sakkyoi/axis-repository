@@ -3,9 +3,8 @@ import { aptPluginManifest } from "../manifest";
 import type {
   ArtifactRepositoryPlugin,
   ValidateRepositoryConfigInput,
-} from "../../../packages/runtime-cloudflare/src/artifact-publisher-registry";
-import { createPrefixServingPredicate } from "../../../packages/runtime-cloudflare/src/artifact-publisher-registry";
-import { readJsonObject, stringField } from "../../../packages/runtime-cloudflare/src/http";
+} from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { createPrefixServingPredicate, readJsonObject, stringField } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { buildAptInstallInfo, buildAptSourceInfo, type AptClientRepositoryInfo } from "./client";
 import { parseAptRepositoryConfig, validateAptPublishArtifacts } from "./metadata";
 

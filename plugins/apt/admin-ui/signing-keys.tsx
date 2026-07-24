@@ -1,25 +1,32 @@
 import { type FormEvent, useState } from "react";
 import { KeyRound, Plus, RotateCcw } from "lucide-react";
-import { Badge } from "../../../packages/admin-ui/src/components/ui/badge";
-import { Button } from "../../../packages/admin-ui/src/components/ui/button";
 import {
+  asJson,
+  Badge,
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "../../../packages/admin-ui/src/components/ui/dialog";
-import { Input } from "../../../packages/admin-ui/src/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../packages/admin-ui/src/components/ui/select";
-import { Textarea } from "../../../packages/admin-ui/src/components/ui/textarea";
+  EmptyState,
+  ErrorState,
+  formatDate,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+  type SigningKey,
+} from "@axis-repository/admin-ui/plugin-ui";
 import {
   useGenerateAptSigningKey,
   useImportAptSigningKey,
   useRevokeAptSigningKey,
 } from "./api";
-import type { SigningKey } from "../../../packages/admin-ui/src/api/schemas";
-import { asJson, EmptyState, ErrorState, formatDate } from "../../../packages/admin-ui/src/pages/shared";
 
 type CreateMode = "generate" | "import";
 

@@ -1,6 +1,9 @@
-import type { PublishArtifact, PublishSession } from "../../../packages/admin-ui/src/api/schemas";
-import { sha256Hex } from "../../../packages/admin-ui/src/admin-publish-form-model";
-import { publishSessionArtifactSummary } from "../../../packages/admin-ui/src/repository-publish-sessions-model";
+import {
+  publishSessionArtifactSummary,
+  sha256Hex,
+  type PublishArtifact,
+  type PublishSession,
+} from "@axis-repository/admin-ui/plugin-ui";
 
 export interface AptPublishFormValues {
   packageName: string;

@@ -6,10 +6,12 @@ import {
   type PublishArtifactsInput,
   type RepositoryObjectStore,
 } from "@axis-repository/core";
-import { OpenPgpSigner } from "../../../packages/runtime-cloudflare/src/openpgp-signer";
-import { MemoryRepositoryObjectStore } from "../../../packages/runtime-cloudflare/src/repository-object-store";
-import { SecretEncryption } from "../../../packages/runtime-cloudflare/src/secret-encryption";
-import { SigningKeyService } from "../../../packages/runtime-cloudflare/src/signing-key-service";
+import {
+  MemoryRepositoryObjectStore,
+  OpenPgpSigner,
+  SecretEncryption,
+  SigningKeyService,
+} from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
 import { AptPublisher } from "./publisher";
 
 async function createSigningKey(state: MemoryStateStore) {

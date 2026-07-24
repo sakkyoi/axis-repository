@@ -1,6 +1,10 @@
-import type { PublishSession, Repository, RepositoryPlugin } from "../../../packages/admin-ui/src/api/schemas";
-import { PublishSessionsSection } from "../../../packages/admin-ui/src/repository-detail-shared";
-import { publishSessionArtifactSummary } from "../../../packages/admin-ui/src/repository-publish-sessions-model";
+import {
+  PublishSessionsSection,
+  publishSessionArtifactSummary,
+  type PublishSession,
+  type Repository,
+  type RepositoryPlugin,
+} from "@axis-repository/admin-ui/plugin-ui";
 
 export function PypiPublishSessionsSection({
   repository,

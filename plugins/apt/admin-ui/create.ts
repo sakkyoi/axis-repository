@@ -3,8 +3,8 @@ import { aptPluginManifest } from "../manifest";
 import type {
   RepositoryCreatePlugin,
   RepositoryCreateWizardState,
-} from "../../../packages/admin-ui/src/repository-ui-plugin-types";
-import { repositoryCreateStepsForConfig } from "../../../packages/admin-ui/src/repository-create-steps";
+} from "@axis-repository/admin-ui/plugin-ui";
+import { repositoryCreateStepsForConfig } from "@axis-repository/admin-ui/plugin-ui";
 import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "./forms";
 
 function splitList(value: string): string[] {

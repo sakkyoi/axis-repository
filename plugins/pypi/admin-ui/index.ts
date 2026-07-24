@@ -2,8 +2,8 @@ import { pypiPluginManifest } from "../manifest";
 import type {
   RepositoryDetailPlugin,
   RepositoryUiPlugin,
-} from "../../../packages/admin-ui/src/repository-ui-plugin-types";
-import { RepositoryClientHelpersSection } from "../../../packages/admin-ui/src/repository-detail-shared";
+} from "@axis-repository/admin-ui/plugin-ui";
+import { RepositoryClientHelpersSection } from "@axis-repository/admin-ui/plugin-ui";
 import { pypiRepositoryCreatePlugin } from "./create";
 import {
   PypiInstallHintsSection,

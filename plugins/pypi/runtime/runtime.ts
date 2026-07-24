@@ -1,8 +1,7 @@
 import { ValidationError, type Repository, type RepositoryObjectStore } from "@axis-repository/core";
 import { pypiPluginManifest } from "../manifest";
-import type { ArtifactRepositoryPlugin } from "../../../packages/runtime-cloudflare/src/artifact-publisher-registry";
-import { createPrefixServingPredicate } from "../../../packages/runtime-cloudflare/src/artifact-publisher-registry";
-import { GenericManifestPublisher } from "../../../packages/runtime-cloudflare/src/generic-manifest-publisher";
+import type { ArtifactRepositoryPlugin } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { createPrefixServingPredicate, GenericManifestPublisher } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 
 function validatePypiRepositoryConfig(config: Record<string, unknown>): void {
   const namespace = pypiPluginManifest.repositoryConfig.namespace;

@@ -5,14 +5,24 @@ import {
   useGenerateAptSigningKey,
   useImportAptSigningKey,
 } from "./api";
-import type { SigningKey } from "../../../packages/admin-ui/src/api/schemas";
-import { Button } from "../../../packages/admin-ui/src/components/ui/button";
-import { Input } from "../../../packages/admin-ui/src/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../packages/admin-ui/src/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../packages/admin-ui/src/components/ui/tabs";
-import { Textarea } from "../../../packages/admin-ui/src/components/ui/textarea";
-import { ErrorState, formatDate } from "../../../packages/admin-ui/src/pages/shared";
-import type { RepositoryCreateFieldRendererProps } from "../../../packages/admin-ui/src/repository-ui-plugin-types";
+import {
+  Button,
+  ErrorState,
+  formatDate,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Textarea,
+  type RepositoryCreateFieldRendererProps,
+  type SigningKey,
+} from "@axis-repository/admin-ui/plugin-ui";
 import { activeSigningKeys } from "./forms";
 
 export function AptSigningKeyDependencyField({

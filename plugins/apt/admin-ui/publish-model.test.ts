@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { PublishSession } from "../../../packages/admin-ui/src/api/schemas";
+import type { PublishSession } from "@axis-repository/admin-ui/plugin-ui";
 import {
   aptPublishSessionArtifactSummary,
   buildAptPublishArtifact,

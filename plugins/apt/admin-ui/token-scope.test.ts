@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Repository, SigningKey } from "../../../packages/admin-ui/src/api/schemas";
+import type { Repository, SigningKey } from "@axis-repository/admin-ui/plugin-ui";
 import {
   activeSigningKeysForRepository,
   aptPublishTokenMissingSigningKeySelections,

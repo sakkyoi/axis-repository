@@ -1,10 +1,15 @@
-import type { Repository, SigningKey } from "../../../packages/admin-ui/src/api/schemas";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../packages/admin-ui/src/components/ui/select";
-import { ErrorState } from "../../../packages/admin-ui/src/pages/shared";
-import type {
-  PublishTokenScopeComponentProps,
-  PublishTokenScopeInput,
-} from "../../../packages/admin-ui/src/repository-ui-plugin-types";
+import {
+  ErrorState,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  type PublishTokenScopeComponentProps,
+  type PublishTokenScopeInput,
+  type Repository,
+  type SigningKey,
+} from "@axis-repository/admin-ui/plugin-ui";
 import { useAptSigningKeys } from "./api";
 
 export function aptPublishTokenMissingSigningKeySelections(input: PublishTokenScopeInput): string[] {

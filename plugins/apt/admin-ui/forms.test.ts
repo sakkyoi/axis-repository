@@ -5,7 +5,7 @@ import {
   buildCreateAptRepositoryInput,
   buildUpdateAptRepositoryInput,
 } from "./forms";
-import type { Repository, SigningKey } from "../../../packages/admin-ui/src/api/schemas";
+import type { Repository, SigningKey } from "@axis-repository/admin-ui/plugin-ui";
 
 describe("APT repository forms", () => {
   it("builds create input from typed APT repository values", () => {

@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { PackagePlus } from "lucide-react";
-import type { Repository, RepositoryPlugin } from "../../../packages/admin-ui/src/api/schemas";
+import {
+  Button,
+  ErrorState,
+  Input,
+  PublishSessionsSection,
+  useRepositoryArtifactPublisher,
+  type Repository,
+  type RepositoryPlugin,
+} from "@axis-repository/admin-ui/plugin-ui";
 import {
   aptPublishSessionArtifactSummary,
   buildAptPublishArtifact,
   defaultAptPublishFormValues,
   type AptPublishFormValues,
 } from "./publish-model";
-import { Button } from "../../../packages/admin-ui/src/components/ui/button";
-import { Input } from "../../../packages/admin-ui/src/components/ui/input";
-import { ErrorState } from "../../../packages/admin-ui/src/pages/shared";
-import { PublishSessionsSection } from "../../../packages/admin-ui/src/repository-detail-shared";
-import { useRepositoryArtifactPublisher } from "../../../packages/admin-ui/src/repository-publish-flow";
 
 export function AptPublishSessionsSection({
   repository,

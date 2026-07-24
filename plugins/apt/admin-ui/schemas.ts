@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { repositoryVisibilitySchema } from "../../../packages/admin-ui/src/api/schemas";
+import { repositoryVisibilitySchema } from "@axis-repository/admin-ui/plugin-ui";
 
 export const aptSourceInfoSchema = z.object({
   repository: z.string(),

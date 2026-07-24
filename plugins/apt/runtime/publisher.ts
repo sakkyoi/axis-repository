@@ -5,7 +5,7 @@ import {
   type PublishResult,
   type RepositoryObjectStore,
 } from "@axis-repository/core";
-import type { SigningKeyService } from "../../../packages/runtime-cloudflare/src/signing-key-service";
+import type { SigningKeyService } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { buildAptRepositoryMetadata } from "./metadata";
 
 const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";

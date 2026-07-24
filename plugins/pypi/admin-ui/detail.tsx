@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
-import { useUpdateRepository } from "../../../packages/admin-ui/src/api/hooks";
-import type {
-  Repository,
-  RepositoryPlugin,
-  RepositoryVisibility,
-} from "../../../packages/admin-ui/src/api/schemas";
-import { Button } from "../../../packages/admin-ui/src/components/ui/button";
-import { ErrorState } from "../../../packages/admin-ui/src/pages/shared";
-import { VisibilitySelect } from "../../../packages/admin-ui/src/repository-detail-shared";
+import {
+  Button,
+  ErrorState,
+  useUpdateRepository,
+  VisibilitySelect,
+  type Repository,
+  type RepositoryPlugin,
+  type RepositoryVisibility,
+} from "@axis-repository/admin-ui/plugin-ui";
 import { usePypiClientInfo } from "./api";
 
 export function pypiSimpleIndexUrl(repository: Repository): string {

@@ -5,8 +5,25 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./plugin-runtime": {
+      "types": "./dist/plugin-runtime.d.ts",
+      "import": "./dist/plugin-runtime.js",
+      "default": "./dist/plugin-runtime.js"
+    },
+    "./plugin-runtime/testing": {
+      "types": "./dist/plugin-runtime-testing.d.ts",
+      "import": "./dist/plugin-runtime-testing.js",
+      "default": "./dist/plugin-runtime-testing.js"
+    }
+  },
   "scripts": {
-    "build": "node scripts/generate-admin-ui-assets.mjs && tsup src/index.ts --format esm --dts",
+    "build": "node scripts/generate-admin-ui-assets.mjs && tsup src/index.ts src/plugin-runtime.ts src/plugin-runtime-testing.ts --format esm --dts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

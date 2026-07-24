@@ -2,11 +2,11 @@ import { aptPluginManifest } from "../manifest";
 import type {
   RepositoryDetailPlugin,
   RepositoryUiPlugin,
-} from "../../../packages/admin-ui/src/repository-ui-plugin-types";
+} from "@axis-repository/admin-ui/plugin-ui";
 import {
   AdvancedJsonConfigSection,
   RepositoryClientHelpersSection,
-} from "../../../packages/admin-ui/src/repository-detail-shared";
+} from "@axis-repository/admin-ui/plugin-ui";
 import { aptRepositoryCreatePlugin } from "./create";
 import { AptSigningKeyDependencyField } from "./create-field-renderers";
 import { AptSettingsSection, AptSigningKeysSection } from "./detail";

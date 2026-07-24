@@ -3,9 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./plugin-ui": {
+      "types": "./dist/plugin-ui.d.ts",
+      "import": "./dist/plugin-ui.js",
+      "default": "./dist/plugin-ui.js"
+    }
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && tsup src/plugin-ui.ts --format esm --dts --tsconfig tsconfig.plugin.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

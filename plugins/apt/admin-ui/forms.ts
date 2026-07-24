@@ -1,6 +1,11 @@
 import { z } from "zod";
-import type { CreateRepositoryInput, UpdateRepositoryInput } from "../../../packages/admin-ui/src/api/client";
-import type { Repository, RepositoryVisibility, SigningKey } from "../../../packages/admin-ui/src/api/schemas";
+import type {
+  CreateRepositoryInput,
+  Repository,
+  RepositoryVisibility,
+  SigningKey,
+  UpdateRepositoryInput,
+} from "@axis-repository/admin-ui/plugin-ui";
 
 export interface AptRepositoryFormValues {
   name: string;
