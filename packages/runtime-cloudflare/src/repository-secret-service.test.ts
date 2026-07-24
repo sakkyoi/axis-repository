@@ -41,7 +41,7 @@ describe("RepositorySecretService", () => {
       createdAt: "2026-07-18T00:00:00.000Z",
       revokedAt: null,
     });
-    expect(JSON.stringify(await state.signingKeys.getById("repository_secret_fixed"))).not.toContain("secret-token");
+    expect(JSON.stringify(await state.repositorySecrets.getById("repository_secret_fixed"))).not.toContain("secret-token");
     await expect(service.getActive("repository_secret_fixed")).resolves.toMatchObject({
       secrets: {
         token: "secret-token",

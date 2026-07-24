@@ -3,7 +3,8 @@ import {
   ValidationError,
   type Clock,
   type RandomId,
-  type SigningKeyRecord,
+  type RepositorySecretRecord as StoredRepositorySecretRecord,
+  type SigningKeyRecord as LegacySigningKeyRecord,
   type StateStore,
 } from "@axis-repository/core";
 import type {
@@ -14,13 +15,6 @@ import type {
 import type { SecretEncryption } from "./secret-encryption";
 
 const LEGACY_APT_SIGNING_KEY_NAMESPACE = "apt.signing-key";
-const STORED_SECRET_VERSION = 1;
-
-interface StoredRepositorySecretMetadata {
-  axisRepositorySecret: typeof STORED_SECRET_VERSION;
-  namespace: string;
-  publicMetadata: Record<string, unknown>;
-}
 
 export class RepositorySecretService implements RepositorySecretCapability {
   constructor(
@@ -49,33 +43,27 @@ export class RepositorySecretService implements RepositorySecretCapability {
     if (!repositoryName) throw new ValidationError("Repository secret repository name is required");
     const name = input.name.trim();
     if (!name) throw new ValidationError("Repository secret name is required");
-    if (await this.options.state.signingKeys.getByName(name, repositoryName)) {
+    if (await this.options.state.repositorySecrets.getByName(name, repositoryName, namespace)) {
       throw new ValidationError(`Repository secret already exists in repository ${repositoryName}: ${name}`);
     }
 
-    const record: SigningKeyRecord = {
+    const record: StoredRepositorySecretRecord = {
       id: this.options.randomId.create("repository_secret"),
+      namespace,
       repositoryName,
       name,
-      publicKeyArmored: JSON.stringify({
-        axisRepositorySecret: STORED_SECRET_VERSION,
-        namespace,
-        publicMetadata: { ...input.publicMetadata },
-      } satisfies StoredRepositorySecretMetadata),
-      encryptedPrivateKeyArmored: await this.options.encryption.encrypt(JSON.stringify({ ...input.secrets })),
-      encryptedPassphrase: await this.options.encryption.encrypt(""),
-      fingerprint: `${namespace}:${repositoryName}:${name}`,
-      keyId: namespace,
+      publicMetadata: { ...input.publicMetadata },
+      encryptedSecrets: await this.options.encryption.encrypt(JSON.stringify({ ...input.secrets })),
       createdAt: this.options.clock.now().toISOString(),
     };
-    await this.options.state.signingKeys.save(record);
+    await this.options.state.repositorySecrets.save(record);
     return this.toSecretRecord(record);
   }
 
   async list(input: { namespace: string; repositoryName?: string }): Promise<RepositorySecretRecord[]> {
     const namespace = input.namespace.trim();
     if (!namespace) throw new ValidationError("Repository secret namespace is required");
-    return (await this.options.state.signingKeys.list())
+    return (await this.options.state.repositorySecrets.list())
       .map((record) => this.toSecretRecord(record))
       .filter((record) =>
         record.namespace === namespace
@@ -84,13 +72,13 @@ export class RepositorySecretService implements RepositorySecretCapability {
   }
 
   async get(id: string): Promise<RepositorySecretRecord> {
-    const record = await this.options.state.signingKeys.getById(id);
+    const record = await this.options.state.repositorySecrets.getById(id);
     if (!record) throw new NotFoundError();
     return this.toSecretRecord(record);
   }
 
   async getActive(id: string): Promise<RepositoryActiveSecret> {
-    const record = await this.options.state.signingKeys.getById(id);
+    const record = await this.options.state.repositorySecrets.getById(id);
     if (!record) throw new NotFoundError();
     if (record.revokedAt) throw new ValidationError("Repository secret has been revoked");
     return {
@@ -100,30 +88,65 @@ export class RepositorySecretService implements RepositorySecretCapability {
   }
 
   async revoke(id: string): Promise<RepositorySecretRecord> {
-    const record = await this.options.state.signingKeys.getById(id);
+    const record = await this.options.state.repositorySecrets.getById(id);
     if (!record) throw new NotFoundError();
     if (record.revokedAt) return this.toSecretRecord(record);
-    const revoked: SigningKeyRecord = { ...record, revokedAt: this.options.clock.now().toISOString() };
-    await this.options.state.signingKeys.save(revoked);
+    if (!isRepositorySecretRecord(record)) {
+      const migrated: StoredRepositorySecretRecord = {
+        id: record.id,
+        namespace: LEGACY_APT_SIGNING_KEY_NAMESPACE,
+        repositoryName: record.repositoryName,
+        name: record.name,
+        publicMetadata: {
+          publicKeyArmored: record.publicKeyArmored,
+          fingerprint: record.fingerprint,
+          keyId: record.keyId,
+        },
+        encryptedSecrets: await this.options.encryption.encrypt(JSON.stringify({
+          privateKeyArmored: await this.options.encryption.decrypt(record.encryptedPrivateKeyArmored),
+          passphrase: await this.options.encryption.decrypt(record.encryptedPassphrase),
+        })),
+        createdAt: record.createdAt,
+        revokedAt: this.options.clock.now().toISOString(),
+      };
+      await this.options.state.repositorySecrets.save(migrated);
+      return this.toSecretRecord(migrated);
+    }
+    const revoked: StoredRepositorySecretRecord = { ...record, revokedAt: this.options.clock.now().toISOString() };
+    await this.options.state.repositorySecrets.save(revoked);
     return this.toSecretRecord(revoked);
   }
 
-  private toSecretRecord(record: SigningKeyRecord): RepositorySecretRecord {
-    const metadata = decodeStoredMetadata(record);
+  private toSecretRecord(record: StoredRepositorySecretRecord | LegacySigningKeyRecord): RepositorySecretRecord {
+    if (!isRepositorySecretRecord(record)) {
+      return {
+        id: record.id,
+        namespace: LEGACY_APT_SIGNING_KEY_NAMESPACE,
+        repositoryName: record.repositoryName,
+        name: record.name,
+        publicMetadata: {
+          publicKeyArmored: record.publicKeyArmored,
+          fingerprint: record.fingerprint,
+          keyId: record.keyId,
+        },
+        createdAt: record.createdAt,
+        revokedAt: record.revokedAt ?? null,
+      };
+    }
     return {
       id: record.id,
-      namespace: metadata.namespace,
+      namespace: record.namespace,
       repositoryName: record.repositoryName,
       name: record.name,
-      publicMetadata: metadata.publicMetadata,
+      publicMetadata: { ...record.publicMetadata },
       createdAt: record.createdAt,
       revokedAt: record.revokedAt ?? null,
     };
   }
 
-  private async decryptSecrets(record: SigningKeyRecord): Promise<Record<string, string>> {
-    if (isStoredRepositorySecretMetadata(record)) {
-      const decrypted = await this.options.encryption.decrypt(record.encryptedPrivateKeyArmored);
+  private async decryptSecrets(record: StoredRepositorySecretRecord | LegacySigningKeyRecord): Promise<Record<string, string>> {
+    if (isRepositorySecretRecord(record)) {
+      const decrypted = await this.options.encryption.decrypt(record.encryptedSecrets);
       const parsed = JSON.parse(decrypted) as unknown;
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         throw new ValidationError("Repository secret payload is invalid");
@@ -140,33 +163,10 @@ export class RepositorySecretService implements RepositorySecretCapability {
   }
 }
 
-function decodeStoredMetadata(record: SigningKeyRecord): StoredRepositorySecretMetadata {
-  if (isStoredRepositorySecretMetadata(record)) {
-    return JSON.parse(record.publicKeyArmored) as StoredRepositorySecretMetadata;
-  }
-  return {
-    axisRepositorySecret: STORED_SECRET_VERSION,
-    namespace: LEGACY_APT_SIGNING_KEY_NAMESPACE,
-    publicMetadata: {
-      publicKeyArmored: record.publicKeyArmored,
-      fingerprint: record.fingerprint,
-      keyId: record.keyId,
-    },
-  };
-}
-
-function isStoredRepositorySecretMetadata(record: SigningKeyRecord): boolean {
-  try {
-    const parsed = JSON.parse(record.publicKeyArmored) as unknown;
-    return Boolean(
-      parsed
-      && typeof parsed === "object"
-      && !Array.isArray(parsed)
-      && (parsed as Record<string, unknown>).axisRepositorySecret === STORED_SECRET_VERSION,
-    );
-  } catch {
-    return false;
-  }
+function isRepositorySecretRecord(
+  record: StoredRepositorySecretRecord | LegacySigningKeyRecord,
+): record is StoredRepositorySecretRecord {
+  return "namespace" in record;
 }
 
 function secretString(value: unknown): string {

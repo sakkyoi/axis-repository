@@ -3,6 +3,7 @@ import {
   MemoryStateStore,
   type PublishSession,
   type PublishTokenRecord,
+  type RepositorySecretRecord,
   type RepositoryPluginPolicyRecord,
   type SigningKeyRecord,
 } from "./index";
@@ -57,6 +58,25 @@ const signingKey = (overrides: Partial<SigningKeyRecord> = {}): SigningKeyRecord
   },
   fingerprint: "A".repeat(40),
   keyId: "B".repeat(16),
+  createdAt: "2026-07-18T00:00:00.000Z",
+  ...overrides,
+});
+
+const repositorySecret = (overrides: Partial<RepositorySecretRecord> = {}): RepositorySecretRecord => ({
+  id: "repository_secret_1",
+  namespace: "apt.signing-key",
+  repositoryName: "debian-internal",
+  name: "debian-prod",
+  publicMetadata: {
+    publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+    fingerprint: "A".repeat(40),
+    keyId: "B".repeat(16),
+  },
+  encryptedSecrets: {
+    algorithm: "AES-GCM",
+    iv: "iv",
+    ciphertext: "private",
+  },
   createdAt: "2026-07-18T00:00:00.000Z",
   ...overrides,
 });
@@ -176,47 +196,52 @@ describe("MemoryStateStore", () => {
   });
 });
 
-describe("MemoryStateStore signing keys", () => {
-  it("persists signing keys by id and name and lists them sorted", async () => {
+describe("MemoryStateStore repository secrets", () => {
+  it("persists repository secrets by id and scoped name and lists them sorted", async () => {
     const state = new MemoryStateStore();
-    await state.signingKeys.save(signingKey({ id: "signing_key_2", name: "zeta" }));
-    await state.signingKeys.save(signingKey({ id: "signing_key_1", name: "alpha" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_2", name: "zeta" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_1", name: "alpha" }));
 
-    await expect(state.signingKeys.getById("signing_key_1")).resolves.toMatchObject({
+    await expect(state.repositorySecrets.getById("repository_secret_1")).resolves.toMatchObject({
       name: "alpha",
     });
-    await expect(state.signingKeys.getByName("zeta", "debian-internal")).resolves.toMatchObject({
-      id: "signing_key_2",
+    await expect(state.repositorySecrets.getByName("zeta", "debian-internal", "apt.signing-key")).resolves.toMatchObject({
+      id: "repository_secret_2",
     });
-    await expect(state.signingKeys.list()).resolves.toMatchObject([
+    await expect(state.repositorySecrets.list()).resolves.toMatchObject([
       { name: "alpha" },
       { name: "zeta" },
     ]);
   });
 
-  it("keeps signing key name and id indexes consistent when a name changes", async () => {
+  it("keeps repository secret name and id indexes consistent when a name changes", async () => {
     const state = new MemoryStateStore();
-    await state.signingKeys.save(signingKey({ id: "signing_key_1", name: "old-name" }));
-    await state.signingKeys.save(signingKey({ id: "signing_key_1", name: "new-name" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_1", name: "old-name" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_1", name: "new-name" }));
 
-    await expect(state.signingKeys.getByName("old-name", "debian-internal")).resolves.toBeNull();
-    await expect(state.signingKeys.getByName("new-name", "debian-internal")).resolves.toMatchObject({
-      id: "signing_key_1",
+    await expect(state.repositorySecrets.getByName("old-name", "debian-internal", "apt.signing-key")).resolves.toBeNull();
+    await expect(state.repositorySecrets.getByName("new-name", "debian-internal", "apt.signing-key")).resolves.toMatchObject({
+      id: "repository_secret_1",
     });
   });
 
-  it("scopes signing key name indexes by repository", async () => {
+  it("scopes repository secret name indexes by repository and namespace", async () => {
     const state = new MemoryStateStore();
-    await state.signingKeys.save(signingKey({ id: "signing_key_1", repositoryName: "debian-prod", name: "release" }));
-    await state.signingKeys.save(signingKey({ id: "signing_key_2", repositoryName: "debian-staging", name: "release" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_1", repositoryName: "debian-prod", name: "release" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_2", repositoryName: "debian-staging", name: "release" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_3", repositoryName: "debian-prod", name: "release", namespace: "npm.token" }));
 
-    await expect(state.signingKeys.getByName("release", "debian-prod")).resolves.toMatchObject({
-      id: "signing_key_1",
+    await expect(state.repositorySecrets.getByName("release", "debian-prod", "apt.signing-key")).resolves.toMatchObject({
+      id: "repository_secret_1",
     });
-    await expect(state.signingKeys.getByName("release", "debian-staging")).resolves.toMatchObject({
-      id: "signing_key_2",
+    await expect(state.repositorySecrets.getByName("release", "debian-staging", "apt.signing-key")).resolves.toMatchObject({
+      id: "repository_secret_2",
+    });
+    await expect(state.repositorySecrets.getByName("release", "debian-prod", "npm.token")).resolves.toMatchObject({
+      id: "repository_secret_3",
     });
   });
+
 });
 
 describe("MemoryStateStore repository plugin policies", () => {

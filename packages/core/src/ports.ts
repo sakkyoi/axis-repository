@@ -1,6 +1,7 @@
 import type {
   PublishSession,
   PublishTokenRecord,
+  RepositorySecretRecord,
   SigningKeyRecord,
   UploadedObject,
   UploadTarget,
@@ -109,11 +110,11 @@ export interface PublishTokenStore {
   save(token: PublishTokenRecord): Promise<void>;
 }
 
-export interface SigningKeyStore {
-  getById(id: string): Promise<SigningKeyRecord | null>;
-  getByName(name: string, repositoryName: string): Promise<SigningKeyRecord | null>;
-  list(): Promise<SigningKeyRecord[]>;
-  save(record: SigningKeyRecord): Promise<void>;
+export interface RepositorySecretStore {
+  getById(id: string): Promise<RepositorySecretRecord | SigningKeyRecord | null>;
+  getByName(name: string, repositoryName: string, namespace: string): Promise<RepositorySecretRecord | null>;
+  list(): Promise<Array<RepositorySecretRecord | SigningKeyRecord>>;
+  save(record: RepositorySecretRecord): Promise<void>;
 }
 
 export interface RepositoryPluginPolicyStore {
@@ -130,6 +131,6 @@ export interface StateStore {
   repositories: RepositoryStore;
   publishSessions: PublishSessionStore;
   publishTokens: PublishTokenStore;
-  signingKeys: SigningKeyStore;
+  repositorySecrets: RepositorySecretStore;
   repositoryPluginPolicies: RepositoryPluginPolicyStore;
 }

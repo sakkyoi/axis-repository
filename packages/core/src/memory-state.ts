@@ -2,6 +2,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
   SigningKeyRecord,
 } from "./domain";
@@ -16,8 +17,8 @@ export class MemoryStateStore implements StateStore {
   private readonly publishSessionById = new Map<string, PublishSession>();
   private readonly publishTokenById = new Map<string, PublishTokenRecord>();
   private readonly publishTokenIdByName = new Map<string, string>();
-  private readonly signingKeyById = new Map<string, SigningKeyRecord>();
-  private readonly signingKeyIdByName = new Map<string, string>();
+  private readonly repositorySecretById = new Map<string, RepositorySecretRecord | SigningKeyRecord>();
+  private readonly repositorySecretIdByName = new Map<string, string>();
   private readonly repositoryPluginPolicyByEcosystem = new Map<string, RepositoryPluginPolicyRecord>();
 
   readonly repositories = {
@@ -102,33 +103,42 @@ export class MemoryStateStore implements StateStore {
     },
   };
 
-  readonly signingKeys = {
-    getById: async (id: string): Promise<SigningKeyRecord | null> => {
-      return this.signingKeyById.get(id) ?? null;
+  readonly repositorySecrets = {
+    getById: async (id: string): Promise<RepositorySecretRecord | SigningKeyRecord | null> => {
+      return this.repositorySecretById.get(id) ?? null;
     },
-    getByName: async (name: string, repositoryName: string): Promise<SigningKeyRecord | null> => {
-      const id = this.signingKeyIdByName.get(signingKeyNameIndex(repositoryName, name));
-      return id ? this.signingKeyById.get(id) ?? null : null;
+    getByName: async (name: string, repositoryName: string, namespace: string): Promise<RepositorySecretRecord | null> => {
+      const id = this.repositorySecretIdByName.get(repositorySecretNameIndex(namespace, repositoryName, name));
+      const record = id ? this.repositorySecretById.get(id) ?? null : null;
+      return record && isRepositorySecretRecord(record) ? record : null;
     },
-    list: async (): Promise<SigningKeyRecord[]> => {
-      return [...this.signingKeyById.values()].sort((left, right) =>
+    list: async (): Promise<Array<RepositorySecretRecord | SigningKeyRecord>> => {
+      return [...this.repositorySecretById.values()].sort((left, right) =>
         left.name.localeCompare(right.name),
       );
     },
-    save: async (record: SigningKeyRecord): Promise<void> => {
-      const existing = this.signingKeyById.get(record.id);
-      if (existing && (existing.name !== record.name || existing.repositoryName !== record.repositoryName)) {
-        this.signingKeyIdByName.delete(signingKeyNameIndex(existing.repositoryName, existing.name));
+    save: async (record: RepositorySecretRecord): Promise<void> => {
+      const existing = this.repositorySecretById.get(record.id);
+      if (existing && isRepositorySecretRecord(existing)) {
+        if (
+          existing.name !== record.name
+          || existing.repositoryName !== record.repositoryName
+          || existing.namespace !== record.namespace
+        ) {
+          this.repositorySecretIdByName.delete(
+            repositorySecretNameIndex(existing.namespace, existing.repositoryName, existing.name),
+          );
+        }
       }
 
-      const nameIndex = signingKeyNameIndex(record.repositoryName, record.name);
-      const existingIdForName = this.signingKeyIdByName.get(nameIndex);
+      const nameIndex = repositorySecretNameIndex(record.namespace, record.repositoryName, record.name);
+      const existingIdForName = this.repositorySecretIdByName.get(nameIndex);
       if (existingIdForName && existingIdForName !== record.id) {
-        this.signingKeyById.delete(existingIdForName);
+        this.repositorySecretById.delete(existingIdForName);
       }
 
-      this.signingKeyById.set(record.id, record);
-      this.signingKeyIdByName.set(nameIndex, record.id);
+      this.repositorySecretById.set(record.id, record);
+      this.repositorySecretIdByName.set(nameIndex, record.id);
     },
   };
 
@@ -152,6 +162,10 @@ function comparePublishSessions(left: PublishSession, right: PublishSession): nu
   return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
 }
 
-function signingKeyNameIndex(repositoryName: string, name: string): string {
-  return `${repositoryName}\0${name}`;
+function repositorySecretNameIndex(namespace: string, repositoryName: string, name: string): string {
+  return `${namespace}\0${repositoryName}\0${name}`;
+}
+
+function isRepositorySecretRecord(record: RepositorySecretRecord | SigningKeyRecord): record is RepositorySecretRecord {
+  return "namespace" in record;
 }

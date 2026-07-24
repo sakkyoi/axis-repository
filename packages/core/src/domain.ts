@@ -36,6 +36,17 @@ export interface SigningKeyRecord {
   revokedAt?: string;
 }
 
+export interface RepositorySecretRecord {
+  id: string;
+  namespace: string;
+  repositoryName: string;
+  name: string;
+  publicMetadata: Record<string, unknown>;
+  encryptedSecrets: EncryptedSecret;
+  createdAt: string;
+  revokedAt?: string;
+}
+
 export interface TokenPrincipal {
   tokenId: string;
   name: string;

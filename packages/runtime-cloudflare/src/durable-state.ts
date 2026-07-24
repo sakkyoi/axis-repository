@@ -2,6 +2,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
   SigningKeyRecord,
   StateStore,
@@ -19,7 +20,9 @@ const sessionKey = (id: string) => `publish-session:${id}`;
 const tokenKey = (id: string) => `publish-token:${id}`;
 const tokenNameKey = (name: string) => `publish-token-name:${name}`;
 const signingKeyKey = (id: string) => `signing-key:${id}`;
-const signingKeyNameKey = (repositoryName: string, name: string) => `signing-key-name:${repositoryName}:${name}`;
+const repositorySecretKey = (id: string) => `repository-secret:${id}`;
+const repositorySecretNameKey = (namespace: string, repositoryName: string, name: string) =>
+  `repository-secret-name:${namespace}:${repositoryName}:${name}`;
 const repositoryPluginPolicyKey = (ecosystem: string) => `repository-plugin-policy:${ecosystem}`;
 
 function clonePublishSession(session: PublishSession): PublishSession {
@@ -137,41 +140,57 @@ export class DurableStateStore implements StateStore {
     },
   };
 
-  readonly signingKeys = {
-    getById: async (id: string): Promise<SigningKeyRecord | null> => {
-      return (await this.storage.get<SigningKeyRecord>(signingKeyKey(id))) ?? null;
+  readonly repositorySecrets = {
+    getById: async (id: string): Promise<RepositorySecretRecord | SigningKeyRecord | null> => {
+      return (
+        (await this.storage.get<RepositorySecretRecord>(repositorySecretKey(id)))
+        ?? (await this.storage.get<SigningKeyRecord>(signingKeyKey(id)))
+        ?? null
+      );
     },
-    getByName: async (name: string, repositoryName: string): Promise<SigningKeyRecord | null> => {
-      const id = await this.storage.get<string>(signingKeyNameKey(repositoryName, name));
+    getByName: async (
+      name: string,
+      repositoryName: string,
+      namespace: string,
+    ): Promise<RepositorySecretRecord | null> => {
+      const id = await this.storage.get<string>(repositorySecretNameKey(namespace, repositoryName, name));
       return id
-        ? ((await this.storage.get<SigningKeyRecord>(signingKeyKey(id))) ?? null)
+        ? ((await this.storage.get<RepositorySecretRecord>(repositorySecretKey(id))) ?? null)
         : null;
     },
-    list: async (): Promise<SigningKeyRecord[]> => {
-      const values = await this.storage.list<SigningKeyRecord>({
+    list: async (): Promise<Array<RepositorySecretRecord | SigningKeyRecord>> => {
+      const values = await this.storage.list<RepositorySecretRecord>({
+        prefix: "repository-secret:",
+      });
+      const legacyValues = await this.storage.list<SigningKeyRecord>({
         prefix: "signing-key:",
       });
-      return [...values.values()].sort((left, right) =>
+      return [...values.values(), ...legacyValues.values()].sort((left, right) =>
         left.name.localeCompare(right.name),
       );
     },
-    save: async (record: SigningKeyRecord): Promise<void> => {
-      const existing = await this.storage.get<SigningKeyRecord>(
-        signingKeyKey(record.id),
+    save: async (record: RepositorySecretRecord): Promise<void> => {
+      const existing = await this.storage.get<RepositorySecretRecord>(
+        repositorySecretKey(record.id),
       );
-      if (existing && (existing.name !== record.name || existing.repositoryName !== record.repositoryName)) {
-        await this.storage.delete(signingKeyNameKey(existing.repositoryName, existing.name));
+      if (
+        existing
+        && (existing.name !== record.name
+          || existing.repositoryName !== record.repositoryName
+          || existing.namespace !== record.namespace)
+      ) {
+        await this.storage.delete(repositorySecretNameKey(existing.namespace, existing.repositoryName, existing.name));
       }
 
       const existingIdForName = await this.storage.get<string>(
-        signingKeyNameKey(record.repositoryName, record.name),
+        repositorySecretNameKey(record.namespace, record.repositoryName, record.name),
       );
       if (existingIdForName && existingIdForName !== record.id) {
-        await this.storage.delete(signingKeyKey(existingIdForName));
+        await this.storage.delete(repositorySecretKey(existingIdForName));
       }
 
-      await this.storage.put(signingKeyKey(record.id), record);
-      await this.storage.put(signingKeyNameKey(record.repositoryName, record.name), record.id);
+      await this.storage.put(repositorySecretKey(record.id), record);
+      await this.storage.put(repositorySecretNameKey(record.namespace, record.repositoryName, record.name), record.id);
     },
   };
 

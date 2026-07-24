@@ -776,7 +776,7 @@ describe("PublishSessionService", () => {
       },
       publishTokens: backingState.publishTokens,
       publishSessions: backingState.publishSessions,
-      signingKeys: backingState.signingKeys,
+      repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
     };
     const service = new PublishSessionService({
@@ -926,7 +926,7 @@ describe("PublishSessionService", () => {
     const state: StateStore = {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
-      signingKeys: backingState.signingKeys,
+      repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       publishSessions: {
         ...backingState.publishSessions,
@@ -1014,7 +1014,7 @@ describe("PublishSessionService", () => {
     const state: StateStore = {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
-      signingKeys: backingState.signingKeys,
+      repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       publishSessions: {
         ...backingState.publishSessions,
