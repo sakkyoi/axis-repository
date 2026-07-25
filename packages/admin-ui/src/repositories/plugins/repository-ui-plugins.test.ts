@@ -137,6 +137,9 @@ describe("repository UI plugin registry", () => {
 
   it("lets ecosystem UI plugins provide publish UI and artifact summaries", () => {
     expect(getRepositoryPublishPlugin("apt")?.PreviewComponent?.name).toBe("AptPublishArtifactPreview");
+    expect(getRepositoryPublishPlugin("apt")?.accept).toContain(".deb");
+    expect(getRepositoryPublishPlugin("apt")?.isAcceptedFile?.(new File(["deb"], "myapp.deb"))).toBe(true);
+    expect(getRepositoryPublishPlugin("apt")?.isAcceptedFile?.(new File(["wheel"], "myapp.whl"))).toBe(false);
     expect(getRepositoryPublishPlugin("apt")?.SessionDetailComponent?.name).toBe("AptPublishSessionDetail");
     expect(getRepositoryPublishPlugin("pypi")?.PreviewComponent).toBeUndefined();
     expect(getRepositoryPublishPlugin("pypi")?.SessionDetailComponent?.name).toBe("PypiPublishSessionDetail");

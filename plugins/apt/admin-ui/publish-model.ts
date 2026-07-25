@@ -27,6 +27,15 @@ export interface AptPublishPackageMetadata {
   homepage?: string;
 }
 
+export function aptCanPublishArtifact(input: {
+  file: File | undefined;
+  metadata: AptPublishPackageMetadata | undefined;
+  error: string;
+  isPublishing: boolean;
+}): boolean {
+  return Boolean(input.file && input.metadata && !input.error && !input.isPublishing);
+}
+
 export async function buildAptPublishArtifact(file: File, values: AptPublishFormValues = {}): Promise<PublishArtifact> {
   const control = await readDebControlMetadata(new Uint8Array(await file.arrayBuffer()));
   return {

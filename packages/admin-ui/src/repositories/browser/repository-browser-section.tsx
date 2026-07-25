@@ -22,6 +22,7 @@ import {
 } from "./repository-browser-model";
 import {
   filesFromFileList,
+  repositoryBrowserAcceptedPublishFiles,
   repositoryBrowserUploadOverlay,
   repositoryBrowserUploadOverlayClasses,
 } from "./repository-browser-upload-model";
@@ -34,6 +35,7 @@ export function RepositoryBrowserSection({
   const [prefix, setPrefix] = useState("");
   const [publishOpen, setPublishOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [publishFileError, setPublishFileError] = useState("");
   const [dragDepth, setDragDepth] = useState(0);
   const objects = useRepositoryObjects(repository.name, prefix);
   const publishPlugin = getRepositoryPublishPlugin(repository.ecosystem);
@@ -49,13 +51,23 @@ export function RepositoryBrowserSection({
 
   function handleFiles(files: File[]) {
     if (files.length === 0 || !PreviewComponent) return;
-    setSelectedFiles(files);
+    const { accepted, rejected } = repositoryBrowserAcceptedPublishFiles({
+      files,
+      ...(publishPlugin?.isAcceptedFile ? { isAcceptedFile: publishPlugin.isAcceptedFile } : {}),
+    });
+    setSelectedFiles(accepted);
+    setPublishFileError(
+      accepted.length === 0 && rejected.length > 0
+        ? `This repository accepts ${publishPlugin?.acceptedFileDescription ?? "supported artifact files"}.`
+        : "",
+    );
     setPublishOpen(true);
   }
 
   function closePublishPreview() {
     setPublishOpen(false);
     setSelectedFiles([]);
+    setPublishFileError("");
   }
 
   function onDragEnter(event: DragEvent<HTMLDivElement>) {
@@ -105,6 +117,7 @@ export function RepositoryBrowserSection({
           <input
             ref={fileInputRef}
             type="file"
+            accept={publishPlugin?.accept}
             className="hidden"
             onChange={(event) => {
               handleFiles(filesFromFileList(event.currentTarget.files));
@@ -125,7 +138,16 @@ export function RepositoryBrowserSection({
           <DialogHeader>
             <DialogTitle>{publishPlugin?.title ?? "Publish artifact"}</DialogTitle>
           </DialogHeader>
-          {PreviewComponent && (
+          {publishFileError ? (
+            <div className="grid gap-3">
+              <ErrorState title="Unsupported artifact" error={publishFileError} />
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={closePublishPreview}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          ) : PreviewComponent && (
             <PreviewComponent
               repository={repository}
               pluginMetadata={pluginMetadata}

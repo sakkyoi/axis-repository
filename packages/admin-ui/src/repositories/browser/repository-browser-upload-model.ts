@@ -49,3 +49,25 @@ export function repositoryBrowserUploadOverlayClasses(tone: RepositoryBrowserUpl
 export function filesFromFileList(files: FileList | null): File[] {
   return files ? Array.from(files) : [];
 }
+
+export function repositoryBrowserAcceptedPublishFiles(input: {
+  files: File[];
+  isAcceptedFile?: (file: File) => boolean;
+}): {
+  accepted: File[];
+  rejected: File[];
+} {
+  if (!input.isAcceptedFile) {
+    return { accepted: input.files, rejected: [] };
+  }
+  const accepted: File[] = [];
+  const rejected: File[] = [];
+  for (const file of input.files) {
+    if (input.isAcceptedFile(file)) {
+      accepted.push(file);
+    } else {
+      rejected.push(file);
+    }
+  }
+  return { accepted, rejected };
+}

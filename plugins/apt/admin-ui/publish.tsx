@@ -10,6 +10,7 @@ import {
   type RepositoryPlugin,
 } from "@axis-repository/admin-ui/plugin-ui";
 import {
+  aptCanPublishArtifact,
   buildAptPublishArtifact,
   readAptPublishPackageMetadata,
   type AptPublishPackageMetadata,
@@ -31,6 +32,12 @@ export function AptPublishArtifactPreview({
   const [file, setFile] = useState<File>();
   const [metadata, setMetadata] = useState<AptPublishPackageMetadata>();
   const [error, setError] = useState("");
+  const canPublish = aptCanPublishArtifact({
+    file,
+    metadata,
+    error,
+    isPublishing: publisher.isPublishing,
+  });
 
   useEffect(() => {
     const droppedFile = droppedFiles[0];
@@ -87,7 +94,7 @@ export function AptPublishArtifactPreview({
           <X className="mr-2 h-4 w-4" />
           Cancel
         </Button>
-        <Button type="button" onClick={publishArtifact} disabled={!file || publisher.isPublishing}>
+        <Button type="button" onClick={publishArtifact} disabled={!canPublish}>
           <PackagePlus className="mr-2 h-4 w-4" />
           Publish
         </Button>

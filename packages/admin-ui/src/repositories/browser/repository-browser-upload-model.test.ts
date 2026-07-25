@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filesFromFileList,
+  repositoryBrowserAcceptedPublishFiles,
   repositoryBrowserUploadOverlayClasses,
   repositoryBrowserUploadOverlay,
 } from "./repository-browser-upload-model";
@@ -63,5 +64,27 @@ describe("repository browser upload model", () => {
 
     expect(filesFromFileList(fileList)).toEqual([first, second]);
     expect(filesFromFileList(null)).toEqual([]);
+  });
+
+  it("splits selected files by plugin-provided accepted file rules", () => {
+    const deb = new File(["deb"], "package.deb");
+    const wheel = new File(["wheel"], "package.whl");
+
+    expect(repositoryBrowserAcceptedPublishFiles({
+      files: [deb, wheel],
+      isAcceptedFile: (file) => file.name.endsWith(".deb"),
+    })).toEqual({
+      accepted: [deb],
+      rejected: [wheel],
+    });
+  });
+
+  it("accepts every selected file when the plugin does not provide file rules", () => {
+    const file = new File(["content"], "artifact.bin");
+
+    expect(repositoryBrowserAcceptedPublishFiles({ files: [file] })).toEqual({
+      accepted: [file],
+      rejected: [],
+    });
   });
 });

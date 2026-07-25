@@ -113,6 +113,9 @@ export interface RepositoryPublishPreviewComponentProps extends RepositoryDetail
 export interface RepositoryPublishPlugin {
   ecosystem: string;
   title?: string;
+  accept?: string;
+  acceptedFileDescription?: string;
+  isAcceptedFile?: (file: File) => boolean;
   PreviewComponent?: ComponentType<RepositoryPublishPreviewComponentProps>;
   SessionDetailComponent?: ComponentType<PublishSessionDetailComponentProps>;
   artifactSummary(session: PublishSession): string;

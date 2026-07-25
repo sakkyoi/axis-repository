@@ -31,6 +31,9 @@ export const aptRepositoryUiPlugin: RepositoryUiPlugin = {
   publish: {
     ecosystem: aptPluginManifest.ecosystem,
     title: "Publish APT artifact",
+    accept: ".deb,application/vnd.debian.binary-package",
+    acceptedFileDescription: "Debian package files (.deb)",
+    isAcceptedFile: (file) => file.name.toLowerCase().endsWith(".deb"),
     PreviewComponent: AptPublishArtifactPreview,
     SessionDetailComponent: AptPublishSessionDetail,
     artifactSummary: aptPublishSessionArtifactSummary,

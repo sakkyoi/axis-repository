@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PublishSession } from "@axis-repository/admin-ui/plugin-ui";
 import {
+  aptCanPublishArtifact,
   aptPublishSessionArtifactSummary,
   buildAptPublishArtifact,
   readAptPublishPackageMetadata,
@@ -70,6 +71,22 @@ describe("APT publish model", () => {
 
   it("summarizes single APT package sessions from plugin metadata", () => {
     expect(aptPublishSessionArtifactSummary(session())).toBe("myapp 1.2.3 amd64, 0 verified");
+  });
+
+  it("only enables publishing after a file has valid parsed metadata", () => {
+    const file = new File(["deb"], "myapp.deb");
+    const metadata = {
+      packageName: "myapp",
+      version: "1.2.3",
+      architecture: "amd64",
+      maintainer: "Release Team <release@example.com>",
+      description: "My app",
+    };
+
+    expect(aptCanPublishArtifact({ file, metadata, error: "", isPublishing: false })).toBe(true);
+    expect(aptCanPublishArtifact({ file, metadata: undefined, error: "", isPublishing: false })).toBe(false);
+    expect(aptCanPublishArtifact({ file, metadata, error: "Invalid Debian package", isPublishing: false })).toBe(false);
+    expect(aptCanPublishArtifact({ file, metadata, error: "", isPublishing: true })).toBe(false);
   });
 });
 
