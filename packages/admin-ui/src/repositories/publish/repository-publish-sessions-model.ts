@@ -70,6 +70,9 @@ export function repositoryActivityActionLabel(activity: RepositoryActivity): str
   if (activity.type === "object.update") {
     return "Updated object";
   }
+  if (activity.type === "artifact-index.rebuild") {
+    return "Rebuilt artifact index";
+  }
   return "Deleted object";
 }
 
@@ -83,6 +86,9 @@ export function repositoryActivityStatusMeta(activity: RepositoryActivity): {
   if (activity.type === "object.update") {
     return { label: "updated", variant: "warning" };
   }
+  if (activity.type === "artifact-index.rebuild") {
+    return { label: "rebuilt", variant: "default" };
+  }
   return { label: "deleted", variant: "destructive" };
 }
 
@@ -92,6 +98,14 @@ export function repositoryActivitySummary(
 ): string {
   if (activity.type === "publish") {
     return publishArtifactSummary(activity.session);
+  }
+  if (activity.type === "artifact-index.rebuild") {
+    const artifactCount = activity.metadata.artifactCount;
+    if (typeof artifactCount === "number") {
+      const artifactLabel = artifactCount === 1 ? "artifact" : "artifacts";
+      return `${artifactCount} indexed ${artifactLabel}`;
+    }
+    return activity.summary;
   }
   const path = activity.metadata.path;
   return typeof path === "string" ? path : activity.summary;

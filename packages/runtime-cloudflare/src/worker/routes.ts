@@ -1004,6 +1004,10 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactsRebuildName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     const result = await dependencies.repositoryArtifactIndexService.rebuild({ repositoryName: repository.name });
+    await dependencies.repositoryActivityService.recordArtifactIndexRebuild({
+      repositoryName: repository.name,
+      artifactCount: result.artifacts.length,
+    });
     return jsonResponse({ ...result, truncated: false });
   }
   const adminRepositoryObjectDetailName = parseAdminRepositoryObjectDetailPath(url.pathname);

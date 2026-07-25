@@ -200,4 +200,22 @@ describe("repository publish sessions model", () => {
     expect(repositoryActivityStatusMeta(activity)).toEqual({ label: "updated", variant: "warning" });
     expect(repositoryActivitySummary(activity, publishSessionArtifactSummary)).toBe("dists/noble/Release");
   });
+
+  it("labels artifact index rebuild activities", () => {
+    const activity = {
+      id: "activity_1",
+      repositoryName: "debian-internal",
+      type: "artifact-index.rebuild" as const,
+      actor: "admin" as const,
+      summary: "Rebuilt artifact index",
+      metadata: {
+        artifactCount: 2,
+      },
+      createdAt: "2026-07-23T00:00:00.000Z",
+    };
+
+    expect(repositoryActivityActionLabel(activity)).toBe("Rebuilt artifact index");
+    expect(repositoryActivityStatusMeta(activity)).toEqual({ label: "rebuilt", variant: "default" });
+    expect(repositoryActivitySummary(activity, publishSessionArtifactSummary)).toBe("2 indexed artifacts");
+  });
 });

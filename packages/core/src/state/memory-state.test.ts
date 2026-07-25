@@ -121,6 +121,30 @@ describe("MemoryStateStore repository activities", () => {
       createdAt: "2026-07-12T00:01:00.000Z",
     });
   });
+
+  it("records artifact index rebuild activities through the activity service", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryActivityService({
+      state,
+      clock: { now: () => new Date("2026-07-12T00:01:00.000Z") },
+      randomId: { create: (prefix) => `${prefix}_1` },
+    });
+
+    await expect(service.recordArtifactIndexRebuild({
+      repositoryName: "debian-internal",
+      artifactCount: 2,
+    })).resolves.toEqual({
+      id: "activity_1",
+      repositoryName: "debian-internal",
+      type: "artifact-index.rebuild",
+      actor: "admin",
+      summary: "Rebuilt artifact index",
+      metadata: {
+        artifactCount: 2,
+      },
+      createdAt: "2026-07-12T00:01:00.000Z",
+    });
+  });
 });
 
 describe("MemoryStateStore repository artifacts", () => {

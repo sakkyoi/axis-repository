@@ -25,6 +25,11 @@ export interface RecordObjectUpdateInput {
   previousEtag?: string;
 }
 
+export interface RecordArtifactIndexRebuildInput {
+  repositoryName: string;
+  artifactCount: number;
+}
+
 export class RepositoryActivityService {
   constructor(private readonly options: RepositoryActivityServiceOptions) {}
 
@@ -65,6 +70,22 @@ export class RepositoryActivityService {
         ...(input.previousContentType !== undefined ? { previousContentType: input.previousContentType } : {}),
         ...(input.previousSize !== undefined ? { previousSize: input.previousSize } : {}),
         ...(input.previousEtag !== undefined ? { previousEtag: input.previousEtag } : {}),
+      },
+      createdAt: this.options.clock.now().toISOString(),
+    };
+    await this.options.state.repositoryActivities.save(activity);
+    return activity;
+  }
+
+  async recordArtifactIndexRebuild(input: RecordArtifactIndexRebuildInput): Promise<RepositoryActivityRecord> {
+    const activity: RepositoryActivityRecord = {
+      id: this.options.randomId.create("activity"),
+      repositoryName: input.repositoryName,
+      type: "artifact-index.rebuild",
+      actor: "admin",
+      summary: "Rebuilt artifact index",
+      metadata: {
+        artifactCount: input.artifactCount,
       },
       createdAt: this.options.clock.now().toISOString(),
     };

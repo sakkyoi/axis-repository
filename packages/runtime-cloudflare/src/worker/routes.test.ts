@@ -1970,6 +1970,40 @@ describe("Cloudflare runtime routes", () => {
     await expect(artifacts.json()).resolves.toEqual({ artifacts: [], truncated: false });
   });
 
+  it("records repository activity when rebuilding artifact indexes", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+
+    const rebuild = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/artifacts/rebuild-index",
+      { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const activity = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/activity",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(rebuild.status).toBe(200);
+    expect(activity.status).toBe(200);
+    await expect(activity.json()).resolves.toMatchObject({
+      activities: [{
+        repositoryName: "debian-private",
+        type: "artifact-index.rebuild",
+        actor: "admin",
+        summary: "Rebuilt artifact index",
+        metadata: {
+          artifactCount: 0,
+        },
+      }],
+      truncated: false,
+    });
+  });
+
   it("rebuilds artifact indexes after deleting repository content objects", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

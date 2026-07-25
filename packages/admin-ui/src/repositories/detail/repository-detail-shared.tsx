@@ -174,10 +174,27 @@ function RepositoryActivityItem({
       </summary>
       {activity.type === "publish" ? (
         <SessionDetailComponent session={activity.session} artifactSummary={artifactSummary} />
+      ) : activity.type === "artifact-index.rebuild" ? (
+        <RepositoryArtifactIndexRebuildActivityDetail activity={activity} />
       ) : (
         <RepositoryObjectActivityDetail activity={activity} />
       )}
     </details>
+  );
+}
+
+function RepositoryArtifactIndexRebuildActivityDetail({
+  activity,
+}: {
+  activity: Extract<RepositoryActivity, { type: "artifact-index.rebuild" }>;
+}) {
+  const artifactCount = activity.metadata.artifactCount;
+  const artifactCountText = typeof artifactCount === "number" ? String(artifactCount) : "unknown";
+  return (
+    <div className="mt-3 grid gap-2 text-xs">
+      <PublishSessionDetailList title="Artifact index" items={[activity.summary]} />
+      <PublishSessionDetailList title="Indexed artifacts" items={[artifactCountText]} />
+    </div>
   );
 }
 
