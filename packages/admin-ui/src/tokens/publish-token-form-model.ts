@@ -36,6 +36,20 @@ export function repositoryDisplayLabel(repository: Repository): string {
   return `${repository.name} (${repository.ecosystem})`;
 }
 
+export function initialPublishTokenSelection(_tokens: PublishToken[]): string | undefined {
+  return undefined;
+}
+
+export function publishTokenRowStateClass(tokenName: string, selectedName: string | undefined): string {
+  return tokenName === selectedName
+    ? "border-l-4 border-l-primary bg-primary/10 hover:bg-primary/15"
+    : "border-l-4 border-l-transparent hover:bg-muted/60";
+}
+
+export function publishTokenDetailBodyClass(): string {
+  return "grid h-full min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4";
+}
+
 export function tokenScopeSummary(token: Pick<PublishToken, "repositories" | "permissions" | "signingKeyIds">): {
   repositories: string;
   permissions: string;
@@ -46,6 +60,17 @@ export function tokenScopeSummary(token: Pick<PublishToken, "repositories" | "pe
     permissions: token.permissions.length ? token.permissions.join(", ") : "none",
     signingKeys: token.signingKeyIds.length ? token.signingKeyIds.join(", ") : "none",
   };
+}
+
+export function publishTokenSummaryItems(token: PublishToken): Array<[string, string]> {
+  const summary = tokenScopeSummary(token);
+  return [
+    ["Permissions", summary.permissions],
+    ["Repositories", summary.repositories],
+    ["Signing key scopes", summary.signingKeys],
+    ["Created", token.createdAt],
+    ["Expires", token.expiresAt ?? "never"],
+  ];
 }
 
 export function revokePublishTokenDialogContent(tokenName: string): DestructiveActionDialogContent {

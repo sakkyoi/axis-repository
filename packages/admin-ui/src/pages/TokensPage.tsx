@@ -6,12 +6,15 @@ import { DestructiveActionDialog } from "../components/ui/destructive-action-dia
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { useCreatePublishToken, usePublishTokens, useRepositories, useRevokePublishToken } from "../api/hooks";
-import type { Repository } from "../api/schemas";
+import type { PublishToken, Repository } from "../api/schemas";
 import {
   buildCreatePublishTokenInput,
+  initialPublishTokenSelection,
+  publishTokenDetailBodyClass,
+  publishTokenRowStateClass,
+  publishTokenSummaryItems,
   repositoryDisplayLabel,
   revokePublishTokenDialogContent,
-  tokenScopeSummary,
   type PublishTokenPermissionState,
 } from "../tokens/publish-token-form-model";
 import { getPublishTokenScopeExtension } from "../repositories/plugins/repository-ui-plugins";
@@ -20,11 +23,10 @@ import { asJson, EmptyState, ErrorState, PageHeader, formatDate } from "./shared
 export function TokensPage() {
   const tokens = usePublishTokens();
   const repositories = useRepositories();
-  const [selectedName, setSelectedName] = useState<string>();
+  const [selectedName, setSelectedName] = useState<string | undefined>(() => initialPublishTokenSelection([]));
   const [pendingRevokeName, setPendingRevokeName] = useState<string>();
-  const selected = tokens.data?.find((token) => token.name === selectedName) ?? tokens.data?.[0];
+  const selected = tokens.data?.find((token) => token.name === selectedName);
   const revoke = useRevokePublishToken();
-  const selectedSummary = selected ? tokenScopeSummary(selected) : undefined;
   const revokeDialogContent = pendingRevokeName ? revokePublishTokenDialogContent(pendingRevokeName) : undefined;
 
   function closeRevokeDialog() {
@@ -41,90 +43,64 @@ export function TokensPage() {
   }
 
   return (
-    <section>
+    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
       <PageHeader
         title="Publish Tokens"
         description="Create scoped automation tokens and revoke them when they are no longer needed."
         action={<CreateTokenDialog repositories={repositories.data ?? []} repositoriesLoading={repositories.isLoading} />}
       />
-      {repositories.isError && <ErrorState title="Repositories unavailable" error={repositories.error} />}
-      {tokens.isError && <ErrorState error={tokens.error} />}
-      {tokens.isLoading && <div className="text-sm text-muted-foreground">Loading publish tokens...</div>}
-      {tokens.data && tokens.data.length === 0 && <EmptyState message="No publish tokens have been created." />}
-      {tokens.data && tokens.data.length > 0 && (
-        <div className="grid grid-cols-[minmax(0,1fr)_420px] gap-5">
-          <div className="overflow-hidden rounded-lg border border-border bg-panel">
-            <table className="w-full border-collapse text-sm">
-              <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Permissions</th>
-                  <th className="px-3 py-2">Repositories</th>
-                  <th className="px-3 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tokens.data.map((token) => (
-                  <tr
-                    key={token.id}
-                    className="cursor-pointer border-t border-border hover:bg-muted/60"
-                    onClick={() => setSelectedName(token.name)}
-                  >
-                    <td className="px-3 py-2 font-medium">{token.name}</td>
-                    <td className="px-3 py-2">{token.permissions.join(", ")}</td>
-                    <td className="px-3 py-2">{token.repositories.join(", ")}</td>
-                    <td className="px-3 py-2">
-                      <Badge variant={token.revokedAt ? "destructive" : "success"}>
-                        {token.revokedAt ? "revoked" : "active"}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {selected && (
-            <aside className="grid content-start gap-4 rounded-lg border border-border bg-panel p-4">
-              <div>
-                <h2 className="text-base font-semibold">{selected.name}</h2>
-                <p className="text-sm text-muted-foreground">Created {formatDate(selected.createdAt)}</p>
-              </div>
-              {selectedSummary && (
-                <dl className="grid gap-3 text-sm">
-                  <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Permissions</dt>
-                    <dd className="mt-1">{selectedSummary.permissions}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Repositories</dt>
-                    <dd className="mt-1">{selectedSummary.repositories}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Signing key scopes</dt>
-                    <dd className="mt-1">{selectedSummary.signingKeys}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Expires</dt>
-                    <dd className="mt-1">{selected.expiresAt ? formatDate(selected.expiresAt) : "never"}</dd>
-                  </div>
-                </dl>
+      <div className="min-h-0">
+        {repositories.isError && <ErrorState title="Repositories unavailable" error={repositories.error} />}
+        {tokens.isError && <ErrorState error={tokens.error} />}
+        {tokens.isLoading && <div className="text-sm text-muted-foreground">Loading publish tokens...</div>}
+        {tokens.data && (
+          <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+            <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
+              {tokens.data.length === 0 ? (
+                <div className="p-4">
+                  <EmptyState message="No publish tokens have been created." />
+                </div>
+              ) : (
+                <table className="w-full border-collapse text-sm">
+                  <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2">Name</th>
+                      <th className="px-3 py-2">Permissions</th>
+                      <th className="px-3 py-2">Repositories</th>
+                      <th className="px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tokens.data.map((token) => (
+                      <tr
+                        key={token.id}
+                        className={`cursor-pointer border-t border-border ${publishTokenRowStateClass(token.name, selectedName)}`}
+                        onClick={() => setSelectedName(token.name)}
+                      >
+                        <td className="px-3 py-2 font-medium">{token.name}</td>
+                        <td className="px-3 py-2">{token.permissions.join(", ")}</td>
+                        <td className="px-3 py-2">{token.repositories.join(", ")}</td>
+                        <td className="px-3 py-2">
+                          <Badge variant={token.revokedAt ? "destructive" : "success"}>
+                            {token.revokedAt ? "revoked" : "active"}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
-              <details>
-                <summary className="cursor-pointer text-sm font-medium">Raw token metadata</summary>
-                <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">{asJson(selected)}</pre>
-              </details>
-              <Button
-                variant="destructive"
-                disabled={Boolean(selected.revokedAt) || revoke.isPending}
-                onClick={() => setPendingRevokeName(selected.name)}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Revoke token
-              </Button>
-            </aside>
-          )}
-        </div>
-      )}
+            </div>
+            {selected ? (
+              <PublishTokenDetail
+                token={selected}
+                revokePending={revoke.isPending}
+                onRevoke={() => setPendingRevokeName(selected.name)}
+              />
+            ) : <PublishTokenDetailEmptyState />}
+          </div>
+        )}
+      </div>
       {revokeDialogContent && (
         <DestructiveActionDialog
           open={Boolean(pendingRevokeName)}
@@ -144,6 +120,70 @@ export function TokensPage() {
         />
       )}
     </section>
+  );
+}
+
+function PublishTokenDetailEmptyState() {
+  return (
+    <aside className="grid min-h-0 min-w-0 place-items-center rounded-lg border border-dashed border-border bg-panel p-6">
+      <div className="max-w-xs text-center">
+        <h2 className="text-sm font-semibold">Select a token</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Choose an item from the token list to inspect its scopes.
+        </p>
+      </div>
+    </aside>
+  );
+}
+
+function PublishTokenDetail({
+  token,
+  revokePending,
+  onRevoke,
+}: {
+  token: PublishToken;
+  revokePending: boolean;
+  onRevoke: () => void;
+}) {
+  const summaryItems = publishTokenSummaryItems(token);
+  return (
+    <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
+      <div className="sticky top-0 z-10 border-b border-border bg-panel p-4">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold">{token.name}</h2>
+            <p className="text-sm text-muted-foreground">Created {formatDate(token.createdAt)}</p>
+          </div>
+          <Badge variant={token.revokedAt ? "destructive" : "success"}>
+            {token.revokedAt ? "revoked" : "active"}
+          </Badge>
+        </div>
+      </div>
+      <div className={publishTokenDetailBodyClass()}>
+        <Button
+          variant="destructive"
+          disabled={Boolean(token.revokedAt) || revokePending}
+          onClick={onRevoke}
+        >
+          <RotateCcw className="mr-2 h-4 w-4" />
+          Revoke token
+        </Button>
+        <div className="grid gap-3">
+          {summaryItems.map(([label, value]) => (
+            <div key={label} className="grid gap-1 rounded-md border border-border bg-background/40 p-3">
+              <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
+              <span className="break-all text-sm">
+                {label === "Created" || label === "Expires" && value !== "never" ? formatDate(value) : value}
+              </span>
+            </div>
+          ))}
+        </div>
+        <details>
+          <summary className="cursor-pointer text-sm font-medium">Raw token metadata</summary>
+          <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">{asJson(token)}</pre>
+        </details>
+      </div>
+    </aside>
   );
 }
 

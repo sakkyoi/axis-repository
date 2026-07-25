@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { Repository } from "../api/schemas";
+import type { PublishToken, Repository } from "../api/schemas";
 import {
   buildCreatePublishTokenInput,
+  initialPublishTokenSelection,
   repositoryDisplayLabel,
   revokePublishTokenDialogContent,
+  publishTokenDetailBodyClass,
+  publishTokenRowStateClass,
+  publishTokenSummaryItems,
   tokenScopeSummary,
 } from "./publish-token-form-model";
 
@@ -87,6 +91,32 @@ describe("publish token form model", () => {
       confirmationText: "github-actions",
     });
   });
+
+  it("does not preselect a publish token", () => {
+    expect(initialPublishTokenSelection([publishToken("github-actions")])).toBeUndefined();
+  });
+
+  it("highlights only the selected publish token row", () => {
+    expect(publishTokenRowStateClass("github-actions", "github-actions")).toContain("border-l-primary");
+    expect(publishTokenRowStateClass("github-actions", "github-actions")).not.toContain("text-primary-foreground");
+    expect(publishTokenRowStateClass("github-actions", undefined)).not.toContain("border-l-primary");
+  });
+
+  it("keeps publish token details packed at the top of the scroll area", () => {
+    expect(publishTokenDetailBodyClass()).toContain("content-start");
+    expect(publishTokenDetailBodyClass()).toContain("h-full");
+    expect(publishTokenDetailBodyClass()).toContain("overflow-y-auto");
+  });
+
+  it("formats readonly publish token summary items", () => {
+    expect(publishTokenSummaryItems(publishToken("github-actions"))).toEqual([
+      ["Permissions", "publish"],
+      ["Repositories", "debian-internal"],
+      ["Signing key scopes", "signing_key_prod"],
+      ["Created", "2026-07-23T00:00:00.000Z"],
+      ["Expires", "never"],
+    ]);
+  });
 });
 
 function repository(name: string, ecosystem: string, config: Record<string, unknown>): Repository {
@@ -98,5 +128,17 @@ function repository(name: string, ecosystem: string, config: Record<string, unkn
     config,
     createdAt: "2026-07-23T00:00:00.000Z",
     updatedAt: "2026-07-23T00:00:00.000Z",
+  };
+}
+
+function publishToken(name: string): PublishToken {
+  return {
+    id: `ptok_${name}`,
+    name,
+    permissions: ["publish"],
+    repositories: ["debian-internal"],
+    ecosystemScopes: {},
+    signingKeyIds: ["signing_key_prod"],
+    createdAt: "2026-07-23T00:00:00.000Z",
   };
 }
