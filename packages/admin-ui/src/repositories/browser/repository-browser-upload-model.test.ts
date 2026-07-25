@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filesFromFileList,
+  repositoryBrowserUploadOverlayClasses,
   repositoryBrowserUploadOverlay,
 } from "./repository-browser-upload-model";
 
@@ -35,6 +36,14 @@ describe("repository browser upload model", () => {
       canPublish: true,
       isDraggingFiles: false,
     })).toBeUndefined();
+  });
+
+  it("uses a full-screen drop panel instead of a small centered card", () => {
+    expect(repositoryBrowserUploadOverlayClasses("default")).toEqual({
+      backdrop: "pointer-events-none fixed inset-0 z-50 bg-background/70 p-6 backdrop-blur-sm",
+      panel: "grid h-full w-full place-items-center gap-2 rounded-lg border border-dashed p-8 text-center shadow-lg border-primary bg-panel/95 text-foreground",
+    });
+    expect(repositoryBrowserUploadOverlayClasses("muted").panel).toContain("border-border bg-panel/95 text-muted-foreground");
   });
 
   it("normalizes file list inputs into arrays", () => {

@@ -22,6 +22,7 @@ import {
 import {
   filesFromFileList,
   repositoryBrowserUploadOverlay,
+  repositoryBrowserUploadOverlayClasses,
 } from "./repository-browser-upload-model";
 
 export function RepositoryBrowserSection({
@@ -166,14 +167,10 @@ function RepositoryBrowserUploadOverlay({
 }: {
   overlay: NonNullable<ReturnType<typeof repositoryBrowserUploadOverlay>>;
 }) {
+  const classes = repositoryBrowserUploadOverlayClasses(overlay.tone);
   return (
-    <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-background/70 p-6 backdrop-blur-sm">
-      <div className={`grid w-full max-w-md place-items-center gap-2 rounded-lg border border-dashed p-8 text-center shadow-lg ${
-        overlay.tone === "default"
-          ? "border-primary bg-panel text-foreground"
-          : "border-border bg-panel text-muted-foreground"
-      }`}
-      >
+    <div className={classes.backdrop}>
+      <div className={classes.panel}>
         <UploadCloud className="h-8 w-8" />
         <div className="text-base font-semibold">{overlay.title}</div>
         <div className="text-sm text-muted-foreground">{overlay.description}</div>
