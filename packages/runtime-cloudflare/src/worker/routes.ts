@@ -9,6 +9,7 @@ import {
   type Repository,
   type RepositoryVisibility,
   type RepositoryObject,
+  type RepositoryObjectList,
   type RepositoryObjectMetadata,
   type RepositoryObjectRange,
 } from "@axis-repository/core";
@@ -542,6 +543,16 @@ function parseAdminRepositoryClientHelperPath(pathname: string): {
   return { repositoryName, namespace, action };
 }
 
+function parseAdminRepositoryObjectsPath(pathname: string): string | null {
+  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/objects$/);
+  if (!match) return null;
+  const repositoryName = decodePathSegment(match[1] ?? "");
+  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
+    throw new NotFoundError();
+  }
+  return repositoryName;
+}
+
 function parseAdminRepositoryPluginResourcePath(requestUrl: string): {
   repositoryName: string;
   namespace: string;
@@ -587,6 +598,50 @@ async function ensureRepositoryPathIsServable(
   if (!plugin?.canServeRepositoryPath({ relativePath })) {
     throw new NotFoundError();
   }
+}
+
+function repositoryObjectListPrefix(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+  if (value.startsWith("/") || value.includes("\\") || value.includes("//")) {
+    throw new ValidationError("prefix must be a repository-relative path");
+  }
+  const segments = value.split("/");
+  const meaningfulSegments = segments.filter((segment) => segment.length > 0);
+  if (meaningfulSegments.some((segment) => segment === "." || segment === "..")) {
+    throw new ValidationError("prefix must be a repository-relative path");
+  }
+  return meaningfulSegments.length === 0 ? "" : `${meaningfulSegments.join("/")}/`;
+}
+
+function repositoryObjectBrowserResponse(input: {
+  repositoryName: string;
+  prefix: string;
+  listing: RepositoryObjectList;
+}) {
+  const basePrefix = `repositories/${input.repositoryName}/`;
+  const relativePath = (key: string) => key.startsWith(basePrefix) ? key.slice(basePrefix.length) : key;
+  const leafName = (path: string) => path.split("/").filter(Boolean).at(-1) ?? path;
+  return {
+    prefix: input.prefix,
+    directories: input.listing.directories.map((directory) => {
+      const path = relativePath(directory.path);
+      return { name: leafName(path), path };
+    }),
+    objects: input.listing.objects.map((object) => {
+      const path = relativePath(object.key);
+      return {
+        name: leafName(path),
+        path,
+        ...(object.contentLength !== undefined ? { size: object.contentLength } : {}),
+        ...(object.contentType !== undefined ? { contentType: object.contentType } : {}),
+        ...(object.etag !== undefined ? { etag: object.etag } : {}),
+      };
+    }),
+    ...(input.listing.cursor !== undefined ? { cursor: input.listing.cursor } : {}),
+    truncated: input.listing.truncated,
+  };
 }
 
 async function authorizeRepositoryRead(
@@ -761,6 +816,25 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       action: adminClientHelperPath.action,
       ...repositoryClientHelperContext(dependencies, url.origin),
     });
+  }
+  const adminRepositoryObjectsName = parseAdminRepositoryObjectsPath(url.pathname);
+  if (adminRepositoryObjectsName) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method !== "GET") {
+      throw new NotFoundError();
+    }
+    const repository = await dependencies.repositoryService.getByName(adminRepositoryObjectsName);
+    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
+    const prefix = repositoryObjectListPrefix(url.searchParams.get("prefix"));
+    const listing = await dependencies.repositoryObjectStore.listObjects({
+      prefix: `repositories/${repository.name}/${prefix}`,
+      delimiter: "/",
+    });
+    return jsonResponse(repositoryObjectBrowserResponse({
+      repositoryName: repository.name,
+      prefix,
+      listing,
+    }));
   }
   const adminPluginResourcePath = parseAdminRepositoryPluginResourcePath(request.url);
   if (adminPluginResourcePath) {

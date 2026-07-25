@@ -27,26 +27,26 @@ describe("repository detail plugins", () => {
 
   it("exposes ordered detail sections per ecosystem", () => {
     expect(getRepositoryDetailPlugin("apt")?.sections.map((section) => section.id)).toEqual([
+      "repository-browser",
       "settings",
-      "publish-sessions",
       "advanced-json",
       "signing-keys",
       "client-helpers",
     ]);
     expect(getRepositoryDetailPlugin("pypi")?.sections.map((section) => section.id)).toEqual([
+      "repository-browser",
       "settings",
-      "publish-sessions",
       "client-helpers",
       "install-hints",
     ]);
   });
 
-  it("uses the shared publish section while plugins provide publish pieces", () => {
-    const aptPublishSection = getRepositoryDetailPlugin("apt")?.sections.find((section) => section.id === "publish-sessions");
-    const pypiPublishSection = getRepositoryDetailPlugin("pypi")?.sections.find((section) => section.id === "publish-sessions");
+  it("uses the shared repository browser while plugins provide publish pieces", () => {
+    const aptBrowserSection = getRepositoryDetailPlugin("apt")?.sections.find((section) => section.id === "repository-browser");
+    const pypiBrowserSection = getRepositoryDetailPlugin("pypi")?.sections.find((section) => section.id === "repository-browser");
 
-    expect(aptPublishSection?.Component.name).toBe("RepositoryPublishSection");
-    expect(pypiPublishSection?.Component.name).toBe("RepositoryPublishSection");
+    expect(aptBrowserSection?.Component.name).toBe("RepositoryBrowserSection");
+    expect(pypiBrowserSection?.Component.name).toBe("RepositoryBrowserSection");
   });
 
   it("renders plugin client helpers through the same shared section", () => {
@@ -60,14 +60,14 @@ describe("repository detail plugins", () => {
   it("provides generic fallback sections for unknown ecosystems", () => {
     expect(genericRepositoryDetailSections.map((section) => section.id)).toEqual([
       "settings",
-      "publish-sessions",
+      "repository-browser",
       "advanced-json",
     ]);
   });
 
   it("splits repository workspace sections from settings sections", () => {
     expect(repositoryWorkspaceSectionsFor("apt").map((section) => section.id)).toEqual([
-      "publish-sessions",
+      "repository-browser",
       "client-helpers",
     ]);
     expect(repositorySettingsSectionsFor("apt").map((section) => section.id)).toEqual([
@@ -76,7 +76,7 @@ describe("repository detail plugins", () => {
       "signing-keys",
     ]);
     expect(repositoryWorkspaceSectionsFor("pypi").map((section) => section.id)).toEqual([
-      "publish-sessions",
+      "repository-browser",
       "client-helpers",
       "install-hints",
     ]);

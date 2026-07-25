@@ -104,9 +104,13 @@ export interface PublishSessionDetailComponentProps {
   artifactSummary: (session: PublishSession) => string;
 }
 
+export interface RepositoryPublishFormComponentProps extends RepositoryDetailSectionProps {
+  droppedFiles: File[];
+}
+
 export interface RepositoryPublishPlugin {
   ecosystem: string;
-  FormComponent?: ComponentType<RepositoryDetailSectionProps>;
+  FormComponent?: ComponentType<RepositoryPublishFormComponentProps>;
   SessionDetailComponent?: ComponentType<PublishSessionDetailComponentProps>;
   artifactSummary(session: PublishSession): string;
 }

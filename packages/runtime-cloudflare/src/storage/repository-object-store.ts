@@ -1,4 +1,5 @@
 import type {
+  RepositoryObjectList,
   RepositoryObject,
   RepositoryObjectMetadata,
   RepositoryObjectReadOptions,
@@ -26,11 +27,26 @@ export interface R2HeadObject {
 export interface R2ObjectBucket {
   head(key: string): Promise<R2HeadObject | null>;
   get(key: string, options?: RepositoryObjectReadOptions): Promise<R2ReadableObject | null>;
+  list(options?: { prefix?: string; delimiter?: string; cursor?: string; limit?: number }): Promise<R2ObjectsList>;
   put(
     key: string,
     value: string | Uint8Array | ReadableStream,
     options?: { httpMetadata?: { contentType?: string } },
   ): Promise<unknown>;
+}
+
+export interface R2ListedObject {
+  key: string;
+  httpMetadata?: { contentType?: string };
+  httpEtag?: string;
+  size?: number;
+}
+
+export interface R2ObjectsList {
+  objects: R2ListedObject[];
+  delimitedPrefixes: string[];
+  cursor?: string;
+  truncated: boolean;
 }
 
 export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
@@ -96,6 +112,34 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
       return null;
     }
     return memoryObjectMetadata(source.value, source.contentType);
+  }
+
+  async listObjects(input: { prefix: string; delimiter?: string; cursor?: string; limit?: number }): Promise<RepositoryObjectList> {
+    const latestObjects = latestMemoryObjects(this.objects)
+      .filter((object) => object.key.startsWith(input.prefix))
+      .sort((left, right) => left.key.localeCompare(right.key));
+    const directories = new Set<string>();
+    const objects: RepositoryObjectList["objects"] = [];
+
+    for (const object of latestObjects) {
+      const rest = object.key.slice(input.prefix.length);
+      const delimiterIndex = input.delimiter ? rest.indexOf(input.delimiter) : -1;
+      if (input.delimiter && delimiterIndex >= 0) {
+        directories.add(`${input.prefix}${rest.slice(0, delimiterIndex + input.delimiter.length)}`);
+        continue;
+      }
+      objects.push({
+        key: object.key,
+        ...await memoryObjectMetadata(object.value, object.contentType),
+      });
+    }
+
+    return {
+      prefix: input.prefix,
+      directories: [...directories].sort((left, right) => left.localeCompare(right)).map((path) => ({ path })),
+      objects,
+      truncated: false,
+    };
   }
 }
 
@@ -169,6 +213,39 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
       ...(source.httpEtag !== undefined ? { etag: source.httpEtag } : {}),
     };
   }
+
+  async listObjects(input: { prefix: string; delimiter?: string; cursor?: string; limit?: number }): Promise<RepositoryObjectList> {
+    const result = await this.bucket.list({
+      prefix: input.prefix,
+      ...(input.delimiter !== undefined ? { delimiter: input.delimiter } : {}),
+      ...(input.cursor !== undefined ? { cursor: input.cursor } : {}),
+      ...(input.limit !== undefined ? { limit: input.limit } : {}),
+    });
+    return {
+      prefix: input.prefix,
+      directories: result.delimitedPrefixes
+        .map((path) => ({ path }))
+        .sort((left, right) => left.path.localeCompare(right.path)),
+      objects: result.objects
+        .map((object) => ({
+          key: object.key,
+          ...(object.httpMetadata?.contentType !== undefined ? { contentType: object.httpMetadata.contentType } : {}),
+          ...(object.size !== undefined ? { contentLength: object.size } : {}),
+          ...(object.httpEtag !== undefined ? { etag: object.httpEtag } : {}),
+        }))
+        .sort((left, right) => left.key.localeCompare(right.key)),
+      ...(result.cursor !== undefined ? { cursor: result.cursor } : {}),
+      truncated: result.truncated,
+    };
+  }
+}
+
+function latestMemoryObjects(objects: Array<{ key: string; value: unknown; contentType?: string }>): Array<{ key: string; value: unknown; contentType?: string }> {
+  const byKey = new Map<string, { key: string; value: unknown; contentType?: string }>();
+  for (const object of objects) {
+    byKey.set(object.key, object);
+  }
+  return [...byKey.values()];
 }
 
 function cloneObjectValue(value: unknown): unknown {

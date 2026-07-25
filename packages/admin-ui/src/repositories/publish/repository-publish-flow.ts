@@ -80,7 +80,12 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
         uploadArtifact: (upload, file) => client.uploadPublishArtifact(upload, file),
         verifyUpload: (verifyInput) => verifyUpload.mutateAsync(verifyInput),
         finalizeSession: (sessionId) => finalizeSession.mutateAsync(sessionId),
-        refresh: () => queryClient.invalidateQueries({ queryKey: ["publish-sessions"] }),
+        refresh: async () => {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["publish-sessions"] }),
+            queryClient.invalidateQueries({ queryKey: ["repository-objects", repository.name] }),
+          ]);
+        },
         onStatus: setStatus,
       });
     } catch (caught) {

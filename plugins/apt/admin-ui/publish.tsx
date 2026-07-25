@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PackagePlus } from "lucide-react";
 import {
   Button,
@@ -8,6 +8,7 @@ import {
   useRepositoryArtifactPublisher,
   type PublishSessionDetailComponentProps,
   type Repository,
+  type RepositoryPlugin,
 } from "@axis-repository/admin-ui/plugin-ui";
 import {
   buildAptPublishArtifact,
@@ -15,11 +16,25 @@ import {
   type AptPublishPackageMetadata,
 } from "./publish-model";
 
-export function AptPublishArtifactForm({ repository }: { repository: Repository }) {
+export function AptPublishArtifactForm({
+  repository,
+  droppedFiles,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+  droppedFiles: File[];
+}) {
   const publisher = useRepositoryArtifactPublisher(repository);
   const [file, setFile] = useState<File>();
   const [metadata, setMetadata] = useState<AptPublishPackageMetadata>();
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const droppedFile = droppedFiles[0];
+    if (droppedFile) {
+      void onFileSelected(droppedFile);
+    }
+  }, [droppedFiles]);
 
   async function onFileSelected(nextFile: File | undefined) {
     setFile(nextFile);
@@ -60,6 +75,7 @@ export function AptPublishArtifactForm({ repository }: { repository: Repository 
         accept=".deb,application/vnd.debian.binary-package"
         onChange={(event) => void onFileSelected(event.currentTarget.files?.[0])}
       />
+      {file && <p className="text-xs text-muted-foreground">Selected {file.name}</p>}
       {metadata && <AptPackageMetadataPreview metadata={metadata} />}
       <Button type="button" onClick={publishArtifact} disabled={publisher.isPublishing}>
         <PackagePlus className="mr-2 h-4 w-4" />

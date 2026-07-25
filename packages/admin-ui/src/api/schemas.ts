@@ -28,6 +28,27 @@ export const repositoriesResponseSchema = z.object({
   repositories: z.array(repositorySchema),
 });
 
+export const repositoryObjectDirectorySchema = z.object({
+  name: z.string(),
+  path: z.string(),
+});
+
+export const repositoryObjectSchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  size: z.number().optional(),
+  contentType: z.string().optional(),
+  etag: z.string().optional(),
+});
+
+export const repositoryObjectsResponseSchema = z.object({
+  prefix: z.string(),
+  directories: z.array(repositoryObjectDirectorySchema),
+  objects: z.array(repositoryObjectSchema),
+  cursor: z.string().optional(),
+  truncated: z.boolean(),
+});
+
 export const repositoryPluginSchema = z.object({
   ecosystem: z.string(),
   name: z.string(),
@@ -170,6 +191,9 @@ export const adminSessionSchema = z.object({
 });
 
 export type Repository = z.infer<typeof repositorySchema>;
+export type RepositoryObjectDirectory = z.infer<typeof repositoryObjectDirectorySchema>;
+export type RepositoryObject = z.infer<typeof repositoryObjectSchema>;
+export type RepositoryObjectsResponse = z.infer<typeof repositoryObjectsResponseSchema>;
 export type RepositoryClientHelperAction = PluginClientHelperActionManifest;
 export type RepositoryPlugin = z.infer<typeof repositoryPluginSchema>;
 export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;

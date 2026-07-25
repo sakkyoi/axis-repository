@@ -1,10 +1,10 @@
 import {
   AdvancedJsonConfigSection,
   GenericRepositoryDetail,
-  PublishSessionsSection,
   RepositorySettingsSection,
   repositoryClientHelperDisplayText,
 } from "../detail/repository-detail-shared";
+import { RepositoryBrowserSection } from "../browser/repository-browser-section";
 import { RepositoryPublishSection } from "../publish/repository-publish-section";
 import type { RepositoryDetailPlugin, RepositoryDetailSection } from "./repository-ui-plugin-types";
 import {
@@ -18,7 +18,7 @@ export const repositoryDetailPlugins = repositoryDetailPluginsFromUiRegistry();
 
 export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
   { id: "settings", title: "Repository settings", placement: "settings", Component: RepositorySettingsSection },
-  { id: "publish-sessions", title: "Publish sessions", placement: "workspace", Component: PublishSessionsSection },
+  { id: "repository-browser", title: "Repository contents", placement: "workspace", Component: RepositoryBrowserSection },
   { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
 ];
 
@@ -45,20 +45,18 @@ function normalizeRepositoryDetailSections(sections: RepositoryDetailSection[]):
       ? { ...section, Component: RepositoryPublishSection }
       : section,
   );
-  if (normalizedSections.some((section) => section.id === "publish-sessions")) {
+  if (normalizedSections.some((section) => section.id === "repository-browser")) {
     return normalizedSections;
   }
-  const publishSection: RepositoryDetailSection = {
-    id: "publish-sessions",
-    title: "Publish sessions",
+  const browserSection: RepositoryDetailSection = {
+    id: "repository-browser",
+    title: "Repository contents",
     placement: "workspace",
-    Component: RepositoryPublishSection,
+    Component: RepositoryBrowserSection,
   };
-  const insertAt = normalizedSections.length > 0 ? 1 : 0;
   return [
-    ...normalizedSections.slice(0, insertAt),
-    publishSection,
-    ...normalizedSections.slice(insertAt),
+    browserSection,
+    ...normalizedSections,
   ];
 }
 

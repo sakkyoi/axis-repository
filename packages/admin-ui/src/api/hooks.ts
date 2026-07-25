@@ -62,6 +62,15 @@ export function useUpdateRepository() {
   });
 }
 
+export function useRepositoryObjects(repositoryName: string | undefined, prefix: string) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["repository-objects", repositoryName, prefix],
+    queryFn: () => client.listRepositoryObjects(repositoryName ?? "", prefix),
+    enabled: Boolean(repositoryName),
+  });
+}
+
 export function useRepositoryClientHelper(
   repositoryName: string | undefined,
   namespace: string | undefined,

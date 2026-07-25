@@ -5,6 +5,7 @@ import {
   publishSessionsResponseSchema,
   publishTokenCreateResponseSchema,
   repositoryPluginSchema,
+  repositoryObjectsResponseSchema,
   repositorySchema,
 } from "./schemas";
 
@@ -97,6 +98,32 @@ describe("admin API schemas", () => {
       enabled: true,
       catalogEnabled: true,
       enabledOverride: null,
+    });
+  });
+
+  it("parses repository object browser responses", () => {
+    expect(repositoryObjectsResponseSchema.parse({
+      prefix: "dists/noble/",
+      directories: [{ name: "main", path: "dists/noble/main/" }],
+      objects: [{
+        name: "Release",
+        path: "dists/noble/Release",
+        size: 1234,
+        contentType: "text/plain",
+        etag: "\"etag\"",
+      }],
+      truncated: false,
+    })).toEqual({
+      prefix: "dists/noble/",
+      directories: [{ name: "main", path: "dists/noble/main/" }],
+      objects: [{
+        name: "Release",
+        path: "dists/noble/Release",
+        size: 1234,
+        contentType: "text/plain",
+        etag: "\"etag\"",
+      }],
+      truncated: false,
     });
   });
 
@@ -366,6 +393,43 @@ describe("createAxisClient", () => {
       .resolves.toEqual({ script: "pip install demo" });
     expect(requests).toEqual([
       "GET /admin/repositories/python-internal/pypi/client/simple-url",
+    ]);
+  });
+
+  it("lists repository objects through an admin-scoped endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          prefix: "dists/noble/",
+          directories: [{ name: "main", path: "dists/noble/main/" }],
+          objects: [{
+            name: "Release",
+            path: "dists/noble/Release",
+            size: 7,
+            contentType: "text/plain",
+          }],
+          truncated: false,
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.listRepositoryObjects("debian internal", "dists/noble/"))
+      .resolves.toMatchObject({
+        prefix: "dists/noble/",
+        directories: [{ name: "main", path: "dists/noble/main/" }],
+      });
+    expect(requests).toEqual([
+      "GET /admin/repositories/debian%20internal/objects?prefix=dists%2Fnoble%2F",
     ]);
   });
 

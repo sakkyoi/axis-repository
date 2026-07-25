@@ -65,6 +65,22 @@ export interface RepositoryObjectMetadata {
   etag?: string;
 }
 
+export interface RepositoryObjectListDirectory {
+  path: string;
+}
+
+export interface RepositoryObjectListItem extends RepositoryObjectMetadata {
+  key: string;
+}
+
+export interface RepositoryObjectList {
+  prefix: string;
+  directories: RepositoryObjectListDirectory[];
+  objects: RepositoryObjectListItem[];
+  cursor?: string;
+  truncated: boolean;
+}
+
 export interface RepositoryObject {
   body: string | Uint8Array | ReadableStream;
   contentType?: string;
@@ -78,6 +94,7 @@ export interface RepositoryObjectStore {
   putText(key: string, value: string, contentType: string): Promise<void>;
   putBytes(key: string, value: Uint8Array, contentType: string): Promise<void>;
   copyObject(sourceKey: string, destinationKey: string, contentType?: string): Promise<void>;
+  listObjects(input: { prefix: string; delimiter?: string; cursor?: string; limit?: number }): Promise<RepositoryObjectList>;
   headObject(key: string): Promise<RepositoryObjectMetadata | null>;
   getObject(key: string, options?: RepositoryObjectReadOptions): Promise<RepositoryObject | null>;
 }

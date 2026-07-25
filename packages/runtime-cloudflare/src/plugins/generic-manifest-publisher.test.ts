@@ -25,6 +25,10 @@ class FailingPublishObjectStore implements RepositoryObjectStore {
     this.keys.push(`${sourceKey}->${destinationKey}`);
   }
 
+  async listObjects(): Promise<never> {
+    throw new Error("listObjects is not used by this test store");
+  }
+
   async getObject(): Promise<null> {
     return null;
   }

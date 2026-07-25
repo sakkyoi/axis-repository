@@ -10,7 +10,7 @@ export function RepositoryPublishSection({
   const FormComponent = publishPlugin?.FormComponent;
   return (
     <div className="grid gap-2">
-      {FormComponent && <FormComponent repository={repository} pluginMetadata={pluginMetadata} />}
+      {FormComponent && <FormComponent repository={repository} pluginMetadata={pluginMetadata} droppedFiles={[]} />}
       <PublishSessionsSection
         repository={repository}
         pluginMetadata={pluginMetadata}

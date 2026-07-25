@@ -63,6 +63,38 @@ class FakeR2Bucket implements R2ObjectBucket {
     };
   }
 
+  async list(options: { prefix?: string; delimiter?: string; cursor?: string; limit?: number } = {}) {
+    const latest = new Map<string, typeof this.puts[number]>();
+    for (const put of this.puts) {
+      latest.set(put.key, put);
+    }
+    const objects = [];
+    const delimitedPrefixes = new Set<string>();
+    for (const object of [...latest.values()].sort((left, right) => left.key.localeCompare(right.key))) {
+      if (options.prefix && !object.key.startsWith(options.prefix)) {
+        continue;
+      }
+      const rest = object.key.slice(options.prefix?.length ?? 0);
+      const delimiterIndex = options.delimiter ? rest.indexOf(options.delimiter) : -1;
+      if (options.delimiter && delimiterIndex >= 0) {
+        delimitedPrefixes.add(`${options.prefix ?? ""}${rest.slice(0, delimiterIndex + options.delimiter.length)}`);
+        continue;
+      }
+      const bytes = await bytesFromStoredValue(object.value);
+      objects.push({
+        key: object.key,
+        ...(object.options?.httpMetadata ? { httpMetadata: object.options.httpMetadata } : {}),
+        httpEtag: `"fake-${bytes.byteLength}"`,
+        size: bytes.byteLength,
+      });
+    }
+    return {
+      objects,
+      delimitedPrefixes: [...delimitedPrefixes].sort((left, right) => left.localeCompare(right)),
+      truncated: false,
+    };
+  }
+
   async put(
     key: string,
     value: string | Uint8Array | ReadableStream,
@@ -312,6 +344,41 @@ describe("MemoryRepositoryObjectStore", () => {
 
     await expect(store.getObject("repositories/debian/missing")).resolves.toBeNull();
   });
+
+  it("lists memory objects by prefix and delimiter as a repository tree", async () => {
+    const store = new MemoryRepositoryObjectStore();
+    await store.putText("repositories/debian/dists/noble/Release", "release", "text/plain");
+    await store.putText("repositories/debian/dists/noble/main/binary-amd64/Packages", "packages", "text/plain");
+    await store.putBytes("repositories/debian/pool/main/myapp/myapp_1.0.0_amd64.deb", new Uint8Array([1]), "application/vnd.debian.binary-package");
+    await store.putText("repositories/other/ignored", "ignored", "text/plain");
+
+    await expect(store.listObjects({
+      prefix: "repositories/debian/",
+      delimiter: "/",
+    })).resolves.toEqual({
+      prefix: "repositories/debian/",
+      directories: [
+        { path: "repositories/debian/dists/" },
+        { path: "repositories/debian/pool/" },
+      ],
+      objects: [],
+      truncated: false,
+    });
+
+    await expect(store.listObjects({
+      prefix: "repositories/debian/dists/noble/",
+      delimiter: "/",
+    })).resolves.toMatchObject({
+      prefix: "repositories/debian/dists/noble/",
+      directories: [{ path: "repositories/debian/dists/noble/main/" }],
+      objects: [{
+        key: "repositories/debian/dists/noble/Release",
+        contentType: "text/plain",
+        contentLength: 7,
+      }],
+      truncated: false,
+    });
+  });
 });
 
 describe("R2RepositoryObjectStore", () => {
@@ -524,5 +591,27 @@ describe("R2RepositoryObjectStore", () => {
     const store = new R2RepositoryObjectStore(new FakeR2Bucket());
 
     await expect(store.getObject("repositories/debian/missing")).resolves.toBeNull();
+  });
+
+  it("lists R2 objects by prefix and delimiter", async () => {
+    const bucket = new FakeR2Bucket();
+    await bucket.put("repositories/debian/dists/noble/Release", "release", { httpMetadata: { contentType: "text/plain" } });
+    await bucket.put("repositories/debian/dists/noble/main/binary-amd64/Packages", "packages", { httpMetadata: { contentType: "text/plain" } });
+    const store = new R2RepositoryObjectStore(bucket);
+
+    await expect(store.listObjects({
+      prefix: "repositories/debian/dists/noble/",
+      delimiter: "/",
+    })).resolves.toEqual({
+      prefix: "repositories/debian/dists/noble/",
+      directories: [{ path: "repositories/debian/dists/noble/main/" }],
+      objects: [{
+        key: "repositories/debian/dists/noble/Release",
+        contentType: "text/plain",
+        contentLength: 7,
+        etag: "\"fake-7\"",
+      }],
+      truncated: false,
+    });
   });
 });

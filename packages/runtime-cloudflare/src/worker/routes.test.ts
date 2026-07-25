@@ -1825,6 +1825,77 @@ describe("Cloudflare runtime routes", () => {
     await expect(poolObject.text()).resolves.toBe("package bytes");
   });
 
+  it("lists repository objects for the admin file browser using repository-relative paths", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-private/dists/noble/Release",
+      "release",
+      "text/plain",
+    );
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-private/dists/noble/main/binary-amd64/Packages",
+      "packages",
+      "text/plain",
+    );
+    await harness.repositoryObjectStore.putBytes(
+      "repositories/debian-private/pool/main/app/app_1.0.0_amd64.deb",
+      new Uint8Array([1, 2, 3]),
+      "application/vnd.debian.binary-package",
+    );
+
+    const root = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/objects",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const nested = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/objects?prefix=dists%2Fnoble%2F",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(root.status).toBe(200);
+    await expect(root.json()).resolves.toEqual({
+      prefix: "",
+      directories: [
+        { name: "dists", path: "dists/" },
+        { name: "pool", path: "pool/" },
+      ],
+      objects: [],
+      truncated: false,
+    });
+    expect(nested.status).toBe(200);
+    await expect(nested.json()).resolves.toMatchObject({
+      prefix: "dists/noble/",
+      directories: [{ name: "main", path: "dists/noble/main/" }],
+      objects: [{
+        name: "Release",
+        path: "dists/noble/Release",
+        size: 7,
+        contentType: "text/plain",
+      }],
+      truncated: false,
+    });
+  });
+
+  it("requires admin auth for repository object listings", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+
+    const response = await app.fetch(new Request("https://axis.example/admin/repositories/debian-private/objects"));
+
+    expect(response.status).toBe(401);
+  });
+
   it("rejects malformed basic auth for private repository reads", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

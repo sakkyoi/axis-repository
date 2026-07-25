@@ -9,6 +9,7 @@ import {
   publishTokensResponseSchema,
   repositoryPluginSchema,
   repositoryPluginsResponseSchema,
+  repositoryObjectsResponseSchema,
   repositoriesResponseSchema,
   repositorySchema,
   type PublishTokenCreateResponse,
@@ -60,6 +61,7 @@ export interface AxisClient {
   createRepository(input: CreateRepositoryInput): Promise<Repository>;
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
+  listRepositoryObjects(name: string, prefix: string): Promise<ReturnType<typeof repositoryObjectsResponseSchema.parse>>;
   getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown>;
   getRepositoryPluginResource(name: string, namespace: string, path: readonly string[]): Promise<unknown>;
   postRepositoryPluginResource(name: string, namespace: string, path: readonly string[], input?: unknown): Promise<unknown>;
@@ -115,6 +117,12 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async updateRepository(name: string, input: UpdateRepositoryInput) {
       const response = await http.patch(`/admin/repositories/${encodePathSegment(name)}`, input);
       return repositorySchema.parse(response.data);
+    },
+    async listRepositoryObjects(name: string, prefix: string) {
+      const response = await http.get(
+        `/admin/repositories/${encodePathSegment(name)}/objects?prefix=${encodeURIComponent(prefix)}`,
+      );
+      return repositoryObjectsResponseSchema.parse(response.data);
     },
     async getRepositoryClientHelper(name: string, namespace: string, action: string) {
       const response = await http.get(
