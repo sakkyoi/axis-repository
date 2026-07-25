@@ -63,9 +63,10 @@ export function DestructiveActionDialog({
         </DialogHeader>
         {confirmationText && (
           <label className="grid gap-2">
-            <span className="text-sm font-medium">Type this text to confirm.</span>
             <span className={confirmationLayout.row}>
-              <code className={confirmationLayout.code}>{confirmationText}</code>
+              <span className={confirmationLayout.prompt}>
+                Type <code className={confirmationLayout.code}>{confirmationText}</code> to confirm.
+              </span>
               <Button
                 type="button"
                 variant="outline"

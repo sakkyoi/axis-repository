@@ -22,10 +22,11 @@ describe("destructive action dialog model", () => {
     expect(destructiveConfirmationCopyLabel("delete object")).toBe("Copy delete object");
   });
 
-  it("keeps confirmation text and copy action in fixed columns", () => {
+  it("keeps confirmation prompt and copy action inline", () => {
     expect(destructiveConfirmationLayoutClasses()).toEqual({
-      row: "grid min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-center gap-2",
-      code: "min-w-0 truncate rounded bg-muted px-2 py-1 text-xs",
+      row: "flex min-w-0 items-center gap-2",
+      prompt: "min-w-0 flex-1 text-sm font-medium",
+      code: "inline-block max-w-full truncate rounded bg-muted px-1.5 py-0.5 align-bottom text-xs",
       copyButton: "h-8 w-8 shrink-0",
     });
   });
