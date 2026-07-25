@@ -66,19 +66,21 @@ export function DestructiveActionDialog({
             <div className={confirmationLayout.prompt}>
               Type
               <span className={confirmationLayout.token}>
-                <code className={confirmationLayout.code}>{confirmationText}</code>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={confirmationLayout.copyButton}
-                  aria-label={destructiveConfirmationCopyLabel(confirmationText)}
-                  title={destructiveConfirmationCopyLabel(confirmationText)}
-                  disabled={pending}
-                  onClick={() => void copyConfirmationText()}
-                >
-                  {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                </Button>
+                <code className={confirmationLayout.code}>
+                  <span className={confirmationLayout.text}>{confirmationText}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={confirmationLayout.copyButton}
+                    aria-label={destructiveConfirmationCopyLabel(confirmationText)}
+                    title={destructiveConfirmationCopyLabel(confirmationText)}
+                    disabled={pending}
+                    onClick={() => void copyConfirmationText()}
+                  >
+                    {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  </Button>
+                </code>
               </span>
               to confirm.
             </div>
