@@ -1,4 +1,5 @@
 import { ValidationError } from "@axis-repository/core";
+import { extract as extractTarXz } from "tar-xz";
 
 export type DebControlMetadata = Record<string, string>;
 
@@ -7,8 +8,7 @@ const arGlobalHeader = "!<arch>\n";
 
 export async function readDebControlMetadata(bytes: Uint8Array): Promise<DebControlMetadata> {
   const controlArchive = readDebControlArchive(bytes);
-  const controlTar = await decompressControlArchive(controlArchive);
-  const controlText = readControlFileFromTar(controlTar);
+  const controlText = await readControlFile(controlArchive);
   return parseDebianControl(controlText);
 }
 
@@ -44,6 +44,14 @@ function readDebControlArchive(bytes: Uint8Array): { name: string; bytes: Uint8A
   throw new ValidationError("APT artifact does not contain control metadata");
 }
 
+async function readControlFile(controlArchive: { name: string; bytes: Uint8Array }): Promise<string> {
+  if (controlArchive.name === "control.tar.xz") {
+    return readControlFileFromTarXz(controlArchive.bytes);
+  }
+  const controlTar = await decompressControlArchive(controlArchive);
+  return readControlFileFromTar(controlTar);
+}
+
 async function decompressControlArchive(controlArchive: { name: string; bytes: Uint8Array }): Promise<Uint8Array> {
   if (controlArchive.name === "control.tar") {
     return controlArchive.bytes;
@@ -52,6 +60,16 @@ async function decompressControlArchive(controlArchive: { name: string; bytes: U
     return gunzip(controlArchive.bytes);
   }
   throw new ValidationError(`APT artifact control archive is not supported: ${controlArchive.name}`);
+}
+
+async function readControlFileFromTarXz(bytes: Uint8Array): Promise<string> {
+  for await (const entry of extractTarXz(bytes)) {
+    if (entry.name === "control" || entry.name === "./control") {
+      return entry.text();
+    }
+  }
+
+  throw new ValidationError("APT artifact control archive does not contain a control file");
 }
 
 function readControlFileFromTar(bytes: Uint8Array): string {

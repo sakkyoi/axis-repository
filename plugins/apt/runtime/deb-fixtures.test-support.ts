@@ -1,6 +1,19 @@
 import { gzipSync } from "node:zlib";
+import { create as createTarXz } from "tar-xz";
 
 const textEncoder = new TextEncoder();
+
+export async function debArchiveWithControlXz(input: { control: string }): Promise<Uint8Array> {
+  const controlTarXz = await collectBytes(createTarXz({
+    files: [{ name: "./control", source: textEncoder.encode(input.control) }],
+    preset: 1,
+  }));
+  return arArchive([
+    { name: "debian-binary", bytes: textEncoder.encode("2.0\n") },
+    { name: "control.tar.xz", bytes: controlTarXz },
+    { name: "data.tar.gz", bytes: new Uint8Array(gzipSync(tarArchive([]))) },
+  ]);
+}
 
 export function debArchive(input: { control: string }): Uint8Array {
   return arArchive([
@@ -58,4 +71,12 @@ function concatBytes(chunks: Uint8Array[]): Uint8Array {
     offset += chunk.byteLength;
   }
   return output;
+}
+
+async function collectBytes(chunks: AsyncIterable<Uint8Array>): Promise<Uint8Array> {
+  const collected: Uint8Array[] = [];
+  for await (const chunk of chunks) {
+    collected.push(chunk);
+  }
+  return concatBytes(collected);
 }

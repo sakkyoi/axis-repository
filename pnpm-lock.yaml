@@ -198,6 +198,9 @@ importers:
       react:
         specifier: ^19.2.8
         version: 19.2.8
+      tar-xz:
+        specifier: ^6.1.1
+        version: 6.1.1
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -1626,6 +1629,18 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  node-addon-api@8.9.0:
+    resolution: {integrity: sha512-ekZMeaaIzSQTSpr7X2X3iJM7lTzgnx8ahAG9pJfT/7+14mlEM8ZYQ9cgCDvSSRbReFK0oHli3WrZdCiRsgAT9Q==}
+    engines: {node: ^18 || ^20 || >= 21}
+
+  node-gyp-build@4.8.4:
+    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
+    hasBin: true
+
+  node-liblzma@5.1.1:
+    resolution: {integrity: sha512-PRMAjS9mMbIxvYO/YlahriN5gAuCrcP2Cm2sFZKdNynO7af7vmGhWVT7os6CplNdmz9KdnHLNsgve4kpajK5rw==}
+    engines: {node: '>=22.0.0'}
+
   node-releases@2.0.51:
     resolution: {integrity: sha512-wRNIrw4DmVLKQlbgOMdkMx27Wrpzes2hh5Jtbi2bjPd+4wJstWIqP5A+lscnqbm0xxmT5Bpg8Lec5ItEBwx6BQ==}
     engines: {node: '>=18'}
@@ -1876,6 +1891,10 @@ packages:
     resolution: {integrity: sha512-3ofp+LL8E+pK/JuPLPggVAIaEuhvIz4qNcf3nA1Xn2o/7fb7s/TYpHhwGDv1ZU3PkBluUVaF8PyCHcm48cKLWQ==}
     engines: {node: '>=14.0.0'}
     hasBin: true
+
+  tar-xz@6.1.1:
+    resolution: {integrity: sha512-CpVkSYplecTCsDSEd4M9TcijVZsj0DDYQbS3I+PKYjhnwz5LMsTsaCcSQ6CKLZ4H0YnWSE7r0NxzUrGET3T/pw==}
+    engines: {node: '>=20.0.0'}
 
   thenify-all@1.6.0:
     resolution: {integrity: sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA==}
@@ -3253,6 +3272,15 @@ snapshots:
 
   nanoid@3.3.16: {}
 
+  node-addon-api@8.9.0: {}
+
+  node-gyp-build@4.8.4: {}
+
+  node-liblzma@5.1.1:
+    dependencies:
+      node-addon-api: 8.9.0
+      node-gyp-build: 4.8.4
+
   node-releases@2.0.51: {}
 
   normalize-path@3.0.0: {}
@@ -3514,6 +3542,10 @@ snapshots:
     transitivePeerDependencies:
       - tsx
       - yaml
+
+  tar-xz@6.1.1:
+    dependencies:
+      node-liblzma: 5.1.1
 
   thenify-all@1.6.0:
     dependencies:
