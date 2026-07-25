@@ -195,6 +195,39 @@ describe("MemoryStateStore repository artifacts", () => {
       publishSessionId: "pub_2",
     }]);
   });
+
+  it("replaces all artifacts for one repository without touching others", async () => {
+    const state = new MemoryStateStore();
+    const oldArtifact: RepositoryArtifactRecord = {
+      id: "artifact_old",
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      identity: "apt:main:old:1.0.0:amd64",
+      name: "old",
+      version: "1.0.0",
+      summary: "old 1.0.0 amd64",
+      objectKeys: [],
+      metadata: {},
+      publishedAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:00:00.000Z",
+      publishSessionId: "pub_old",
+    };
+    const newArtifact = {
+      ...oldArtifact,
+      id: "artifact_new",
+      identity: "apt:main:new:1.0.0:amd64",
+      name: "new",
+      summary: "new 1.0.0 amd64",
+      publishSessionId: "pub_new",
+    };
+    await state.repositoryArtifacts.upsert(oldArtifact);
+    await state.repositoryArtifacts.upsert({ ...oldArtifact, id: "artifact_other", repositoryName: "python-internal" });
+
+    await state.repositoryArtifacts.replaceByRepository("debian-internal", [newArtifact]);
+
+    await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toEqual([newArtifact]);
+    await expect(state.repositoryArtifacts.listByRepository("python-internal")).resolves.toMatchObject([{ id: "artifact_other" }]);
+  });
 });
 
 const repositorySecret = (overrides: Partial<RepositorySecretRecord> = {}): RepositorySecretRecord => ({

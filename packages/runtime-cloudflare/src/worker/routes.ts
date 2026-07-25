@@ -584,6 +584,16 @@ function parseAdminRepositoryArtifactsPath(pathname: string): string | null {
   return repositoryName;
 }
 
+function parseAdminRepositoryArtifactsRebuildIndexPath(pathname: string): string | null {
+  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/artifacts\/rebuild-index$/);
+  if (!match) return null;
+  const repositoryName = decodePathSegment(match[1] ?? "");
+  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
+    throw new NotFoundError();
+  }
+  return repositoryName;
+}
+
 function parseAdminRepositoryPluginResourcePath(requestUrl: string): {
   repositoryName: string;
   namespace: string;
@@ -985,6 +995,17 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       truncated: false,
     });
   }
+  const adminRepositoryArtifactsRebuildName = parseAdminRepositoryArtifactsRebuildIndexPath(url.pathname);
+  if (adminRepositoryArtifactsRebuildName) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method !== "POST") {
+      throw new NotFoundError();
+    }
+    const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactsRebuildName);
+    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
+    const result = await dependencies.repositoryArtifactIndexService.rebuild({ repositoryName: repository.name });
+    return jsonResponse({ ...result, truncated: false });
+  }
   const adminRepositoryObjectDetailName = parseAdminRepositoryObjectDetailPath(url.pathname);
   if (adminRepositoryObjectDetailName) {
     requireAdmin(request, dependencies.adminToken);
@@ -1042,6 +1063,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         ...(metadata.contentType !== undefined ? { contentType: metadata.contentType } : {}),
         ...(metadata.contentLength !== undefined ? { size: metadata.contentLength } : {}),
       });
+      await dependencies.repositoryArtifactIndexService.rebuild({ repositoryName: repository.name });
       return jsonResponse({ activity });
     }
     throw new NotFoundError();

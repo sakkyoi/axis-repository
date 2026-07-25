@@ -11,7 +11,9 @@ import {
   type RepositoryActivityService,
   PublishSessionService,
   type Repository,
+  type RepositoryArtifactRecord,
   type RepositoryArtifactStore,
+  type RepositoryObjectStore,
   RepositoryService,
   type TokenPrincipal,
   type UpdateRepositoryInput,
@@ -222,6 +224,30 @@ export class PluginPublishSessionService {
       ecosystem,
       catalogEnabled: getRepositoryPluginCatalogEntry(ecosystem)?.enabled ?? true,
     });
+  }
+}
+
+export class PluginRepositoryArtifactIndexService {
+  constructor(
+    private readonly options: {
+      repositoryService: RepositoryService;
+      plugins: RepositoryRuntimePluginRegistry;
+      repositoryObjectStore: RepositoryObjectStore;
+      repositoryArtifactStore: RepositoryArtifactStore;
+      clock: { now(): Date };
+    },
+  ) {}
+
+  async rebuild(input: { repositoryName: string }): Promise<{ artifacts: RepositoryArtifactRecord[] }> {
+    const repository = await this.options.repositoryService.getByName(input.repositoryName);
+    const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
+    const artifacts = await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore: this.options.repositoryObjectStore,
+      now: this.options.clock.now(),
+    }) ?? [];
+    await this.options.repositoryArtifactStore.replaceByRepository(repository.name, artifacts);
+    return { artifacts };
   }
 }
 

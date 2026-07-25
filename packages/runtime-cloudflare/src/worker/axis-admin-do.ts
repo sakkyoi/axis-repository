@@ -14,7 +14,7 @@ import type { AppDependencies } from "./dev-dependencies";
 import { SameOriginUploadBroker } from "../uploads/same-origin-upload-broker";
 import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage/repository-object-store";
-import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
+import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 
@@ -122,6 +122,13 @@ export function createDurableObjectDependencies(
     clock,
     randomId,
   });
+  const repositoryArtifactIndexService = new PluginRepositoryArtifactIndexService({
+    repositoryService,
+    plugins: repositoryRuntimePlugins,
+    repositoryObjectStore: objectStore,
+    repositoryArtifactStore: state.repositoryArtifacts,
+    clock,
+  });
 
   return {
     adminToken: env.ADMIN_TOKEN,
@@ -142,6 +149,7 @@ export function createDurableObjectDependencies(
     }),
     repositoryActivityService,
     repositoryArtifactStore: state.repositoryArtifacts,
+    repositoryArtifactIndexService,
     pluginPolicyService,
     repositorySecrets,
     repositoryObjectStore: objectStore,

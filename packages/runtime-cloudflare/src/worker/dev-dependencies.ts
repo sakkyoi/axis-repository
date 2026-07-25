@@ -16,7 +16,7 @@ import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-p
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import SameOriginUploadBroker from "../uploads/same-origin-upload-broker";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
-import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
+import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 
@@ -28,6 +28,7 @@ export interface AppDependencies {
   publishSessionService: PluginPublishSessionService;
   repositoryActivityService: RepositoryActivityService;
   repositoryArtifactStore: RepositoryArtifactStore;
+  repositoryArtifactIndexService: PluginRepositoryArtifactIndexService;
   pluginPolicyService: PluginPolicyService;
   repositorySecrets: RepositorySecretService;
   repositoryObjectStore: RepositoryObjectStore;
@@ -83,6 +84,13 @@ export function createDevDependencyHarness(
     clock,
     randomId,
   });
+  const repositoryArtifactIndexService = new PluginRepositoryArtifactIndexService({
+    repositoryService,
+    plugins: repositoryRuntimePlugins,
+    repositoryObjectStore: objectStore,
+    repositoryArtifactStore: state.repositoryArtifacts,
+    clock,
+  });
 
   return {
     dependencies: {
@@ -107,6 +115,7 @@ export function createDevDependencyHarness(
       pluginPolicyService,
       repositorySecrets,
       repositoryObjectStore: objectStore,
+      repositoryArtifactIndexService,
       localUploadBroker: uploadBroker,
       repositoryRuntimePlugins,
     },

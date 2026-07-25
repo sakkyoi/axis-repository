@@ -5,6 +5,8 @@ export type {
   DerivedPublishPrincipalScope,
   PublisherMetadata,
   RepositoryPathServingRule,
+  RebuildRepositoryArtifactIndexInput,
+  RepositoryArtifactIndexLifecycle,
   RepositoryPublishLifecycle,
   RepositoryRuntimePluginDescriptor,
   RepositoryServingContext,

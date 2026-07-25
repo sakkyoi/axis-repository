@@ -153,7 +153,7 @@ export interface RepositoryArtifactRecord {
   metadata: Record<string, unknown>;
   publishedAt: string;
   updatedAt: string;
-  publishSessionId: string;
+  publishSessionId?: string;
 }
 
 export interface PublishFailure {

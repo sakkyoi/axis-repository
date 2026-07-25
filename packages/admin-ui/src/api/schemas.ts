@@ -71,7 +71,7 @@ export const repositoryArtifactSchema = z.object({
   metadata: z.record(z.string(), z.unknown()),
   publishedAt: z.string(),
   updatedAt: z.string(),
-  publishSessionId: z.string(),
+  publishSessionId: z.string().optional(),
 });
 
 export const repositoryArtifactsResponseSchema = z.object({

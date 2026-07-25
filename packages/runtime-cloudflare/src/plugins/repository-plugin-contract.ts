@@ -5,6 +5,7 @@ import type {
   PublishResult,
   Repository,
   RepositoryArtifactRecord,
+  RepositoryObjectStore,
   TokenPrincipal,
 } from "@axis-repository/core";
 import type { RepositoryAdminResources } from "./repository-plugin-admin-resources";
@@ -63,8 +64,19 @@ export interface RepositoryPublishLifecycle {
   describeArtifacts?(input: DescribePublishedArtifactsInput): RepositoryArtifactRecord[];
 }
 
+export interface RebuildRepositoryArtifactIndexInput {
+  repository: Repository;
+  objectStore: RepositoryObjectStore;
+  now: Date;
+}
+
+export interface RepositoryArtifactIndexLifecycle {
+  rebuildIndex(input: RebuildRepositoryArtifactIndexInput): Promise<RepositoryArtifactRecord[]>;
+}
+
 export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   publish: RepositoryPublishLifecycle;
+  artifacts?: RepositoryArtifactIndexLifecycle;
   canServeRepositoryPath: RepositoryPathServingRule;
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
   clientHelpers?: RepositoryClientHelpers;

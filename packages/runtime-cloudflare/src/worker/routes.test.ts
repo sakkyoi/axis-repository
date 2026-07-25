@@ -1938,6 +1938,66 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("rebuilds repository artifact indexes from current storage", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const { token, session } = await createPublishSession(app, harness.repositoryObjectStore);
+    const uploadId = session.uploads[0]?.uploadId;
+    expect(uploadId).toBeDefined();
+    await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/uploads/${uploadId}/verify`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/finalize`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    await harness.repositoryObjectStore.deleteObject(
+      "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb",
+    );
+
+    const rebuild = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/artifacts/rebuild-index",
+      { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const artifacts = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/artifacts",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(rebuild.status).toBe(200);
+    await expect(rebuild.json()).resolves.toEqual({ artifacts: [], truncated: false });
+    await expect(artifacts.json()).resolves.toEqual({ artifacts: [], truncated: false });
+  });
+
+  it("rebuilds artifact indexes after deleting repository content objects", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const { token, session } = await createPublishSession(app, harness.repositoryObjectStore);
+    const uploadId = session.uploads[0]?.uploadId;
+    expect(uploadId).toBeDefined();
+    await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/uploads/${uploadId}/verify`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/finalize`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+
+    const deleted = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/objects?path=pool%2Fmain%2Fmyapp%2Fmyapp_1.2.3_amd64.deb",
+      { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const artifacts = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/artifacts",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(deleted.status).toBe(200);
+    await expect(artifacts.json()).resolves.toEqual({ artifacts: [], truncated: false });
+  });
+
   it("returns repository object detail metadata through the admin file browser", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

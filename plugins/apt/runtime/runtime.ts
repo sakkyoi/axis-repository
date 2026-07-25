@@ -3,11 +3,15 @@ import {
   type ArtifactPublisher,
   type Repository,
   type RepositoryArtifactRecord,
+  type RepositoryObject,
+  type RepositoryObjectListItem,
+  type RepositoryObjectStore,
 } from "@axis-repository/core";
 import { aptPluginManifest } from "../manifest";
 import type {
   ArtifactRepositoryPlugin,
   DescribePublishedArtifactsInput,
+  RebuildRepositoryArtifactIndexInput,
   RepositorySigningKeyCapability,
   ValidateRepositoryConfigInput,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
@@ -15,6 +19,7 @@ import { createPrefixServingPredicate } from "@axis-repository/runtime-cloudflar
 import { createAptAdminResources } from "./admin-resources";
 import { createAptClientHelpers } from "./client-helpers";
 import { parseAptRepositoryConfig, validateAptPublishArtifacts } from "./metadata";
+import { readDebControlMetadata } from "./deb-control";
 
 export { AptSigningKeyResource } from "./signing-keys";
 
@@ -60,9 +65,71 @@ export function createAptPlugin(input: {
       finalize: (publishInput) => input.publisher.publish(publishInput),
       describeArtifacts: describeAptArtifacts,
     },
+    artifacts: {
+      rebuildIndex: rebuildAptArtifactIndex,
+    },
     clientHelpers: createAptClientHelpers({ signingKeys: input.signingKeys }),
     adminResources: createAptAdminResources({ signingKeys: input.signingKeys }),
   };
+}
+
+async function rebuildAptArtifactIndex(input: RebuildRepositoryArtifactIndexInput): Promise<RepositoryArtifactRecord[]> {
+  parseAptRepositoryConfig(input.repository);
+  const repositoryPrefix = `repositories/${input.repository.name}/`;
+  const poolPrefix = `${repositoryPrefix}pool/`;
+  const objects = await listAllObjects(input.objectStore, poolPrefix);
+  const timestamp = input.now.toISOString();
+  const artifacts: RepositoryArtifactRecord[] = [];
+
+  for (const object of objects.filter((candidate) => candidate.key.endsWith(".deb"))) {
+    const storedObject = await input.objectStore.getObject(object.key);
+    if (!storedObject) continue;
+
+    const bytes = await objectBytes(storedObject);
+    const control = await readDebControlMetadata(bytes);
+    const packageName = requiredControlString(control, "package");
+    const version = requiredControlString(control, "version");
+    const architecture = requiredControlString(control, "architecture");
+    const description = requiredControlString(control, "description");
+    const maintainer = requiredControlString(control, "maintainer");
+    const repositoryRelativePath = object.key.slice(repositoryPrefix.length);
+    const pathSegments = repositoryRelativePath.split("/");
+    const component = pathSegments[1] || "main";
+    const metadata = {
+      package: packageName,
+      version,
+      architecture,
+      component,
+      description,
+      maintainer,
+      section: control.section,
+      priority: control.priority,
+      homepage: control.homepage,
+      depends: control.depends,
+      recommends: control.recommends,
+      suggests: control.suggests,
+      conflicts: control.conflicts,
+      replaces: control.replaces,
+      provides: control.provides,
+    };
+    const identityParts = ["apt", component, packageName, version, architecture];
+    artifacts.push({
+      id: `artifact_${input.repository.name}_${identityParts.join("_")}`,
+      repositoryName: input.repository.name,
+      ecosystem: input.repository.ecosystem,
+      identity: identityParts.join(":"),
+      name: packageName,
+      version,
+      summary: `${packageName} ${version} ${architecture}`,
+      primaryObjectKey: object.key,
+      objectKeys: [object.key],
+      metadata,
+      publishedAt: timestamp,
+      updatedAt: timestamp,
+    });
+  }
+
+  return artifacts;
 }
 
 function describeAptArtifacts(input: DescribePublishedArtifactsInput): RepositoryArtifactRecord[] {
@@ -99,4 +166,50 @@ function describeAptArtifacts(input: DescribePublishedArtifactsInput): Repositor
 function metadataString(metadata: Record<string, unknown>, field: string): string | undefined {
   const value = metadata[field];
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function requiredControlString(metadata: Record<string, string>, field: string): string {
+  const value = metadata[field];
+  if (!value) {
+    throw new ValidationError(`APT artifact control field is required: ${field}`);
+  }
+  return value;
+}
+
+async function listAllObjects(objectStore: RepositoryObjectStore, prefix: string): Promise<RepositoryObjectListItem[]> {
+  const objects: RepositoryObjectListItem[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await objectStore.listObjects({
+      prefix,
+      ...(cursor ? { cursor } : {}),
+    });
+    objects.push(...page.objects);
+    cursor = page.cursor;
+  } while (cursor);
+  return objects;
+}
+
+async function objectBytes(object: RepositoryObject): Promise<Uint8Array> {
+  if (object.body instanceof Uint8Array) {
+    return object.body;
+  }
+  if (typeof object.body === "string") {
+    return new TextEncoder().encode(object.body);
+  }
+  const chunks: Uint8Array[] = [];
+  const reader = object.body.getReader();
+  while (true) {
+    const next = await reader.read();
+    if (next.done) break;
+    chunks.push(next.value);
+  }
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }

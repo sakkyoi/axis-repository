@@ -151,6 +151,7 @@ export interface RepositoryActivityStore {
 export interface RepositoryArtifactStore {
   listByRepository(repositoryName: string): Promise<RepositoryArtifactRecord[]>;
   upsert(record: RepositoryArtifactRecord): Promise<void>;
+  replaceByRepository(repositoryName: string, records: RepositoryArtifactRecord[]): Promise<void>;
 }
 
 export interface TokenVerifier {

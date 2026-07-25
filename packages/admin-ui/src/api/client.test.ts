@@ -522,6 +522,33 @@ describe("createAxisClient", () => {
     ]);
   });
 
+  it("rebuilds repository artifact indexes through an admin-scoped endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          artifacts: [],
+          truncated: false,
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.rebuildRepositoryArtifactIndex("debian internal"))
+      .resolves.toEqual({ artifacts: [], truncated: false });
+    expect(requests).toEqual([
+      "POST /admin/repositories/debian%20internal/artifacts/rebuild-index",
+    ]);
+  });
+
   it("gets repository object detail through an admin-scoped endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",

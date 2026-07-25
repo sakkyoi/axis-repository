@@ -82,6 +82,19 @@ export function useRepositoryArtifacts(repositoryName: string | undefined) {
   });
 }
 
+export function useRebuildRepositoryArtifactIndex(repositoryName: string | undefined) {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => client.rebuildRepositoryArtifactIndex(repositoryName ?? ""),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
+    },
+  });
+}
+
 export function useRepositoryObjectDetail(repositoryName: string | undefined, path: string | undefined) {
   const client = useAxisClient();
   return useQuery({
