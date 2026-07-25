@@ -41,12 +41,21 @@ export const repositoryObjectSchema = z.object({
   etag: z.string().optional(),
 });
 
+export const repositoryObjectDetailSchema = repositoryObjectSchema.extend({
+  objectKey: z.string(),
+  repositoryUrl: z.string(),
+});
+
 export const repositoryObjectsResponseSchema = z.object({
   prefix: z.string(),
   directories: z.array(repositoryObjectDirectorySchema),
   objects: z.array(repositoryObjectSchema),
   cursor: z.string().optional(),
   truncated: z.boolean(),
+});
+
+export const repositoryObjectDetailResponseSchema = z.object({
+  object: repositoryObjectDetailSchema,
 });
 
 export const repositoryPluginSchema = z.object({
@@ -181,6 +190,16 @@ export const objectDeleteActivitySchema = z.object({
   createdAt: z.string(),
 });
 
+export const objectUpdateActivitySchema = z.object({
+  id: z.string(),
+  repositoryName: z.string(),
+  type: z.literal("object.update"),
+  actor: z.literal("admin"),
+  summary: z.string(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+});
+
 export const publishActivitySchema = z.object({
   id: z.string(),
   repositoryName: z.string(),
@@ -192,7 +211,7 @@ export const publishActivitySchema = z.object({
   session: publishSessionSchema,
 });
 
-export const repositoryActivitySchema = z.union([objectDeleteActivitySchema, publishActivitySchema]);
+export const repositoryActivitySchema = z.union([objectDeleteActivitySchema, objectUpdateActivitySchema, publishActivitySchema]);
 
 export const repositoryActivitiesResponseSchema = z.object({
   activities: z.array(repositoryActivitySchema),
@@ -226,6 +245,7 @@ export const adminSessionSchema = z.object({
 export type Repository = z.infer<typeof repositorySchema>;
 export type RepositoryObjectDirectory = z.infer<typeof repositoryObjectDirectorySchema>;
 export type RepositoryObject = z.infer<typeof repositoryObjectSchema>;
+export type RepositoryObjectDetail = z.infer<typeof repositoryObjectDetailSchema>;
 export type RepositoryObjectsResponse = z.infer<typeof repositoryObjectsResponseSchema>;
 export type RepositoryClientHelperAction = PluginClientHelperActionManifest;
 export type RepositoryPlugin = z.infer<typeof repositoryPluginSchema>;

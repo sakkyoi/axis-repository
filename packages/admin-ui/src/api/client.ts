@@ -11,12 +11,14 @@ import {
   repositoryPluginsResponseSchema,
   repositoryActivitiesResponseSchema,
   repositoryObjectDeleteResponseSchema,
+  repositoryObjectDetailResponseSchema,
   repositoryObjectsResponseSchema,
   repositoriesResponseSchema,
   repositorySchema,
   type PublishTokenCreateResponse,
   type Repository,
   type RepositoryActivity,
+  type RepositoryObjectDetail,
   type RepositoryPlugin,
   type RepositoryVisibility,
   type PublishSession,
@@ -70,6 +72,7 @@ export interface AxisClient {
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
   listRepositoryObjects(name: string, prefix: string): Promise<ReturnType<typeof repositoryObjectsResponseSchema.parse>>;
+  getRepositoryObjectDetail(name: string, path: string): Promise<RepositoryObjectDetail>;
   deleteRepositoryObject(name: string, path: string): Promise<RepositoryActivity>;
   listRepositoryActivities(name: string, options?: ListRepositoryActivitiesOptions): Promise<ReturnType<typeof repositoryActivitiesResponseSchema.parse>>;
   getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown>;
@@ -145,6 +148,12 @@ export function createAxisClient(options: HttpOptions): AxisClient {
         `/admin/repositories/${encodePathSegment(name)}/objects?prefix=${encodeURIComponent(prefix)}`,
       );
       return repositoryObjectsResponseSchema.parse(response.data);
+    },
+    async getRepositoryObjectDetail(name: string, path: string) {
+      const response = await http.get(
+        `/admin/repositories/${encodePathSegment(name)}/objects/detail?path=${encodeURIComponent(path)}`,
+      );
+      return repositoryObjectDetailResponseSchema.parse(response.data).object;
     },
     async deleteRepositoryObject(name: string, path: string) {
       const response = await http.delete(

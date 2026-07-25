@@ -1,7 +1,9 @@
 import type {
   ArtifactPublisher,
+  PublishedObject,
   PublishArtifactsInput,
   PublishResult,
+  RepositoryObjectMetadata,
   RepositoryObjectStore,
 } from "@axis-repository/core";
 import { JSON_CONTENT_TYPE } from "../storage/repository-object-store";
@@ -37,10 +39,12 @@ export class GenericManifestPublisher implements ArtifactPublisher {
       })),
     };
     const publishKey = `repositories/${input.repository.name}/publishes/${input.session.id}.json`;
+    const previous = await this.objectStore.headObject(publishKey);
     const objects = [
       {
         key: publishKey,
         contentType: JSON_CONTENT_TYPE,
+        ...publishedObjectPrevious(previous),
       },
     ];
 
@@ -51,4 +55,17 @@ export class GenericManifestPublisher implements ArtifactPublisher {
       publishedAt,
     };
   }
+}
+
+function publishedObjectPrevious(previous: RepositoryObjectMetadata | null): Pick<PublishedObject, "previous"> | Record<string, never> {
+  if (!previous) {
+    return {};
+  }
+  return {
+    previous: {
+      ...(previous.contentType !== undefined ? { contentType: previous.contentType } : {}),
+      ...(previous.contentLength !== undefined ? { size: previous.contentLength } : {}),
+      ...(previous.etag !== undefined ? { etag: previous.etag } : {}),
+    },
+  };
 }

@@ -73,6 +73,15 @@ export function useRepositoryObjects(repositoryName: string | undefined, prefix:
   });
 }
 
+export function useRepositoryObjectDetail(repositoryName: string | undefined, path: string | undefined) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["repository-object-detail", repositoryName, path],
+    queryFn: () => client.getRepositoryObjectDetail(repositoryName ?? "", path ?? ""),
+    enabled: Boolean(repositoryName && path),
+  });
+}
+
 export function useDeleteRepositoryObject(repositoryName: string | undefined, prefix: string) {
   const client = useAxisClient();
   const queryClient = useQueryClient();

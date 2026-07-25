@@ -189,24 +189,41 @@ describe("admin API schemas", () => {
 
   it("parses repository activity timeline pages", () => {
     const response = repositoryActivitiesResponseSchema.parse({
-      activities: [{
-        id: "activity_1",
-        repositoryName: "debian-internal",
-        type: "object.delete",
-        actor: "admin",
-        summary: "Deleted pool/main/app.deb",
-        metadata: {
-          path: "pool/main/app.deb",
-          objectKey: "repositories/debian-internal/pool/main/app.deb",
+      activities: [
+        {
+          id: "activity_1",
+          repositoryName: "debian-internal",
+          type: "object.delete",
+          actor: "admin",
+          summary: "Deleted pool/main/app.deb",
+          metadata: {
+            path: "pool/main/app.deb",
+            objectKey: "repositories/debian-internal/pool/main/app.deb",
+          },
+          createdAt: "2026-07-23T00:00:00.000Z",
         },
-        createdAt: "2026-07-23T00:00:00.000Z",
-      }],
+        {
+          id: "activity_2",
+          repositoryName: "debian-internal",
+          type: "object.update",
+          actor: "admin",
+          summary: "Updated dists/noble/Release",
+          metadata: {
+            path: "dists/noble/Release",
+            objectKey: "repositories/debian-internal/dists/noble/Release",
+            previousContentType: "text/plain",
+            previousSize: 7,
+            contentType: "text/plain; charset=utf-8",
+          },
+          createdAt: "2026-07-23T00:01:00.000Z",
+        },
+      ],
       cursor: "opaque-cursor",
       truncated: true,
     });
 
     expect(response).toMatchObject({
-      activities: [{ type: "object.delete" }],
+      activities: [{ type: "object.delete" }, { type: "object.update" }],
       cursor: "opaque-cursor",
       truncated: true,
     });
@@ -456,6 +473,44 @@ describe("createAxisClient", () => {
       });
     expect(requests).toEqual([
       "GET /admin/repositories/debian%20internal/objects?prefix=dists%2Fnoble%2F",
+    ]);
+  });
+
+  it("gets repository object detail through an admin-scoped endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          object: {
+            name: "Release",
+            path: "dists/noble/Release",
+            objectKey: "repositories/debian-internal/dists/noble/Release",
+            size: 7,
+            contentType: "text/plain",
+            etag: "\"etag\"",
+            repositoryUrl: "https://axis.example/repositories/debian-internal/dists/noble/Release",
+          },
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.getRepositoryObjectDetail("debian internal", "dists/noble/Release"))
+      .resolves.toMatchObject({
+        path: "dists/noble/Release",
+        objectKey: "repositories/debian-internal/dists/noble/Release",
+        repositoryUrl: "https://axis.example/repositories/debian-internal/dists/noble/Release",
+      });
+    expect(requests).toEqual([
+      "GET /admin/repositories/debian%20internal/objects/detail?path=dists%2Fnoble%2FRelease",
     ]);
   });
 

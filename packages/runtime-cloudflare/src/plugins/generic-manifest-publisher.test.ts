@@ -142,6 +142,60 @@ describe("GenericManifestPublisher", () => {
     ]);
   });
 
+  it("marks publish manifest writes that replace an existing object", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putText(
+      "repositories/debian-internal/publishes/pub_1.json",
+      "old manifest",
+      "text/plain",
+    );
+    const publisher = new GenericManifestPublisher({
+      objectStore,
+      now: () => new Date("2026-07-12T00:01:00.000Z"),
+    });
+    const input: PublishArtifactsInput = {
+      repository: {
+        id: "repo_1",
+        name: "debian-internal",
+        ecosystem: "apt",
+        visibility: "private",
+        config: {},
+        createdAt: "2026-07-12T00:00:00.000Z",
+        updatedAt: "2026-07-12T00:00:00.000Z",
+      },
+      session: {
+        id: "pub_1",
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        status: "finalizing",
+        requestedBy: {
+          tokenId: "tok_1",
+          name: "ci",
+          permissions: ["publish"],
+          repositories: ["debian-internal"],
+          ecosystemScopes: {},
+          signingKeyIds: [],
+        },
+        artifacts: [],
+        uploads: [],
+        verifiedUploads: [],
+        createdAt: "2026-07-12T00:00:00.000Z",
+        expiresAt: "2026-07-12T01:00:00.000Z",
+      },
+      artifacts: [],
+    };
+
+    await expect(publisher.publish(input)).resolves.toMatchObject({
+      objects: [{
+        key: "repositories/debian-internal/publishes/pub_1.json",
+        previous: {
+          contentType: "text/plain",
+          size: 12,
+        },
+      }],
+    });
+  });
+
   it("surfaces immutable publish manifest write failures", async () => {
     const objectStore = new FailingPublishObjectStore();
     const publisher = new GenericManifestPublisher({ objectStore });
@@ -230,7 +284,14 @@ describe("GenericManifestPublisher", () => {
       },
     });
 
-    expect(first).toEqual(second);
+    expect(first.publishedAt).toBe(second.publishedAt);
+    expect(first.objects[0]).not.toHaveProperty("previous");
+    expect(second.objects[0]).toMatchObject({
+      key: "repositories/debian-internal/publishes/pub_1.json",
+      previous: {
+        contentType: JSON_CONTENT_TYPE,
+      },
+    });
     expect(objectStore.objects).toEqual([
       {
         key: "repositories/debian-internal/publishes/pub_1.json",

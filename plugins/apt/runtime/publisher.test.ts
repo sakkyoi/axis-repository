@@ -351,6 +351,39 @@ describe("AptPublisher", () => {
     ]);
   });
 
+  it("marks APT metadata writes that replace existing repository objects", async () => {
+    const state = new MemoryStateStore();
+    const { service: signingKeyService } = await createSigningKey(state);
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putBytes(
+      "_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+      debFixture(),
+      "application/vnd.debian.binary-package",
+    );
+    await objectStore.putText(
+      "repositories/debian-internal/dists/noble/Release",
+      "old release",
+      "text/plain",
+    );
+    const publisher = new AptPublisher({
+      objectStore,
+      signingKeys: signingKeyService,
+      signer: new OpenPgpSigner(),
+    });
+
+    const result = await publisher.publish(publishInput());
+
+    expect(result.objects).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: "repositories/debian-internal/dists/noble/Release",
+        previous: expect.objectContaining({
+          contentType: "text/plain",
+          size: 11,
+        }),
+      }),
+    ]));
+  });
+
   it("publishes byte-identical signed metadata for the same input and publish timestamp", async () => {
     const state = new MemoryStateStore();
     const { service: signingKeyService } = await createSigningKey(state);

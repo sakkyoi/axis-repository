@@ -1,6 +1,7 @@
 import {
   MemoryStateStore,
   PluginPolicyService,
+  RepositoryActivityService,
   PublishSessionService,
   RepositoryService,
   ValidationError,
@@ -248,5 +249,78 @@ describe("PluginPublishSessionService", () => {
 
     expect(session.requestedBy.signingKeyIds).toEqual(["plugin_key"]);
     expect(session.requestedBy.ecosystemScopes).toEqual({ apt: { component: "main" } });
+  });
+
+  it("records object update activity for published objects with previous metadata", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock, randomId });
+    await repositoryService.create({
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: {},
+    });
+    const plugins = new RepositoryRuntimePluginRegistry();
+    plugins.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["publish"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({
+          publishedAt: "2026-07-24T00:00:00.000Z",
+          objects: [{
+            key: "repositories/debian-internal/dists/noble/Release",
+            contentType: "text/plain; charset=utf-8",
+            previous: {
+              contentType: "text/plain",
+              size: 7,
+            },
+          }],
+        }),
+      },
+    });
+    const corePublishSessionService = new PublishSessionService({
+      state,
+      uploadBroker,
+      artifactPublisher: plugins,
+      clock,
+      randomId,
+    });
+    const service = new PluginPublishSessionService({
+      publishSessionService: corePublishSessionService,
+      repositoryService,
+      plugins,
+      pluginPolicyService: new PluginPolicyService({ state }),
+      repositoryActivityService: new RepositoryActivityService({ state, clock, randomId }),
+    });
+    const session = await corePublishSessionService.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await corePublishSessionService.verifyUpload({
+      sessionId: session.id,
+      uploadId: session.uploads[0]!.uploadId,
+      principal,
+    });
+
+    await service.finalize({ sessionId: session.id, principal });
+
+    await expect(state.repositoryActivities.listByRepository("debian-internal")).resolves.toMatchObject([{
+      type: "object.update",
+      summary: "Updated dists/noble/Release",
+      metadata: {
+        path: "dists/noble/Release",
+        objectKey: "repositories/debian-internal/dists/noble/Release",
+        previousContentType: "text/plain",
+        previousSize: 7,
+        contentType: "text/plain; charset=utf-8",
+      },
+    }]);
   });
 });

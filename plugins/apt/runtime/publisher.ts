@@ -1,11 +1,13 @@
 import {
   ValidationError,
   type ArtifactPublisher,
+  type PublishedObject,
   type PublishedArtifactInput,
   type PublishArtifactsInput,
   type PublishArtifactRequest,
   type PublishResult,
   type RepositoryObject,
+  type RepositoryObjectMetadata,
   type RepositoryObjectStore,
 } from "@axis-repository/core";
 import type { RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
@@ -61,6 +63,22 @@ export class AptPublisher implements ArtifactPublisher {
     };
     const inRelease = await this.options.signer.clearSign(signingInput);
     const releaseGpg = await this.options.signer.detachSign(signingInput);
+    const publishedObjects: PublishedObject[] = [
+      ...metadata.poolCopies.map((copy) => ({
+        key: copy.destinationKey,
+        contentType: copy.contentType || DEB_CONTENT_TYPE,
+      })),
+      ...metadata.packageIndexes.flatMap((packageIndex) => [
+        { key: packageIndex.packagesPath, contentType: TEXT_CONTENT_TYPE },
+        { key: packageIndex.packagesGzPath, contentType: GZIP_CONTENT_TYPE },
+      ]),
+      { key: metadata.releasePath, contentType: TEXT_CONTENT_TYPE },
+      { key: inReleasePath, contentType: TEXT_CONTENT_TYPE },
+      { key: releaseGpgPath, contentType: PGP_SIGNATURE_CONTENT_TYPE },
+    ];
+    const previousByKey = new Map(
+      await Promise.all(publishedObjects.map(async (object) => [object.key, await this.options.objectStore.headObject(object.key)] as const)),
+    );
 
     for (const copy of metadata.poolCopies) {
       await this.options.objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
@@ -77,19 +95,10 @@ export class AptPublisher implements ArtifactPublisher {
 
     return {
       publishedAt,
-      objects: [
-        ...metadata.poolCopies.map((copy) => ({
-          key: copy.destinationKey,
-          contentType: copy.contentType || DEB_CONTENT_TYPE,
-        })),
-        ...metadata.packageIndexes.flatMap((packageIndex) => [
-          { key: packageIndex.packagesPath, contentType: TEXT_CONTENT_TYPE },
-          { key: packageIndex.packagesGzPath, contentType: GZIP_CONTENT_TYPE },
-        ]),
-        { key: metadata.releasePath, contentType: TEXT_CONTENT_TYPE },
-        { key: inReleasePath, contentType: TEXT_CONTENT_TYPE },
-        { key: releaseGpgPath, contentType: PGP_SIGNATURE_CONTENT_TYPE },
-      ],
+      objects: publishedObjects.map((object) => ({
+        ...object,
+        ...publishedObjectPrevious(previousByKey.get(object.key) ?? null),
+      })),
     };
   }
 
@@ -122,6 +131,19 @@ export class AptPublisher implements ArtifactPublisher {
       },
     };
   }
+}
+
+function publishedObjectPrevious(previous: RepositoryObjectMetadata | null): Pick<PublishedObject, "previous"> | Record<string, never> {
+  if (!previous) {
+    return {};
+  }
+  return {
+    previous: {
+      ...(previous.contentType !== undefined ? { contentType: previous.contentType } : {}),
+      ...(previous.contentLength !== undefined ? { size: previous.contentLength } : {}),
+      ...(previous.etag !== undefined ? { etag: previous.etag } : {}),
+    },
+  };
 }
 
 function aptArtifactMetadataFromDebControl(input: {

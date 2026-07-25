@@ -114,6 +114,7 @@ export function createDurableObjectDependencies(
   const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, secrets: repositorySecrets });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const pluginPolicyService = new PluginPolicyService({ state });
+  const repositoryActivityService = new RepositoryActivityService({ state, clock, randomId });
   const publishSessionService = new PublishSessionService({
     state,
     uploadBroker,
@@ -136,8 +137,9 @@ export function createDurableObjectDependencies(
       repositoryService,
       plugins: repositoryRuntimePlugins,
       pluginPolicyService,
+      repositoryActivityService,
     }),
-    repositoryActivityService: new RepositoryActivityService({ state, clock, randomId }),
+    repositoryActivityService,
     pluginPolicyService,
     repositorySecrets,
     repositoryObjectStore: objectStore,

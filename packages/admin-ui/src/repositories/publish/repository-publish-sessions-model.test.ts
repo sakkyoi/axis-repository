@@ -180,4 +180,24 @@ describe("repository publish sessions model", () => {
       totalCount: 23,
     });
   });
+
+  it("labels object update activities", () => {
+    const activity = {
+      id: "activity_1",
+      repositoryName: "debian-internal",
+      type: "object.update" as const,
+      actor: "admin" as const,
+      summary: "Updated dists/noble/Release",
+      metadata: {
+        path: "dists/noble/Release",
+        previousContentType: "text/plain",
+        contentType: "text/plain; charset=utf-8",
+      },
+      createdAt: "2026-07-23T00:00:00.000Z",
+    };
+
+    expect(repositoryActivityActionLabel(activity)).toBe("Updated object");
+    expect(repositoryActivityStatusMeta(activity)).toEqual({ label: "updated", variant: "warning" });
+    expect(repositoryActivitySummary(activity, publishSessionArtifactSummary)).toBe("dists/noble/Release");
+  });
 });

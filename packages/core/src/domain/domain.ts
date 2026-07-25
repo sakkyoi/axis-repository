@@ -128,6 +128,11 @@ export interface VerifiedUpload extends UploadedObject {
 export interface PublishedObject {
   key: string;
   contentType: string;
+  previous?: {
+    contentType?: string;
+    size?: number;
+    etag?: string;
+  };
 }
 
 export interface PublishResult {
@@ -152,7 +157,7 @@ export interface PublishArtifactsInput {
   artifacts: PublishedArtifactInput[];
 }
 
-export type RepositoryActivityType = "object.delete";
+export type RepositoryActivityType = "object.delete" | "object.update";
 
 export interface RepositoryActivityRecord {
   id: string;

@@ -554,6 +554,16 @@ function parseAdminRepositoryObjectsPath(pathname: string): string | null {
   return repositoryName;
 }
 
+function parseAdminRepositoryObjectDetailPath(pathname: string): string | null {
+  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/objects\/detail$/);
+  if (!match) return null;
+  const repositoryName = decodePathSegment(match[1] ?? "");
+  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
+    throw new NotFoundError();
+  }
+  return repositoryName;
+}
+
 function parseAdminRepositoryActivityPath(pathname: string): string | null {
   const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/activity$/);
   if (!match) return null;
@@ -745,6 +755,27 @@ function repositoryObjectBrowserResponse(input: {
   };
 }
 
+function repositoryObjectDetailResponse(input: {
+  origin: string;
+  repositoryName: string;
+  path: string;
+  objectKey: string;
+  metadata: RepositoryObjectMetadata;
+}) {
+  const leafName = input.path.split("/").filter(Boolean).at(-1) ?? input.path;
+  return {
+    object: {
+      name: leafName,
+      path: input.path,
+      objectKey: input.objectKey,
+      repositoryUrl: `${input.origin}/repositories/${encodeURIComponent(input.repositoryName)}/${input.path.split("/").map(encodeURIComponent).join("/")}`,
+      ...(input.metadata.contentLength !== undefined ? { size: input.metadata.contentLength } : {}),
+      ...(input.metadata.contentType !== undefined ? { contentType: input.metadata.contentType } : {}),
+      ...(input.metadata.etag !== undefined ? { etag: input.metadata.etag } : {}),
+    },
+  };
+}
+
 async function authorizeRepositoryRead(
   request: Request,
   dependencies: AppDependencies,
@@ -930,6 +961,28 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       await repositoryActivityTimeline(dependencies, repository.name),
       repositoryActivityPageParams(url.searchParams),
     ));
+  }
+  const adminRepositoryObjectDetailName = parseAdminRepositoryObjectDetailPath(url.pathname);
+  if (adminRepositoryObjectDetailName) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method !== "GET") {
+      throw new NotFoundError();
+    }
+    const repository = await dependencies.repositoryService.getByName(adminRepositoryObjectDetailName);
+    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
+    const relativePath = repositoryObjectRelativePathParam(url.searchParams.get("path"));
+    const objectKey = `repositories/${repository.name}/${relativePath}`;
+    const metadata = await dependencies.repositoryObjectStore.headObject(objectKey);
+    if (!metadata) {
+      throw new NotFoundError();
+    }
+    return jsonResponse(repositoryObjectDetailResponse({
+      origin: url.origin,
+      repositoryName: repository.name,
+      path: relativePath,
+      objectKey,
+      metadata,
+    }));
   }
   const adminRepositoryObjectsName = parseAdminRepositoryObjectsPath(url.pathname);
   if (adminRepositoryObjectsName) {

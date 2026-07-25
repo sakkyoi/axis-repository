@@ -1,7 +1,8 @@
-import { File, Folder, History, PackagePlus, Trash2, UploadCloud } from "lucide-react";
+import { Copy, ExternalLink, File, Folder, History, PackagePlus, Trash2, UploadCloud } from "lucide-react";
 import type { DragEvent } from "react";
 import { useRef, useState } from "react";
-import { useDeleteRepositoryObject, useRepositoryObjects } from "../../api/hooks";
+import { useDeleteRepositoryObject, useRepositoryObjectDetail, useRepositoryObjects } from "../../api/hooks";
+import type { RepositoryObjectDetail } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
 import {
   Dialog,
@@ -37,10 +38,12 @@ export function RepositoryBrowserSection({
   const [prefix, setPrefix] = useState("");
   const [publishOpen, setPublishOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [selectedObjectPath, setSelectedObjectPath] = useState<string>();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [publishFileError, setPublishFileError] = useState("");
   const [dragDepth, setDragDepth] = useState(0);
   const objects = useRepositoryObjects(repository.name, prefix);
+  const objectDetail = useRepositoryObjectDetail(repository.name, selectedObjectPath);
   const deleteObject = useDeleteRepositoryObject(repository.name, prefix);
   const publishPlugin = getRepositoryPublishPlugin(repository.ecosystem);
   const PreviewComponent = publishPlugin?.PreviewComponent;
@@ -74,6 +77,17 @@ export function RepositoryBrowserSection({
     setPublishOpen(false);
     setSelectedFiles([]);
     setPublishFileError("");
+  }
+
+  function deleteObjectPath(path: string) {
+    if (!window.confirm(`Delete ${path}?`)) return;
+    deleteObject.mutate(path, {
+      onSuccess: () => {
+        if (selectedObjectPath === path) {
+          setSelectedObjectPath(undefined);
+        }
+      },
+    });
   }
 
   function onDragEnter(event: DragEvent<HTMLDivElement>) {
@@ -190,6 +204,29 @@ export function RepositoryBrowserSection({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={Boolean(selectedObjectPath)} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedObjectPath(undefined);
+        }
+      }}>
+        <DialogContent className={activityDrawerContentClass}>
+          <DialogHeader>
+            <DialogTitle>Object detail</DialogTitle>
+          </DialogHeader>
+          <div className={drawerBodyClass}>
+            {objectDetail.isLoading && <p className="text-sm text-muted-foreground">Loading object detail...</p>}
+            {objectDetail.isError && <ErrorState title="Object detail unavailable" error={objectDetail.error} />}
+            {objectDetail.data && (
+              <RepositoryObjectDetailPanel
+                detail={objectDetail.data}
+                deleting={deleteObject.variables === objectDetail.data.path}
+                onDelete={() => deleteObjectPath(objectDetail.data.path)}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className={layout.frame}>
         {objects.isLoading && <div className={layout.loading}>Loading objects...</div>}
         {objects.isError && <div className={layout.error}><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
@@ -206,10 +243,8 @@ export function RepositoryBrowserSection({
             rows={rows}
             deletingPath={deleteObject.variables}
             onOpenDirectory={setPrefix}
-            onDeleteObject={(path) => {
-              if (!window.confirm(`Delete ${path}?`)) return;
-              deleteObject.mutate(path);
-            }}
+            onOpenObject={setSelectedObjectPath}
+            onDeleteObject={deleteObjectPath}
           />
         )}
       </div>
@@ -270,11 +305,13 @@ function RepositoryBrowserTable({
   rows,
   deletingPath,
   onOpenDirectory,
+  onOpenObject,
   onDeleteObject,
 }: {
   rows: RepositoryBrowserRow[];
   deletingPath: string | undefined;
   onOpenDirectory: (prefix: string) => void;
+  onOpenObject: (path: string) => void;
   onDeleteObject: (path: string) => void;
 }) {
   return (
@@ -293,7 +330,11 @@ function RepositoryBrowserTable({
           {rows.map((row) => (
             <tr key={`${row.kind}:${row.path}`} className="border-t border-border">
               <td className="min-w-0 px-3 py-2">
-                <RepositoryBrowserNameCell row={row} onOpenDirectory={onOpenDirectory} />
+                <RepositoryBrowserNameCell
+                  row={row}
+                  onOpenDirectory={onOpenDirectory}
+                  onOpenObject={onOpenObject}
+                />
               </td>
               <td className="truncate px-3 py-2 text-muted-foreground">{row.contentType}</td>
               <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{row.sizeLabel}</td>
@@ -325,9 +366,11 @@ function RepositoryBrowserTable({
 function RepositoryBrowserNameCell({
   row,
   onOpenDirectory,
+  onOpenObject,
 }: {
   row: RepositoryBrowserRow;
   onOpenDirectory: (prefix: string) => void;
+  onOpenObject: (path: string) => void;
 }) {
   const icon = row.kind === "directory"
     ? <Folder className="h-4 w-4 text-primary" />
@@ -345,9 +388,66 @@ function RepositoryBrowserNameCell({
     );
   }
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <button
+      type="button"
+      className="flex min-w-0 items-center gap-2 rounded px-1 py-0.5 text-left font-medium hover:bg-muted"
+      onClick={() => onOpenObject(row.path)}
+    >
       {icon}
-      <span className="truncate font-medium">{row.name}</span>
+      <span className="truncate">{row.name}</span>
+    </button>
+  );
+}
+
+function RepositoryObjectDetailPanel({
+  detail,
+  deleting,
+  onDelete,
+}: {
+  detail: RepositoryObjectDetail;
+  deleting: boolean;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-1">
+        <div className="truncate text-sm font-semibold">{detail.name}</div>
+        <div className="break-all text-xs text-muted-foreground">{detail.path}</div>
+      </div>
+      <dl className="grid gap-2 text-sm">
+        <RepositoryObjectDetailItem label="Object key" value={detail.objectKey} />
+        <RepositoryObjectDetailItem label="Content type" value={detail.contentType ?? "-"} />
+        <RepositoryObjectDetailItem label="Size" value={detail.size === undefined ? "-" : `${detail.size} B`} />
+        <RepositoryObjectDetailItem label="ETag" value={detail.etag ?? "-"} />
+        <RepositoryObjectDetailItem label="Repository URL" value={detail.repositoryUrl} />
+      </dl>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void navigator.clipboard.writeText(detail.repositoryUrl)}
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          Copy URL
+        </Button>
+        <Button type="button" variant="outline" onClick={() => window.open(detail.repositoryUrl, "_blank", "noopener,noreferrer")}>
+          <ExternalLink className="mr-2 h-4 w-4" />
+          Open
+        </Button>
+        <Button type="button" variant="destructive" disabled={deleting} onClick={onDelete}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          {deleting ? "Deleting..." : "Delete"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function RepositoryObjectDetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1 rounded-md border border-border bg-background/40 p-2">
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="break-all text-xs">{value}</dd>
     </div>
   );
 }

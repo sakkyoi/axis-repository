@@ -67,6 +67,9 @@ export function repositoryActivityActionLabel(activity: RepositoryActivity): str
   if (activity.type === "publish") {
     return activity.session.artifacts.length === 1 ? "Published artifact" : "Published artifacts";
   }
+  if (activity.type === "object.update") {
+    return "Updated object";
+  }
   return "Deleted object";
 }
 
@@ -76,6 +79,9 @@ export function repositoryActivityStatusMeta(activity: RepositoryActivity): {
 } {
   if (activity.type === "publish") {
     return publishSessionStatusMeta(activity.session.status);
+  }
+  if (activity.type === "object.update") {
+    return { label: "updated", variant: "warning" };
   }
   return { label: "deleted", variant: "destructive" };
 }

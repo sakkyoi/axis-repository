@@ -1896,6 +1896,38 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(401);
   });
 
+  it("returns repository object detail metadata through the admin file browser", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    await harness.repositoryObjectStore.putBytes(
+      "repositories/debian-private/pool/main/app/app_1.0.0_amd64.deb",
+      new Uint8Array([1, 2, 3]),
+      "application/vnd.debian.binary-package",
+    );
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/objects/detail?path=pool%2Fmain%2Fapp%2Fapp_1.0.0_amd64.deb",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      object: {
+        name: "app_1.0.0_amd64.deb",
+        path: "pool/main/app/app_1.0.0_amd64.deb",
+        objectKey: "repositories/debian-private/pool/main/app/app_1.0.0_amd64.deb",
+        size: 3,
+        contentType: "application/vnd.debian.binary-package",
+        repositoryUrl: "https://axis.example/repositories/debian-private/pool/main/app/app_1.0.0_amd64.deb",
+      },
+    });
+  });
+
   it("deletes repository objects through the admin file browser and records activity", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

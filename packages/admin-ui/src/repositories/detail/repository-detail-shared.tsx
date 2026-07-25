@@ -169,17 +169,29 @@ function RepositoryActivityItem({
       {activity.type === "publish" ? (
         <SessionDetailComponent session={activity.session} artifactSummary={artifactSummary} />
       ) : (
-        <RepositoryObjectDeleteActivityDetail activity={activity} />
+        <RepositoryObjectActivityDetail activity={activity} />
       )}
     </details>
   );
 }
 
-function RepositoryObjectDeleteActivityDetail({ activity }: { activity: Extract<RepositoryActivity, { type: "object.delete" }> }) {
+function RepositoryObjectActivityDetail({ activity }: { activity: Extract<RepositoryActivity, { type: "object.delete" | "object.update" }> }) {
+  const metadataItems = [
+    activity.type === "object.update" && typeof activity.metadata.previousContentType === "string"
+      ? `previous content type: ${activity.metadata.previousContentType}`
+      : undefined,
+    activity.type === "object.update" && typeof activity.metadata.previousSize === "number"
+      ? `previous size: ${activity.metadata.previousSize} bytes`
+      : undefined,
+    activity.type === "object.update" && typeof activity.metadata.contentType === "string"
+      ? `current content type: ${activity.metadata.contentType}`
+      : undefined,
+  ].filter((item): item is string => Boolean(item));
   return (
     <div className="mt-3 grid gap-2 text-xs">
-      <PublishSessionDetailList title="Deleted object" items={[String(activity.metadata.path ?? activity.summary)]} />
+      <PublishSessionDetailList title={activity.type === "object.update" ? "Updated object" : "Deleted object"} items={[String(activity.metadata.path ?? activity.summary)]} />
       <PublishSessionDetailList title="Object key" items={[String(activity.metadata.objectKey ?? "")]} />
+      {metadataItems.length > 0 && <PublishSessionDetailList title="Metadata change" items={metadataItems} />}
     </div>
   );
 }

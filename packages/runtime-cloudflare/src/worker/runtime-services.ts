@@ -8,6 +8,7 @@ import {
   NotFoundError,
   PluginPolicyService,
   type PublishSession,
+  type RepositoryActivityService,
   PublishSessionService,
   type Repository,
   RepositoryService,
@@ -76,6 +77,7 @@ export class PluginPublishSessionService {
       repositoryService: RepositoryService;
       plugins: RepositoryRuntimePluginRegistry;
       pluginPolicyService: PluginPolicyService;
+      repositoryActivityService?: RepositoryActivityService;
     },
   ) {}
 
@@ -154,7 +156,7 @@ export class PluginPublishSessionService {
       principal,
       artifacts: session.artifacts,
     });
-    return this.options.publishSessionService.finalize({
+    return this.finalizeAndRecordUpdates({
       ...input,
       principal,
     });
@@ -169,7 +171,27 @@ export class PluginPublishSessionService {
       principal: input.principal,
       artifacts: session.artifacts,
     });
-    return this.options.publishSessionService.finalize(input);
+    return this.finalizeAndRecordUpdates(input);
+  }
+
+  private async finalizeAndRecordUpdates(input: FinalizePublishSessionInput): Promise<FinalizePublishSessionResult> {
+    const result = await this.options.publishSessionService.finalize(input);
+    const repositoryActivityService = this.options.repositoryActivityService;
+    if (!repositoryActivityService) {
+      return result;
+    }
+    await Promise.all(result.result.objects
+      .filter((object) => object.previous)
+      .map((object) => repositoryActivityService.recordObjectUpdate({
+        repositoryName: result.session.repositoryName,
+        path: repositoryRelativeObjectPath(result.session.repositoryName, object.key),
+        objectKey: object.key,
+        contentType: object.contentType,
+        ...(object.previous?.contentType !== undefined ? { previousContentType: object.previous.contentType } : {}),
+        ...(object.previous?.size !== undefined ? { previousSize: object.previous.size } : {}),
+        ...(object.previous?.etag !== undefined ? { previousEtag: object.previous.etag } : {}),
+      })));
+    return result;
   }
 
   private async getExistingSession(sessionId: string): Promise<PublishSession> {
@@ -187,6 +209,11 @@ export class PluginPublishSessionService {
       catalogEnabled: getRepositoryPluginCatalogEntry(ecosystem)?.enabled ?? true,
     });
   }
+}
+
+function repositoryRelativeObjectPath(repositoryName: string, objectKey: string): string {
+  const prefix = `repositories/${repositoryName}/`;
+  return objectKey.startsWith(prefix) ? objectKey.slice(prefix.length) : objectKey;
 }
 
 function adminPublishPrincipal(
