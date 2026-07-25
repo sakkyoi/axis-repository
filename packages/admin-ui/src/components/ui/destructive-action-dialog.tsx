@@ -69,7 +69,7 @@ export function DestructiveActionDialog({
                 <code className={confirmationLayout.code}>{confirmationText}</code>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
                   className={confirmationLayout.copyButton}
                   aria-label={destructiveConfirmationCopyLabel(confirmationText)}
@@ -77,7 +77,7 @@ export function DestructiveActionDialog({
                   disabled={pending}
                   onClick={() => void copyConfirmationText()}
                 >
-                  {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                 </Button>
               </span>
               to confirm.

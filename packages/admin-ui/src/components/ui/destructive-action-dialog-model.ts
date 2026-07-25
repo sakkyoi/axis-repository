@@ -26,7 +26,7 @@ export function destructiveConfirmationLayoutClasses(): {
   return {
     prompt: "min-w-0 text-sm font-medium",
     token: "mx-1 inline-flex max-w-full align-middle",
-    code: "min-w-0 truncate rounded-l bg-muted px-1.5 py-0.5 font-mono text-xs",
-    copyButton: "h-6 w-6 shrink-0 rounded-l-none border-l-0 px-0",
+    code: "min-w-0 truncate rounded bg-muted px-1.5 py-0.5 font-mono text-xs",
+    copyButton: "ml-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm bg-transparent p-0 text-muted-foreground hover:text-foreground disabled:opacity-50",
   };
 }
