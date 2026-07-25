@@ -10,7 +10,7 @@ import { WebCryptoRandomId, Sha256SecretHasher } from "../crypto";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import { DurableStateStore, type DurableStorage } from "../storage/durable-state";
 import type { AppDependencies } from "./dev-dependencies";
-import { MemoryUploadBroker } from "../uploads/memory-upload-broker";
+import { SameOriginUploadBroker } from "../uploads/same-origin-upload-broker";
 import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
@@ -32,7 +32,7 @@ export interface AxisEnv {
   ADMIN_UI_API_BASE_URL?: string;
 }
 
-type UploadBackend = "r2" | "memory";
+type UploadBackend = "r2" | "local-r2" | "memory";
 
 function requiredEnv(value: string | undefined, name: string): string {
   if (!value) {
@@ -57,7 +57,10 @@ function parseUploadBackend(value: string | undefined): UploadBackend {
   if (value === "memory") {
     return "memory";
   }
-  throw new Error("UPLOAD_BACKEND must be one of: r2, memory");
+  if (value === "local-r2") {
+    return "local-r2";
+  }
+  throw new Error("UPLOAD_BACKEND must be one of: r2, local-r2, memory");
 }
 
 function requiredR2Bucket(value: R2Bucket | undefined): R2Bucket {
@@ -97,8 +100,8 @@ export function createDurableObjectDependencies(
   const objectStore = uploadBackend === "memory"
     ? new MemoryRepositoryObjectStore()
     : new R2RepositoryObjectStore(requiredR2Bucket(env.AXIS_OBJECTS));
-  const uploadBroker = uploadBackend === "memory"
-    ? new MemoryUploadBroker(objectStore)
+  const uploadBroker = uploadBackend === "memory" || uploadBackend === "local-r2"
+    ? new SameOriginUploadBroker(objectStore)
     : new R2PresignedUploadBroker({
       bucket: requiredR2Bucket(env.AXIS_OBJECTS),
       accountId: requiredEnv(env.R2_ACCOUNT_ID, "R2_ACCOUNT_ID"),
@@ -136,7 +139,7 @@ export function createDurableObjectDependencies(
     pluginPolicyService,
     repositorySecrets,
     repositoryObjectStore: objectStore,
-    ...(uploadBroker instanceof MemoryUploadBroker ? { localUploadBroker: uploadBroker } : {}),
+    ...(uploadBroker instanceof SameOriginUploadBroker ? { localUploadBroker: uploadBroker } : {}),
     repositoryRuntimePlugins,
   };
 }

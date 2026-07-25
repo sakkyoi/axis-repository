@@ -12,7 +12,7 @@ import {
 import type { AdminUiRuntimeConfig } from "../admin-ui-assets";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
-import MemoryUploadBroker from "../uploads/memory-upload-broker";
+import SameOriginUploadBroker from "../uploads/same-origin-upload-broker";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "../storage/secret-encryption";
@@ -27,7 +27,7 @@ export interface AppDependencies {
   pluginPolicyService: PluginPolicyService;
   repositorySecrets: RepositorySecretService;
   repositoryObjectStore: RepositoryObjectStore;
-  localUploadBroker?: MemoryUploadBroker;
+  localUploadBroker?: SameOriginUploadBroker;
   repositoryRuntimePlugins: RepositoryRuntimePluginRegistry;
 }
 
@@ -61,7 +61,7 @@ export function createDevDependencyHarness(
     verify: async (secret: string, hash: string): Promise<boolean> => hash === `dev:${secret}`,
   };
   const objectStore = new MemoryRepositoryObjectStore();
-  const uploadBroker = new MemoryUploadBroker(objectStore);
+  const uploadBroker = new SameOriginUploadBroker(objectStore);
   const repositorySecrets = new RepositorySecretService({
     state,
     clock,

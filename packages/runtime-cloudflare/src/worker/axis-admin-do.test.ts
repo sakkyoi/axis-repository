@@ -291,6 +291,29 @@ describe("AxisAdminDO", () => {
     expect(response.status).toBe(201);
   });
 
+  it("uses local R2 upload backend without R2 signing configuration", async () => {
+    const object = createObject({
+      UPLOAD_BACKEND: "local-r2",
+      R2_ACCOUNT_ID: undefined,
+      R2_BUCKET_NAME: undefined,
+      R2_ACCESS_KEY_ID: undefined,
+      R2_SECRET_ACCESS_KEY: undefined,
+    });
+
+    const response = await object.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer admin",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+  });
+
   it("serves hardened admin APIs through the Durable Object", async () => {
     const { generateKey } = await import("openpgp");
     const key = await generateKey({
@@ -676,7 +699,7 @@ describe("AxisAdminDO", () => {
 
   it("rejects invalid upload backend values", () => {
     expect(() => createObject({ UPLOAD_BACKEND: "disk" })).toThrow(
-      "UPLOAD_BACKEND must be one of: r2, memory",
+      "UPLOAD_BACKEND must be one of: r2, local-r2, memory",
     );
   });
 
@@ -784,5 +807,106 @@ describe("AxisAdminDO", () => {
       "x-amz-meta-axis-sha256": "a".repeat(64),
       "x-amz-meta-axis-upload-id": expect.any(String),
     });
+  });
+
+  it("stores local R2 uploads through same-origin upload targets", async () => {
+    const bucket = new FakeR2Bucket();
+    const object = createObject({
+      AXIS_OBJECTS: bucket as unknown as R2Bucket,
+      UPLOAD_BACKEND: "local-r2",
+      R2_ACCOUNT_ID: undefined,
+      R2_BUCKET_NAME: undefined,
+      R2_ACCESS_KEY_ID: undefined,
+      R2_SECRET_ACCESS_KEY: undefined,
+    });
+
+    const createRepository = await object.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer admin",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
+      }),
+    );
+    expect(createRepository.status).toBe(201);
+
+    const createToken = await object.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer admin",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+          signingKeyIds: ["signing_key_prod"],
+        }),
+      }),
+    );
+    expect(createToken.status).toBe(201);
+    const tokenBody = (await createToken.json()) as { secret: string };
+
+    const body = new Uint8Array([1, 2, 3]);
+    const createSession = await object.fetch(
+      new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [
+            {
+              filename: "myapp_1.2.3_amd64.deb",
+              size: body.byteLength,
+              sha256: "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+              contentType: "application/vnd.debian.binary-package",
+              metadata: {
+                package: "myapp",
+                version: "1.2.3",
+                architecture: "amd64",
+                component: "main",
+                description: "Example package",
+                maintainer: "Release Team <release@example.com>",
+              },
+            },
+          ],
+        }),
+      }),
+    );
+    expect(createSession.status).toBe(201);
+    const session = (await createSession.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string; objectKey: string; url: string }>;
+    };
+    const upload = session.uploads[0]!;
+
+    expect(upload.url).toBe(`/api/uploads/${session.id}/${upload.uploadId}`);
+
+    const put = await object.fetch(
+      new Request(`https://axis.example${upload.url}`, {
+        method: "PUT",
+        headers: { "content-type": "application/vnd.debian.binary-package" },
+        body,
+      }),
+    );
+    expect(put.status).toBe(204);
+    expect(readBucketBytes(bucket, upload.objectKey)).toEqual(body);
+
+    const verify = await object.fetch(
+      new Request(`https://axis.example/api/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${tokenBody.secret}` },
+      }),
+    );
+
+    expect(verify.status).toBe(200);
   });
 });
