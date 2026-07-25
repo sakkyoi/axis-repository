@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { PackagePlus } from "lucide-react";
+import { PackagePlus, X } from "lucide-react";
 import {
   Button,
   ErrorState,
-  Input,
   PublishSessionDetailList,
   useRepositoryArtifactPublisher,
   type PublishSessionDetailComponentProps,
@@ -16,13 +15,17 @@ import {
   type AptPublishPackageMetadata,
 } from "./publish-model";
 
-export function AptPublishArtifactForm({
+export function AptPublishArtifactPreview({
   repository,
   droppedFiles,
+  onCancel,
+  onPublished,
 }: {
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
   droppedFiles: File[];
+  onCancel: () => void;
+  onPublished: () => void;
 }) {
   const publisher = useRepositoryArtifactPublisher(repository);
   const [file, setFile] = useState<File>();
@@ -59,28 +62,36 @@ export function AptPublishArtifactForm({
     try {
       const artifact = await buildAptPublishArtifact(file);
       await publisher.publish({ files: [file], artifacts: [artifact] });
+      onPublished();
     } catch (publishError) {
       setError(publishError instanceof Error ? publishError.message : String(publishError));
     }
   }
 
   return (
-    <div className="grid gap-3 rounded-md border border-border bg-background/40 p-3">
-      <div className="flex items-center gap-2 text-sm font-medium">
-        <PackagePlus className="h-4 w-4" />
-        Publish APT artifact
-      </div>
-      <Input
-        type="file"
-        accept=".deb,application/vnd.debian.binary-package"
-        onChange={(event) => void onFileSelected(event.currentTarget.files?.[0])}
-      />
-      {file && <p className="text-xs text-muted-foreground">Selected {file.name}</p>}
+    <div className="grid gap-4">
+      {file ? (
+        <div className="grid gap-1 rounded-md border border-border bg-background/40 p-3">
+          <div className="text-xs font-medium uppercase text-muted-foreground">Selected artifact</div>
+          <div className="break-words text-sm font-medium text-foreground">{file.name}</div>
+          <div className="text-xs text-muted-foreground">{file.size.toLocaleString()} bytes</div>
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed border-border bg-background/40 p-3 text-sm text-muted-foreground">
+          Choose a .deb file from the toolbar or drop it on the repository browser.
+        </div>
+      )}
       {metadata && <AptPackageMetadataPreview metadata={metadata} />}
-      <Button type="button" onClick={publishArtifact} disabled={publisher.isPublishing}>
-        <PackagePlus className="mr-2 h-4 w-4" />
-        Publish artifact
-      </Button>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={publisher.isPublishing}>
+          <X className="mr-2 h-4 w-4" />
+          Cancel
+        </Button>
+        <Button type="button" onClick={publishArtifact} disabled={!file || publisher.isPublishing}>
+          <PackagePlus className="mr-2 h-4 w-4" />
+          Publish
+        </Button>
+      </div>
       {publisher.status && <p className="text-sm text-muted-foreground">{publisher.status}</p>}
       {(error || publisher.error) && <ErrorState title="Publish failed" error={error || publisher.error} />}
     </div>

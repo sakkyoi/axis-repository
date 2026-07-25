@@ -7,10 +7,18 @@ export function RepositoryPublishSection({
   pluginMetadata,
 }: RepositoryDetailSectionProps) {
   const publishPlugin = getRepositoryPublishPlugin(repository.ecosystem);
-  const FormComponent = publishPlugin?.FormComponent;
+  const PreviewComponent = publishPlugin?.PreviewComponent;
   return (
     <div className="grid gap-2">
-      {FormComponent && <FormComponent repository={repository} pluginMetadata={pluginMetadata} droppedFiles={[]} />}
+      {PreviewComponent && (
+        <PreviewComponent
+          repository={repository}
+          pluginMetadata={pluginMetadata}
+          droppedFiles={[]}
+          onCancel={() => undefined}
+          onPublished={() => undefined}
+        />
+      )}
       <PublishSessionsSection
         repository={repository}
         pluginMetadata={pluginMetadata}

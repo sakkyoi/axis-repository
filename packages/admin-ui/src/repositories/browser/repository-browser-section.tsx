@@ -3,6 +3,12 @@ import type { DragEvent } from "react";
 import { useRef, useState } from "react";
 import { useRepositoryObjects } from "../../api/hooks";
 import { Button } from "../../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
 import { EmptyState, ErrorState } from "../../pages/shared";
 import { PublishSessionsSection } from "../detail/repository-detail-shared";
 import { getRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
@@ -28,18 +34,23 @@ export function RepositoryBrowserSection({
   const [dragDepth, setDragDepth] = useState(0);
   const objects = useRepositoryObjects(repository.name, prefix);
   const publishPlugin = getRepositoryPublishPlugin(repository.ecosystem);
-  const FormComponent = publishPlugin?.FormComponent;
+  const PreviewComponent = publishPlugin?.PreviewComponent;
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
   const overlay = repositoryBrowserUploadOverlay({
     repositoryName: repository.name,
-    canPublish: Boolean(FormComponent),
+    canPublish: Boolean(PreviewComponent),
     isDraggingFiles: dragDepth > 0,
   });
 
   function handleFiles(files: File[]) {
-    if (files.length === 0 || !FormComponent) return;
+    if (files.length === 0 || !PreviewComponent) return;
     setSelectedFiles(files);
     setPublishOpen(true);
+  }
+
+  function closePublishPreview() {
+    setPublishOpen(false);
+    setSelectedFiles([]);
   }
 
   function onDragEnter(event: DragEvent<HTMLDivElement>) {
@@ -79,13 +90,13 @@ export function RepositoryBrowserSection({
           prefix={prefix}
           onPrefixChange={setPrefix}
         />
-        {FormComponent && (
+        {PreviewComponent && (
           <Button type="button" onClick={() => fileInputRef.current?.click()}>
             <PackagePlus className="mr-2 h-4 w-4" />
             Publish artifact
           </Button>
         )}
-        {FormComponent && (
+        {PreviewComponent && (
           <input
             ref={fileInputRef}
             type="file"
@@ -98,16 +109,35 @@ export function RepositoryBrowserSection({
         )}
       </div>
 
-      {publishOpen && FormComponent && (
-        <FormComponent repository={repository} pluginMetadata={pluginMetadata} droppedFiles={selectedFiles} />
-      )}
+      <Dialog open={publishOpen} onOpenChange={(open) => {
+        if (open) {
+          setPublishOpen(true);
+          return;
+        }
+        closePublishPreview();
+      }}>
+        <DialogContent className="bottom-0 left-0 top-auto max-h-[88dvh] w-full translate-x-0 translate-y-0 overflow-auto rounded-b-none sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-dvh sm:max-h-none sm:w-[min(92vw,420px)] sm:translate-x-0 sm:translate-y-0 sm:rounded-l-lg sm:rounded-r-none">
+          <DialogHeader>
+            <DialogTitle>{publishPlugin?.title ?? "Publish artifact"}</DialogTitle>
+          </DialogHeader>
+          {PreviewComponent && (
+            <PreviewComponent
+              repository={repository}
+              pluginMetadata={pluginMetadata}
+              droppedFiles={selectedFiles}
+              onCancel={closePublishPreview}
+              onPublished={closePublishPreview}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="min-h-64 overflow-hidden rounded-md border border-border bg-background/40">
         {objects.isLoading && <div className="p-3 text-sm text-muted-foreground">Loading objects...</div>}
         {objects.isError && <div className="p-3"><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
         {!objects.isLoading && !objects.isError && rows.length === 0 && (
           <div className="p-3">
-            <EmptyState message={FormComponent ? "No objects here. Use Publish artifact or drop files on this page." : "No repository objects at this path."} />
+            <EmptyState message={PreviewComponent ? "No objects here. Use Publish artifact or drop files on this page." : "No repository objects at this path."} />
           </div>
         )}
         {!objects.isLoading && !objects.isError && rows.length > 0 && (

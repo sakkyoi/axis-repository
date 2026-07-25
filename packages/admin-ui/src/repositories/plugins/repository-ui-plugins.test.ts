@@ -136,9 +136,9 @@ describe("repository UI plugin registry", () => {
   });
 
   it("lets ecosystem UI plugins provide publish UI and artifact summaries", () => {
-    expect(getRepositoryPublishPlugin("apt")?.FormComponent?.name).toBe("AptPublishArtifactForm");
+    expect(getRepositoryPublishPlugin("apt")?.PreviewComponent?.name).toBe("AptPublishArtifactPreview");
     expect(getRepositoryPublishPlugin("apt")?.SessionDetailComponent?.name).toBe("AptPublishSessionDetail");
-    expect(getRepositoryPublishPlugin("pypi")?.FormComponent).toBeUndefined();
+    expect(getRepositoryPublishPlugin("pypi")?.PreviewComponent).toBeUndefined();
     expect(getRepositoryPublishPlugin("pypi")?.SessionDetailComponent?.name).toBe("PypiPublishSessionDetail");
     expect(getRepositoryPublishPlugin("apt")?.artifactSummary({
       id: "pub_apt",

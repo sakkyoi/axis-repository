@@ -40,7 +40,7 @@ export type {
   RepositoryCreateWizardState,
   RepositoryDetailPlugin,
   RepositoryDetailSectionProps,
-  RepositoryPublishFormComponentProps,
+  RepositoryPublishPreviewComponentProps,
   RepositoryPublishPlugin,
   RepositoryUiPlugin,
 } from "./repositories/plugins/repository-ui-plugin-types";
