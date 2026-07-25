@@ -44,6 +44,14 @@ export function repositoryBrowserObjectDeleteDialogContent(path: string): Destru
   };
 }
 
+export function repositoryBrowserParentPrefix(path: string): string {
+  const lastSlash = path.lastIndexOf("/");
+  if (lastSlash === -1) {
+    return "";
+  }
+  return path.slice(0, lastSlash + 1);
+}
+
 export function repositoryBrowserRows(listing: RepositoryObjectsResponse): RepositoryBrowserRow[] {
   return [
     ...listing.directories

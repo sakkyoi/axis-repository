@@ -10,3 +10,11 @@ export function repositoryArtifactDeleteDialogContent(artifact: RepositoryArtifa
     confirmationText: "delete artifact",
   };
 }
+
+export function repositoryArtifactObjectRelativePath(repositoryName: string, objectKey: string): string | undefined {
+  const prefix = `repositories/${repositoryName}/`;
+  if (!objectKey.startsWith(prefix)) {
+    return undefined;
+  }
+  return objectKey.slice(prefix.length);
+}

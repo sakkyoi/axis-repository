@@ -273,6 +273,16 @@ export const repositoryObjectDeleteResponseSchema = z.object({
 
 export const repositoryArtifactDeleteResponseSchema = z.object({
   activity: artifactDeleteActivitySchema,
+  artifact: repositoryArtifactSchema,
+  artifacts: z.array(repositoryArtifactSchema),
+  deletedObjectKeys: z.array(z.string()),
+  missingObjectKeys: z.array(z.string()),
+  skippedObjectKeys: z.array(z.string()),
+  failedObjectKeys: z.array(z.object({
+    objectKey: z.string(),
+    message: z.string(),
+  })),
+  truncated: z.boolean(),
 });
 
 export const signingKeySchema = z.object({

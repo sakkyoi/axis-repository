@@ -70,8 +70,25 @@ export interface RebuildRepositoryArtifactIndexInput {
   now: Date;
 }
 
+export interface DeleteRepositoryArtifactInput {
+  repository: Repository;
+  artifact: RepositoryArtifactRecord;
+  objectStore: RepositoryObjectStore;
+}
+
+export interface DeleteRepositoryArtifactResult {
+  deletedObjectKeys: string[];
+  missingObjectKeys: string[];
+  skippedObjectKeys: string[];
+  failedObjectKeys: Array<{
+    objectKey: string;
+    message: string;
+  }>;
+}
+
 export interface RepositoryArtifactIndexLifecycle {
   rebuildIndex(input: RebuildRepositoryArtifactIndexInput): Promise<RepositoryArtifactRecord[]>;
+  deleteArtifact?(input: DeleteRepositoryArtifactInput): Promise<DeleteRepositoryArtifactResult>;
 }
 
 export interface ArtifactRepositoryPlugin extends PublisherMetadata {

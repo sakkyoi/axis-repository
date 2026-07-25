@@ -1975,6 +1975,15 @@ describe("Cloudflare runtime routes", () => {
 
     expect(deleted.status).toBe(200);
     await expect(deleted.json()).resolves.toMatchObject({
+      artifact: {
+        id: artifact!.id,
+      },
+      artifacts: [],
+      deletedObjectKeys: artifact!.objectKeys,
+      missingObjectKeys: [],
+      skippedObjectKeys: [],
+      failedObjectKeys: [],
+      truncated: false,
       activity: {
         repositoryName: "debian-internal",
         type: "artifact.delete",
@@ -1983,6 +1992,10 @@ describe("Cloudflare runtime routes", () => {
         metadata: {
           artifactId: artifact!.id,
           objectKeys: artifact!.objectKeys,
+          deletedObjectKeys: artifact!.objectKeys,
+          missingObjectKeys: [],
+          skippedObjectKeys: [],
+          failedObjectKeys: [],
         },
       },
     });
@@ -1995,6 +2008,14 @@ describe("Cloudflare runtime routes", () => {
         artifactId: artifact!.id,
       },
     });
+    expect(activityBody.activities).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "artifact-index.rebuild",
+        metadata: {
+          artifactCount: 0,
+        },
+      }),
+    ]));
   });
 
   it("rebuilds repository artifact indexes from current storage", async () => {
@@ -2165,14 +2186,19 @@ describe("Cloudflare runtime routes", () => {
       },
     });
     await expect(listing.json()).resolves.toMatchObject({ objects: [] });
-    await expect(activity.json()).resolves.toMatchObject({
-      activities: [
-        {
-          type: "object.delete",
-          summary: "Deleted pool/main/app/app_1.0.0_amd64.deb",
+    const activityBody = await activity.json() as { activities: Array<{ type: string; summary: string; metadata: Record<string, unknown> }> };
+    expect(activityBody.activities).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "artifact-index.rebuild",
+        metadata: {
+          artifactCount: 0,
         },
-      ],
-    });
+      }),
+      expect.objectContaining({
+        type: "object.delete",
+        summary: "Deleted pool/main/app/app_1.0.0_amd64.deb",
+      }),
+    ]));
   });
 
   it("paginates repository activity timelines with an opaque cursor", async () => {
@@ -2212,7 +2238,6 @@ describe("Cloudflare runtime routes", () => {
     };
 
     expect(firstPageBody.activities).toHaveLength(2);
-    expect(firstPageBody.activities.every((activity) => activity.type === "object.delete")).toBe(true);
     expect(firstPageBody.truncated).toBe(true);
     expect(firstPageBody.cursor).toEqual(expect.any(String));
 
@@ -2222,18 +2247,45 @@ describe("Cloudflare runtime routes", () => {
     ));
     expect(secondPage.status).toBe(200);
     const secondPageBody = (await secondPage.json()) as {
-      activities: Array<{ id: string }>;
+      activities: Array<{ id: string; type: string }>;
       cursor?: string;
       truncated: boolean;
     };
 
-    expect(secondPageBody.activities).toHaveLength(1);
-    expect(secondPageBody.truncated).toBe(false);
-    expect(secondPageBody.cursor).toBeUndefined();
-    expect(new Set([
+    expect(secondPageBody.activities).toHaveLength(2);
+    expect(secondPageBody.truncated).toBe(true);
+    expect(secondPageBody.cursor).toEqual(expect.any(String));
+
+    const thirdPage = await app.fetch(new Request(
+      `https://axis.example/admin/repositories/debian-private/activity?limit=2&cursor=${encodeURIComponent(secondPageBody.cursor ?? "")}`,
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(thirdPage.status).toBe(200);
+    const thirdPageBody = (await thirdPage.json()) as {
+      activities: Array<{ id: string; type: string }>;
+      cursor?: string;
+      truncated: boolean;
+    };
+
+    expect(thirdPageBody.activities).toHaveLength(2);
+    expect(thirdPageBody.truncated).toBe(false);
+    expect(thirdPageBody.cursor).toBeUndefined();
+    const pagedActivities = [
       ...firstPageBody.activities.map((activity) => activity.id),
       ...secondPageBody.activities.map((activity) => activity.id),
-    ]).size).toBe(3);
+      ...thirdPageBody.activities.map((activity) => activity.id),
+    ];
+    expect(new Set(pagedActivities).size).toBe(6);
+    expect([
+      ...firstPageBody.activities,
+      ...secondPageBody.activities,
+      ...thirdPageBody.activities,
+    ].filter((activity) => activity.type === "object.delete")).toHaveLength(3);
+    expect([
+      ...firstPageBody.activities,
+      ...secondPageBody.activities,
+      ...thirdPageBody.activities,
+    ].filter((activity) => activity.type === "artifact-index.rebuild")).toHaveLength(3);
   });
 
   it("rejects malformed repository activity pagination parameters", async () => {

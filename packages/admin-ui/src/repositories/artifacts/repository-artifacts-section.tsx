@@ -1,10 +1,12 @@
 import { Eye, Package, RefreshCcw, RotateCw, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useDeleteRepositoryArtifact, useRebuildRepositoryArtifactIndex, useRepositoryArtifacts } from "../../api/hooks";
 import type { RepositoryArtifact } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
 import { CopyToClipboardButton } from "../../components/ui/copy-to-clipboard-button";
 import { DestructiveActionDialog } from "../../components/ui/destructive-action-dialog";
+import { useToast } from "../../components/ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -14,12 +16,17 @@ import {
 import { ErrorState } from "../../pages/shared";
 import { repositoryEmptyStatePanelClass } from "../detail/repository-empty-state-model";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
-import { repositoryArtifactDeleteDialogContent } from "./repository-artifacts-model";
+import {
+  repositoryArtifactDeleteDialogContent,
+  repositoryArtifactObjectRelativePath,
+} from "./repository-artifacts-model";
 
 export function RepositoryArtifactsSection({ repository }: RepositoryDetailSectionProps) {
   const artifacts = useRepositoryArtifacts(repository.name);
   const rebuildIndex = useRebuildRepositoryArtifactIndex(repository.name);
   const deleteArtifact = useDeleteRepositoryArtifact(repository.name);
+  const toast = useToast();
+  const [, setSearchParams] = useSearchParams();
   const [selectedArtifact, setSelectedArtifact] = useState<RepositoryArtifact>();
   const [pendingDeleteArtifact, setPendingDeleteArtifact] = useState<RepositoryArtifact>();
   const rows = artifacts.data?.artifacts ?? [];
@@ -33,10 +40,30 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
   function confirmDeleteArtifact() {
     if (!pendingDeleteArtifact) return;
     deleteArtifact.mutate(pendingDeleteArtifact.id, {
-      onSuccess: () => {
+      onSuccess: (result) => {
         setSelectedArtifact(undefined);
         setPendingDeleteArtifact(undefined);
+        toast.notify({
+          title: "Artifact delete finished",
+          description: [
+            `${result.deletedObjectKeys.length} deleted`,
+            result.missingObjectKeys.length > 0 ? `${result.missingObjectKeys.length} missing` : undefined,
+            result.skippedObjectKeys.length > 0 ? `${result.skippedObjectKeys.length} skipped` : undefined,
+            result.failedObjectKeys.length > 0 ? `${result.failedObjectKeys.length} failed` : undefined,
+          ].filter(Boolean).join(", "),
+        });
       },
+    });
+  }
+
+  function openArtifactObject(objectKey: string) {
+    const objectPath = repositoryArtifactObjectRelativePath(repository.name, objectKey);
+    if (!objectPath) return;
+    setSelectedArtifact(undefined);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("object", objectPath);
+      return next;
     });
   }
 
@@ -56,7 +83,14 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
             variant="outline"
             size="sm"
             disabled={rebuildIndex.isPending}
-            onClick={() => rebuildIndex.mutate()}
+            onClick={() => rebuildIndex.mutate(undefined, {
+              onSuccess: (result) => {
+                toast.notify({
+                  title: "Artifact index rebuilt",
+                  description: `${result.artifacts.length} artifact${result.artifacts.length === 1 ? "" : "s"} indexed.`,
+                });
+              },
+            })}
           >
             <RotateCw className="mr-2 h-3.5 w-3.5" />
             {rebuildIndex.isPending ? "Rebuilding..." : "Rebuild index"}
@@ -89,7 +123,9 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
             {selectedArtifact && (
               <RepositoryArtifactDetail
                 artifact={selectedArtifact}
+                repositoryName={repository.name}
                 deleting={deleteArtifact.variables === selectedArtifact.id && deleteArtifact.isPending}
+                onOpenObject={openArtifactObject}
                 onDelete={() => setPendingDeleteArtifact(selectedArtifact)}
               />
             )}
@@ -173,11 +209,15 @@ function RepositoryArtifactsTable({
 
 function RepositoryArtifactDetail({
   artifact,
+  repositoryName,
   deleting,
+  onOpenObject,
   onDelete,
 }: {
   artifact: RepositoryArtifact;
+  repositoryName: string;
   deleting: boolean;
+  onOpenObject: (objectKey: string) => void;
   onDelete: () => void;
 }) {
   const primaryObjectUrl = artifact.primaryObjectKey
@@ -211,9 +251,27 @@ function RepositoryArtifactDetail({
         <ul className="grid gap-1 text-xs">
           {artifact.objectKeys.length === 0 ? (
             <li className="rounded bg-muted px-2 py-1 text-muted-foreground">None</li>
-          ) : artifact.objectKeys.map((objectKey) => (
-            <li key={objectKey} className="break-all rounded bg-muted px-2 py-1">{objectKey}</li>
-          ))}
+          ) : artifact.objectKeys.map((objectKey) => {
+            const objectPath = repositoryArtifactObjectRelativePath(repositoryName, objectKey);
+            return (
+              <li key={objectKey} className="flex min-w-0 items-center justify-between gap-2 rounded bg-muted px-2 py-1">
+                <span className="min-w-0 break-all">{objectKey}</span>
+                {objectPath && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-muted-foreground"
+                    aria-label={`Open object ${objectPath}`}
+                    title={`Open object ${objectPath}`}
+                    onClick={() => onOpenObject(objectKey)}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
       <div className="grid gap-2">

@@ -76,7 +76,7 @@ export interface AxisClient {
   listRepositoryObjects(name: string, prefix: string): Promise<ReturnType<typeof repositoryObjectsResponseSchema.parse>>;
   listRepositoryArtifacts(name: string): Promise<ReturnType<typeof repositoryArtifactsResponseSchema.parse>>;
   rebuildRepositoryArtifactIndex(name: string): Promise<ReturnType<typeof repositoryArtifactsResponseSchema.parse>>;
-  deleteRepositoryArtifact(name: string, artifactId: string): Promise<RepositoryActivity>;
+  deleteRepositoryArtifact(name: string, artifactId: string): Promise<ReturnType<typeof repositoryArtifactDeleteResponseSchema.parse>>;
   getRepositoryObjectDetail(name: string, path: string): Promise<RepositoryObjectDetail>;
   deleteRepositoryObject(name: string, path: string): Promise<RepositoryActivity>;
   listRepositoryActivities(name: string, options?: ListRepositoryActivitiesOptions): Promise<ReturnType<typeof repositoryActivitiesResponseSchema.parse>>;
@@ -166,7 +166,7 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.delete(
         `/admin/repositories/${encodePathSegment(name)}/artifacts/${encodePathSegment(artifactId)}`,
       );
-      return repositoryArtifactDeleteResponseSchema.parse(response.data).activity;
+      return repositoryArtifactDeleteResponseSchema.parse(response.data);
     },
     async getRepositoryObjectDetail(name: string, path: string) {
       const response = await http.get(

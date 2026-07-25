@@ -4,6 +4,7 @@ import {
   RepositoryActivityService,
   PublishSessionService,
   type RepositoryArtifactRecord,
+  type RepositoryObjectStore,
   RepositoryService,
   ValidationError,
   type ArtifactPublisher,
@@ -15,7 +16,7 @@ import {
 } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
-import { PluginPublishSessionService } from "./runtime-services";
+import { PluginPublishSessionService, PluginRepositoryArtifactIndexService } from "./runtime-services";
 
 const clock: Clock = {
   now: () => new Date("2026-07-24T00:00:00.000Z"),
@@ -60,6 +61,20 @@ const uploadBroker: UploadBroker = {
   }),
   abortUpload: async () => {},
 };
+
+function memoryObjectStore(existingKeys: string[] = []): RepositoryObjectStore {
+  const keys = new Set(existingKeys);
+  return {
+    putJson: async () => {},
+    putText: async () => {},
+    putBytes: async () => {},
+    copyObject: async () => {},
+    listObjects: async () => ({ prefix: "", directories: [], objects: [], truncated: false }),
+    headObject: async (key) => keys.has(key) ? {} : null,
+    getObject: async (key) => keys.has(key) ? { body: new Uint8Array() } : null,
+    deleteObject: async (key) => keys.delete(key),
+  };
+}
 
 describe("PluginPublishSessionService", () => {
   it("authorizes finalize through the repository runtime plugin before publishing", async () => {
@@ -400,5 +415,133 @@ describe("PluginPublishSessionService", () => {
     await service.finalize({ sessionId: session.id, principal });
 
     await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toEqual([indexedArtifact]);
+  });
+});
+
+describe("PluginRepositoryArtifactIndexService", () => {
+  const indexedArtifact: RepositoryArtifactRecord = {
+    id: "artifact_myapp",
+    repositoryName: "debian-internal",
+    ecosystem: "apt",
+    identity: "apt:myapp:1.2.3:amd64",
+    name: "myapp",
+    version: "1.2.3",
+    summary: "myapp 1.2.3 amd64",
+    primaryObjectKey: "repositories/debian-internal/pool/main/m/myapp/myapp_1.2.3_amd64.deb",
+    objectKeys: [
+      "repositories/debian-internal/pool/main/m/myapp/myapp_1.2.3_amd64.deb",
+      "repositories/debian-internal/pool/main/missing/missing_1.0.0_amd64.deb",
+      "repositories/other/pool/main/other/other_1.0.0_amd64.deb",
+    ],
+    metadata: { architecture: "amd64" },
+    publishedAt: "2026-07-24T00:00:00.000Z",
+    updatedAt: "2026-07-24T00:00:00.000Z",
+  };
+
+  it("deletes artifact objects with explicit deleted, missing, and skipped results", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock, randomId });
+    await repositoryService.create({
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: {},
+    });
+    await state.repositoryArtifacts.upsert(indexedArtifact);
+    const plugins = new RepositoryRuntimePluginRegistry();
+    plugins.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["publish"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: "2026-07-24T00:00:00.000Z", objects: [] }),
+      },
+      artifacts: {
+        rebuildIndex: async () => [],
+      },
+    });
+    const objectStore = memoryObjectStore([indexedArtifact.objectKeys[0]!]);
+    const service = new PluginRepositoryArtifactIndexService({
+      repositoryService,
+      plugins,
+      repositoryObjectStore: objectStore,
+      repositoryArtifactStore: state.repositoryArtifacts,
+      clock,
+    });
+
+    await expect(service.deleteArtifact({
+      repositoryName: "debian-internal",
+      artifactId: "artifact_myapp",
+    })).resolves.toMatchObject({
+      artifact: indexedArtifact,
+      deletedObjectKeys: [indexedArtifact.objectKeys[0]],
+      missingObjectKeys: [indexedArtifact.objectKeys[1]],
+      skippedObjectKeys: [indexedArtifact.objectKeys[2]],
+      failedObjectKeys: [],
+      artifacts: [],
+    });
+    await expect(objectStore.headObject(indexedArtifact.objectKeys[0]!)).resolves.toBeNull();
+    await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toEqual([]);
+  });
+
+  it("lets repository plugins override artifact delete behavior", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock, randomId });
+    await repositoryService.create({
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: {},
+    });
+    await state.repositoryArtifacts.upsert(indexedArtifact);
+    const pluginCalls: string[] = [];
+    const plugins = new RepositoryRuntimePluginRegistry();
+    plugins.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["publish"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: "2026-07-24T00:00:00.000Z", objects: [] }),
+      },
+      artifacts: {
+        rebuildIndex: async () => [],
+        deleteArtifact: async ({ artifact }) => {
+          pluginCalls.push(artifact.id);
+          return {
+            deletedObjectKeys: [],
+            missingObjectKeys: [],
+            skippedObjectKeys: [...artifact.objectKeys],
+            failedObjectKeys: [],
+          };
+        },
+      },
+    });
+    const objectStore = memoryObjectStore([indexedArtifact.objectKeys[0]!]);
+    const service = new PluginRepositoryArtifactIndexService({
+      repositoryService,
+      plugins,
+      repositoryObjectStore: objectStore,
+      repositoryArtifactStore: state.repositoryArtifacts,
+      clock,
+    });
+
+    await expect(service.deleteArtifact({
+      repositoryName: "debian-internal",
+      artifactId: "artifact_myapp",
+    })).resolves.toMatchObject({
+      deletedObjectKeys: [],
+      skippedObjectKeys: indexedArtifact.objectKeys,
+      failedObjectKeys: [],
+    });
+    expect(pluginCalls).toEqual(["artifact_myapp"]);
+    await expect(objectStore.headObject(indexedArtifact.objectKeys[0]!)).resolves.toEqual({});
   });
 });

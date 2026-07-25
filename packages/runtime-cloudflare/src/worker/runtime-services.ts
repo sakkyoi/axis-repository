@@ -24,6 +24,7 @@ import {
 import { getRepositoryPluginCatalogEntry } from "../../../../plugins/catalog";
 import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { ensureRepositoryPluginEnabled } from "../plugins/repository-plugin-policy";
+import type { DeleteRepositoryArtifactResult } from "../plugins/repository-plugin-contract";
 
 export class PluginRepositoryService {
   constructor(
@@ -248,6 +249,67 @@ export class PluginRepositoryArtifactIndexService {
     }) ?? [];
     await this.options.repositoryArtifactStore.replaceByRepository(repository.name, artifacts);
     return { artifacts };
+  }
+
+  async deleteArtifact(input: {
+    repositoryName: string;
+    artifactId: string;
+  }): Promise<DeleteRepositoryArtifactResult & {
+    artifact: RepositoryArtifactRecord;
+    artifacts: RepositoryArtifactRecord[];
+  }> {
+    const repository = await this.options.repositoryService.getByName(input.repositoryName);
+    const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
+    const artifacts = await this.options.repositoryArtifactStore.listByRepository(repository.name);
+    const artifact = artifacts.find((candidate) => candidate.id === input.artifactId);
+    if (!artifact) {
+      throw new NotFoundError();
+    }
+    const deleteResult = await plugin.artifacts?.deleteArtifact?.({
+      repository,
+      artifact,
+      objectStore: this.options.repositoryObjectStore,
+    }) ?? await this.deleteArtifactObjects(repository, artifact);
+    const rebuildResult = await this.rebuild({ repositoryName: repository.name });
+    return {
+      artifact,
+      ...deleteResult,
+      artifacts: rebuildResult.artifacts,
+    };
+  }
+
+  private async deleteArtifactObjects(
+    repository: Repository,
+    artifact: RepositoryArtifactRecord,
+  ): Promise<DeleteRepositoryArtifactResult> {
+    const deletedObjectKeys: string[] = [];
+    const missingObjectKeys: string[] = [];
+    const skippedObjectKeys: string[] = [];
+    const failedObjectKeys: DeleteRepositoryArtifactResult["failedObjectKeys"] = [];
+    for (const objectKey of artifact.objectKeys) {
+      if (!objectKey.startsWith(`repositories/${repository.name}/`)) {
+        skippedObjectKeys.push(objectKey);
+        continue;
+      }
+      try {
+        if (await this.options.repositoryObjectStore.deleteObject(objectKey)) {
+          deletedObjectKeys.push(objectKey);
+        } else {
+          missingObjectKeys.push(objectKey);
+        }
+      } catch (error) {
+        failedObjectKeys.push({
+          objectKey,
+          message: error instanceof Error ? error.message : "unknown delete error",
+        });
+      }
+    }
+    return {
+      deletedObjectKeys,
+      missingObjectKeys,
+      skippedObjectKeys,
+      failedObjectKeys,
+    };
   }
 }
 

@@ -1039,32 +1039,29 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactPath.repositoryName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
-    const artifacts = await dependencies.repositoryArtifactStore.listByRepository(repository.name);
-    const artifact = artifacts.find((candidate) => candidate.id === adminRepositoryArtifactPath.artifactId);
-    if (!artifact) {
-      throw new NotFoundError();
-    }
-    const deletedObjectKeys: string[] = [];
-    for (const objectKey of artifact.objectKeys) {
-      if (!objectKey.startsWith(`repositories/${repository.name}/`)) {
-        continue;
-      }
-      if (await dependencies.repositoryObjectStore.deleteObject(objectKey)) {
-        deletedObjectKeys.push(objectKey);
-      }
-    }
+    const result = await dependencies.repositoryArtifactIndexService.deleteArtifact({
+      repositoryName: repository.name,
+      artifactId: adminRepositoryArtifactPath.artifactId,
+    });
     const activity = await dependencies.repositoryActivityService.recordArtifactDelete({
       repositoryName: repository.name,
-      artifactId: artifact.id,
-      identity: artifact.identity,
-      summary: artifact.summary,
-      name: artifact.name,
-      ...(artifact.version !== undefined ? { version: artifact.version } : {}),
-      objectKeys: artifact.objectKeys,
-      deletedObjectKeys,
+      artifactId: result.artifact.id,
+      identity: result.artifact.identity,
+      summary: result.artifact.summary,
+      name: result.artifact.name,
+      ...(result.artifact.version !== undefined ? { version: result.artifact.version } : {}),
+      objectKeys: result.artifact.objectKeys,
+      deletedObjectKeys: result.deletedObjectKeys,
+      missingObjectKeys: result.missingObjectKeys,
+      skippedObjectKeys: result.skippedObjectKeys,
+      failedObjectKeys: result.failedObjectKeys,
     });
-    await dependencies.repositoryArtifactIndexService.rebuild({ repositoryName: repository.name });
-    return jsonResponse({ activity });
+    await dependencies.repositoryActivityService.recordArtifactIndexRebuild({
+      repositoryName: repository.name,
+      artifactCount: result.artifacts.length,
+    });
+    const { artifact, artifacts, ...deleteResult } = result;
+    return jsonResponse({ activity, artifact, artifacts, ...deleteResult, truncated: false });
   }
   const adminRepositoryObjectDetailName = parseAdminRepositoryObjectDetailPath(url.pathname);
   if (adminRepositoryObjectDetailName) {
@@ -1123,7 +1120,11 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         ...(metadata.contentType !== undefined ? { contentType: metadata.contentType } : {}),
         ...(metadata.contentLength !== undefined ? { size: metadata.contentLength } : {}),
       });
-      await dependencies.repositoryArtifactIndexService.rebuild({ repositoryName: repository.name });
+      const rebuildResult = await dependencies.repositoryArtifactIndexService.rebuild({ repositoryName: repository.name });
+      await dependencies.repositoryActivityService.recordArtifactIndexRebuild({
+        repositoryName: repository.name,
+        artifactCount: rebuildResult.artifacts.length,
+      });
       return jsonResponse({ activity });
     }
     throw new NotFoundError();

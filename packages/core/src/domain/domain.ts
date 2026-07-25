@@ -173,7 +173,14 @@ export interface PublishArtifactsInput {
   artifacts: PublishedArtifactInput[];
 }
 
-export type RepositoryActivityType = "object.delete" | "object.update" | "artifact-index.rebuild" | "artifact.delete";
+export const REPOSITORY_ACTIVITY_TYPES = {
+  objectDelete: "object.delete",
+  objectUpdate: "object.update",
+  artifactIndexRebuild: "artifact-index.rebuild",
+  artifactDelete: "artifact.delete",
+} as const;
+
+export type RepositoryActivityType = typeof REPOSITORY_ACTIVITY_TYPES[keyof typeof REPOSITORY_ACTIVITY_TYPES];
 
 export interface RepositoryActivityRecord {
   id: string;

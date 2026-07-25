@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { RepositoryArtifact } from "../../api/schemas";
-import { repositoryArtifactDeleteDialogContent } from "./repository-artifacts-model";
+import {
+  repositoryArtifactDeleteDialogContent,
+  repositoryArtifactObjectRelativePath,
+} from "./repository-artifacts-model";
 
 const artifact = (overrides: Partial<RepositoryArtifact> = {}): RepositoryArtifact => ({
   id: "artifact_1",
@@ -29,5 +32,23 @@ describe("repository artifacts model", () => {
       pendingLabel: "Deleting...",
       confirmationText: "delete artifact",
     });
+  });
+
+  it("maps artifact object keys to repository-relative browser paths", () => {
+    expect(
+      repositoryArtifactObjectRelativePath(
+        "debian-internal",
+        "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb",
+      ),
+    ).toBe("pool/main/myapp/myapp_1.2.3_amd64.deb");
+  });
+
+  it("does not expose object keys outside the repository namespace", () => {
+    expect(
+      repositoryArtifactObjectRelativePath(
+        "debian-internal",
+        "repositories/other/pool/main/myapp/myapp_1.2.3_amd64.deb",
+      ),
+    ).toBeUndefined();
   });
 });

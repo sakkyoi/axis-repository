@@ -1,11 +1,13 @@
 import { ExternalLink, File, Folder, Trash2, UploadCloud } from "lucide-react";
 import type { DragEvent } from "react";
-import { useState } from "react";
-import { useDeleteRepositoryObject, useRepositoryObjectDetail, useRepositoryObjects } from "../../api/hooks";
-import type { RepositoryObjectDetail } from "../../api/schemas";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useDeleteRepositoryObject, useRepositoryArtifacts, useRepositoryObjectDetail, useRepositoryObjects } from "../../api/hooks";
+import type { RepositoryArtifact, RepositoryObjectDetail } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
 import { CopyToClipboardButton } from "../../components/ui/copy-to-clipboard-button";
 import { DestructiveActionDialog } from "../../components/ui/destructive-action-dialog";
+import { useToast } from "../../components/ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +21,7 @@ import {
   repositoryBrowserDrawerBodyClass,
   repositoryBrowserLayoutClasses,
   repositoryBrowserObjectDeleteDialogContent,
+  repositoryBrowserParentPrefix,
   repositoryBrowserRows,
   type RepositoryBrowserRow,
 } from "./repository-browser-model";
@@ -32,13 +35,16 @@ export function RepositoryBrowserSection({
   repository,
   onPublishFiles,
 }: RepositoryDetailSectionProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [prefix, setPrefix] = useState("");
   const [selectedObjectPath, setSelectedObjectPath] = useState<string>();
   const [pendingDeletePath, setPendingDeletePath] = useState<string>();
   const [dragDepth, setDragDepth] = useState(0);
   const objects = useRepositoryObjects(repository.name, prefix);
   const objectDetail = useRepositoryObjectDetail(repository.name, selectedObjectPath);
+  const artifacts = useRepositoryArtifacts(repository.name);
   const deleteObject = useDeleteRepositoryObject(repository.name);
+  const toast = useToast();
   const publishPlugin = getRepositoryPublishPlugin(repository.ecosystem);
   const PreviewComponent = publishPlugin?.PreviewComponent;
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
@@ -52,6 +58,13 @@ export function RepositoryBrowserSection({
     canPublish: Boolean(PreviewComponent),
     isDraggingFiles: dragDepth > 0,
   });
+  const requestedObjectPath = searchParams.get("object");
+
+  useEffect(() => {
+    if (!requestedObjectPath) return;
+    setPrefix(repositoryBrowserParentPrefix(requestedObjectPath));
+    setSelectedObjectPath(requestedObjectPath);
+  }, [requestedObjectPath]);
 
   function handleFiles(files: File[]) {
     if (files.length === 0 || !PreviewComponent) return;
@@ -70,10 +83,43 @@ export function RepositoryBrowserSection({
     deleteObject.mutate(deletedPath, {
       onSuccess: () => {
         if (selectedObjectPath === deletedPath) {
-          setSelectedObjectPath(undefined);
+          clearSelectedObjectPath();
         }
         setPendingDeletePath(undefined);
+        toast.notify({
+          title: "Object deleted",
+          description: deletedPath,
+        });
       },
+    });
+  }
+
+  function clearSelectedObjectPath() {
+    setSelectedObjectPath(undefined);
+    if (!searchParams.has("object")) return;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("object");
+      return next;
+    });
+  }
+
+  function openObject(path: string) {
+    setSelectedObjectPath(path);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("object", path);
+      return next;
+    });
+  }
+
+  function openDirectory(path: string) {
+    setPrefix(path);
+    if (!searchParams.has("object")) return;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("object");
+      return next;
     });
   }
 
@@ -118,7 +164,7 @@ export function RepositoryBrowserSection({
 
       <Dialog open={Boolean(selectedObjectPath)} onOpenChange={(open) => {
         if (!open) {
-          setSelectedObjectPath(undefined);
+          clearSelectedObjectPath();
         }
       }}>
         <DialogContent className="content-start grid-rows-[auto_minmax(0,1fr)] bottom-0 left-0 top-auto max-h-[88dvh] w-full translate-x-0 translate-y-0 overflow-hidden rounded-b-none sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-dvh sm:max-h-none sm:w-[min(92vw,440px)] sm:translate-x-0 sm:translate-y-0 sm:rounded-l-lg sm:rounded-r-none">
@@ -131,6 +177,7 @@ export function RepositoryBrowserSection({
             {objectDetail.data && (
               <RepositoryObjectDetailPanel
                 detail={objectDetail.data}
+                relatedArtifacts={(artifacts.data?.artifacts ?? []).filter((artifact) => artifact.objectKeys.includes(objectDetail.data.objectKey))}
                 deleting={deleteObject.variables === objectDetail.data.path}
                 onDelete={() => setPendingDeletePath(objectDetail.data.path)}
               />
@@ -172,8 +219,8 @@ export function RepositoryBrowserSection({
           <RepositoryBrowserTable
             rows={rows}
             deletingPath={deleteObject.variables}
-            onOpenDirectory={setPrefix}
-            onOpenObject={setSelectedObjectPath}
+            onOpenDirectory={openDirectory}
+            onOpenObject={openObject}
             onDeleteObject={setPendingDeletePath}
           />
         )}
@@ -331,10 +378,12 @@ function RepositoryBrowserNameCell({
 
 function RepositoryObjectDetailPanel({
   detail,
+  relatedArtifacts,
   deleting,
   onDelete,
 }: {
   detail: RepositoryObjectDetail;
+  relatedArtifacts: RepositoryArtifact[];
   deleting: boolean;
   onDelete: () => void;
 }) {
@@ -362,6 +411,19 @@ function RepositoryObjectDetailPanel({
           {deleting ? "Deleting..." : "Delete"}
         </Button>
       </div>
+      {relatedArtifacts.length > 0 && (
+        <div className="grid gap-2">
+          <div className="text-xs font-medium text-muted-foreground">Related artifacts</div>
+          <ul className="grid gap-1 text-xs">
+            {relatedArtifacts.map((artifact) => (
+              <li key={artifact.id} className="rounded bg-muted px-2 py-1">
+                <div className="truncate font-medium">{artifact.summary}</div>
+                <div className="truncate text-muted-foreground">{artifact.identity}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

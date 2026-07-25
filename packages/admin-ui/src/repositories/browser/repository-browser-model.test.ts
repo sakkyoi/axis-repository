@@ -5,6 +5,7 @@ import {
   repositoryBrowserBreadcrumbs,
   repositoryBrowserDrawerBodyClass,
   repositoryBrowserObjectDeleteDialogContent,
+  repositoryBrowserParentPrefix,
   repositoryBrowserLayoutClasses,
   repositoryBrowserPublishDrawerContentClass,
   repositoryBrowserRows,
@@ -87,5 +88,10 @@ describe("repository browser model", () => {
       pendingLabel: "Deleting...",
       confirmationText: "delete object",
     });
+  });
+
+  it("finds the parent prefix for an object detail path", () => {
+    expect(repositoryBrowserParentPrefix("pool/main/app_1.0.0_amd64.deb")).toBe("pool/main/");
+    expect(repositoryBrowserParentPrefix("Release")).toBe("");
   });
 });

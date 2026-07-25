@@ -1,5 +1,5 @@
 import type { Clock, RandomId, StateStore } from "../ports/ports";
-import type { RepositoryActivityRecord } from "../domain/domain";
+import { REPOSITORY_ACTIVITY_TYPES, type RepositoryActivityRecord } from "../domain/domain";
 
 export interface RepositoryActivityServiceOptions {
   state: StateStore;
@@ -39,6 +39,12 @@ export interface RecordArtifactDeleteInput {
   version?: string;
   objectKeys: string[];
   deletedObjectKeys: string[];
+  missingObjectKeys?: string[];
+  skippedObjectKeys?: string[];
+  failedObjectKeys?: Array<{
+    objectKey: string;
+    message: string;
+  }>;
 }
 
 export class RepositoryActivityService {
@@ -52,7 +58,7 @@ export class RepositoryActivityService {
     const activity: RepositoryActivityRecord = {
       id: this.options.randomId.create("activity"),
       repositoryName: input.repositoryName,
-      type: "object.delete",
+      type: REPOSITORY_ACTIVITY_TYPES.objectDelete,
       actor: "admin",
       summary: `Deleted ${input.path}`,
       metadata: {
@@ -71,7 +77,7 @@ export class RepositoryActivityService {
     const activity: RepositoryActivityRecord = {
       id: this.options.randomId.create("activity"),
       repositoryName: input.repositoryName,
-      type: "object.update",
+      type: REPOSITORY_ACTIVITY_TYPES.objectUpdate,
       actor: "admin",
       summary: `Updated ${input.path}`,
       metadata: {
@@ -92,7 +98,7 @@ export class RepositoryActivityService {
     const activity: RepositoryActivityRecord = {
       id: this.options.randomId.create("activity"),
       repositoryName: input.repositoryName,
-      type: "artifact-index.rebuild",
+      type: REPOSITORY_ACTIVITY_TYPES.artifactIndexRebuild,
       actor: "admin",
       summary: "Rebuilt artifact index",
       metadata: {
@@ -108,7 +114,7 @@ export class RepositoryActivityService {
     const activity: RepositoryActivityRecord = {
       id: this.options.randomId.create("activity"),
       repositoryName: input.repositoryName,
-      type: "artifact.delete",
+      type: REPOSITORY_ACTIVITY_TYPES.artifactDelete,
       actor: "admin",
       summary: `Deleted artifact ${input.summary}`,
       metadata: {
@@ -118,6 +124,9 @@ export class RepositoryActivityService {
         ...(input.version !== undefined ? { version: input.version } : {}),
         objectKeys: [...input.objectKeys],
         deletedObjectKeys: [...input.deletedObjectKeys],
+        missingObjectKeys: [...(input.missingObjectKeys ?? [])],
+        skippedObjectKeys: [...(input.skippedObjectKeys ?? [])],
+        failedObjectKeys: [...(input.failedObjectKeys ?? [])],
       },
       createdAt: this.options.clock.now().toISOString(),
     };

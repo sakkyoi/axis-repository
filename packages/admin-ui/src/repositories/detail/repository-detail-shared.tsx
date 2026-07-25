@@ -211,11 +211,29 @@ function RepositoryArtifactDeleteActivityDetail({
   const deletedObjectKeys = Array.isArray(activity.metadata.deletedObjectKeys)
     ? activity.metadata.deletedObjectKeys.map(String)
     : [];
+  const missingObjectKeys = Array.isArray(activity.metadata.missingObjectKeys)
+    ? activity.metadata.missingObjectKeys.map(String)
+    : [];
+  const skippedObjectKeys = Array.isArray(activity.metadata.skippedObjectKeys)
+    ? activity.metadata.skippedObjectKeys.map(String)
+    : [];
+  const failedObjectKeys = Array.isArray(activity.metadata.failedObjectKeys)
+    ? activity.metadata.failedObjectKeys.map((item) => {
+      if (item && typeof item === "object" && "objectKey" in item) {
+        const message = "message" in item ? String(item.message) : "unknown error";
+        return `${String(item.objectKey)}: ${message}`;
+      }
+      return String(item);
+    })
+    : [];
   return (
     <div className="mt-3 grid gap-2 text-xs">
       <PublishSessionDetailList title="Artifact" items={[activity.summary]} />
       <PublishSessionDetailList title="Objects" items={objectKeys} />
       <PublishSessionDetailList title="Deleted objects" items={deletedObjectKeys} />
+      {missingObjectKeys.length > 0 && <PublishSessionDetailList title="Missing objects" items={missingObjectKeys} />}
+      {skippedObjectKeys.length > 0 && <PublishSessionDetailList title="Skipped objects" items={skippedObjectKeys} />}
+      {failedObjectKeys.length > 0 && <PublishSessionDetailList title="Failed objects" items={failedObjectKeys} />}
     </div>
   );
 }

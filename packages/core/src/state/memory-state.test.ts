@@ -176,6 +176,9 @@ describe("MemoryStateStore repository activities", () => {
         version: "1.2.3",
         objectKeys: ["repositories/debian-internal/pool/main/myapp.deb"],
         deletedObjectKeys: ["repositories/debian-internal/pool/main/myapp.deb"],
+        missingObjectKeys: [],
+        skippedObjectKeys: [],
+        failedObjectKeys: [],
       },
       createdAt: "2026-07-12T00:01:00.000Z",
     });
