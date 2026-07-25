@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check, Copy } from "lucide-react";
 import { ErrorState } from "../../pages/shared";
 import { Button } from "./button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./dialog";
 import { Input } from "./input";
-import { destructiveConfirmationMatches } from "./destructive-action-dialog-model";
+import {
+  destructiveConfirmationCopyLabel,
+  destructiveConfirmationMatches,
+} from "./destructive-action-dialog-model";
 import type { DestructiveActionDialogContent } from "./destructive-action-dialog-model";
 
 export interface DestructiveActionDialogProps extends DestructiveActionDialogContent {
@@ -28,14 +31,22 @@ export function DestructiveActionDialog({
   onConfirm,
 }: DestructiveActionDialogProps) {
   const [confirmationInput, setConfirmationInput] = useState("");
+  const [copied, setCopied] = useState(false);
   const confirmed = destructiveConfirmationMatches(confirmationInput, confirmationText);
 
   function changeOpen(nextOpen: boolean) {
     if (pending && !nextOpen) return;
     if (!nextOpen) {
       setConfirmationInput("");
+      setCopied(false);
     }
     onOpenChange(nextOpen);
+  }
+
+  async function copyConfirmationText() {
+    if (!confirmationText) return;
+    await navigator.clipboard.writeText(confirmationText);
+    setCopied(true);
   }
 
   return (
@@ -50,8 +61,21 @@ export function DestructiveActionDialog({
         </DialogHeader>
         {confirmationText && (
           <label className="grid gap-2">
-            <span className="text-sm font-medium">
-              Type <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{confirmationText}</code> to confirm.
+            <span className="text-sm font-medium">Type this text to confirm.</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 text-xs">{confirmationText}</code>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                aria-label={destructiveConfirmationCopyLabel(confirmationText)}
+                title={destructiveConfirmationCopyLabel(confirmationText)}
+                disabled={pending}
+                onClick={() => void copyConfirmationText()}
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
             </span>
             <Input
               value={confirmationInput}

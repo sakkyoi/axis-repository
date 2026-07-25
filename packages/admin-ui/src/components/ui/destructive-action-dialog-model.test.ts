@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { destructiveConfirmationMatches } from "./destructive-action-dialog-model";
+import {
+  destructiveConfirmationCopyLabel,
+  destructiveConfirmationMatches,
+} from "./destructive-action-dialog-model";
 
 describe("destructive action dialog model", () => {
   it("requires exact confirmation text after trimming surrounding whitespace", () => {
@@ -12,5 +15,9 @@ describe("destructive action dialog model", () => {
   it("keeps confirmation optional when no target text is configured", () => {
     expect(destructiveConfirmationMatches("", undefined)).toBe(true);
     expect(destructiveConfirmationMatches("anything", undefined)).toBe(true);
+  });
+
+  it("builds an accessible label for copying confirmation text", () => {
+    expect(destructiveConfirmationCopyLabel("delete object")).toBe("Copy delete object");
   });
 });

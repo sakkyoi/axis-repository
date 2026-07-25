@@ -12,3 +12,7 @@ export function destructiveConfirmationMatches(input: string, confirmationText: 
   }
   return input.trim() === confirmationText;
 }
+
+export function destructiveConfirmationCopyLabel(confirmationText: string): string {
+  return `Copy ${confirmationText}`;
+}
