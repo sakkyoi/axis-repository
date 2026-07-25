@@ -55,6 +55,11 @@ export interface CreateAdminPublishSessionInput {
   artifacts: PublishArtifact[];
 }
 
+export interface ListRepositoryActivitiesOptions {
+  limit?: number;
+  cursor?: string;
+}
+
 export interface AxisClient {
   http: AxiosInstance;
   verifyAdminToken(): Promise<void>;
@@ -66,7 +71,7 @@ export interface AxisClient {
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
   listRepositoryObjects(name: string, prefix: string): Promise<ReturnType<typeof repositoryObjectsResponseSchema.parse>>;
   deleteRepositoryObject(name: string, path: string): Promise<RepositoryActivity>;
-  listRepositoryActivities(name: string): Promise<RepositoryActivity[]>;
+  listRepositoryActivities(name: string, options?: ListRepositoryActivitiesOptions): Promise<ReturnType<typeof repositoryActivitiesResponseSchema.parse>>;
   getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown>;
   getRepositoryPluginResource(name: string, namespace: string, path: readonly string[]): Promise<unknown>;
   postRepositoryPluginResource(name: string, namespace: string, path: readonly string[], input?: unknown): Promise<unknown>;
@@ -89,6 +94,18 @@ function repositoryPluginResourceUrl(name: string, namespace: string, path: read
   const encodedPath = path.map(encodePathSegment).join("/");
   const suffix = encodedPath ? `/${encodedPath}` : "";
   return `/admin/repositories/${encodePathSegment(name)}/${encodePathSegment(namespace)}${suffix}`;
+}
+
+function repositoryActivityUrl(name: string, options: ListRepositoryActivitiesOptions = {}): string {
+  const searchParams = new URLSearchParams();
+  if (options.limit !== undefined) {
+    searchParams.set("limit", String(options.limit));
+  }
+  if (options.cursor !== undefined) {
+    searchParams.set("cursor", options.cursor);
+  }
+  const query = searchParams.toString();
+  return `/admin/repositories/${encodePathSegment(name)}/activity${query ? `?${query}` : ""}`;
 }
 
 export function createAxisClient(options: HttpOptions): AxisClient {
@@ -135,9 +152,9 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       );
       return repositoryObjectDeleteResponseSchema.parse(response.data).activity;
     },
-    async listRepositoryActivities(name: string) {
-      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/activity`);
-      return repositoryActivitiesResponseSchema.parse(response.data).activities;
+    async listRepositoryActivities(name: string, options: ListRepositoryActivitiesOptions = {}) {
+      const response = await http.get(repositoryActivityUrl(name, options));
+      return repositoryActivitiesResponseSchema.parse(response.data);
     },
     async getRepositoryClientHelper(name: string, namespace: string, action: string) {
       const response = await http.get(

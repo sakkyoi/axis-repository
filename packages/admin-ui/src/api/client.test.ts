@@ -4,6 +4,7 @@ import { serverErrorMessage } from "./http";
 import {
   publishSessionsResponseSchema,
   publishTokenCreateResponseSchema,
+  repositoryActivitiesResponseSchema,
   repositoryPluginSchema,
   repositoryObjectsResponseSchema,
   repositorySchema,
@@ -184,6 +185,31 @@ describe("admin API schemas", () => {
     });
 
     expect(response.sessions[0]?.publishResult?.objects[0]?.key).toContain("Release");
+  });
+
+  it("parses repository activity timeline pages", () => {
+    const response = repositoryActivitiesResponseSchema.parse({
+      activities: [{
+        id: "activity_1",
+        repositoryName: "debian-internal",
+        type: "object.delete",
+        actor: "admin",
+        summary: "Deleted pool/main/app.deb",
+        metadata: {
+          path: "pool/main/app.deb",
+          objectKey: "repositories/debian-internal/pool/main/app.deb",
+        },
+        createdAt: "2026-07-23T00:00:00.000Z",
+      }],
+      cursor: "opaque-cursor",
+      truncated: true,
+    });
+
+    expect(response).toMatchObject({
+      activities: [{ type: "object.delete" }],
+      cursor: "opaque-cursor",
+      truncated: true,
+    });
   });
 });
 
@@ -430,6 +456,34 @@ describe("createAxisClient", () => {
       });
     expect(requests).toEqual([
       "GET /admin/repositories/debian%20internal/objects?prefix=dists%2Fnoble%2F",
+    ]);
+  });
+
+  it("lists repository activity pages through an admin-scoped endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          activities: [],
+          cursor: "next-page",
+          truncated: true,
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.listRepositoryActivities("debian internal", { limit: 10, cursor: "page 2" }))
+      .resolves.toMatchObject({ cursor: "next-page", truncated: true });
+    expect(requests).toEqual([
+      "GET /admin/repositories/debian%20internal/activity?limit=10&cursor=page+2",
     ]);
   });
 

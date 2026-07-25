@@ -662,6 +662,60 @@ async function repositoryActivityTimeline(dependencies: AppDependencies, reposit
   });
 }
 
+interface RepositoryActivityPageParams {
+  limit: number;
+  offset: number;
+}
+
+const DEFAULT_ACTIVITY_PAGE_LIMIT = 10;
+const MAX_ACTIVITY_PAGE_LIMIT = 100;
+
+function repositoryActivityPageParams(searchParams: URLSearchParams): RepositoryActivityPageParams {
+  const limitParam = searchParams.get("limit");
+  const limit = limitParam === null ? DEFAULT_ACTIVITY_PAGE_LIMIT : Number(limitParam);
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_ACTIVITY_PAGE_LIMIT) {
+    throw new ValidationError(`limit must be an integer between 1 and ${MAX_ACTIVITY_PAGE_LIMIT}`);
+  }
+  const cursor = searchParams.get("cursor");
+  return {
+    limit,
+    offset: cursor ? decodeActivityCursor(cursor) : 0,
+  };
+}
+
+function repositoryActivityPage<T>(activities: T[], params: RepositoryActivityPageParams) {
+  const end = params.offset + params.limit;
+  const pageActivities = activities.slice(params.offset, end);
+  const truncated = end < activities.length;
+  return {
+    activities: pageActivities,
+    truncated,
+    ...(truncated ? { cursor: encodeActivityCursor(end) } : {}),
+  };
+}
+
+function encodeActivityCursor(offset: number): string {
+  return btoa(JSON.stringify({ offset }))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
+}
+
+function decodeActivityCursor(cursor: string): number {
+  try {
+    const normalized = cursor.replaceAll("-", "+").replaceAll("_", "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+    const parsed = JSON.parse(atob(padded)) as { offset?: unknown };
+    const offset = parsed.offset;
+    if (!Number.isSafeInteger(offset) || typeof offset !== "number" || offset < 0) {
+      throw new Error("invalid offset");
+    }
+    return offset;
+  } catch {
+    throw new ValidationError("cursor is invalid");
+  }
+}
+
 function repositoryObjectBrowserResponse(input: {
   repositoryName: string;
   prefix: string;
@@ -872,9 +926,10 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     const repository = await dependencies.repositoryService.getByName(adminRepositoryActivityName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
-    return jsonResponse({
-      activities: await repositoryActivityTimeline(dependencies, repository.name),
-    });
+    return jsonResponse(repositoryActivityPage(
+      await repositoryActivityTimeline(dependencies, repository.name),
+      repositoryActivityPageParams(url.searchParams),
+    ));
   }
   const adminRepositoryObjectsName = parseAdminRepositoryObjectsPath(url.pathname);
   if (adminRepositoryObjectsName) {

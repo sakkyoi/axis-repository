@@ -1948,6 +1948,86 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("paginates repository activity timelines with an opaque cursor", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    for (const path of [
+      "pool/main/app/app_1.0.0_amd64.deb",
+      "pool/main/app/app_1.0.1_amd64.deb",
+      "pool/main/app/app_1.0.2_amd64.deb",
+    ]) {
+      await harness.repositoryObjectStore.putBytes(
+        `repositories/debian-private/${path}`,
+        new Uint8Array([1, 2, 3]),
+        "application/vnd.debian.binary-package",
+      );
+      const response = await app.fetch(new Request(
+        `https://axis.example/admin/repositories/debian-private/objects?path=${encodeURIComponent(path)}`,
+        { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
+      ));
+      expect(response.status).toBe(200);
+    }
+
+    const firstPage = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/activity?limit=2",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(firstPage.status).toBe(200);
+    const firstPageBody = (await firstPage.json()) as {
+      activities: Array<{ id: string; type: string }>;
+      cursor?: string;
+      truncated: boolean;
+    };
+
+    expect(firstPageBody.activities).toHaveLength(2);
+    expect(firstPageBody.activities.every((activity) => activity.type === "object.delete")).toBe(true);
+    expect(firstPageBody.truncated).toBe(true);
+    expect(firstPageBody.cursor).toEqual(expect.any(String));
+
+    const secondPage = await app.fetch(new Request(
+      `https://axis.example/admin/repositories/debian-private/activity?limit=2&cursor=${encodeURIComponent(firstPageBody.cursor ?? "")}`,
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(secondPage.status).toBe(200);
+    const secondPageBody = (await secondPage.json()) as {
+      activities: Array<{ id: string }>;
+      cursor?: string;
+      truncated: boolean;
+    };
+
+    expect(secondPageBody.activities).toHaveLength(1);
+    expect(secondPageBody.truncated).toBe(false);
+    expect(secondPageBody.cursor).toBeUndefined();
+    expect(new Set([
+      ...firstPageBody.activities.map((activity) => activity.id),
+      ...secondPageBody.activities.map((activity) => activity.id),
+    ]).size).toBe(3);
+  });
+
+  it("rejects malformed repository activity pagination parameters", async () => {
+    const app = createApp();
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/activity?limit=0",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "limit must be an integer between 1 and 100" },
+    });
+  });
+
   it("rejects repository object delete paths with traversal segments", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

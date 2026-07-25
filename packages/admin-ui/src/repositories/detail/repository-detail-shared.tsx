@@ -12,10 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../../components/ui/textarea";
 import { asJson, ErrorState } from "../../pages/shared";
 import {
-  REPOSITORY_ACTIVITY_PAGE_SIZE,
   publishSessionArtifactSummary,
   repositoryActivityActionLabel,
-  repositoryActivityPage,
   repositoryActivityStatusMeta,
   repositoryActivitySummary,
   type RepositoryActivity,
@@ -95,22 +93,16 @@ export function PublishSessionsSection({
   SessionDetailComponent?: React.ComponentType<PublishSessionDetailComponentProps>;
   hideTitle?: boolean;
 }) {
-  const [visibleActivityCount, setVisibleActivityCount] = useState(REPOSITORY_ACTIVITY_PAGE_SIZE);
   const repositoryActivities = useRepositoryActivities(repository.name);
-  const activityPage = repositoryActivityPage(repositoryActivities.data ?? [], visibleActivityCount);
-  const activities = activityPage.visibleActivities;
-
-  useEffect(() => {
-    setVisibleActivityCount(REPOSITORY_ACTIVITY_PAGE_SIZE);
-  }, [repository.name]);
+  const activities = repositoryActivities.data?.pages.flatMap((page) => page.activities) ?? [];
 
   return (
     <section className="grid gap-2">
       <div className="flex items-center justify-between gap-3">
         {!hideTitle && <h3 className="text-sm font-semibold">Activity</h3>}
-        {(repositoryActivities.data?.length ?? 0) > 0 && (
+        {activities.length > 0 && (
           <span className="text-xs text-muted-foreground">
-            {activityPage.visibleCount} of {activityPage.totalCount}
+            {activities.length} loaded
           </span>
         )}
       </div>
@@ -131,13 +123,14 @@ export function PublishSessionsSection({
             SessionDetailComponent={SessionDetailComponent}
           />
         ))}
-      {!repositoryActivities.isLoading && !repositoryActivities.isError && activityPage.hasMoreActivities && (
+      {!repositoryActivities.isLoading && !repositoryActivities.isError && repositoryActivities.hasNextPage && (
         <Button
           type="button"
           variant="outline"
-          onClick={() => setVisibleActivityCount(activityPage.nextVisibleCount)}
+          disabled={repositoryActivities.isFetchingNextPage}
+          onClick={() => void repositoryActivities.fetchNextPage()}
         >
-          Load more
+          {repositoryActivities.isFetchingNextPage ? "Loading..." : "Load more"}
         </Button>
       )}
     </section>

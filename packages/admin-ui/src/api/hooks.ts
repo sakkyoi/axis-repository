@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAxisClient,
   type CreateAdminPublishSessionInput,
@@ -10,6 +10,8 @@ import {
 } from "./client";
 import { useAuth } from "../auth";
 import { getRuntimeConfig } from "../runtime-config";
+
+const REPOSITORY_ACTIVITY_PAGE_LIMIT = 10;
 
 export function useAxisClient() {
   const { adminToken } = useAuth();
@@ -85,9 +87,15 @@ export function useDeleteRepositoryObject(repositoryName: string | undefined, pr
 
 export function useRepositoryActivities(repositoryName: string | undefined) {
   const client = useAxisClient();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["repository-activity", repositoryName],
-    queryFn: () => client.listRepositoryActivities(repositoryName ?? ""),
+    queryFn: ({ pageParam }) =>
+      client.listRepositoryActivities(repositoryName ?? "", {
+        limit: REPOSITORY_ACTIVITY_PAGE_LIMIT,
+        ...(pageParam ? { cursor: pageParam } : {}),
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.cursor,
     enabled: Boolean(repositoryName),
   });
 }

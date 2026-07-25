@@ -196,6 +196,8 @@ export const repositoryActivitySchema = z.union([objectDeleteActivitySchema, pub
 
 export const repositoryActivitiesResponseSchema = z.object({
   activities: z.array(repositoryActivitySchema),
+  cursor: z.string().optional(),
+  truncated: z.boolean(),
 });
 
 export const repositoryObjectDeleteResponseSchema = z.object({
