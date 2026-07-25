@@ -2,6 +2,18 @@ import type { PublishSession, PublishSessionStatus, Repository } from "../../api
 
 export type PublishSessionStatusVariant = "default" | "success" | "warning" | "destructive";
 
+export interface RepositoryActivity {
+  id: string;
+  type: "publish";
+  actionLabel: string;
+  createdAt: string;
+  status: {
+    label: string;
+    variant: PublishSessionStatusVariant;
+  };
+  session: PublishSession;
+}
+
 export function sessionsForRepository(repositoryName: string, sessions: PublishSession[]): PublishSession[] {
   return sessions.filter((session) => session.repositoryName === repositoryName);
 }
@@ -11,9 +23,23 @@ export function repositoryPublishSessionsView(
   sessions: PublishSession[],
 ): {
   sessions: PublishSession[];
+  activities: RepositoryActivity[];
 } {
+  const repositorySessions = sessionsForRepository(repository.name, sessions);
   return {
-    sessions: sessionsForRepository(repository.name, sessions),
+    sessions: repositorySessions,
+    activities: repositorySessions.map(repositoryActivityFromPublishSession),
+  };
+}
+
+export function repositoryActivityFromPublishSession(session: PublishSession): RepositoryActivity {
+  return {
+    id: `publish:${session.id}`,
+    type: "publish",
+    actionLabel: session.artifacts.length === 1 ? "Published artifact" : "Published artifacts",
+    createdAt: session.createdAt,
+    status: publishSessionStatusMeta(session.status),
+    session,
   };
 }
 

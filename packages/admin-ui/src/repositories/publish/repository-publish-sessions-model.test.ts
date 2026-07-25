@@ -33,6 +33,7 @@ describe("repository publish sessions model", () => {
   it("keeps publish sessions view independent from ecosystem-specific renderers", () => {
     expect(repositoryPublishSessionsView({ name: "debian-internal", ecosystem: "apt" }, [])).toEqual({
       sessions: [],
+      activities: [],
     });
   });
 
@@ -93,5 +94,41 @@ describe("repository publish sessions model", () => {
         }),
       ),
     ).toBe("2 artifacts, 1 verified");
+  });
+
+  it("maps repository publish sessions into compact activity rows", () => {
+    const publishSession = session({
+      id: "pub_new",
+      repositoryName: "debian-internal",
+      status: "finalized",
+      artifacts: [{
+        filename: "myapp_1.2.3_amd64.deb",
+        size: 1234,
+        sha256: "a".repeat(64),
+        contentType: "application/vnd.debian.binary-package",
+        metadata: {},
+      }],
+      verifiedUploads: [{
+        uploadId: "upl_1",
+        objectKey: "_staging/uploads/pub_new/upl_1/myapp.deb",
+        size: 1234,
+        sha256: "a".repeat(64),
+        verifiedAt: "2026-07-23T00:02:00.000Z",
+      }],
+    });
+
+    expect(
+      repositoryPublishSessionsView({ name: "debian-internal", ecosystem: "apt" }, [
+        publishSession,
+        session({ id: "pub_other", repositoryName: "python-internal", ecosystem: "pypi" }),
+      ]).activities,
+    ).toEqual([{
+      id: "publish:pub_new",
+      type: "publish",
+      actionLabel: "Published artifact",
+      createdAt: "2026-07-23T00:00:00.000Z",
+      status: { label: "finalized", variant: "success" },
+      session: publishSession,
+    }]);
   });
 });

@@ -13,7 +13,7 @@ import { Textarea } from "../../components/ui/textarea";
 import { asJson, ErrorState } from "../../pages/shared";
 import {
   publishSessionArtifactSummary,
-  publishSessionStatusMeta,
+  type RepositoryActivity,
   repositoryPublishSessionsView,
 } from "../publish/repository-publish-sessions-model";
 import type { PublishSessionDetailComponentProps, RepositoryDetailSection } from "../plugins/repository-ui-plugin-types";
@@ -91,53 +91,61 @@ export function PublishSessionsSection({
 }) {
   const publishSessions = usePublishSessions();
   const publishSessionsView = repositoryPublishSessionsView(repository, publishSessions.data ?? []);
-  const sessions = publishSessionsView.sessions.slice(0, 5);
+  const activities = publishSessionsView.activities.slice(0, 5);
 
   return (
-    <div className="grid gap-2">
+    <section className="grid gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">Activity</h3>
+        {publishSessionsView.activities.length > 0 && (
+          <span className="text-xs text-muted-foreground">Latest {activities.length}</span>
+        )}
+      </div>
       {publishSessions.isLoading && <p className="text-sm text-muted-foreground">Loading publish sessions...</p>}
       {publishSessions.isError && <ErrorState title="Publish sessions unavailable" error={publishSessions.error} />}
-      {!publishSessions.isLoading && !publishSessions.isError && sessions.length === 0 && (
+      {!publishSessions.isLoading && !publishSessions.isError && activities.length === 0 && (
         <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
-          No publish sessions for this repository.
+          No repository activity yet.
         </div>
       )}
       {!publishSessions.isLoading &&
         !publishSessions.isError &&
-        sessions.map((session) => (
-          <PublishSessionItem
-            key={session.id}
-            session={session}
+        activities.map((activity) => (
+          <RepositoryActivityItem
+            key={activity.id}
+            activity={activity}
             artifactSummary={artifactSummary}
             SessionDetailComponent={SessionDetailComponent}
           />
         ))}
-    </div>
+    </section>
   );
 }
 
-function PublishSessionItem({
-  session,
+function RepositoryActivityItem({
+  activity,
   artifactSummary,
   SessionDetailComponent,
 }: {
-  session: PublishSession;
+  activity: RepositoryActivity;
   artifactSummary: (session: PublishSession) => string;
   SessionDetailComponent: React.ComponentType<PublishSessionDetailComponentProps>;
 }) {
-  const status = publishSessionStatusMeta(session.status);
+  const session = activity.session;
   return (
-    <details className="min-w-0 rounded-md border border-border bg-background/40 p-3">
+    <details className="group min-w-0 rounded-md border border-border bg-background/40 px-3 py-2">
       <summary className="cursor-pointer list-none">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-medium">{session.id}</span>
-              <Badge variant={status.variant}>{status.label}</Badge>
+              <span className="truncate text-sm font-medium">{activity.actionLabel}</span>
+              <Badge variant={activity.status.variant}>{activity.status.label}</Badge>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {artifactSummary(session)} · created {session.createdAt}
-            </p>
+            <p className="mt-1 truncate text-xs text-muted-foreground">{artifactSummary(session)}</p>
+          </div>
+          <div className="shrink-0 text-right text-xs text-muted-foreground">
+            <div>{activity.createdAt}</div>
+            <div className="mt-1 text-[11px] group-open:hidden">Details</div>
           </div>
         </div>
       </summary>
