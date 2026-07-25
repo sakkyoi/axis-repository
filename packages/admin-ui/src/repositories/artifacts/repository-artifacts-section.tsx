@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { ErrorState } from "../../pages/shared";
+import { repositoryEmptyStatePanelClass } from "../detail/repository-empty-state-model";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 
 export function RepositoryArtifactsSection({ repository }: RepositoryDetailSectionProps) {
@@ -46,8 +47,10 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
         {artifacts.isLoading && <div className="p-3 text-sm text-muted-foreground">Loading artifacts...</div>}
         {artifacts.isError && <div className="p-3"><ErrorState title="Repository artifacts unavailable" error={artifacts.error} /></div>}
         {!artifacts.isLoading && !artifacts.isError && rows.length === 0 && (
-          <div className="grid min-h-40 place-items-center p-6 text-center text-sm text-muted-foreground">
-            No artifacts have been published yet.
+          <div className="grid min-h-64 p-3">
+            <div className={repositoryEmptyStatePanelClass()}>
+              No indexed artifacts yet. Publish artifacts or rebuild the index after adding repository contents.
+            </div>
           </div>
         )}
         {!artifacts.isLoading && !artifacts.isError && rows.length > 0 && (

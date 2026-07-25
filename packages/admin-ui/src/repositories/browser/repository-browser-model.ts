@@ -1,5 +1,6 @@
 import type { RepositoryObjectsResponse } from "../../api/schemas";
 import type { DestructiveActionDialogContent } from "../../components/ui/destructive-action-dialog-model";
+import { repositoryEmptyStatePanelClass } from "../detail/repository-empty-state-model";
 
 export interface RepositoryBrowserBreadcrumb {
   label: string;
@@ -76,7 +77,7 @@ export function repositoryBrowserLayoutClasses(): {
   return {
     frame: "min-h-64 overflow-hidden rounded-md border border-border bg-background/40",
     empty: "grid min-h-64 p-3",
-    emptyPanel: "grid min-h-[calc(16rem-1.5rem)] place-items-center rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground",
+    emptyPanel: repositoryEmptyStatePanelClass(),
     loading: "min-h-64 p-3 text-sm text-muted-foreground",
     error: "min-h-64 p-3",
   };
