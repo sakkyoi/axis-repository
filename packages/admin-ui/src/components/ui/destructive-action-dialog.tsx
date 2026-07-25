@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "./input";
 import {
   destructiveConfirmationCopyLabel,
+  destructiveConfirmationLayoutClasses,
   destructiveConfirmationMatches,
 } from "./destructive-action-dialog-model";
 import type { DestructiveActionDialogContent } from "./destructive-action-dialog-model";
@@ -33,6 +34,7 @@ export function DestructiveActionDialog({
   const [confirmationInput, setConfirmationInput] = useState("");
   const [copied, setCopied] = useState(false);
   const confirmed = destructiveConfirmationMatches(confirmationInput, confirmationText);
+  const confirmationLayout = destructiveConfirmationLayoutClasses();
 
   function changeOpen(nextOpen: boolean) {
     if (pending && !nextOpen) return;
@@ -62,13 +64,13 @@ export function DestructiveActionDialog({
         {confirmationText && (
           <label className="grid gap-2">
             <span className="text-sm font-medium">Type this text to confirm.</span>
-            <span className="flex min-w-0 items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 text-xs">{confirmationText}</code>
+            <span className={confirmationLayout.row}>
+              <code className={confirmationLayout.code}>{confirmationText}</code>
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
-                className="h-8 w-8 shrink-0"
+                className={confirmationLayout.copyButton}
                 aria-label={destructiveConfirmationCopyLabel(confirmationText)}
                 title={destructiveConfirmationCopyLabel(confirmationText)}
                 disabled={pending}
