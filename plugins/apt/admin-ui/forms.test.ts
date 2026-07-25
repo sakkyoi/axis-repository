@@ -15,7 +15,13 @@ describe("APT repository forms", () => {
       codename: "noble",
       components: "",
       architectures: "",
-      signingKeyId: "signing_key_prod",
+      signingKeyMode: "generate",
+      signingKeyName: "release",
+      signingKeyUserIdName: "Axis Repository",
+      signingKeyUserIdEmail: "axis@example.test",
+      signingKeyPrivateKeyArmored: "",
+      signingKeyPassphrase: "",
+      signingKeyExistingId: "",
     })).toEqual({
       name: "debian-internal",
       ecosystem: "apt",
@@ -23,7 +29,16 @@ describe("APT repository forms", () => {
       config: {
         apt: {
           codename: "noble",
-          signingKeyId: "signing_key_prod",
+        },
+      },
+      provisioning: {
+        apt: {
+          signingKey: {
+            mode: "generate",
+            name: "release",
+            userIdName: "Axis Repository",
+            userIdEmail: "axis@example.test",
+          },
         },
       },
     });
@@ -37,9 +52,43 @@ describe("APT repository forms", () => {
         codename: "",
         components: "",
         architectures: "",
-        signingKeyId: "",
+        signingKeyMode: "generate",
+        signingKeyName: "",
+        signingKeyUserIdName: "",
+        signingKeyUserIdEmail: "",
+        signingKeyPrivateKeyArmored: "",
+        signingKeyPassphrase: "",
+        signingKeyExistingId: "",
       }),
     ).toThrow("Repository name is required");
+  });
+
+  it("builds create input for importing an APT signing key during repository creation", () => {
+    expect(buildCreateAptRepositoryInput({
+      name: "debian-internal",
+      visibility: "private",
+      codename: "noble",
+      components: "",
+      architectures: "",
+      signingKeyMode: "import",
+      signingKeyName: "release",
+      signingKeyUserIdName: "",
+      signingKeyUserIdEmail: "",
+      signingKeyPrivateKeyArmored: "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+      signingKeyPassphrase: "secret",
+      signingKeyExistingId: "",
+    })).toMatchObject({
+      provisioning: {
+        apt: {
+          signingKey: {
+            mode: "import",
+            name: "release",
+            privateKeyArmored: "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+            passphrase: "secret",
+          },
+        },
+      },
+    });
   });
 
   it("builds edit form defaults and update input from an existing APT repository", () => {
@@ -67,6 +116,13 @@ describe("APT repository forms", () => {
       components: "main contrib",
       architectures: "amd64",
       signingKeyId: "signing_key_prod",
+      signingKeyMode: "existing",
+      signingKeyName: "",
+      signingKeyUserIdName: "",
+      signingKeyUserIdEmail: "",
+      signingKeyPrivateKeyArmored: "",
+      signingKeyPassphrase: "",
+      signingKeyExistingId: "signing_key_prod",
     });
     expect(buildUpdateAptRepositoryInput({
       name: "ignored",

@@ -49,7 +49,7 @@ const stepLabels: Record<RepositoryCreateStep, string> = {
   plugin: "Plugin",
   basics: "Basics",
   config: "Config",
-  dependencies: "Dependencies",
+  setup: "Setup",
   review: "Review",
 };
 
@@ -150,7 +150,7 @@ export function NewRepositoryPage() {
     <section className={repositoryCreatePageClass()}>
       <PageHeader
         title="Create repository"
-        description="Choose a repository plugin, provide its config, then satisfy plugin dependencies."
+        description="Choose a repository plugin, provide its config, then choose plugin setup actions."
         action={(
           <Button type="button" variant="outline" onClick={() => navigate(ADMIN_UI_PATHS.repositories)}>
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -180,7 +180,7 @@ export function NewRepositoryPage() {
                   const { name: _name, ...rest } = current;
                   return rest;
                 });
-                updateState({ name, dependencies: { ...state.dependencies, signingKeyId: "" } });
+                updateState({ name, setup: { ...state.setup, signingKeyExistingId: "" } });
               }}
               onVisibilityChange={(visibility) => updateState({ visibility })}
             />
@@ -195,14 +195,14 @@ export function NewRepositoryPage() {
               onChange={(config) => updateState({ config })}
             />
           )}
-          {currentStep === "dependencies" && (
+          {currentStep === "setup" && (
             <DependenciesStep
               plugin={plugin}
               displayName={pluginManifest?.displayName ?? plugin.ecosystem}
               fieldRenderers={getRepositoryCreateFieldRenderers(plugin.ecosystem)}
               repositoryName={state.name.trim()}
-              dependencies={state.dependencies}
-              onChange={(dependencies) => updateState({ dependencies })}
+              setup={state.setup}
+              onChange={(setup) => updateState({ setup })}
             />
           )}
           {currentStep === "review" && (
@@ -443,28 +443,28 @@ function DependenciesStep({
   displayName,
   fieldRenderers,
   repositoryName,
-  dependencies,
+  setup,
   onChange,
 }: {
   plugin: RepositoryCreatePlugin;
   displayName: string;
   fieldRenderers: RepositoryCreateFieldRendererMap | undefined;
   repositoryName: string;
-  dependencies: Record<string, string>;
-  onChange: (dependencies: Record<string, string>) => void;
+  setup: Record<string, string>;
+  onChange: (setup: Record<string, string>) => void;
 }) {
-  const fields = repositoryConfigFieldsForStep(plugin.repositoryConfig, "dependencies");
+  const fields = repositoryConfigFieldsForStep(plugin.repositoryConfig, "setup");
 
   return (
     <div className="grid gap-4">
       <div>
-        <h2 className="text-base font-semibold">{displayName} dependencies</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Satisfy the resources this plugin needs before creation.</p>
+        <h2 className="text-base font-semibold">{displayName} setup</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Choose what this plugin should provision while creating the repository.</p>
       </div>
       <RepositoryDependencyFields
         fields={fields}
         repositoryName={repositoryName}
-        values={dependencies}
+        values={setup}
         fieldRenderers={fieldRenderers}
         onChange={onChange}
       />

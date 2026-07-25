@@ -48,6 +48,8 @@ export interface RecordArtifactDeleteInput {
 }
 
 export class RepositoryActivityService {
+  private lastCreatedAtMs = 0;
+
   constructor(private readonly options: RepositoryActivityServiceOptions) {}
 
   async listByRepository(repositoryName: string): Promise<RepositoryActivityRecord[]> {
@@ -67,7 +69,7 @@ export class RepositoryActivityService {
         ...(input.contentType !== undefined ? { contentType: input.contentType } : {}),
         ...(input.size !== undefined ? { size: input.size } : {}),
       },
-      createdAt: this.options.clock.now().toISOString(),
+      createdAt: this.nextCreatedAt(),
     };
     await this.options.state.repositoryActivities.save(activity);
     return activity;
@@ -88,7 +90,7 @@ export class RepositoryActivityService {
         ...(input.previousSize !== undefined ? { previousSize: input.previousSize } : {}),
         ...(input.previousEtag !== undefined ? { previousEtag: input.previousEtag } : {}),
       },
-      createdAt: this.options.clock.now().toISOString(),
+      createdAt: this.nextCreatedAt(),
     };
     await this.options.state.repositoryActivities.save(activity);
     return activity;
@@ -104,7 +106,7 @@ export class RepositoryActivityService {
       metadata: {
         artifactCount: input.artifactCount,
       },
-      createdAt: this.options.clock.now().toISOString(),
+      createdAt: this.nextCreatedAt(),
     };
     await this.options.state.repositoryActivities.save(activity);
     return activity;
@@ -128,9 +130,15 @@ export class RepositoryActivityService {
         skippedObjectKeys: [...(input.skippedObjectKeys ?? [])],
         failedObjectKeys: [...(input.failedObjectKeys ?? [])],
       },
-      createdAt: this.options.clock.now().toISOString(),
+      createdAt: this.nextCreatedAt(),
     };
     await this.options.state.repositoryActivities.save(activity);
     return activity;
+  }
+
+  private nextCreatedAt(): string {
+    const nowMs = this.options.clock.now().getTime();
+    this.lastCreatedAtMs = Math.max(nowMs, this.lastCreatedAtMs + 1);
+    return new Date(this.lastCreatedAtMs).toISOString();
   }
 }

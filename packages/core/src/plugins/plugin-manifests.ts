@@ -28,9 +28,9 @@ export interface PluginAdminResourcesManifest {
   routes: PluginAdminResourceRouteManifest[];
 }
 
-export type PluginRepositoryConfigFieldKind = "text" | "string-list" | "signing-key";
+export type PluginRepositoryConfigFieldKind = "text" | "string-list" | "signing-key" | "signing-key-provisioning";
 export type PluginRepositoryConfigDefaultValue = string | string[];
-export type PluginRepositoryConfigFieldStep = "config" | "dependencies";
+export type PluginRepositoryConfigFieldStep = "config" | "setup";
 
 export interface PluginRepositoryConfigFieldManifest {
   name: string;

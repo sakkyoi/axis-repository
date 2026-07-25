@@ -30,12 +30,6 @@ function validateRequiredTextField(state: RepositoryCreateWizardState, name: str
   return state.config[name]?.trim() ? [] : [requiredFieldError(name)];
 }
 
-function validateRequiredDependencyField(state: RepositoryCreateWizardState, name: string): string[] {
-  const configField = field(name);
-  if (!configField.required) return [];
-  return state.dependencies[name]?.trim() ? [] : [requiredFieldError(name)];
-}
-
 function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormValues {
   return {
     name: state.name,
@@ -43,7 +37,13 @@ function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormVal
     codename: state.config.codename ?? "",
     components: state.config.components ?? "",
     architectures: state.config.architectures ?? "",
-    signingKeyId: state.dependencies.signingKeyId ?? "",
+    signingKeyMode: state.setup.signingKeyMode ?? "generate",
+    signingKeyName: state.setup.signingKeyName ?? "",
+    signingKeyUserIdName: state.setup.signingKeyUserIdName ?? "",
+    signingKeyUserIdEmail: state.setup.signingKeyUserIdEmail ?? "",
+    signingKeyPrivateKeyArmored: state.setup.signingKeyPrivateKeyArmored ?? "",
+    signingKeyPassphrase: state.setup.signingKeyPassphrase ?? "",
+    signingKeyExistingId: state.setup.signingKeyExistingId ?? "",
   };
 }
 
@@ -57,8 +57,14 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
     config: {
       codename: stringDefault("codename"),
     },
-    dependencies: {
-      signingKeyId: "",
+    setup: {
+      signingKeyMode: "generate",
+      signingKeyName: "release",
+      signingKeyUserIdName: "Axis Repository",
+      signingKeyUserIdEmail: "",
+      signingKeyPrivateKeyArmored: "",
+      signingKeyPassphrase: "",
+      signingKeyExistingId: "",
     },
   },
   validateStep: (step, state) => {
@@ -68,8 +74,13 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
     if (step === "config") {
       return validateRequiredTextField(state, "codename");
     }
-    if (step === "dependencies") {
-      return validateRequiredDependencyField(state, "signingKeyId");
+    if (step === "setup") {
+      try {
+        buildCreateAptRepositoryInput(aptFormValues(state));
+        return [];
+      } catch (error) {
+        return [error instanceof Error ? error.message : requiredFieldError("signingKey")];
+      }
     }
     return [];
   },

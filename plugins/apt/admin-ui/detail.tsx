@@ -124,7 +124,7 @@ function AptRepositoryFields({
         {signingKeys.length === 0 ? (
           <EmptyState message="No active signing key is available." />
         ) : (
-          <Select value={values.signingKeyId} onValueChange={(value) => onChange("signingKeyId", value)}>
+          <Select value={values.signingKeyId ?? ""} onValueChange={(value) => onChange("signingKeyId", value)}>
             <SelectTrigger>
               <SelectValue placeholder="Select signing key" />
             </SelectTrigger>
@@ -140,7 +140,7 @@ function AptRepositoryFields({
   );
 }
 
-function signingKeyOptions(activeKeys: SigningKey[], allKeys: SigningKey[], currentId: string): SigningKey[] {
+function signingKeyOptions(activeKeys: SigningKey[], allKeys: SigningKey[], currentId: string | undefined): SigningKey[] {
   if (!currentId || activeKeys.some((key) => key.id === currentId)) {
     return activeKeys;
   }

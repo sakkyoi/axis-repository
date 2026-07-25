@@ -36,6 +36,25 @@ export interface ValidateRepositoryConfigInput {
   config: Record<string, unknown>;
 }
 
+export interface ValidateRepositoryCreateProvisioningInput {
+  repositoryName: string;
+  ecosystem: Ecosystem;
+  visibility: Repository["visibility"];
+  config: Record<string, unknown>;
+  provisioning: Record<string, unknown>;
+}
+
+export interface ProvisionRepositoryCreateInput extends ValidateRepositoryCreateProvisioningInput {}
+
+export interface RepositoryCreateProvisioningResult {
+  configPatch?: Record<string, unknown>;
+}
+
+export interface RepositoryCreateLifecycle {
+  validateProvisioning(input: ValidateRepositoryCreateProvisioningInput): void;
+  provision(input: ProvisionRepositoryCreateInput): Promise<RepositoryCreateProvisioningResult>;
+}
+
 export interface ValidatePublishArtifactsInput {
   repository: Repository;
   artifacts: PublishArtifactRequest[];
@@ -94,6 +113,7 @@ export interface RepositoryArtifactIndexLifecycle {
 export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   publish: RepositoryPublishLifecycle;
   artifacts?: RepositoryArtifactIndexLifecycle;
+  create?: RepositoryCreateLifecycle;
   canServeRepositoryPath: RepositoryPathServingRule;
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
   clientHelpers?: RepositoryClientHelpers;

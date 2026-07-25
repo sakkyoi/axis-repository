@@ -26,6 +26,10 @@ import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runt
 import { ensureRepositoryPluginEnabled } from "../plugins/repository-plugin-policy";
 import type { DeleteRepositoryArtifactResult } from "../plugins/repository-plugin-contract";
 
+export interface CreatePluginRepositoryInput extends CreateRepositoryInput {
+  provisioning?: Record<string, unknown>;
+}
+
 export class PluginRepositoryService {
   constructor(
     private readonly options: {
@@ -35,14 +39,39 @@ export class PluginRepositoryService {
     },
   ) {}
 
-  async create(input: CreateRepositoryInput): Promise<Repository> {
+  async create(input: CreatePluginRepositoryInput): Promise<Repository> {
     await this.ensurePluginEnabled(input.ecosystem);
     const plugin = this.options.plugins.requirePlugin(input.ecosystem);
+    let config = input.config ?? {};
+    if (input.provisioning !== undefined) {
+      if (!plugin.create) {
+        throw new ValidationError(`Repository create provisioning is not configured for ecosystem: ${input.ecosystem}`);
+      }
+      try {
+        await this.options.repositoryService.getByName(input.name);
+        throw new ValidationError(`Repository already exists: ${input.name.trim()}`);
+      } catch (error) {
+        if (!(error instanceof NotFoundError)) throw error;
+      }
+      const provisioningInput = {
+        repositoryName: input.name.trim(),
+        ecosystem: input.ecosystem,
+        visibility: input.visibility ?? "private",
+        config,
+        provisioning: input.provisioning,
+      };
+      plugin.create.validateProvisioning(provisioningInput);
+      const result = await plugin.create.provision(provisioningInput);
+      config = mergeConfigPatch(config, result?.configPatch ?? {});
+    }
     plugin.validateRepositoryConfig({
       ecosystem: input.ecosystem,
-      config: input.config ?? {},
+      config,
     });
-    return this.options.repositoryService.create(input);
+    return this.options.repositoryService.create({
+      ...input,
+      config,
+    });
   }
 
   list(): Promise<Repository[]> {
@@ -316,6 +345,23 @@ export class PluginRepositoryArtifactIndexService {
 function repositoryRelativeObjectPath(repositoryName: string, objectKey: string): string {
   const prefix = `repositories/${repositoryName}/`;
   return objectKey.startsWith(prefix) ? objectKey.slice(prefix.length) : objectKey;
+}
+
+function mergeConfigPatch(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    const current = merged[key];
+    if (isRecord(current) && isRecord(value)) {
+      merged[key] = mergeConfigPatch(current, value);
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function adminPublishPrincipal(

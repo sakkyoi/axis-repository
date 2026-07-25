@@ -883,11 +883,13 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     if (request.method === "POST") {
       const body = await readJsonObject(request);
+      const provisioning = optionalObjectField(body, "provisioning");
       const repository = await dependencies.repositoryService.create({
         name: stringField(body, "name"),
         ecosystem: stringField(body, "ecosystem"),
         visibility: repositoryVisibility(body),
         config: optionalObjectField(body, "config") ?? {},
+        ...(provisioning === undefined ? {} : { provisioning }),
       });
       return jsonResponse(repository, { status: 201 });
     }

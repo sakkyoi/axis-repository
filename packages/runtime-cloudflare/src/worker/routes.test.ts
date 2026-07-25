@@ -849,6 +849,58 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("provisions APT signing keys during repository creation", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-internal",
+          ecosystem: "apt",
+          visibility: "private",
+          config: {
+            apt: {
+              codename: "noble",
+            },
+          },
+          provisioning: {
+            apt: {
+              signingKey: {
+                mode: "generate",
+                name: "release",
+                userIdName: "Axis Repository",
+                userIdEmail: "axis@example.test",
+              },
+            },
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    const body = await response.json() as { config: { apt: { signingKeyId?: string } } };
+    expect(body.config.apt.signingKeyId).toEqual(expect.stringMatching(/^repository_secret_/));
+
+    const keys = await app.fetch(
+      new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    await expect(keys.json()).resolves.toMatchObject({
+      signingKeys: [
+        {
+          name: "release",
+          repositoryName: "debian-internal",
+          id: body.config.apt.signingKeyId,
+        },
+      ],
+    });
+  });
+
   it("gets repositories by name through admin routes", async () => {
     const app = createApp();
     await createRepository(app, {
@@ -2003,17 +2055,17 @@ describe("Cloudflare runtime routes", () => {
     await expect(artifactsAfterDelete.json()).resolves.toEqual({ artifacts: [], truncated: false });
     const activityBody = await activity.json() as { activities: Array<{ type: string; metadata: Record<string, unknown> }> };
     expect(activityBody.activities[0]).toMatchObject({
-      type: "artifact.delete",
+      type: "artifact-index.rebuild",
       metadata: {
-        artifactId: artifact!.id,
+        artifactCount: 0,
       },
     });
     expect(activityBody.activities).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        type: "artifact-index.rebuild",
-        metadata: {
-          artifactCount: 0,
-        },
+        type: "artifact.delete",
+        metadata: expect.objectContaining({
+          artifactId: artifact!.id,
+        }),
       }),
     ]));
   });

@@ -10,7 +10,7 @@ export const pypiRepositoryCreatePlugin: RepositoryCreatePlugin = {
     name: "",
     visibility: "private",
     config: {},
-    dependencies: {},
+    setup: {},
   },
   validateStep: (step, state) => {
     if (step === "basics") {

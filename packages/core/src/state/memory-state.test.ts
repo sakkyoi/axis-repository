@@ -122,6 +122,30 @@ describe("MemoryStateStore repository activities", () => {
     });
   });
 
+  it("assigns monotonic activity timestamps when the clock does not advance", async () => {
+    const state = new MemoryStateStore();
+    let id = 0;
+    const service = new RepositoryActivityService({
+      state,
+      clock: { now: () => new Date("2026-07-12T00:01:00.000Z") },
+      randomId: { create: (prefix) => `${prefix}_${++id}` },
+    });
+
+    const first = await service.recordObjectDelete({
+      repositoryName: "debian-internal",
+      path: "pool/main/app.deb",
+      objectKey: "repositories/debian-internal/pool/main/app.deb",
+    });
+    const second = await service.recordArtifactIndexRebuild({
+      repositoryName: "debian-internal",
+      artifactCount: 0,
+    });
+
+    expect(first.createdAt).toBe("2026-07-12T00:01:00.000Z");
+    expect(second.createdAt).toBe("2026-07-12T00:01:00.001Z");
+    await expect(state.repositoryActivities.listByRepository("debian-internal")).resolves.toEqual([second, first]);
+  });
+
   it("records artifact index rebuild activities through the activity service", async () => {
     const state = new MemoryStateStore();
     const service = new RepositoryActivityService({

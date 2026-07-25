@@ -11,8 +11,10 @@ import { aptPluginManifest } from "../manifest";
 import type {
   ArtifactRepositoryPlugin,
   DescribePublishedArtifactsInput,
+  ProvisionRepositoryCreateInput,
   RebuildRepositoryArtifactIndexInput,
   RepositorySigningKeyCapability,
+  ValidateRepositoryCreateProvisioningInput,
   ValidateRepositoryConfigInput,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { createPrefixServingPredicate } from "@axis-repository/runtime-cloudflare/plugin-runtime";
@@ -48,6 +50,10 @@ export function createAptPlugin(input: {
     validateRepositoryConfig: (configInput) => {
       parseAptRepositoryConfig(repositoryForConfig(configInput));
     },
+    create: {
+      validateProvisioning: validateAptCreateProvisioning,
+      provision: (provisionInput) => provisionAptRepository(input.signingKeys, provisionInput),
+    },
     publish: {
       validateArtifacts: validateAptPublishArtifacts,
       derivePrincipalScope: (repository) => {
@@ -71,6 +77,102 @@ export function createAptPlugin(input: {
     clientHelpers: createAptClientHelpers({ signingKeys: input.signingKeys }),
     adminResources: createAptAdminResources({ signingKeys: input.signingKeys }),
   };
+}
+
+function validateAptCreateProvisioning(input: ValidateRepositoryCreateProvisioningInput): void {
+  parseAptSigningKeyProvisioning(input.provisioning);
+}
+
+async function provisionAptRepository(
+  signingKeys: RepositorySigningKeyCapability,
+  input: ProvisionRepositoryCreateInput,
+): Promise<{ configPatch: Record<string, unknown> }> {
+  const signingKey = parseAptSigningKeyProvisioning(input.provisioning);
+  if (signingKey.mode === "existing") {
+    const key = await signingKeys.getPublicKey(signingKey.signingKeyId);
+    if (key.repositoryName !== input.repositoryName) {
+      throw new ValidationError("Signing key is not scoped to this repository");
+    }
+    if (key.revokedAt) {
+      throw new ValidationError("Signing key has been revoked");
+    }
+    return aptSigningKeyConfigPatch(key.id);
+  }
+  if (signingKey.mode === "import") {
+    const key = await signingKeys.create({
+      repositoryName: input.repositoryName,
+      name: signingKey.name,
+      privateKeyArmored: signingKey.privateKeyArmored,
+      passphrase: signingKey.passphrase,
+    });
+    return aptSigningKeyConfigPatch(key.id);
+  }
+  const key = await signingKeys.generate({
+    repositoryName: input.repositoryName,
+    name: signingKey.name,
+    userIdName: signingKey.userIdName,
+    userIdEmail: signingKey.userIdEmail,
+  });
+  return aptSigningKeyConfigPatch(key.id);
+}
+
+function aptSigningKeyConfigPatch(signingKeyId: string): { configPatch: Record<string, unknown> } {
+  return {
+    configPatch: {
+      apt: {
+        signingKeyId,
+      },
+    },
+  };
+}
+
+type AptSigningKeyProvisioning =
+  | { mode: "generate"; name: string; userIdName: string; userIdEmail: string }
+  | { mode: "import"; name: string; privateKeyArmored: string; passphrase: string }
+  | { mode: "existing"; signingKeyId: string };
+
+function parseAptSigningKeyProvisioning(provisioning: Record<string, unknown>): AptSigningKeyProvisioning {
+  const apt = readRecord(provisioning.apt);
+  const signingKey = readRecord(apt.signingKey);
+  const mode = requiredProvisioningString(signingKey, "mode");
+  if (mode === "existing") {
+    return {
+      mode,
+      signingKeyId: requiredProvisioningString(signingKey, "signingKeyId"),
+    };
+  }
+  if (mode === "import") {
+    return {
+      mode,
+      name: requiredProvisioningString(signingKey, "name"),
+      privateKeyArmored: requiredProvisioningString(signingKey, "privateKeyArmored"),
+      passphrase: requiredProvisioningString(signingKey, "passphrase"),
+    };
+  }
+  if (mode === "generate") {
+    return {
+      mode,
+      name: requiredProvisioningString(signingKey, "name"),
+      userIdName: requiredProvisioningString(signingKey, "userIdName"),
+      userIdEmail: requiredProvisioningString(signingKey, "userIdEmail"),
+    };
+  }
+  throw new ValidationError("Signing key provisioning mode is invalid");
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
+}
+
+function requiredProvisioningString(config: Record<string, unknown>, field: string): string {
+  const value = config[field];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new ValidationError(`Signing key ${field} is required`);
+  }
+  return value;
 }
 
 async function rebuildAptArtifactIndex(input: RebuildRepositoryArtifactIndexInput): Promise<RepositoryArtifactRecord[]> {

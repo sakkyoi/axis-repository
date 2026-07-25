@@ -8,13 +8,13 @@ import type { CreateRepositoryInput } from "../../api/client";
 import type { PublishSession, Repository, RepositoryPlugin, RepositoryVisibility } from "../../api/schemas";
 import type { PluginLifecycleBadge, PluginLifecycleSummary } from "./plugin-lifecycle";
 
-export type RepositoryCreateStep = "plugin" | "basics" | "config" | "dependencies" | "review";
+export type RepositoryCreateStep = "plugin" | "basics" | "config" | "setup" | "review";
 
 export interface RepositoryCreateWizardState {
   name: string;
   visibility: RepositoryVisibility;
   config: Record<string, string>;
-  dependencies: Record<string, string>;
+  setup: Record<string, string>;
 }
 
 export interface RepositoryCreatePlugin {
@@ -76,6 +76,8 @@ export interface RepositoryCreateFieldRendererProps {
   repositoryName: string;
   value: string;
   onChange: (value: string) => void;
+  values: Record<string, string>;
+  onValuesChange: (values: Record<string, string>) => void;
 }
 
 export type RepositoryCreateFieldRenderer = ComponentType<RepositoryCreateFieldRendererProps>;

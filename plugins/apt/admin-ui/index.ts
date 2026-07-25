@@ -8,7 +8,7 @@ import {
   RepositoryClientHelpersSection,
 } from "@axis-repository/admin-ui/plugin-ui";
 import { aptRepositoryCreatePlugin } from "./create";
-import { AptSigningKeyDependencyField } from "./create-field-renderers";
+import { AptSigningKeySetupField } from "./create-field-renderers";
 import { AptSettingsSection, AptSigningKeysSection } from "./detail";
 import { AptPublishArtifactPreview, AptPublishSessionDetail } from "./publish";
 import { aptPublishSessionArtifactSummary } from "./publish-model";
@@ -39,7 +39,7 @@ export const aptRepositoryUiPlugin: RepositoryUiPlugin = {
     artifactSummary: aptPublishSessionArtifactSummary,
   },
   createFieldRenderers: {
-    "signing-key": AptSigningKeyDependencyField,
+    "signing-key-provisioning": AptSigningKeySetupField,
   },
   publishTokenScope: {
     Component: AptSigningKeyTokenScopeFields,
@@ -47,7 +47,7 @@ export const aptRepositoryUiPlugin: RepositoryUiPlugin = {
   },
   mapCreateServerError: (message) => {
     if (/^config\.apt\.|Codename|Components|Architectures/i.test(message)) return "config";
-    if (/Signing key/i.test(message)) return "dependencies";
+    if (/Signing key/i.test(message)) return "setup";
     return undefined;
   },
 };

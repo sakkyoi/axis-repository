@@ -297,6 +297,16 @@ describe("createAxisClient", () => {
       ecosystem: "apt",
       visibility: "private",
       config: { apt: { codename: "noble" } },
+      provisioning: {
+        apt: {
+          signingKey: {
+            mode: "generate",
+            name: "release",
+            userIdName: "Axis Repository",
+            userIdEmail: "axis@example.test",
+          },
+        },
+      },
     });
 
     expect(repository.name).toBe("debian-internal");
@@ -309,6 +319,16 @@ describe("createAxisClient", () => {
           ecosystem: "apt",
           visibility: "private",
           config: { apt: { codename: "noble" } },
+          provisioning: {
+            apt: {
+              signingKey: {
+                mode: "generate",
+                name: "release",
+                userIdName: "Axis Repository",
+                userIdEmail: "axis@example.test",
+              },
+            },
+          },
         },
       },
     ]);

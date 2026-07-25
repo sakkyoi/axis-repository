@@ -117,16 +117,18 @@ describe("repository UI plugin registry", () => {
     });
   });
 
-  it("lets ecosystem UI plugins map create errors for their own config and dependencies", () => {
-    expect(getRepositoryCreateServerErrorMapper("apt")?.("Signing key is required")).toBe("dependencies");
+  it("lets ecosystem UI plugins map create errors for their own config and setup", () => {
+    expect(getRepositoryCreateServerErrorMapper("apt")?.("Signing key is required")).toBe("setup");
     expect(getRepositoryCreateServerErrorMapper("apt")?.("config.apt.codename is required")).toBe("config");
     expect(getRepositoryCreateServerErrorMapper("pypi")?.("Signing key is required")).toBeUndefined();
   });
 
   it("lets ecosystem UI plugins provide custom create field renderers", () => {
     expect(getRepositoryCreateFieldRenderers("apt")?.["signing-key"]?.name)
-      .toBe("AptSigningKeyDependencyField");
-    expect(getRepositoryCreateFieldRenderers("pypi")?.["signing-key"]).toBeUndefined();
+      .toBeUndefined();
+    expect(getRepositoryCreateFieldRenderers("apt")?.["signing-key-provisioning"]?.name)
+      .toBe("AptSigningKeySetupField");
+    expect(getRepositoryCreateFieldRenderers("pypi")?.["signing-key-provisioning"]).toBeUndefined();
   });
 
   it("lets ecosystem UI plugins provide publish token scope UI", () => {

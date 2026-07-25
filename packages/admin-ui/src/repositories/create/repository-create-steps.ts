@@ -6,7 +6,7 @@ export function repositoryCreateStepsForConfig(
 ): RepositoryCreateStep[] {
   const steps: RepositoryCreateStep[] = ["plugin", "basics"];
   if (repositoryConfig.fields.some((field) => field.step === "config")) steps.push("config");
-  if (repositoryConfig.fields.some((field) => field.step === "dependencies")) steps.push("dependencies");
+  if (repositoryConfig.fields.some((field) => field.step === "setup")) steps.push("setup");
   steps.push("review");
   return steps;
 }

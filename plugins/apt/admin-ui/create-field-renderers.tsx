@@ -1,12 +1,6 @@
-import { type FormEvent, useState } from "react";
-import { KeyRound, Plus } from "lucide-react";
+import { KeyRound } from "lucide-react";
+import { useAptSigningKeys } from "./api";
 import {
-  useAptSigningKeys,
-  useGenerateAptSigningKey,
-  useImportAptSigningKey,
-} from "./api";
-import {
-  Button,
   ErrorState,
   formatDate,
   Input,
@@ -25,147 +19,119 @@ import {
 } from "@axis-repository/admin-ui/plugin-ui";
 import { activeSigningKeys } from "./forms";
 
-export function AptSigningKeyDependencyField({
+export function AptSigningKeySetupField({
   field,
   repositoryName,
-  value,
-  onChange,
+  values,
+  onValuesChange,
 }: RepositoryCreateFieldRendererProps) {
   const signingKeysQuery = useAptSigningKeys(repositoryName, Boolean(repositoryName));
   const signingKeys = signingKeysQuery.data ?? [];
   const activeKeys = activeSigningKeys(signingKeys);
+  const mode = values.signingKeyMode || "generate";
+
+  function update(patch: Record<string, string>) {
+    onValuesChange({ ...values, ...patch });
+  }
 
   if (!repositoryName) {
     return (
       <ErrorState
         title="Repository name required"
-        error={new Error("Go back and enter a repository name before configuring dependencies.")}
+        error={new Error("Go back and enter a repository name before configuring setup.")}
       />
     );
   }
 
   return (
     <>
-      <label className="grid gap-2">
+      <div className="grid gap-2">
         <span className="text-sm font-medium">{field.label}</span>
         {field.description && <span className="text-xs text-muted-foreground">{field.description}</span>}
-        {activeKeys.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-            No active signing key is scoped to {repositoryName}. Generate or import one below.
-          </div>
-        ) : (
-          <Select value={value} onValueChange={onChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select signing key" />
-            </SelectTrigger>
-            <SelectContent>
-              {activeKeys.map((key) => (
-                <SelectItem key={key.id} value={key.id}>{key.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </label>
-      <InlineAptSigningKeyForm repositoryName={repositoryName} onCreated={(key) => onChange(key.id)} />
+      </div>
+      <div className="rounded-lg border border-border bg-background p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <KeyRound className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Signing key setup</h3>
+        </div>
+        <Tabs value={mode} onValueChange={(nextMode) => update({ signingKeyMode: nextMode })}>
+          <TabsList>
+            <TabsTrigger value="generate">Generate</TabsTrigger>
+            <TabsTrigger value="import">Import</TabsTrigger>
+            <TabsTrigger value="existing">Existing</TabsTrigger>
+          </TabsList>
+          <TabsContent value="generate">
+            <div className="grid gap-3">
+              <Input
+                value={values.signingKeyName ?? ""}
+                onChange={(event) => update({ signingKeyName: event.target.value })}
+                placeholder="release"
+                required
+              />
+              <Input
+                value={values.signingKeyUserIdName ?? ""}
+                onChange={(event) => update({ signingKeyUserIdName: event.target.value })}
+                placeholder="Axis Repository"
+                required
+              />
+              <Input
+                value={values.signingKeyUserIdEmail ?? ""}
+                onChange={(event) => update({ signingKeyUserIdEmail: event.target.value })}
+                type="email"
+                placeholder="axis@example.local"
+                required
+              />
+            </div>
+          </TabsContent>
+          <TabsContent value="import">
+            <div className="grid gap-3">
+              <Input
+                value={values.signingKeyName ?? ""}
+                onChange={(event) => update({ signingKeyName: event.target.value })}
+                placeholder="release"
+                required
+              />
+              <Textarea
+                value={values.signingKeyPrivateKeyArmored ?? ""}
+                onChange={(event) => update({ signingKeyPrivateKeyArmored: event.target.value })}
+                placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----"
+                required
+              />
+              <Input
+                value={values.signingKeyPassphrase ?? ""}
+                onChange={(event) => update({ signingKeyPassphrase: event.target.value })}
+                type="password"
+                placeholder="Passphrase"
+                required
+              />
+            </div>
+          </TabsContent>
+          <TabsContent value="existing">
+            {activeKeys.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+                No active signing key is scoped to {repositoryName}. Generate or import one during creation instead.
+              </div>
+            ) : (
+              <Select
+                value={values.signingKeyExistingId ?? ""}
+                onValueChange={(signingKeyId) => update({ signingKeyExistingId: signingKeyId })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select signing key" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeKeys.map((key) => (
+                    <SelectItem key={key.id} value={key.id}>{key.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
       {signingKeys.length > 0 && <SigningKeySummary signingKeys={signingKeys} />}
       {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
     </>
-  );
-}
-
-function InlineAptSigningKeyForm({
-  repositoryName,
-  onCreated,
-}: {
-  repositoryName: string;
-  onCreated: (key: SigningKey) => void;
-}) {
-  const generateKey = useGenerateAptSigningKey();
-  const importKey = useImportAptSigningKey();
-  const [error, setError] = useState("");
-
-  async function generate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    try {
-      const key = await generateKey.mutateAsync({
-        repositoryName,
-        input: {
-          name: String(form.get("name") ?? ""),
-          userIdName: String(form.get("userIdName") ?? ""),
-          userIdEmail: String(form.get("userIdEmail") ?? ""),
-        },
-      });
-      setError("");
-      onCreated(key);
-      formElement.reset();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Signing key could not be generated");
-    }
-  }
-
-  async function importSigningKey(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    try {
-      const key = await importKey.mutateAsync({
-        repositoryName,
-        input: {
-          name: String(form.get("name") ?? ""),
-          privateKeyArmored: String(form.get("privateKeyArmored") ?? ""),
-          passphrase: String(form.get("passphrase") ?? ""),
-        },
-      });
-      setError("");
-      onCreated(key);
-      formElement.reset();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Signing key could not be imported");
-    }
-  }
-
-  return (
-    <div className="rounded-lg border border-border bg-background p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <KeyRound className="h-4 w-4 text-primary" />
-        <h3 className="text-sm font-semibold">Create signing key</h3>
-      </div>
-      <Tabs defaultValue="generate">
-        <TabsList>
-          <TabsTrigger value="generate">Generate</TabsTrigger>
-          <TabsTrigger value="import">Import</TabsTrigger>
-        </TabsList>
-        <TabsContent value="generate">
-          <form className="grid gap-3" onSubmit={generate}>
-            <Input name="name" placeholder="release" required />
-            <Input name="userIdName" placeholder="Axis Repository" required />
-            <Input name="userIdEmail" type="email" placeholder="axis@example.local" required />
-            <Button type="submit" disabled={generateKey.isPending}>
-              <Plus className="mr-2 h-4 w-4" />
-              Generate key
-            </Button>
-          </form>
-        </TabsContent>
-        <TabsContent value="import">
-          <form className="grid gap-3" onSubmit={importSigningKey}>
-            <Input name="name" placeholder="release" required />
-            <Textarea name="privateKeyArmored" placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----" required />
-            <Input name="passphrase" type="password" placeholder="Passphrase" required />
-            <Button type="submit" disabled={importKey.isPending}>
-              <Plus className="mr-2 h-4 w-4" />
-              Import key
-            </Button>
-          </form>
-        </TabsContent>
-      </Tabs>
-      {(error || generateKey.isError || importKey.isError) && (
-        <div className="mt-3">
-          <ErrorState error={error || generateKey.error || importKey.error} />
-        </div>
-      )}
-    </div>
   );
 }
 

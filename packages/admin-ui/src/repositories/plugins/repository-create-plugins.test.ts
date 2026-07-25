@@ -9,11 +9,11 @@ import {
 } from "./repository-create-plugins";
 
 describe("repository create plugins", () => {
-  it("exposes APT as a wizard plugin with config and dependency steps", () => {
+  it("exposes APT as a wizard plugin with config and setup steps", () => {
     expect(repositoryCreatePlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
     expect(getRepositoryCreatePlugin("apt")).toMatchObject({
       ecosystem: "apt",
-      steps: ["plugin", "basics", "config", "dependencies", "review"],
+      steps: ["plugin", "basics", "config", "setup", "review"],
     });
     expect(getRepositoryCreatePlugin("pypi")).toMatchObject({
       ecosystem: "pypi",
@@ -22,7 +22,7 @@ describe("repository create plugins", () => {
   });
 
   it("derives create steps from repository config field steps", () => {
-    expect(getRepositoryCreatePlugin("apt").steps).toEqual(["plugin", "basics", "config", "dependencies", "review"]);
+    expect(getRepositoryCreatePlugin("apt").steps).toEqual(["plugin", "basics", "config", "setup", "review"]);
     expect(getRepositoryCreatePlugin("pypi").steps).toEqual(["plugin", "basics", "review"]);
   });
 
@@ -32,7 +32,7 @@ describe("repository create plugins", () => {
     expect(plugin.repositoryConfig.namespace).toBe("apt");
     expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step])).toEqual([
       ["codename", "text", "config"],
-      ["signingKeyId", "signing-key", "dependencies"],
+      ["signingKey", "signing-key-provisioning", "setup"],
     ]);
   });
 
@@ -45,8 +45,11 @@ describe("repository create plugins", () => {
       config: {
         codename: "noble",
       },
-      dependencies: {
-        signingKeyId: "signing_key_prod",
+      setup: {
+        signingKeyMode: "generate",
+        signingKeyName: "release",
+        signingKeyUserIdName: "Axis Repository",
+        signingKeyUserIdEmail: "axis@example.test",
       },
     })).toEqual({
       name: "debian-internal",
@@ -55,7 +58,16 @@ describe("repository create plugins", () => {
       config: {
         apt: {
           codename: "noble",
-          signingKeyId: "signing_key_prod",
+        },
+      },
+      provisioning: {
+        apt: {
+          signingKey: {
+            mode: "generate",
+            name: "release",
+            userIdName: "Axis Repository",
+            userIdEmail: "axis@example.test",
+          },
         },
       },
     });
@@ -68,7 +80,7 @@ describe("repository create plugins", () => {
       name: "python-internal",
       visibility: "private",
       config: {},
-      dependencies: {},
+      setup: {},
     })).toEqual({
       name: "python-internal",
       ecosystem: "pypi",

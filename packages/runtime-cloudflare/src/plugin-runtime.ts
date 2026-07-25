@@ -4,6 +4,9 @@ export type {
   DescribePublishedArtifactsInput,
   DerivedPublishPrincipalScope,
   PublisherMetadata,
+  ProvisionRepositoryCreateInput,
+  RepositoryCreateLifecycle,
+  RepositoryCreateProvisioningResult,
   RepositoryPathServingRule,
   RebuildRepositoryArtifactIndexInput,
   RepositoryArtifactIndexLifecycle,
@@ -11,6 +14,7 @@ export type {
   RepositoryRuntimePluginDescriptor,
   RepositoryServingContext,
   ValidatePublishArtifactsInput,
+  ValidateRepositoryCreateProvisioningInput,
   ValidateRepositoryConfigInput,
 } from "./plugins/repository-plugin-contract";
 export type {

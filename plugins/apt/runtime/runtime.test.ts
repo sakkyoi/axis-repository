@@ -111,6 +111,101 @@ describe("APT plugin lifecycle", () => {
     ).toThrow(new ValidationError("Publish token is not scoped to the repository signing key"));
   });
 
+  it("generates a signing key during repository creation", async () => {
+    const calls: unknown[] = [];
+    const plugin = createTestAptPlugin({
+      generate: async (input) => {
+        calls.push(input);
+        return { ...defaultSigningKey, id: "signing_key_generated" };
+      },
+    });
+
+    const result = await plugin.create?.provision({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: { apt: { codename: "noble", components: ["main"], architectures: ["amd64"] } },
+      provisioning: {
+        apt: {
+          signingKey: {
+            mode: "generate",
+            name: "release",
+            userIdName: "Axis Repository",
+            userIdEmail: "axis@example.test",
+          },
+        },
+      },
+    });
+
+    expect(result).toEqual({ configPatch: { apt: { signingKeyId: "signing_key_generated" } } });
+    expect(calls).toEqual([
+      {
+        repositoryName: "debian-internal",
+        name: "release",
+        userIdName: "Axis Repository",
+        userIdEmail: "axis@example.test",
+      },
+    ]);
+  });
+
+  it("imports a signing key during repository creation", async () => {
+    const calls: unknown[] = [];
+    const plugin = createTestAptPlugin({
+      create: async (input) => {
+        calls.push(input);
+        return { ...defaultSigningKey, id: "signing_key_imported" };
+      },
+    });
+
+    const result = await plugin.create?.provision({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: { apt: { codename: "noble", components: ["main"], architectures: ["amd64"] } },
+      provisioning: {
+        apt: {
+          signingKey: {
+            mode: "import",
+            name: "release",
+            privateKeyArmored: "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+            passphrase: "passphrase",
+          },
+        },
+      },
+    });
+
+    expect(result).toEqual({ configPatch: { apt: { signingKeyId: "signing_key_imported" } } });
+    expect(calls).toEqual([
+      {
+        repositoryName: "debian-internal",
+        name: "release",
+        privateKeyArmored: "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+        passphrase: "passphrase",
+      },
+    ]);
+  });
+
+  it("attaches an existing signing key during repository creation", async () => {
+    const plugin = createTestAptPlugin({
+      getPublicKey: async () => defaultSigningKey,
+    });
+
+    await expect(plugin.create?.provision({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: { apt: { codename: "noble", components: ["main"], architectures: ["amd64"] } },
+      provisioning: {
+        apt: {
+          signingKey: {
+            mode: "existing",
+            signingKeyId: "signing_key_prod",
+          },
+        },
+      },
+    })).resolves.toEqual({ configPatch: { apt: { signingKeyId: "signing_key_prod" } } });
+  });
+
   it("serves APT client helpers from plugin policy", async () => {
     const plugin = createTestAptPlugin({
       getPublicKey: async () => ({

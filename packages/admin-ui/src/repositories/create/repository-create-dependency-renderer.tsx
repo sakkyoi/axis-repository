@@ -31,6 +31,8 @@ export function RepositoryDependencyFields({
               repositoryName={repositoryName}
               value={values[field.name] ?? ""}
               onChange={(value) => update(field.name, value)}
+              values={values}
+              onValuesChange={onChange}
             />
           );
         }

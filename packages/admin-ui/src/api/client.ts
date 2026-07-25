@@ -42,6 +42,7 @@ export interface CreateRepositoryInput {
   ecosystem: string;
   visibility: RepositoryVisibility;
   config: Record<string, unknown>;
+  provisioning?: Record<string, unknown>;
 }
 
 export interface UpdateRepositoryInput {
