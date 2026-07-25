@@ -4,6 +4,7 @@ import {
   repositoryBrowserActivityDrawerContentClass,
   repositoryBrowserBreadcrumbs,
   repositoryBrowserDrawerBodyClass,
+  repositoryBrowserObjectDeleteDialogContent,
   repositoryBrowserLayoutClasses,
   repositoryBrowserPublishDrawerContentClass,
   repositoryBrowserRows,
@@ -75,5 +76,15 @@ describe("repository browser model", () => {
     expect(className).toContain("sm:h-dvh");
     expect(className).toContain("sm:right-0");
     expect(className).toContain("sm:w-[min(92vw,440px)]");
+  });
+
+  it("builds destructive dialog copy for deleting an object", () => {
+    expect(repositoryBrowserObjectDeleteDialogContent("pool/main/app_1.0.0_amd64.deb")).toEqual({
+      title: "Delete object",
+      description:
+        "Delete pool/main/app_1.0.0_amd64.deb? This removes the object from storage and records a repository activity entry.",
+      confirmLabel: "Delete object",
+      pendingLabel: "Deleting...",
+    });
   });
 });

@@ -82,13 +82,14 @@ export function useRepositoryObjectDetail(repositoryName: string | undefined, pa
   });
 }
 
-export function useDeleteRepositoryObject(repositoryName: string | undefined, prefix: string) {
+export function useDeleteRepositoryObject(repositoryName: string | undefined) {
   const client = useAxisClient();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (path: string) => client.deleteRepositoryObject(repositoryName ?? "", path),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName, prefix] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-object-detail", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
     },
   });
@@ -163,6 +164,8 @@ export function useFinalizeAdminPublishSession() {
     mutationFn: (sessionId: string) => client.finalizeAdminPublishSession(sessionId),
     onSuccess: (session) => {
       void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-objects", session.repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-object-detail", session.repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", session.repositoryName] });
     },
   });

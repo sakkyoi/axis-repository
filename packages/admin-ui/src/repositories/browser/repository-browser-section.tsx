@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useDeleteRepositoryObject, useRepositoryObjectDetail, useRepositoryObjects } from "../../api/hooks";
 import type { RepositoryObjectDetail } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
+import { DestructiveActionDialog } from "../../components/ui/destructive-action-dialog";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import {
   repositoryBrowserBreadcrumbs,
   repositoryBrowserDrawerBodyClass,
   repositoryBrowserLayoutClasses,
+  repositoryBrowserObjectDeleteDialogContent,
   repositoryBrowserPublishDrawerContentClass,
   repositoryBrowserRows,
   type RepositoryBrowserRow,
@@ -39,12 +41,13 @@ export function RepositoryBrowserSection({
   const [publishOpen, setPublishOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [selectedObjectPath, setSelectedObjectPath] = useState<string>();
+  const [pendingDeletePath, setPendingDeletePath] = useState<string>();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [publishFileError, setPublishFileError] = useState("");
   const [dragDepth, setDragDepth] = useState(0);
   const objects = useRepositoryObjects(repository.name, prefix);
   const objectDetail = useRepositoryObjectDetail(repository.name, selectedObjectPath);
-  const deleteObject = useDeleteRepositoryObject(repository.name, prefix);
+  const deleteObject = useDeleteRepositoryObject(repository.name);
   const publishPlugin = getRepositoryPublishPlugin(repository.ecosystem);
   const PreviewComponent = publishPlugin?.PreviewComponent;
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
@@ -52,6 +55,9 @@ export function RepositoryBrowserSection({
   const publishDrawerContentClass = repositoryBrowserPublishDrawerContentClass();
   const activityDrawerContentClass = repositoryBrowserActivityDrawerContentClass();
   const drawerBodyClass = repositoryBrowserDrawerBodyClass();
+  const deleteDialogContent = pendingDeletePath
+    ? repositoryBrowserObjectDeleteDialogContent(pendingDeletePath)
+    : undefined;
   const overlay = repositoryBrowserUploadOverlay({
     repositoryName: repository.name,
     canPublish: Boolean(PreviewComponent),
@@ -79,13 +85,21 @@ export function RepositoryBrowserSection({
     setPublishFileError("");
   }
 
-  function deleteObjectPath(path: string) {
-    if (!window.confirm(`Delete ${path}?`)) return;
-    deleteObject.mutate(path, {
+  function closeDeleteDialog() {
+    if (deleteObject.isPending) return;
+    setPendingDeletePath(undefined);
+    deleteObject.reset();
+  }
+
+  function confirmDeleteObject() {
+    if (!pendingDeletePath) return;
+    const deletedPath = pendingDeletePath;
+    deleteObject.mutate(deletedPath, {
       onSuccess: () => {
-        if (selectedObjectPath === path) {
+        if (selectedObjectPath === deletedPath) {
           setSelectedObjectPath(undefined);
         }
+        setPendingDeletePath(undefined);
       },
     });
   }
@@ -220,17 +234,34 @@ export function RepositoryBrowserSection({
               <RepositoryObjectDetailPanel
                 detail={objectDetail.data}
                 deleting={deleteObject.variables === objectDetail.data.path}
-                onDelete={() => deleteObjectPath(objectDetail.data.path)}
+                onDelete={() => setPendingDeletePath(objectDetail.data.path)}
               />
             )}
           </div>
         </DialogContent>
       </Dialog>
 
+      {deleteDialogContent && (
+        <DestructiveActionDialog
+          open={Boolean(pendingDeletePath)}
+          title={deleteDialogContent.title}
+          description={deleteDialogContent.description}
+          confirmLabel={deleteDialogContent.confirmLabel}
+          pendingLabel={deleteDialogContent.pendingLabel}
+          pending={deleteObject.isPending}
+          error={deleteObject.isError ? deleteObject.error : undefined}
+          onOpenChange={(open) => {
+            if (!open) {
+              closeDeleteDialog();
+            }
+          }}
+          onConfirm={confirmDeleteObject}
+        />
+      )}
+
       <div className={layout.frame}>
         {objects.isLoading && <div className={layout.loading}>Loading objects...</div>}
         {objects.isError && <div className={layout.error}><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
-        {deleteObject.isError && <div className={layout.error}><ErrorState title="Delete failed" error={deleteObject.error} /></div>}
         {!objects.isLoading && !objects.isError && rows.length === 0 && (
           <div className={layout.empty}>
             <div className={layout.emptyPanel}>
@@ -244,7 +275,7 @@ export function RepositoryBrowserSection({
             deletingPath={deleteObject.variables}
             onOpenDirectory={setPrefix}
             onOpenObject={setSelectedObjectPath}
-            onDeleteObject={deleteObjectPath}
+            onDeleteObject={setPendingDeletePath}
           />
         )}
       </div>
