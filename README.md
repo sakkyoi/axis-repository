@@ -16,15 +16,10 @@ Repository format plugins are documented in [docs/plugin-authoring.md](docs/plug
 
 ## Local Worker
 
-Copy the example Wrangler configuration:
-
-```bash
-cp packages/runtime-cloudflare/wrangler.example.toml packages/runtime-cloudflare/wrangler.toml
-```
-
-For the Durable Object-backed local worker, local Wrangler variables belong in
-`packages/runtime-cloudflare/.dev.vars`. This file contains local secrets and
-must not be committed.
+Axis uses the root `wrangler.jsonc` as the Cloudflare Worker configuration for
+local development, dry runs, and deploys. For the Durable Object-backed local
+worker, local Wrangler variables belong in root `.dev.vars`. This file contains
+local secrets and must not be committed.
 
 For normal local development, use Wrangler's local R2 binding:
 
@@ -73,7 +68,7 @@ SHA-256. Do not use it as a deployed artifact storage backend.
 Start the local worker after choosing one of the `.dev.vars` blocks above:
 
 ```bash
-pnpm --filter @axis-repository/runtime-cloudflare dev
+pnpm dev:worker
 ```
 
 The `--local` flag keeps Worker bindings local. With `UPLOAD_BACKEND=local-r2`,
@@ -138,4 +133,5 @@ repositories/<repository-name>/publishes/<session-id>.json
 Format-specific repository indexes and repository heads for apt, PyPI, and npm
 are future publishers.
 
-`packages/runtime-cloudflare/wrangler.toml` is local-only and should not be committed.
+Cloudflare deploy configuration lives in root `wrangler.jsonc`. Keep local
+secrets in root `.dev.vars`.

@@ -6,6 +6,9 @@
   "scripts": {
     "build": "pnpm --filter @axis-repository/core build && pnpm --filter @axis-repository/admin-ui build && pnpm --filter @axis-repository/publish-client build && pnpm --filter @axis-repository/runtime-cloudflare build:worker",
     "dev:ui": "pnpm --filter @axis-repository/admin-ui dev",
+    "dev:worker": "wrangler dev --local",
+    "deploy": "pnpm build && wrangler deploy",
+    "deploy:dry-run": "pnpm build && wrangler deploy --dry-run",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && pnpm -r typecheck"
   },
@@ -34,6 +37,7 @@
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
+    "wrangler": "^4.114.0",
     "zod": "^4.4.3"
   }
 }

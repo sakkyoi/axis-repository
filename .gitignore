@@ -3,3 +3,5 @@
 node_modules/
 packages/*/dist/
 *.tsbuildinfo
+.dev.vars
+packages/runtime-cloudflare/.dev.vars

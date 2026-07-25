@@ -80,6 +80,9 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(lightningcss@1.33.0)
+      wrangler:
+        specifier: ^4.114.0
+        version: 4.114.0(@cloudflare/workers-types@5.20260724.1)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -189,9 +192,6 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20260724.1
         version: 5.20260724.1
-      wrangler:
-        specifier: ^4.114.0
-        version: 4.114.0(@cloudflare/workers-types@5.20260724.1)
 
   plugins/apt:
     dependencies:
