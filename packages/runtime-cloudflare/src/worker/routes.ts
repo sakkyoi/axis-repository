@@ -5,6 +5,7 @@ import {
   UnauthorizedError,
   ValidationError,
   type PublishArtifactRequest,
+  type PublishSession,
   type PublishTokenRecord,
   type Repository,
   type RepositoryVisibility,
@@ -553,6 +554,16 @@ function parseAdminRepositoryObjectsPath(pathname: string): string | null {
   return repositoryName;
 }
 
+function parseAdminRepositoryActivityPath(pathname: string): string | null {
+  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/activity$/);
+  if (!match) return null;
+  const repositoryName = decodePathSegment(match[1] ?? "");
+  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
+    throw new NotFoundError();
+  }
+  return repositoryName;
+}
+
 function parseAdminRepositoryPluginResourcePath(requestUrl: string): {
   repositoryName: string;
   namespace: string;
@@ -613,6 +624,42 @@ function repositoryObjectListPrefix(value: string | null): string {
     throw new ValidationError("prefix must be a repository-relative path");
   }
   return meaningfulSegments.length === 0 ? "" : `${meaningfulSegments.join("/")}/`;
+}
+
+function repositoryObjectRelativePathParam(value: string | null): string {
+  if (!value || value.startsWith("/") || value.includes("\\") || value.includes("//")) {
+    throw new ValidationError("path must be a repository-relative object path");
+  }
+  const segments = value.split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
+    throw new ValidationError("path must be a repository-relative object path");
+  }
+  return segments.join("/");
+}
+
+function publishSessionActivity(session: PublishSession) {
+  const artifactLabel = session.artifacts.length === 1 ? "artifact" : "artifacts";
+  return {
+    id: `publish:${session.id}`,
+    repositoryName: session.repositoryName,
+    type: "publish",
+    actor: "publish-token",
+    summary: `Published ${session.artifacts.length} ${artifactLabel}`,
+    metadata: {},
+    createdAt: session.createdAt,
+    session,
+  };
+}
+
+async function repositoryActivityTimeline(dependencies: AppDependencies, repositoryName: string) {
+  const storedActivities = await dependencies.repositoryActivityService.listByRepository(repositoryName);
+  const publishActivities = (await dependencies.publishSessionService.listAll())
+    .filter((session) => session.repositoryName === repositoryName)
+    .map(publishSessionActivity);
+  return [...storedActivities, ...publishActivities].sort((left, right) => {
+    const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
+    return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
+  });
 }
 
 function repositoryObjectBrowserResponse(input: {
@@ -817,24 +864,56 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       ...repositoryClientHelperContext(dependencies, url.origin),
     });
   }
-  const adminRepositoryObjectsName = parseAdminRepositoryObjectsPath(url.pathname);
-  if (adminRepositoryObjectsName) {
+  const adminRepositoryActivityName = parseAdminRepositoryActivityPath(url.pathname);
+  if (adminRepositoryActivityName) {
     requireAdmin(request, dependencies.adminToken);
     if (request.method !== "GET") {
       throw new NotFoundError();
     }
+    const repository = await dependencies.repositoryService.getByName(adminRepositoryActivityName);
+    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
+    return jsonResponse({
+      activities: await repositoryActivityTimeline(dependencies, repository.name),
+    });
+  }
+  const adminRepositoryObjectsName = parseAdminRepositoryObjectsPath(url.pathname);
+  if (adminRepositoryObjectsName) {
+    requireAdmin(request, dependencies.adminToken);
     const repository = await dependencies.repositoryService.getByName(adminRepositoryObjectsName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
-    const prefix = repositoryObjectListPrefix(url.searchParams.get("prefix"));
-    const listing = await dependencies.repositoryObjectStore.listObjects({
-      prefix: `repositories/${repository.name}/${prefix}`,
-      delimiter: "/",
-    });
-    return jsonResponse(repositoryObjectBrowserResponse({
-      repositoryName: repository.name,
-      prefix,
-      listing,
-    }));
+    if (request.method === "GET") {
+      const prefix = repositoryObjectListPrefix(url.searchParams.get("prefix"));
+      const listing = await dependencies.repositoryObjectStore.listObjects({
+        prefix: `repositories/${repository.name}/${prefix}`,
+        delimiter: "/",
+      });
+      return jsonResponse(repositoryObjectBrowserResponse({
+        repositoryName: repository.name,
+        prefix,
+        listing,
+      }));
+    }
+    if (request.method === "DELETE") {
+      const relativePath = repositoryObjectRelativePathParam(url.searchParams.get("path"));
+      const objectKey = `repositories/${repository.name}/${relativePath}`;
+      const metadata = await dependencies.repositoryObjectStore.headObject(objectKey);
+      if (!metadata) {
+        throw new NotFoundError();
+      }
+      const deleted = await dependencies.repositoryObjectStore.deleteObject(objectKey);
+      if (!deleted) {
+        throw new NotFoundError();
+      }
+      const activity = await dependencies.repositoryActivityService.recordObjectDelete({
+        repositoryName: repository.name,
+        path: relativePath,
+        objectKey,
+        ...(metadata.contentType !== undefined ? { contentType: metadata.contentType } : {}),
+        ...(metadata.contentLength !== undefined ? { size: metadata.contentLength } : {}),
+      });
+      return jsonResponse({ activity });
+    }
+    throw new NotFoundError();
   }
   const adminPluginResourcePath = parseAdminRepositoryPluginResourcePath(request.url);
   if (adminPluginResourcePath) {

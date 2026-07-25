@@ -2,6 +2,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  RepositoryActivityRecord,
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
   SigningKeyRecord,
@@ -24,6 +25,7 @@ const repositorySecretKey = (id: string) => `repository-secret:${id}`;
 const repositorySecretNameKey = (namespace: string, repositoryName: string, name: string) =>
   `repository-secret-name:${namespace}:${repositoryName}:${name}`;
 const repositoryPluginPolicyKey = (ecosystem: string) => `repository-plugin-policy:${ecosystem}`;
+const repositoryActivityKey = (id: string) => `repository-activity:${id}`;
 
 function clonePublishSession(session: PublishSession): PublishSession {
   return JSON.parse(JSON.stringify(session)) as PublishSession;
@@ -210,9 +212,28 @@ export class DurableStateStore implements StateStore {
       await this.storage.put(repositoryPluginPolicyKey(record.ecosystem), record);
     },
   };
+
+  readonly repositoryActivities = {
+    listByRepository: async (repositoryName: string): Promise<RepositoryActivityRecord[]> => {
+      const values = await this.storage.list<RepositoryActivityRecord>({
+        prefix: "repository-activity:",
+      });
+      return [...values.values()]
+        .filter((activity) => activity.repositoryName === repositoryName)
+        .sort(compareRepositoryActivities);
+    },
+    save: async (record: RepositoryActivityRecord): Promise<void> => {
+      await this.storage.put(repositoryActivityKey(record.id), record);
+    },
+  };
 }
 
 function comparePublishSessions(left: PublishSession, right: PublishSession): number {
+  const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
+  return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
+}
+
+function compareRepositoryActivities(left: RepositoryActivityRecord, right: RepositoryActivityRecord): number {
   const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
   return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
 }

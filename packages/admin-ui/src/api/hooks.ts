@@ -71,6 +71,27 @@ export function useRepositoryObjects(repositoryName: string | undefined, prefix:
   });
 }
 
+export function useDeleteRepositoryObject(repositoryName: string | undefined, prefix: string) {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (path: string) => client.deleteRepositoryObject(repositoryName ?? "", path),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName, prefix] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
+    },
+  });
+}
+
+export function useRepositoryActivities(repositoryName: string | undefined) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["repository-activity", repositoryName],
+    queryFn: () => client.listRepositoryActivities(repositoryName ?? ""),
+    enabled: Boolean(repositoryName),
+  });
+}
+
 export function useRepositoryClientHelper(
   repositoryName: string | undefined,
   namespace: string | undefined,
@@ -98,7 +119,10 @@ export function useCreateAdminPublishSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateAdminPublishSessionInput) => client.createAdminPublishSession(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["publish-sessions"] }),
+    onSuccess: (session) => {
+      void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-activity", session.repositoryName] });
+    },
   });
 }
 
@@ -108,7 +132,10 @@ export function useVerifyAdminPublishUpload() {
   return useMutation({
     mutationFn: ({ sessionId, uploadId }: { sessionId: string; uploadId: string }) =>
       client.verifyAdminPublishUpload(sessionId, uploadId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["publish-sessions"] }),
+    onSuccess: (session) => {
+      void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-activity", session.repositoryName] });
+    },
   });
 }
 
@@ -117,7 +144,10 @@ export function useFinalizeAdminPublishSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (sessionId: string) => client.finalizeAdminPublishSession(sessionId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["publish-sessions"] }),
+    onSuccess: (session) => {
+      void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-activity", session.repositoryName] });
+    },
   });
 }
 

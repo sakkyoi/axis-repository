@@ -778,6 +778,7 @@ describe("PublishSessionService", () => {
       publishSessions: backingState.publishSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
+      repositoryActivities: backingState.repositoryActivities,
     };
     const service = new PublishSessionService({
       state,
@@ -928,6 +929,7 @@ describe("PublishSessionService", () => {
       publishTokens: backingState.publishTokens,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
+      repositoryActivities: backingState.repositoryActivities,
       publishSessions: {
         ...backingState.publishSessions,
         save: async (session: PublishSession) => {
@@ -1016,6 +1018,7 @@ describe("PublishSessionService", () => {
       publishTokens: backingState.publishTokens,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
+      repositoryActivities: backingState.repositoryActivities,
       publishSessions: {
         ...backingState.publishSessions,
         update: async (id, updater) => {

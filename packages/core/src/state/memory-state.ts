@@ -2,6 +2,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  RepositoryActivityRecord,
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
   SigningKeyRecord,
@@ -20,6 +21,7 @@ export class MemoryStateStore implements StateStore {
   private readonly repositorySecretById = new Map<string, RepositorySecretRecord | SigningKeyRecord>();
   private readonly repositorySecretIdByName = new Map<string, string>();
   private readonly repositoryPluginPolicyByEcosystem = new Map<string, RepositoryPluginPolicyRecord>();
+  private readonly repositoryActivityById = new Map<string, RepositoryActivityRecord>();
 
   readonly repositories = {
     getByName: async (name: string): Promise<Repository | null> => {
@@ -155,9 +157,25 @@ export class MemoryStateStore implements StateStore {
       this.repositoryPluginPolicyByEcosystem.set(record.ecosystem, record);
     },
   };
+
+  readonly repositoryActivities = {
+    listByRepository: async (repositoryName: string): Promise<RepositoryActivityRecord[]> => {
+      return [...this.repositoryActivityById.values()]
+        .filter((activity) => activity.repositoryName === repositoryName)
+        .sort(compareRepositoryActivities);
+    },
+    save: async (record: RepositoryActivityRecord): Promise<void> => {
+      this.repositoryActivityById.set(record.id, record);
+    },
+  };
 }
 
 function comparePublishSessions(left: PublishSession, right: PublishSession): number {
+  const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
+  return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
+}
+
+function compareRepositoryActivities(left: RepositoryActivityRecord, right: RepositoryActivityRecord): number {
   const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
   return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
 }

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   MemoryStateStore,
+  RepositoryActivityService,
   type PublishSession,
   type PublishTokenRecord,
+  type RepositoryActivityRecord,
   type RepositorySecretRecord,
   type RepositoryPluginPolicyRecord,
   type SigningKeyRecord,
@@ -60,6 +62,64 @@ const signingKey = (overrides: Partial<SigningKeyRecord> = {}): SigningKeyRecord
   keyId: "B".repeat(16),
   createdAt: "2026-07-18T00:00:00.000Z",
   ...overrides,
+});
+
+describe("MemoryStateStore repository activities", () => {
+  it("persists repository activities and lists them newest first", async () => {
+    const state = new MemoryStateStore();
+    const oldActivity: RepositoryActivityRecord = {
+      id: "activity_old",
+      repositoryName: "debian-internal",
+      type: "object.delete",
+      actor: "admin",
+      summary: "Deleted pool/main/app.deb",
+      metadata: { path: "pool/main/app.deb" },
+      createdAt: "2026-07-12T00:00:00.000Z",
+    };
+    const newActivity: RepositoryActivityRecord = {
+      ...oldActivity,
+      id: "activity_new",
+      createdAt: "2026-07-12T00:01:00.000Z",
+    };
+    await state.repositoryActivities.save(oldActivity);
+    await state.repositoryActivities.save({ ...newActivity, repositoryName: "python-internal" });
+    await state.repositoryActivities.save(newActivity);
+
+    await expect(state.repositoryActivities.listByRepository("debian-internal")).resolves.toEqual([
+      newActivity,
+      oldActivity,
+    ]);
+  });
+
+  it("records object delete activities through the activity service", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryActivityService({
+      state,
+      clock: { now: () => new Date("2026-07-12T00:01:00.000Z") },
+      randomId: { create: (prefix) => `${prefix}_1` },
+    });
+
+    await expect(service.recordObjectDelete({
+      repositoryName: "debian-internal",
+      path: "pool/main/app.deb",
+      objectKey: "repositories/debian-internal/pool/main/app.deb",
+      contentType: "application/vnd.debian.binary-package",
+      size: 123,
+    })).resolves.toEqual({
+      id: "activity_1",
+      repositoryName: "debian-internal",
+      type: "object.delete",
+      actor: "admin",
+      summary: "Deleted pool/main/app.deb",
+      metadata: {
+        path: "pool/main/app.deb",
+        objectKey: "repositories/debian-internal/pool/main/app.deb",
+        contentType: "application/vnd.debian.binary-package",
+        size: 123,
+      },
+      createdAt: "2026-07-12T00:01:00.000Z",
+    });
+  });
 });
 
 const repositorySecret = (overrides: Partial<RepositorySecretRecord> = {}): RepositorySecretRecord => ({

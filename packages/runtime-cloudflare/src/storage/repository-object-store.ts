@@ -28,6 +28,7 @@ export interface R2ObjectBucket {
   head(key: string): Promise<R2HeadObject | null>;
   get(key: string, options?: RepositoryObjectReadOptions): Promise<R2ReadableObject | null>;
   list(options?: { prefix?: string; delimiter?: string; cursor?: string; limit?: number }): Promise<R2ObjectsList>;
+  delete(key: string): Promise<unknown>;
   put(
     key: string,
     value: string | Uint8Array | ReadableStream,
@@ -141,6 +142,16 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
       truncated: false,
     };
   }
+
+  async deleteObject(key: string): Promise<boolean> {
+    const previousLength = this.objects.length;
+    for (let index = this.objects.length - 1; index >= 0; index -= 1) {
+      if (this.objects[index]?.key === key) {
+        this.objects.splice(index, 1);
+      }
+    }
+    return previousLength !== this.objects.length;
+  }
 }
 
 export class R2RepositoryObjectStore implements RepositoryObjectStore {
@@ -237,6 +248,15 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
       ...(result.cursor !== undefined ? { cursor: result.cursor } : {}),
       truncated: result.truncated,
     };
+  }
+
+  async deleteObject(key: string): Promise<boolean> {
+    const existing = await this.bucket.head(key);
+    if (!existing) {
+      return false;
+    }
+    await this.bucket.delete(key);
+    return true;
   }
 }
 

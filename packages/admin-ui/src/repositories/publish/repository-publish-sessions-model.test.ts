@@ -5,7 +5,10 @@ import {
   REPOSITORY_ACTIVITY_PAGE_SIZE,
   publishSessionArtifactSummary,
   publishSessionStatusMeta,
+  repositoryActivityActionLabel,
   repositoryActivityPage,
+  repositoryActivityStatusMeta,
+  repositoryActivitySummary,
   repositoryPublishSessionsView,
   sessionsForRepository,
 } from "./repository-publish-sessions-model";
@@ -126,21 +129,30 @@ describe("repository publish sessions model", () => {
       ]).activities,
     ).toEqual([{
       id: "publish:pub_new",
+      repositoryName: "debian-internal",
       type: "publish",
-      actionLabel: "Published artifact",
+      actor: "publish-token",
+      summary: "Published 1 artifact",
+      metadata: {},
       createdAt: "2026-07-23T00:00:00.000Z",
-      status: { label: "finalized", variant: "success" },
       session: publishSession,
     }]);
+
+    const activity = repositoryPublishSessionsView({ name: "debian-internal", ecosystem: "apt" }, [publishSession]).activities[0]!;
+    expect(repositoryActivityActionLabel(activity)).toBe("Published artifact");
+    expect(repositoryActivityStatusMeta(activity)).toEqual({ label: "finalized", variant: "success" });
+    expect(repositoryActivitySummary(activity, publishSessionArtifactSummary)).toBe("1 artifact, 1 verified");
   });
 
   it("pages repository activities with an explicit load more state", () => {
     const activities = Array.from({ length: 23 }, (_, index) => ({
       id: `publish:pub_${index}`,
+      repositoryName: "debian-internal",
       type: "publish" as const,
-      actionLabel: "Published artifact",
+      actor: "publish-token" as const,
+      summary: "Published 1 artifact",
+      metadata: {},
       createdAt: `2026-07-23T00:${String(index).padStart(2, "0")}:00.000Z`,
-      status: { label: "finalized", variant: "success" as const },
       session: session({ id: `pub_${index}` }),
     }));
 

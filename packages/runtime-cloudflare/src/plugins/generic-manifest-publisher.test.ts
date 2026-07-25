@@ -36,6 +36,10 @@ class FailingPublishObjectStore implements RepositoryObjectStore {
   async headObject(): Promise<null> {
     return null;
   }
+
+  async deleteObject(): Promise<boolean> {
+    return false;
+  }
 }
 
 describe("GenericManifestPublisher", () => {

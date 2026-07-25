@@ -9,11 +9,14 @@ import {
   publishTokensResponseSchema,
   repositoryPluginSchema,
   repositoryPluginsResponseSchema,
+  repositoryActivitiesResponseSchema,
+  repositoryObjectDeleteResponseSchema,
   repositoryObjectsResponseSchema,
   repositoriesResponseSchema,
   repositorySchema,
   type PublishTokenCreateResponse,
   type Repository,
+  type RepositoryActivity,
   type RepositoryPlugin,
   type RepositoryVisibility,
   type PublishSession,
@@ -62,6 +65,8 @@ export interface AxisClient {
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
   listRepositoryObjects(name: string, prefix: string): Promise<ReturnType<typeof repositoryObjectsResponseSchema.parse>>;
+  deleteRepositoryObject(name: string, path: string): Promise<RepositoryActivity>;
+  listRepositoryActivities(name: string): Promise<RepositoryActivity[]>;
   getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown>;
   getRepositoryPluginResource(name: string, namespace: string, path: readonly string[]): Promise<unknown>;
   postRepositoryPluginResource(name: string, namespace: string, path: readonly string[], input?: unknown): Promise<unknown>;
@@ -123,6 +128,16 @@ export function createAxisClient(options: HttpOptions): AxisClient {
         `/admin/repositories/${encodePathSegment(name)}/objects?prefix=${encodeURIComponent(prefix)}`,
       );
       return repositoryObjectsResponseSchema.parse(response.data);
+    },
+    async deleteRepositoryObject(name: string, path: string) {
+      const response = await http.delete(
+        `/admin/repositories/${encodePathSegment(name)}/objects?path=${encodeURIComponent(path)}`,
+      );
+      return repositoryObjectDeleteResponseSchema.parse(response.data).activity;
+    },
+    async listRepositoryActivities(name: string) {
+      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/activity`);
+      return repositoryActivitiesResponseSchema.parse(response.data).activities;
     },
     async getRepositoryClientHelper(name: string, namespace: string, action: string) {
       const response = await http.get(

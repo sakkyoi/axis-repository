@@ -6,6 +6,7 @@ import type {
   UploadedObject,
   UploadTarget,
   Repository,
+  RepositoryActivityRecord,
   TokenPrincipal,
   PublishArtifactRequest,
   PublishArtifactsInput,
@@ -97,6 +98,7 @@ export interface RepositoryObjectStore {
   listObjects(input: { prefix: string; delimiter?: string; cursor?: string; limit?: number }): Promise<RepositoryObjectList>;
   headObject(key: string): Promise<RepositoryObjectMetadata | null>;
   getObject(key: string, options?: RepositoryObjectReadOptions): Promise<RepositoryObject | null>;
+  deleteObject(key: string): Promise<boolean>;
 }
 
 export interface RepositoryStore {
@@ -140,6 +142,11 @@ export interface RepositoryPluginPolicyStore {
   save(record: RepositoryPluginPolicyRecord): Promise<void>;
 }
 
+export interface RepositoryActivityStore {
+  listByRepository(repositoryName: string): Promise<RepositoryActivityRecord[]>;
+  save(record: RepositoryActivityRecord): Promise<void>;
+}
+
 export interface TokenVerifier {
   verifyPublishToken(token: string): Promise<TokenPrincipal | null>;
 }
@@ -150,4 +157,5 @@ export interface StateStore {
   publishTokens: PublishTokenStore;
   repositorySecrets: RepositorySecretStore;
   repositoryPluginPolicies: RepositoryPluginPolicyStore;
+  repositoryActivities: RepositoryActivityStore;
 }

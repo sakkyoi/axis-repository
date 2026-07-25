@@ -1896,6 +1896,78 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(401);
   });
 
+  it("deletes repository objects through the admin file browser and records activity", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    await harness.repositoryObjectStore.putBytes(
+      "repositories/debian-private/pool/main/app/app_1.0.0_amd64.deb",
+      new Uint8Array([1, 2, 3]),
+      "application/vnd.debian.binary-package",
+    );
+
+    const deleteResponse = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/objects?path=pool%2Fmain%2Fapp%2Fapp_1.0.0_amd64.deb",
+      { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const listing = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/objects?prefix=pool%2Fmain%2Fapp%2F",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const activity = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/activity",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(deleteResponse.status).toBe(200);
+    await expect(deleteResponse.json()).resolves.toMatchObject({
+      activity: {
+        type: "object.delete",
+        repositoryName: "debian-private",
+        summary: "Deleted pool/main/app/app_1.0.0_amd64.deb",
+        metadata: {
+          path: "pool/main/app/app_1.0.0_amd64.deb",
+          objectKey: "repositories/debian-private/pool/main/app/app_1.0.0_amd64.deb",
+          contentType: "application/vnd.debian.binary-package",
+          size: 3,
+        },
+      },
+    });
+    await expect(listing.json()).resolves.toMatchObject({ objects: [] });
+    await expect(activity.json()).resolves.toMatchObject({
+      activities: [
+        {
+          type: "object.delete",
+          summary: "Deleted pool/main/app/app_1.0.0_amd64.deb",
+        },
+      ],
+    });
+  });
+
+  it("rejects repository object delete paths with traversal segments", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/objects?path=..%2Fsecret",
+      { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "path must be a repository-relative object path" },
+    });
+  });
+
   it("rejects malformed basic auth for private repository reads", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

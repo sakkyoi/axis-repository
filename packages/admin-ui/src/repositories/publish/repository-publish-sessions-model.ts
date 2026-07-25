@@ -1,20 +1,15 @@
-import type { PublishSession, PublishSessionStatus, Repository } from "../../api/schemas";
+import type {
+  PublishSession,
+  PublishSessionStatus,
+  Repository,
+  RepositoryActivity as ApiRepositoryActivity,
+} from "../../api/schemas";
 
 export type PublishSessionStatusVariant = "default" | "success" | "warning" | "destructive";
 
 export const REPOSITORY_ACTIVITY_PAGE_SIZE = 10;
 
-export interface RepositoryActivity {
-  id: string;
-  type: "publish";
-  actionLabel: string;
-  createdAt: string;
-  status: {
-    label: string;
-    variant: PublishSessionStatusVariant;
-  };
-  session: PublishSession;
-}
+export type RepositoryActivity = ApiRepositoryActivity;
 
 export function sessionsForRepository(repositoryName: string, sessions: PublishSession[]): PublishSession[] {
   return sessions.filter((session) => session.repositoryName === repositoryName);
@@ -35,12 +30,15 @@ export function repositoryPublishSessionsView(
 }
 
 export function repositoryActivityFromPublishSession(session: PublishSession): RepositoryActivity {
+  const artifactLabel = session.artifacts.length === 1 ? "artifact" : "artifacts";
   return {
     id: `publish:${session.id}`,
+    repositoryName: session.repositoryName,
     type: "publish",
-    actionLabel: session.artifacts.length === 1 ? "Published artifact" : "Published artifacts",
+    actor: "publish-token",
+    summary: `Published ${session.artifacts.length} ${artifactLabel}`,
+    metadata: {},
     createdAt: session.createdAt,
-    status: publishSessionStatusMeta(session.status),
     session,
   };
 }
@@ -63,6 +61,34 @@ export function repositoryActivityPage(
     nextVisibleCount: Math.min(normalizedVisibleCount + REPOSITORY_ACTIVITY_PAGE_SIZE, activities.length),
     totalCount: activities.length,
   };
+}
+
+export function repositoryActivityActionLabel(activity: RepositoryActivity): string {
+  if (activity.type === "publish") {
+    return activity.session.artifacts.length === 1 ? "Published artifact" : "Published artifacts";
+  }
+  return "Deleted object";
+}
+
+export function repositoryActivityStatusMeta(activity: RepositoryActivity): {
+  label: string;
+  variant: PublishSessionStatusVariant;
+} {
+  if (activity.type === "publish") {
+    return publishSessionStatusMeta(activity.session.status);
+  }
+  return { label: "deleted", variant: "destructive" };
+}
+
+export function repositoryActivitySummary(
+  activity: RepositoryActivity,
+  publishArtifactSummary: (session: PublishSession) => string,
+): string {
+  if (activity.type === "publish") {
+    return publishArtifactSummary(activity.session);
+  }
+  const path = activity.metadata.path;
+  return typeof path === "string" ? path : activity.summary;
 }
 
 export function publishSessionStatusMeta(status: PublishSessionStatus): {

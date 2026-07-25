@@ -3,6 +3,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  RepositoryActivityRecord,
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
   SigningKeyRecord,
@@ -84,6 +85,20 @@ const signingKey = (overrides: Partial<SigningKeyRecord> = {}): SigningKeyRecord
   fingerprint: "A".repeat(40),
   keyId: "B".repeat(16),
   createdAt: "2026-07-18T00:00:00.000Z",
+  ...overrides,
+});
+
+const repositoryActivity = (overrides: Partial<RepositoryActivityRecord> = {}): RepositoryActivityRecord => ({
+  id: "activity_1",
+  repositoryName: "debian-internal",
+  type: "object.delete",
+  actor: "admin",
+  summary: "Deleted pool/main/app.deb",
+  metadata: {
+    path: "pool/main/app.deb",
+    objectKey: "repositories/debian-internal/pool/main/app.deb",
+  },
+  createdAt: "2026-07-14T00:00:00.000Z",
   ...overrides,
 });
 
@@ -190,6 +205,21 @@ describe("DurableStateStore", () => {
       { id: "pub_new" },
       { id: "pub_mid" },
       { id: "pub_old" },
+    ]);
+  });
+
+  it("persists repository activities and lists newest first by repository", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    const oldActivity = repositoryActivity({ id: "activity_old", createdAt: "2026-07-14T00:00:00.000Z" });
+    const newActivity = repositoryActivity({ id: "activity_new", createdAt: "2026-07-14T00:02:00.000Z" });
+
+    await state.repositoryActivities.save(oldActivity);
+    await state.repositoryActivities.save({ ...newActivity, repositoryName: "python-internal" });
+    await state.repositoryActivities.save(newActivity);
+
+    await expect(state.repositoryActivities.listByRepository("debian-internal")).resolves.toEqual([
+      newActivity,
+      oldActivity,
     ]);
   });
 

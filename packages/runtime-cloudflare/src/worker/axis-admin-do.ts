@@ -1,4 +1,5 @@
 import {
+  RepositoryActivityService,
   PublishSessionService,
   PublishTokenService,
   PluginPolicyService,
@@ -136,6 +137,7 @@ export function createDurableObjectDependencies(
       plugins: repositoryRuntimePlugins,
       pluginPolicyService,
     }),
+    repositoryActivityService: new RepositoryActivityService({ state, clock, randomId }),
     pluginPolicyService,
     repositorySecrets,
     repositoryObjectStore: objectStore,

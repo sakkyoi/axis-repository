@@ -1,7 +1,7 @@
-import { File, Folder, History, PackagePlus, UploadCloud } from "lucide-react";
+import { File, Folder, History, PackagePlus, Trash2, UploadCloud } from "lucide-react";
 import type { DragEvent } from "react";
 import { useRef, useState } from "react";
-import { useRepositoryObjects } from "../../api/hooks";
+import { useDeleteRepositoryObject, useRepositoryObjects } from "../../api/hooks";
 import { Button } from "../../components/ui/button";
 import {
   Dialog,
@@ -41,6 +41,7 @@ export function RepositoryBrowserSection({
   const [publishFileError, setPublishFileError] = useState("");
   const [dragDepth, setDragDepth] = useState(0);
   const objects = useRepositoryObjects(repository.name, prefix);
+  const deleteObject = useDeleteRepositoryObject(repository.name, prefix);
   const publishPlugin = getRepositoryPublishPlugin(repository.ecosystem);
   const PreviewComponent = publishPlugin?.PreviewComponent;
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
@@ -192,6 +193,7 @@ export function RepositoryBrowserSection({
       <div className={layout.frame}>
         {objects.isLoading && <div className={layout.loading}>Loading objects...</div>}
         {objects.isError && <div className={layout.error}><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
+        {deleteObject.isError && <div className={layout.error}><ErrorState title="Delete failed" error={deleteObject.error} /></div>}
         {!objects.isLoading && !objects.isError && rows.length === 0 && (
           <div className={layout.empty}>
             <div className={layout.emptyPanel}>
@@ -200,7 +202,15 @@ export function RepositoryBrowserSection({
           </div>
         )}
         {!objects.isLoading && !objects.isError && rows.length > 0 && (
-          <RepositoryBrowserTable rows={rows} onOpenDirectory={setPrefix} />
+          <RepositoryBrowserTable
+            rows={rows}
+            deletingPath={deleteObject.variables}
+            onOpenDirectory={setPrefix}
+            onDeleteObject={(path) => {
+              if (!window.confirm(`Delete ${path}?`)) return;
+              deleteObject.mutate(path);
+            }}
+          />
         )}
       </div>
 
@@ -258,10 +268,14 @@ function RepositoryBrowserBreadcrumbs({
 
 function RepositoryBrowserTable({
   rows,
+  deletingPath,
   onOpenDirectory,
+  onDeleteObject,
 }: {
   rows: RepositoryBrowserRow[];
+  deletingPath: string | undefined;
   onOpenDirectory: (prefix: string) => void;
+  onDeleteObject: (path: string) => void;
 }) {
   return (
     <div className="max-h-[36rem] overflow-auto">
@@ -271,7 +285,8 @@ function RepositoryBrowserTable({
             <th className="w-[45%] px-3 py-2 font-medium">Name</th>
             <th className="w-[25%] px-3 py-2 font-medium">Type</th>
             <th className="w-[15%] px-3 py-2 font-medium">Size</th>
-            <th className="w-[15%] px-3 py-2 font-medium">Path</th>
+            <th className="w-[12%] px-3 py-2 font-medium">Path</th>
+            <th className="w-[3rem] px-3 py-2 font-medium" aria-label="Actions" />
           </tr>
         </thead>
         <tbody>
@@ -283,6 +298,22 @@ function RepositoryBrowserTable({
               <td className="truncate px-3 py-2 text-muted-foreground">{row.contentType}</td>
               <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{row.sizeLabel}</td>
               <td className="truncate px-3 py-2 text-xs text-muted-foreground">{row.path}</td>
+              <td className="px-3 py-2 text-right">
+                {row.kind === "object" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    aria-label={`Delete ${row.path}`}
+                    title={`Delete ${row.path}`}
+                    disabled={deletingPath === row.path}
+                    onClick={() => onDeleteObject(row.path)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

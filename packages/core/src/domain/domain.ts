@@ -151,3 +151,15 @@ export interface PublishArtifactsInput {
   session: PublishSession;
   artifacts: PublishedArtifactInput[];
 }
+
+export type RepositoryActivityType = "object.delete";
+
+export interface RepositoryActivityRecord {
+  id: string;
+  repositoryName: string;
+  type: RepositoryActivityType;
+  actor: "admin";
+  summary: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}

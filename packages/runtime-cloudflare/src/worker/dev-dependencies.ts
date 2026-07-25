@@ -1,6 +1,7 @@
 import {
   MemoryStateStore,
   PluginPolicyService,
+  RepositoryActivityService,
   PublishSessionService,
   PublishTokenService,
   RepositoryService,
@@ -24,6 +25,7 @@ export interface AppDependencies {
   repositoryService: PluginRepositoryService;
   publishTokenService: PublishTokenService;
   publishSessionService: PluginPublishSessionService;
+  repositoryActivityService: RepositoryActivityService;
   pluginPolicyService: PluginPolicyService;
   repositorySecrets: RepositorySecretService;
   repositoryObjectStore: RepositoryObjectStore;
@@ -95,6 +97,7 @@ export function createDevDependencyHarness(
         plugins: repositoryRuntimePlugins,
         pluginPolicyService,
       }),
+      repositoryActivityService: new RepositoryActivityService({ state, clock, randomId }),
       pluginPolicyService,
       repositorySecrets,
       repositoryObjectStore: objectStore,

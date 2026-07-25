@@ -171,6 +171,37 @@ export const publishSessionsResponseSchema = z.object({
   sessions: z.array(publishSessionSchema),
 });
 
+export const objectDeleteActivitySchema = z.object({
+  id: z.string(),
+  repositoryName: z.string(),
+  type: z.literal("object.delete"),
+  actor: z.literal("admin"),
+  summary: z.string(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+});
+
+export const publishActivitySchema = z.object({
+  id: z.string(),
+  repositoryName: z.string(),
+  type: z.literal("publish"),
+  actor: z.literal("publish-token"),
+  summary: z.string(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  session: publishSessionSchema,
+});
+
+export const repositoryActivitySchema = z.union([objectDeleteActivitySchema, publishActivitySchema]);
+
+export const repositoryActivitiesResponseSchema = z.object({
+  activities: z.array(repositoryActivitySchema),
+});
+
+export const repositoryObjectDeleteResponseSchema = z.object({
+  activity: objectDeleteActivitySchema,
+});
+
 export const signingKeySchema = z.object({
   id: z.string(),
   repositoryName: z.string(),
@@ -203,4 +234,5 @@ export type PublishSession = z.infer<typeof publishSessionSchema>;
 export type PublishSessionStatus = z.infer<typeof publishSessionStatusSchema>;
 export type PublishArtifact = z.infer<typeof publishArtifactSchema>;
 export type UploadTarget = z.infer<typeof uploadTargetSchema>;
+export type RepositoryActivity = z.infer<typeof repositoryActivitySchema>;
 export type SigningKey = z.infer<typeof signingKeySchema>;

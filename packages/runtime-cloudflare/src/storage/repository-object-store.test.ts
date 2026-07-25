@@ -17,6 +17,7 @@ class FakeR2Bucket implements R2ObjectBucket {
     key: string;
     options?: { range?: { offset: number; length: number } };
   }> = [];
+  readonly deletes: string[] = [];
   failArrayBufferReads = false;
 
   async head(key: string): Promise<R2ReadableObject | null> {
@@ -101,6 +102,17 @@ class FakeR2Bucket implements R2ObjectBucket {
     options?: { httpMetadata?: { contentType?: string } },
   ) {
     this.puts.push(options === undefined ? { key, value } : { key, value, options });
+  }
+
+  async delete(key: string) {
+    this.deletes.push(key);
+    const previousLength = this.puts.length;
+    for (let index = this.puts.length - 1; index >= 0; index -= 1) {
+      if (this.puts[index]?.key === key) {
+        this.puts.splice(index, 1);
+      }
+    }
+    return previousLength !== this.puts.length;
   }
 }
 
@@ -343,6 +355,17 @@ describe("MemoryRepositoryObjectStore", () => {
     const store = new MemoryRepositoryObjectStore();
 
     await expect(store.getObject("repositories/debian/missing")).resolves.toBeNull();
+  });
+
+  it("deletes the latest memory object by key", async () => {
+    const store = new MemoryRepositoryObjectStore();
+    await store.putText("repositories/debian/pool/app.deb", "old", "text/plain");
+    await store.putText("repositories/debian/pool/app.deb", "new", "text/plain");
+
+    await expect(store.deleteObject("repositories/debian/pool/app.deb")).resolves.toBe(true);
+
+    await expect(store.getObject("repositories/debian/pool/app.deb")).resolves.toBeNull();
+    await expect(store.deleteObject("repositories/debian/pool/app.deb")).resolves.toBe(false);
   });
 
   it("lists memory objects by prefix and delimiter as a repository tree", async () => {
@@ -591,6 +614,17 @@ describe("R2RepositoryObjectStore", () => {
     const store = new R2RepositoryObjectStore(new FakeR2Bucket());
 
     await expect(store.getObject("repositories/debian/missing")).resolves.toBeNull();
+  });
+
+  it("deletes R2 objects by key", async () => {
+    const bucket = new FakeR2Bucket();
+    const store = new R2RepositoryObjectStore(bucket);
+    await store.putText("repositories/debian/pool/app.deb", "content", "text/plain");
+
+    await expect(store.deleteObject("repositories/debian/pool/app.deb")).resolves.toBe(true);
+
+    expect(bucket.deletes).toEqual(["repositories/debian/pool/app.deb"]);
+    await expect(store.headObject("repositories/debian/pool/app.deb")).resolves.toBeNull();
   });
 
   it("lists R2 objects by prefix and delimiter", async () => {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import {
-  usePublishSessions,
+  useRepositoryActivities,
   useRepositoryClientHelper,
   useUpdateRepository,
 } from "../../api/hooks";
@@ -14,9 +14,11 @@ import { asJson, ErrorState } from "../../pages/shared";
 import {
   REPOSITORY_ACTIVITY_PAGE_SIZE,
   publishSessionArtifactSummary,
+  repositoryActivityActionLabel,
   repositoryActivityPage,
+  repositoryActivityStatusMeta,
+  repositoryActivitySummary,
   type RepositoryActivity,
-  repositoryPublishSessionsView,
 } from "../publish/repository-publish-sessions-model";
 import type { PublishSessionDetailComponentProps, RepositoryDetailSection } from "../plugins/repository-ui-plugin-types";
 
@@ -94,9 +96,8 @@ export function PublishSessionsSection({
   hideTitle?: boolean;
 }) {
   const [visibleActivityCount, setVisibleActivityCount] = useState(REPOSITORY_ACTIVITY_PAGE_SIZE);
-  const publishSessions = usePublishSessions();
-  const publishSessionsView = repositoryPublishSessionsView(repository, publishSessions.data ?? []);
-  const activityPage = repositoryActivityPage(publishSessionsView.activities, visibleActivityCount);
+  const repositoryActivities = useRepositoryActivities(repository.name);
+  const activityPage = repositoryActivityPage(repositoryActivities.data ?? [], visibleActivityCount);
   const activities = activityPage.visibleActivities;
 
   useEffect(() => {
@@ -107,21 +108,21 @@ export function PublishSessionsSection({
     <section className="grid gap-2">
       <div className="flex items-center justify-between gap-3">
         {!hideTitle && <h3 className="text-sm font-semibold">Activity</h3>}
-        {publishSessionsView.activities.length > 0 && (
+        {(repositoryActivities.data?.length ?? 0) > 0 && (
           <span className="text-xs text-muted-foreground">
             {activityPage.visibleCount} of {activityPage.totalCount}
           </span>
         )}
       </div>
-      {publishSessions.isLoading && <p className="text-sm text-muted-foreground">Loading publish sessions...</p>}
-      {publishSessions.isError && <ErrorState title="Publish sessions unavailable" error={publishSessions.error} />}
-      {!publishSessions.isLoading && !publishSessions.isError && activities.length === 0 && (
+      {repositoryActivities.isLoading && <p className="text-sm text-muted-foreground">Loading activity...</p>}
+      {repositoryActivities.isError && <ErrorState title="Activity unavailable" error={repositoryActivities.error} />}
+      {!repositoryActivities.isLoading && !repositoryActivities.isError && activities.length === 0 && (
         <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
           No repository activity yet.
         </div>
       )}
-      {!publishSessions.isLoading &&
-        !publishSessions.isError &&
+      {!repositoryActivities.isLoading &&
+        !repositoryActivities.isError &&
         activities.map((activity) => (
           <RepositoryActivityItem
             key={activity.id}
@@ -130,7 +131,7 @@ export function PublishSessionsSection({
             SessionDetailComponent={SessionDetailComponent}
           />
         ))}
-      {!publishSessions.isLoading && !publishSessions.isError && activityPage.hasMoreActivities && (
+      {!repositoryActivities.isLoading && !repositoryActivities.isError && activityPage.hasMoreActivities && (
         <Button
           type="button"
           variant="outline"
@@ -152,17 +153,19 @@ function RepositoryActivityItem({
   artifactSummary: (session: PublishSession) => string;
   SessionDetailComponent: React.ComponentType<PublishSessionDetailComponentProps>;
 }) {
-  const session = activity.session;
+  const status = repositoryActivityStatusMeta(activity);
   return (
     <details className="group min-w-0 rounded-md border border-border bg-background/40 px-3 py-2">
       <summary className="cursor-pointer list-none">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-medium">{activity.actionLabel}</span>
-              <Badge variant={activity.status.variant}>{activity.status.label}</Badge>
+              <span className="truncate text-sm font-medium">{repositoryActivityActionLabel(activity)}</span>
+              <Badge variant={status.variant}>{status.label}</Badge>
             </div>
-            <p className="mt-1 truncate text-xs text-muted-foreground">{artifactSummary(session)}</p>
+            <p className="mt-1 truncate text-xs text-muted-foreground">
+              {repositoryActivitySummary(activity, artifactSummary)}
+            </p>
           </div>
           <div className="shrink-0 text-right text-xs text-muted-foreground">
             <div>{activity.createdAt}</div>
@@ -170,8 +173,21 @@ function RepositoryActivityItem({
           </div>
         </div>
       </summary>
-      <SessionDetailComponent session={session} artifactSummary={artifactSummary} />
+      {activity.type === "publish" ? (
+        <SessionDetailComponent session={activity.session} artifactSummary={artifactSummary} />
+      ) : (
+        <RepositoryObjectDeleteActivityDetail activity={activity} />
+      )}
     </details>
+  );
+}
+
+function RepositoryObjectDeleteActivityDetail({ activity }: { activity: Extract<RepositoryActivity, { type: "object.delete" }> }) {
+  return (
+    <div className="mt-3 grid gap-2 text-xs">
+      <PublishSessionDetailList title="Deleted object" items={[String(activity.metadata.path ?? activity.summary)]} />
+      <PublishSessionDetailList title="Object key" items={[String(activity.metadata.objectKey ?? "")]} />
+    </div>
   );
 }
 
