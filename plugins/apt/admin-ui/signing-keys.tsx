@@ -28,44 +28,31 @@ import {
   useImportAptSigningKey,
   useRevokeAptSigningKey,
 } from "./api";
-import { revokeAptSigningKeyDialogContent } from "./signing-keys-model";
-
-type CreateMode = "generate" | "import";
+import {
+  revokeAptSigningKeyDialogContent,
+  submitAptSigningKeyForm,
+  type AptSigningKeyCreateMode,
+} from "./signing-keys-model";
 
 export function AptSigningKeyDialog({ repositoryName, disabled = false }: { repositoryName: string; disabled?: boolean }) {
   const generateKey = useGenerateAptSigningKey();
   const importKey = useImportAptSigningKey();
-  const [mode, setMode] = useState<CreateMode>("generate");
+  const [mode, setMode] = useState<AptSigningKeyCreateMode>("generate");
   const [error, setError] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    try {
-      if (mode === "generate") {
-        await generateKey.mutateAsync({
-          repositoryName,
-          input: {
-            name: String(form.get("name") ?? ""),
-            userIdName: String(form.get("userIdName") ?? ""),
-            userIdEmail: String(form.get("userIdEmail") ?? ""),
-          },
-        });
-      } else {
-        await importKey.mutateAsync({
-          repositoryName,
-          input: {
-            name: String(form.get("name") ?? ""),
-            privateKeyArmored: String(form.get("privateKeyArmored") ?? ""),
-            passphrase: String(form.get("passphrase") ?? ""),
-          },
-        });
-      }
-      setError("");
-      event.currentTarget.reset();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Signing key could not be saved");
-    }
+    const formElement = event.currentTarget;
+    const formData = new FormData(formElement);
+    await submitAptSigningKeyForm({
+      mode,
+      repositoryName,
+      formData,
+      formElement,
+      generateKey: generateKey.mutateAsync,
+      importKey: importKey.mutateAsync,
+      setError,
+    });
   }
 
   const isPending = generateKey.isPending || importKey.isPending;
@@ -86,7 +73,7 @@ export function AptSigningKeyDialog({ repositoryName, disabled = false }: { repo
         <form className="grid gap-3" onSubmit={submit}>
           <label className="grid gap-2">
             <span className="text-sm font-medium">Mode</span>
-            <Select value={mode} onValueChange={(value) => setMode(value as CreateMode)}>
+            <Select value={mode} onValueChange={(value) => setMode(value as AptSigningKeyCreateMode)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
