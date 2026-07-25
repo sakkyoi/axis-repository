@@ -58,12 +58,14 @@ export function repositoryBrowserRows(listing: RepositoryObjectsResponse): Repos
 export function repositoryBrowserLayoutClasses(): {
   frame: string;
   empty: string;
+  emptyPanel: string;
   loading: string;
   error: string;
 } {
   return {
     frame: "min-h-64 overflow-hidden rounded-md border border-border bg-background/40",
-    empty: "grid min-h-64 place-items-center p-3",
+    empty: "grid min-h-64 p-3",
+    emptyPanel: "grid min-h-[calc(16rem-1.5rem)] place-items-center rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground",
     loading: "min-h-64 p-3 text-sm text-muted-foreground",
     error: "min-h-64 p-3",
   };

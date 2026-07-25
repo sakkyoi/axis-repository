@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog";
-import { EmptyState, ErrorState } from "../../pages/shared";
+import { ErrorState } from "../../pages/shared";
 import { PublishSessionsSection } from "../detail/repository-detail-shared";
 import { getRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
@@ -139,7 +139,9 @@ export function RepositoryBrowserSection({
         {objects.isError && <div className={layout.error}><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
         {!objects.isLoading && !objects.isError && rows.length === 0 && (
           <div className={layout.empty}>
-            <EmptyState message={PreviewComponent ? "No objects here. Use Publish artifact or drop files on this page." : "No repository objects at this path."} />
+            <div className={layout.emptyPanel}>
+              {PreviewComponent ? "No objects here. Use Publish artifact or drop files on this page." : "No repository objects at this path."}
+            </div>
           </div>
         )}
         {!objects.isLoading && !objects.isError && rows.length > 0 && (
