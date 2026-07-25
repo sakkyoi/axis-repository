@@ -33,17 +33,23 @@ export function RepositoryDetailSections({
   repository,
   pluginMetadata,
   sections,
+  onPublishFiles,
 }: {
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
   sections: RepositoryDetailSection[];
+  onPublishFiles?: (files: File[]) => void;
 }) {
   return (
     <>
       {sections.map((section) => (
         <section key={section.id} className="grid gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
           <h3 className="text-sm font-semibold">{section.title}</h3>
-          <section.Component repository={repository} pluginMetadata={pluginMetadata} />
+          <section.Component
+            repository={repository}
+            pluginMetadata={pluginMetadata}
+            {...(onPublishFiles ? { onPublishFiles } : {})}
+          />
         </section>
       ))}
     </>

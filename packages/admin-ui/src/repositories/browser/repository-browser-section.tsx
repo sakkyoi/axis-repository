@@ -1,6 +1,6 @@
-import { Copy, ExternalLink, File, Folder, History, PackagePlus, Trash2, UploadCloud } from "lucide-react";
+import { Copy, ExternalLink, File, Folder, Trash2, UploadCloud } from "lucide-react";
 import type { DragEvent } from "react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useDeleteRepositoryObject, useRepositoryObjectDetail, useRepositoryObjects } from "../../api/hooks";
 import type { RepositoryObjectDetail } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
@@ -8,42 +8,32 @@ import { DestructiveActionDialog } from "../../components/ui/destructive-action-
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog";
 import { ErrorState } from "../../pages/shared";
-import { PublishSessionsSection } from "../detail/repository-detail-shared";
 import { getRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
-  repositoryBrowserActivityDrawerContentClass,
   repositoryBrowserBreadcrumbs,
   repositoryBrowserDrawerBodyClass,
   repositoryBrowserLayoutClasses,
   repositoryBrowserObjectDeleteDialogContent,
-  repositoryBrowserPublishDrawerContentClass,
   repositoryBrowserRows,
   type RepositoryBrowserRow,
 } from "./repository-browser-model";
 import {
   filesFromFileList,
-  repositoryBrowserAcceptedPublishFiles,
   repositoryBrowserUploadOverlay,
   repositoryBrowserUploadOverlayClasses,
 } from "./repository-browser-upload-model";
 
 export function RepositoryBrowserSection({
   repository,
-  pluginMetadata,
+  onPublishFiles,
 }: RepositoryDetailSectionProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [prefix, setPrefix] = useState("");
-  const [publishOpen, setPublishOpen] = useState(false);
-  const [activityOpen, setActivityOpen] = useState(false);
   const [selectedObjectPath, setSelectedObjectPath] = useState<string>();
   const [pendingDeletePath, setPendingDeletePath] = useState<string>();
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [publishFileError, setPublishFileError] = useState("");
   const [dragDepth, setDragDepth] = useState(0);
   const objects = useRepositoryObjects(repository.name, prefix);
   const objectDetail = useRepositoryObjectDetail(repository.name, selectedObjectPath);
@@ -52,8 +42,6 @@ export function RepositoryBrowserSection({
   const PreviewComponent = publishPlugin?.PreviewComponent;
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
   const layout = repositoryBrowserLayoutClasses();
-  const publishDrawerContentClass = repositoryBrowserPublishDrawerContentClass();
-  const activityDrawerContentClass = repositoryBrowserActivityDrawerContentClass();
   const drawerBodyClass = repositoryBrowserDrawerBodyClass();
   const deleteDialogContent = pendingDeletePath
     ? repositoryBrowserObjectDeleteDialogContent(pendingDeletePath)
@@ -66,23 +54,7 @@ export function RepositoryBrowserSection({
 
   function handleFiles(files: File[]) {
     if (files.length === 0 || !PreviewComponent) return;
-    const { accepted, rejected } = repositoryBrowserAcceptedPublishFiles({
-      files,
-      ...(publishPlugin?.isAcceptedFile ? { isAcceptedFile: publishPlugin.isAcceptedFile } : {}),
-    });
-    setSelectedFiles(accepted);
-    setPublishFileError(
-      accepted.length === 0 && rejected.length > 0
-        ? `This repository accepts ${publishPlugin?.acceptedFileDescription ?? "supported artifact files"}.`
-        : "",
-    );
-    setPublishOpen(true);
-  }
-
-  function closePublishPreview() {
-    setPublishOpen(false);
-    setSelectedFiles([]);
-    setPublishFileError("");
+    onPublishFiles?.(files);
   }
 
   function closeDeleteDialog() {
@@ -141,92 +113,17 @@ export function RepositoryBrowserSection({
           prefix={prefix}
           onPrefixChange={setPrefix}
         />
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => setActivityOpen(true)}>
-            <History className="mr-2 h-4 w-4" />
-            Activity
-          </Button>
-          {PreviewComponent && (
-            <Button type="button" onClick={() => fileInputRef.current?.click()}>
-              <PackagePlus className="mr-2 h-4 w-4" />
-              Publish artifact
-            </Button>
-          )}
-        </div>
-        {PreviewComponent && (
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={publishPlugin?.accept}
-            className="hidden"
-            onChange={(event) => {
-              handleFiles(filesFromFileList(event.currentTarget.files));
-              event.currentTarget.value = "";
-            }}
-          />
-        )}
       </div>
-
-      <Dialog open={publishOpen} onOpenChange={(open) => {
-        if (open) {
-          setPublishOpen(true);
-          return;
-        }
-        closePublishPreview();
-      }}>
-        <DialogContent className={publishDrawerContentClass}>
-          <DialogHeader>
-            <DialogTitle>{publishPlugin?.title ?? "Publish artifact"}</DialogTitle>
-          </DialogHeader>
-          <div className={drawerBodyClass}>
-            {publishFileError ? (
-              <div className="grid gap-3">
-                <ErrorState title="Unsupported artifact" error={publishFileError} />
-                <div className="flex justify-end">
-                  <Button type="button" variant="outline" onClick={closePublishPreview}>
-                    Close
-                  </Button>
-                </div>
-              </div>
-            ) : PreviewComponent && (
-              <PreviewComponent
-                repository={repository}
-                pluginMetadata={pluginMetadata}
-                droppedFiles={selectedFiles}
-                onCancel={closePublishPreview}
-                onPublished={closePublishPreview}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
-        <DialogContent className={activityDrawerContentClass}>
-          <DialogHeader>
-            <DialogTitle>Activity</DialogTitle>
-          </DialogHeader>
-          <div className={drawerBodyClass}>
-            <PublishSessionsSection
-              repository={repository}
-              pluginMetadata={pluginMetadata}
-              hideTitle
-              {...(publishPlugin?.artifactSummary ? { artifactSummary: publishPlugin.artifactSummary } : {})}
-              {...(publishPlugin?.SessionDetailComponent ? { SessionDetailComponent: publishPlugin.SessionDetailComponent } : {})}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={Boolean(selectedObjectPath)} onOpenChange={(open) => {
         if (!open) {
           setSelectedObjectPath(undefined);
         }
       }}>
-        <DialogContent className={activityDrawerContentClass}>
-          <DialogHeader>
+        <DialogContent className="content-start grid-rows-[auto_minmax(0,1fr)] bottom-0 left-0 top-auto max-h-[88dvh] w-full translate-x-0 translate-y-0 overflow-hidden rounded-b-none sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-dvh sm:max-h-none sm:w-[min(92vw,440px)] sm:translate-x-0 sm:translate-y-0 sm:rounded-l-lg sm:rounded-r-none">
+          <div className="grid gap-1.5">
             <DialogTitle>Object detail</DialogTitle>
-          </DialogHeader>
+          </div>
           <div className={drawerBodyClass}>
             {objectDetail.isLoading && <p className="text-sm text-muted-foreground">Loading object detail...</p>}
             {objectDetail.isError && <ErrorState title="Object detail unavailable" error={objectDetail.error} />}

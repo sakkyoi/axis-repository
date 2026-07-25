@@ -55,6 +55,7 @@ export type RepositoryCreatePluginOption =
 export interface RepositoryDetailSectionProps {
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
+  onPublishFiles?: (files: File[]) => void;
 }
 
 export interface RepositoryDetailSection {
