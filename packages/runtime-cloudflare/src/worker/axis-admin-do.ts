@@ -94,8 +94,11 @@ export function createDurableObjectDependencies(
   });
   const uploadUrlTtlSeconds = optionalPositiveInteger(env.UPLOAD_URL_TTL_SECONDS, "UPLOAD_URL_TTL_SECONDS");
   const uploadBackend = parseUploadBackend(env.UPLOAD_BACKEND);
+  const objectStore = uploadBackend === "memory"
+    ? new MemoryRepositoryObjectStore()
+    : new R2RepositoryObjectStore(requiredR2Bucket(env.AXIS_OBJECTS));
   const uploadBroker = uploadBackend === "memory"
-    ? new MemoryUploadBroker()
+    ? new MemoryUploadBroker(objectStore)
     : new R2PresignedUploadBroker({
       bucket: requiredR2Bucket(env.AXIS_OBJECTS),
       accountId: requiredEnv(env.R2_ACCOUNT_ID, "R2_ACCOUNT_ID"),
@@ -104,9 +107,6 @@ export function createDurableObjectDependencies(
       secretAccessKey: requiredEnv(env.R2_SECRET_ACCESS_KEY, "R2_SECRET_ACCESS_KEY"),
       ...(uploadUrlTtlSeconds === undefined ? {} : { uploadUrlTtlSeconds }),
     });
-  const objectStore = uploadBackend === "memory"
-    ? new MemoryRepositoryObjectStore()
-    : new R2RepositoryObjectStore(requiredR2Bucket(env.AXIS_OBJECTS));
   const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, secrets: repositorySecrets });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const pluginPolicyService = new PluginPolicyService({ state });
@@ -136,6 +136,7 @@ export function createDurableObjectDependencies(
     pluginPolicyService,
     repositorySecrets,
     repositoryObjectStore: objectStore,
+    ...(uploadBroker instanceof MemoryUploadBroker ? { localUploadBroker: uploadBroker } : {}),
     repositoryRuntimePlugins,
   };
 }

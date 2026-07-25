@@ -33,6 +33,7 @@ async function createPublishSession(
   repositoryObjectStore?: MemoryRepositoryObjectStore,
 ) {
   const debBytes = aptDebFixture();
+  const debSha256 = await sha256Hex(debBytes);
   const { generateKey } = await import("openpgp");
   const key = await generateKey({
     type: "ecc",
@@ -114,7 +115,7 @@ async function createPublishSession(
           {
             filename: "myapp_1.2.3_amd64.deb",
             size: debBytes.byteLength,
-            sha256: "a".repeat(64),
+            sha256: debSha256,
             contentType: "application/vnd.debian.binary-package",
             metadata: {
               package: "myapp",
@@ -145,6 +146,11 @@ async function createPublishSession(
   }
 
   return { token: tokenBody.secret, session };
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function readStoredText(store: MemoryRepositoryObjectStore, key: string): string {
@@ -2214,6 +2220,7 @@ describe("Cloudflare runtime routes", () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
     const debBytes = aptDebFixture();
+    const debSha256 = await sha256Hex(debBytes);
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
       name: "debian-internal",
@@ -2233,7 +2240,7 @@ describe("Cloudflare runtime routes", () => {
         artifacts: [{
           filename: "myapp_1.2.3_amd64.deb",
           size: debBytes.byteLength,
-          sha256: "a".repeat(64),
+          sha256: debSha256,
           contentType: "application/vnd.debian.binary-package",
           metadata: {
             package: "myapp",
@@ -2281,6 +2288,69 @@ describe("Cloudflare runtime routes", () => {
         expect.objectContaining({ key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" }),
       ]),
     );
+  });
+
+  it("accepts local memory uploads through same-origin upload targets", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const debBytes = aptDebFixture();
+    const debSha256 = await sha256Hex(debBytes);
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: validAptConfig(signingKey.id),
+    });
+
+    const createResponse = await app.fetch(new Request("https://axis.example/admin/publish-sessions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "myapp_1.2.3_amd64.deb",
+          size: debBytes.byteLength,
+          sha256: debSha256,
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "myapp",
+            version: "1.2.3",
+            architecture: "amd64",
+            component: "main",
+            description: "Example package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    expect(createResponse.status).toBe(201);
+    const session = (await createResponse.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string; url: string }>;
+    };
+    const upload = session.uploads[0]!;
+
+    expect(upload.url).toBe(`/api/uploads/${session.id}/${upload.uploadId}`);
+
+    const uploadResponse = await app.fetch(new Request(`https://axis.example${upload.url}`, {
+      method: "PUT",
+      headers: { "content-type": "application/vnd.debian.binary-package" },
+      body: debBytes,
+    }));
+    expect(uploadResponse.status).toBe(204);
+
+    const verifyResponse = await app.fetch(new Request(
+      `https://axis.example/admin/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+      {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      },
+    ));
+    expect(verifyResponse.status).toBe(200);
   });
 
   it("gets a publish session by id and rejects tokens outside the repository scope", async () => {
@@ -2343,7 +2413,10 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("verifies an uploaded artifact for a publish session", async () => {
-    const app = createApp();
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const debBytes = aptDebFixture();
+    const debSha256 = await sha256Hex(debBytes);
 
     await app.fetch(
       new Request("https://axis.example/admin/repositories", {
@@ -2387,8 +2460,8 @@ describe("Cloudflare runtime routes", () => {
           artifacts: [
             {
               filename: "myapp_1.2.3_amd64.deb",
-              size: 1234,
-              sha256: "a".repeat(64),
+              size: debBytes.byteLength,
+              sha256: debSha256,
               contentType: "application/vnd.debian.binary-package",
               metadata: {
                 package: "myapp",
@@ -2410,6 +2483,11 @@ describe("Cloudflare runtime routes", () => {
 
     const uploadId = session.uploads[0]?.uploadId;
     expect(uploadId).toBeTruthy();
+    await harness.repositoryObjectStore.putBytes(
+      session.uploads[0]!.objectKey,
+      debBytes,
+      "application/vnd.debian.binary-package",
+    );
 
     const verifyResponse = await app.fetch(
       new Request(
@@ -2426,8 +2504,8 @@ describe("Cloudflare runtime routes", () => {
       upload: {
         uploadId,
         objectKey: session.uploads[0]?.objectKey,
-        size: 1234,
-        sha256: "a".repeat(64),
+        size: debBytes.byteLength,
+        sha256: debSha256,
         verifiedAt: expect.any(String),
       },
       session: expect.objectContaining({
@@ -2436,7 +2514,7 @@ describe("Cloudflare runtime routes", () => {
         verifiedUploads: [
           expect.objectContaining({
             uploadId,
-            sha256: "a".repeat(64),
+            sha256: debSha256,
           }),
         ],
       }),
@@ -2446,6 +2524,8 @@ describe("Cloudflare runtime routes", () => {
   it("rejects apt publish finalization when uploaded deb metadata cannot be parsed", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
+    const invalidDebBytes = new TextEncoder().encode("not a deb");
+    const invalidDebSha256 = await sha256Hex(invalidDebBytes);
     await createRepository(app, {
       name: "debian-internal",
       ecosystem: "apt",
@@ -2473,8 +2553,8 @@ describe("Cloudflare runtime routes", () => {
           artifacts: [
             {
               filename: "myapp_1.2.3_amd64.deb",
-              size: 1234,
-              sha256: "a".repeat(64),
+              size: invalidDebBytes.byteLength,
+              sha256: invalidDebSha256,
               contentType: "application/vnd.debian.binary-package",
               metadata: {
                 version: "1.2.3",
@@ -2497,7 +2577,7 @@ describe("Cloudflare runtime routes", () => {
     const upload = session.uploads[0]!;
     await harness.repositoryObjectStore.putBytes(
       upload.objectKey,
-      new TextEncoder().encode("not a deb"),
+      invalidDebBytes,
       "application/vnd.debian.binary-package",
     );
 

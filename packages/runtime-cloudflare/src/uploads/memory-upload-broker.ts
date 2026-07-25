@@ -1,6 +1,15 @@
-import type { PublishArtifactRequest, UploadedObject, UploadBroker, UploadTarget } from "@axis-repository/core";
+import {
+  ValidationError,
+  type PublishArtifactRequest,
+  type RepositoryObjectStore,
+  type UploadedObject,
+  type UploadBroker,
+  type UploadTarget,
+} from "@axis-repository/core";
 
 export class MemoryUploadBroker implements UploadBroker {
+  constructor(private readonly objectStore: RepositoryObjectStore) {}
+
   async createUploadTarget(input: {
     sessionId: string;
     uploadId: string;
@@ -12,7 +21,7 @@ export class MemoryUploadBroker implements UploadBroker {
       filename: input.artifact.filename,
       objectKey: `_staging/uploads/${input.sessionId}/${input.uploadId}/${input.artifact.filename}`,
       method: "PUT",
-      url: `https://uploads.local/${input.sessionId}/${input.uploadId}`,
+      url: `/api/uploads/${input.sessionId}/${input.uploadId}`,
       headers: {
         "content-type": input.artifact.contentType,
         "x-amz-meta-axis-sha256": input.artifact.sha256,
@@ -22,7 +31,26 @@ export class MemoryUploadBroker implements UploadBroker {
     };
   }
 
+  async putUpload(input: { target: UploadTarget; body: Uint8Array; contentType?: string }): Promise<void> {
+    await this.objectStore.putBytes(
+      input.target.objectKey,
+      input.body,
+      input.contentType ?? input.target.headers["content-type"] ?? "application/octet-stream",
+    );
+  }
+
   async verifyUpload(input: { target: UploadTarget; expected: PublishArtifactRequest }): Promise<UploadedObject> {
+    const object = await this.objectStore.headObject(input.target.objectKey);
+    if (!object) {
+      throw new ValidationError(`Uploaded object is missing: ${input.target.objectKey}`);
+    }
+    if (object.contentLength !== input.expected.size) {
+      throw new ValidationError(`Uploaded object size mismatch: ${input.target.objectKey}`);
+    }
+    if (object.etag !== `"${input.expected.sha256}"`) {
+      throw new ValidationError(`Uploaded object sha256 mismatch: ${input.target.objectKey}`);
+    }
+
     return {
       uploadId: input.target.uploadId,
       objectKey: input.target.objectKey,

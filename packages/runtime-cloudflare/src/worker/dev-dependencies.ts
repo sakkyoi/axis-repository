@@ -27,6 +27,7 @@ export interface AppDependencies {
   pluginPolicyService: PluginPolicyService;
   repositorySecrets: RepositorySecretService;
   repositoryObjectStore: RepositoryObjectStore;
+  localUploadBroker?: MemoryUploadBroker;
   repositoryRuntimePlugins: RepositoryRuntimePluginRegistry;
 }
 
@@ -59,8 +60,8 @@ export function createDevDependencyHarness(
     hash: async (secret: string): Promise<string> => `dev:${secret}`,
     verify: async (secret: string, hash: string): Promise<boolean> => hash === `dev:${secret}`,
   };
-  const uploadBroker = new MemoryUploadBroker();
   const objectStore = new MemoryRepositoryObjectStore();
+  const uploadBroker = new MemoryUploadBroker(objectStore);
   const repositorySecrets = new RepositorySecretService({
     state,
     clock,
@@ -97,6 +98,7 @@ export function createDevDependencyHarness(
       pluginPolicyService,
       repositorySecrets,
       repositoryObjectStore: objectStore,
+      localUploadBroker: uploadBroker,
       repositoryRuntimePlugins,
     },
     repositoryObjectStore: objectStore,

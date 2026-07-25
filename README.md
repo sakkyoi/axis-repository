@@ -35,9 +35,9 @@ UPLOAD_BACKEND=memory
 ```
 
 Warning: `UPLOAD_BACKEND=memory` is only for local development. It does not
-store uploaded bytes, and upload verification only echoes/uses the publish
-session's expected artifact metadata. Do not use it as a deployed artifact
-storage backend.
+persist uploaded bytes across worker restarts. It stores uploads in memory and
+verifies the uploaded bytes against the publish session's expected size and
+SHA-256. Do not use it as a deployed artifact storage backend.
 
 For real R2 uploads in local development, use R2 upload mode:
 
@@ -79,9 +79,14 @@ curl -X POST http://localhost:8787/admin/repositories \
 After creating a publish token and publish session, continue according to the
 selected upload backend.
 
-For `UPLOAD_BACKEND=memory`, the returned upload URL is synthetic. Do not `PUT`
-artifact bytes to it; `verify` uses the publish session's expected metadata and
-does not read uploaded bytes.
+For `UPLOAD_BACKEND=memory`, upload each artifact to the returned same-origin
+`PUT` URL:
+
+```bash
+curl -X PUT "http://localhost:8787/api/uploads/<session-id>/<upload-id>" \
+  -H "Content-Type: application/vnd.debian.binary-package" \
+  --data-binary @artifact.deb
+```
 
 For `UPLOAD_BACKEND=r2`, upload each artifact with the returned `PUT` URL and
 headers:

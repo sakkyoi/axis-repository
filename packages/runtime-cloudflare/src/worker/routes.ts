@@ -822,6 +822,29 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     });
     return jsonResponse(result);
   }
+  const localUploadMatch = url.pathname.match(/^\/api\/uploads\/([^/]+)\/([^/]+)$/);
+  if (localUploadMatch && request.method === "PUT") {
+    const localUploadBroker = dependencies.localUploadBroker;
+    if (!localUploadBroker) {
+      throw new NotFoundError();
+    }
+    const [, sessionId, uploadId] = localUploadMatch;
+    if (!sessionId || !uploadId) {
+      throw new NotFoundError();
+    }
+    const session = await dependencies.publishSessionService.getAsAdmin({ sessionId });
+    const target = session.uploads.find((upload) => upload.uploadId === uploadId);
+    if (!target) {
+      throw new NotFoundError(`Upload not found: ${uploadId}`);
+    }
+    const contentType = request.headers.get("content-type");
+    await localUploadBroker.putUpload({
+      target,
+      body: new Uint8Array(await request.arrayBuffer()),
+      ...(contentType ? { contentType } : {}),
+    });
+    return new Response(null, { status: 204 });
+  }
   const adminFinalizeMatch = url.pathname.match(/^\/admin\/publish-sessions\/([^/]+)\/finalize$/);
   if (adminFinalizeMatch && request.method === "POST") {
     requireAdmin(request, dependencies.adminToken);

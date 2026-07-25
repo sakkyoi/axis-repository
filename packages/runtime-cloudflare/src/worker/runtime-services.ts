@@ -127,6 +127,10 @@ export class PluginPublishSessionService {
     return this.options.publishSessionService.get(input);
   }
 
+  async getAsAdmin(input: { sessionId: string }): Promise<PublishSession> {
+    return this.getExistingSession(input.sessionId);
+  }
+
   async verifyUploadAsAdmin(input: Omit<VerifyPublishUploadInput, "principal">): Promise<VerifyPublishUploadResult> {
     const session = await this.getExistingSession(input.sessionId);
     return this.options.publishSessionService.verifyUpload({
