@@ -85,6 +85,7 @@ describe("repository browser model", () => {
         "Delete pool/main/app_1.0.0_amd64.deb? This removes the object from storage and records a repository activity entry.",
       confirmLabel: "Delete object",
       pendingLabel: "Deleting...",
+      confirmationText: "delete object",
     });
   });
 });

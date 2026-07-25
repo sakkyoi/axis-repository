@@ -1,4 +1,5 @@
 import type { RepositoryObjectsResponse } from "../../api/schemas";
+import type { DestructiveActionDialogContent } from "../../components/ui/destructive-action-dialog-model";
 
 export interface RepositoryBrowserBreadcrumb {
   label: string;
@@ -21,13 +22,6 @@ export type RepositoryBrowserRow =
       contentType: string;
     };
 
-export interface RepositoryBrowserObjectDeleteDialogContent {
-  title: string;
-  description: string;
-  confirmLabel: string;
-  pendingLabel: string;
-}
-
 export function repositoryBrowserBreadcrumbs(repositoryName: string, prefix: string): RepositoryBrowserBreadcrumb[] {
   const segments = prefix.split("/").filter(Boolean);
   const breadcrumbs: RepositoryBrowserBreadcrumb[] = [{ label: repositoryName, prefix: "" }];
@@ -39,12 +33,13 @@ export function repositoryBrowserBreadcrumbs(repositoryName: string, prefix: str
   return breadcrumbs;
 }
 
-export function repositoryBrowserObjectDeleteDialogContent(path: string): RepositoryBrowserObjectDeleteDialogContent {
+export function repositoryBrowserObjectDeleteDialogContent(path: string): DestructiveActionDialogContent {
   return {
     title: "Delete object",
     description: `Delete ${path}? This removes the object from storage and records a repository activity entry.`,
     confirmLabel: "Delete object",
     pendingLabel: "Deleting...",
+    confirmationText: "delete object",
   };
 }
 

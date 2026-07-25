@@ -248,6 +248,7 @@ export function RepositoryBrowserSection({
           description={deleteDialogContent.description}
           confirmLabel={deleteDialogContent.confirmLabel}
           pendingLabel={deleteDialogContent.pendingLabel}
+          confirmationText={deleteDialogContent.confirmationText}
           pending={deleteObject.isPending}
           error={deleteObject.isError ? deleteObject.error : undefined}
           onOpenChange={(open) => {

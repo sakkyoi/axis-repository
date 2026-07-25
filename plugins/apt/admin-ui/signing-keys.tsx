@@ -4,6 +4,7 @@ import {
   asJson,
   Badge,
   Button,
+  DestructiveActionDialog,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -27,6 +28,7 @@ import {
   useImportAptSigningKey,
   useRevokeAptSigningKey,
 } from "./api";
+import { revokeAptSigningKeyDialogContent } from "./signing-keys-model";
 
 type CreateMode = "generate" | "import";
 
@@ -121,8 +123,23 @@ export function AptSigningKeyDialog({ repositoryName, disabled = false }: { repo
 
 export function AptSigningKeyList({ repositoryName, signingKeys }: { repositoryName: string; signingKeys: SigningKey[] }) {
   const [selectedId, setSelectedId] = useState<string>();
+  const [pendingRevokeKey, setPendingRevokeKey] = useState<{ id: string; name: string }>();
   const selected = signingKeys.find((key) => key.id === selectedId) ?? signingKeys[0];
   const revoke = useRevokeAptSigningKey();
+  const revokeDialogContent = pendingRevokeKey ? revokeAptSigningKeyDialogContent(pendingRevokeKey.name) : undefined;
+
+  function closeRevokeDialog() {
+    if (revoke.isPending) return;
+    setPendingRevokeKey(undefined);
+    revoke.reset();
+  }
+
+  function confirmRevokeKey() {
+    if (!pendingRevokeKey) return;
+    revoke.mutate({ repositoryName, id: pendingRevokeKey.id }, {
+      onSuccess: () => setPendingRevokeKey(undefined),
+    });
+  }
 
   if (signingKeys.length === 0) {
     return <EmptyState message="No APT signing keys have been added." />;
@@ -170,13 +187,30 @@ export function AptSigningKeyList({ repositoryName, signingKeys }: { repositoryN
           <Button
             variant="destructive"
             disabled={Boolean(selected.revokedAt) || revoke.isPending}
-            onClick={() => revoke.mutate({ repositoryName, id: selected.id })}
+            onClick={() => setPendingRevokeKey({ id: selected.id, name: selected.name })}
           >
             <RotateCcw className="mr-2 h-4 w-4" />
             Revoke key
           </Button>
-          {revoke.isError && <ErrorState error={revoke.error} />}
         </div>
+      )}
+      {revokeDialogContent && (
+        <DestructiveActionDialog
+          open={Boolean(pendingRevokeKey)}
+          title={revokeDialogContent.title}
+          description={revokeDialogContent.description}
+          confirmLabel={revokeDialogContent.confirmLabel}
+          pendingLabel={revokeDialogContent.pendingLabel}
+          confirmationText={revokeDialogContent.confirmationText}
+          pending={revoke.isPending}
+          error={revoke.isError ? revoke.error : undefined}
+          onOpenChange={(open) => {
+            if (!open) {
+              closeRevokeDialog();
+            }
+          }}
+          onConfirm={confirmRevokeKey}
+        />
       )}
     </div>
   );

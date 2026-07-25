@@ -3,6 +3,7 @@ import type { Repository } from "../api/schemas";
 import {
   buildCreatePublishTokenInput,
   repositoryDisplayLabel,
+  revokePublishTokenDialogContent,
   tokenScopeSummary,
 } from "./publish-token-form-model";
 
@@ -74,6 +75,16 @@ describe("publish token form model", () => {
       repositories: "debian-internal",
       permissions: "publish",
       signingKeys: "signing_key_prod",
+    });
+  });
+
+  it("builds destructive dialog copy for revoking a publish token", () => {
+    expect(revokePublishTokenDialogContent("github-actions")).toEqual({
+      title: "Revoke publish token",
+      description: "Revoke github-actions? Existing automation using this token will stop working.",
+      confirmLabel: "Revoke token",
+      pendingLabel: "Revoking...",
+      confirmationText: "github-actions",
     });
   });
 });

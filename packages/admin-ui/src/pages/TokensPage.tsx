@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Plus, RotateCcw } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { DestructiveActionDialog } from "../components/ui/destructive-action-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { useCreatePublishToken, usePublishTokens, useRepositories, useRevokePublishToken } from "../api/hooks";
@@ -9,6 +10,7 @@ import type { Repository } from "../api/schemas";
 import {
   buildCreatePublishTokenInput,
   repositoryDisplayLabel,
+  revokePublishTokenDialogContent,
   tokenScopeSummary,
   type PublishTokenPermissionState,
 } from "../tokens/publish-token-form-model";
@@ -19,9 +21,24 @@ export function TokensPage() {
   const tokens = usePublishTokens();
   const repositories = useRepositories();
   const [selectedName, setSelectedName] = useState<string>();
+  const [pendingRevokeName, setPendingRevokeName] = useState<string>();
   const selected = tokens.data?.find((token) => token.name === selectedName) ?? tokens.data?.[0];
   const revoke = useRevokePublishToken();
   const selectedSummary = selected ? tokenScopeSummary(selected) : undefined;
+  const revokeDialogContent = pendingRevokeName ? revokePublishTokenDialogContent(pendingRevokeName) : undefined;
+
+  function closeRevokeDialog() {
+    if (revoke.isPending) return;
+    setPendingRevokeName(undefined);
+    revoke.reset();
+  }
+
+  function confirmRevokeToken() {
+    if (!pendingRevokeName) return;
+    revoke.mutate(pendingRevokeName, {
+      onSuccess: () => setPendingRevokeName(undefined),
+    });
+  }
 
   return (
     <section>
@@ -99,15 +116,32 @@ export function TokensPage() {
               <Button
                 variant="destructive"
                 disabled={Boolean(selected.revokedAt) || revoke.isPending}
-                onClick={() => revoke.mutate(selected.name)}
+                onClick={() => setPendingRevokeName(selected.name)}
               >
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Revoke token
               </Button>
-              {revoke.isError && <ErrorState error={revoke.error} />}
             </aside>
           )}
         </div>
+      )}
+      {revokeDialogContent && (
+        <DestructiveActionDialog
+          open={Boolean(pendingRevokeName)}
+          title={revokeDialogContent.title}
+          description={revokeDialogContent.description}
+          confirmLabel={revokeDialogContent.confirmLabel}
+          pendingLabel={revokeDialogContent.pendingLabel}
+          confirmationText={revokeDialogContent.confirmationText}
+          pending={revoke.isPending}
+          error={revoke.isError ? revoke.error : undefined}
+          onOpenChange={(open) => {
+            if (!open) {
+              closeRevokeDialog();
+            }
+          }}
+          onConfirm={confirmRevokeToken}
+        />
       )}
     </section>
   );

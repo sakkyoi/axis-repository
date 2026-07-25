@@ -13,6 +13,8 @@ export {
 } from "./api/schemas";
 export { Button } from "./components/ui/button";
 export { Badge } from "./components/ui/badge";
+export { DestructiveActionDialog } from "./components/ui/destructive-action-dialog";
+export type { DestructiveActionDialogContent } from "./components/ui/destructive-action-dialog-model";
 export { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./components/ui/dialog";
 export { Input } from "./components/ui/input";
 export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";

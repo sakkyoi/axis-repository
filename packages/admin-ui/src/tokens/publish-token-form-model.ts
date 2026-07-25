@@ -1,5 +1,6 @@
 import type { CreatePublishTokenInput } from "../api/client";
 import type { PublishToken, Repository } from "../api/schemas";
+import type { DestructiveActionDialogContent } from "../components/ui/destructive-action-dialog-model";
 
 export interface PublishTokenPermissionState {
   read: boolean;
@@ -44,5 +45,15 @@ export function tokenScopeSummary(token: Pick<PublishToken, "repositories" | "pe
     repositories: token.repositories.length ? token.repositories.join(", ") : "none",
     permissions: token.permissions.length ? token.permissions.join(", ") : "none",
     signingKeys: token.signingKeyIds.length ? token.signingKeyIds.join(", ") : "none",
+  };
+}
+
+export function revokePublishTokenDialogContent(tokenName: string): DestructiveActionDialogContent {
+  return {
+    title: "Revoke publish token",
+    description: `Revoke ${tokenName}? Existing automation using this token will stop working.`,
+    confirmLabel: "Revoke token",
+    pendingLabel: "Revoking...",
+    confirmationText: tokenName,
   };
 }
