@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RepositoryObjectsResponse } from "../../api/schemas";
 import {
   repositoryBrowserBreadcrumbs,
+  repositoryBrowserLayoutClasses,
   repositoryBrowserRows,
 } from "./repository-browser-model";
 
@@ -39,5 +40,14 @@ describe("repository browser model", () => {
       { kind: "directory", name: "main", path: "dists/noble/main/", sizeLabel: "-", contentType: "Folder" },
       { kind: "object", name: "Release", path: "dists/noble/Release", sizeLabel: "7 B", contentType: "text/plain" },
     ]);
+  });
+
+  it("keeps empty repository states filling the browser frame", () => {
+    expect(repositoryBrowserLayoutClasses()).toEqual({
+      frame: "min-h-64 overflow-hidden rounded-md border border-border bg-background/40",
+      empty: "grid min-h-64 place-items-center p-3",
+      loading: "min-h-64 p-3 text-sm text-muted-foreground",
+      error: "min-h-64 p-3",
+    });
   });
 });

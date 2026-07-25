@@ -15,6 +15,7 @@ import { getRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
   repositoryBrowserBreadcrumbs,
+  repositoryBrowserLayoutClasses,
   repositoryBrowserRows,
   type RepositoryBrowserRow,
 } from "./repository-browser-model";
@@ -36,6 +37,7 @@ export function RepositoryBrowserSection({
   const publishPlugin = getRepositoryPublishPlugin(repository.ecosystem);
   const PreviewComponent = publishPlugin?.PreviewComponent;
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
+  const layout = repositoryBrowserLayoutClasses();
   const overlay = repositoryBrowserUploadOverlay({
     repositoryName: repository.name,
     canPublish: Boolean(PreviewComponent),
@@ -132,11 +134,11 @@ export function RepositoryBrowserSection({
         </DialogContent>
       </Dialog>
 
-      <div className="min-h-64 overflow-hidden rounded-md border border-border bg-background/40">
-        {objects.isLoading && <div className="p-3 text-sm text-muted-foreground">Loading objects...</div>}
-        {objects.isError && <div className="p-3"><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
+      <div className={layout.frame}>
+        {objects.isLoading && <div className={layout.loading}>Loading objects...</div>}
+        {objects.isError && <div className={layout.error}><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
         {!objects.isLoading && !objects.isError && rows.length === 0 && (
-          <div className="p-3">
+          <div className={layout.empty}>
             <EmptyState message={PreviewComponent ? "No objects here. Use Publish artifact or drop files on this page." : "No repository objects at this path."} />
           </div>
         )}
