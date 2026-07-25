@@ -24,10 +24,10 @@ describe("destructive action dialog model", () => {
 
   it("keeps confirmation prompt and copy action inline", () => {
     expect(destructiveConfirmationLayoutClasses()).toEqual({
-      row: "flex min-w-0 items-center gap-2",
-      prompt: "min-w-0 flex-1 text-sm font-medium",
-      code: "inline-block max-w-full truncate rounded bg-muted px-1.5 py-0.5 align-bottom text-xs",
-      copyButton: "h-8 w-8 shrink-0",
+      prompt: "min-w-0 text-sm font-medium",
+      token: "mx-1 inline-flex max-w-full align-middle",
+      code: "min-w-0 truncate rounded-l bg-muted px-1.5 py-0.5 font-mono text-xs",
+      copyButton: "h-6 w-6 shrink-0 rounded-l-none border-l-0 px-0",
     });
   });
 });

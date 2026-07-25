@@ -62,31 +62,34 @@ export function DestructiveActionDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {confirmationText && (
-          <label className="grid gap-2">
-            <span className={confirmationLayout.row}>
-              <span className={confirmationLayout.prompt}>
-                Type <code className={confirmationLayout.code}>{confirmationText}</code> to confirm.
+          <div className="grid gap-2">
+            <div className={confirmationLayout.prompt}>
+              Type
+              <span className={confirmationLayout.token}>
+                <code className={confirmationLayout.code}>{confirmationText}</code>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className={confirmationLayout.copyButton}
+                  aria-label={destructiveConfirmationCopyLabel(confirmationText)}
+                  title={destructiveConfirmationCopyLabel(confirmationText)}
+                  disabled={pending}
+                  onClick={() => void copyConfirmationText()}
+                >
+                  {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                </Button>
               </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className={confirmationLayout.copyButton}
-                aria-label={destructiveConfirmationCopyLabel(confirmationText)}
-                title={destructiveConfirmationCopyLabel(confirmationText)}
-                disabled={pending}
-                onClick={() => void copyConfirmationText()}
-              >
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </span>
+              to confirm.
+            </div>
             <Input
+              aria-label="Confirmation text"
               value={confirmationInput}
               disabled={pending}
               autoComplete="off"
               onChange={(event) => setConfirmationInput(event.target.value)}
             />
-          </label>
+          </div>
         )}
         {error !== undefined && error !== null && <ErrorState title="Action failed" error={error} />}
         <div className="flex justify-end gap-2">
