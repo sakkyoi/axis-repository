@@ -59,7 +59,7 @@ export function DestructiveActionDialog({
             <AlertTriangle className="h-4 w-4 text-destructive" />
             {title}
           </DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogDescription className="whitespace-pre-line">{description}</DialogDescription>
         </DialogHeader>
         {confirmationText && (
           <div className="grid gap-2">

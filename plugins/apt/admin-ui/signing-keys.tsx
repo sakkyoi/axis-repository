@@ -34,11 +34,29 @@ import {
   type AptSigningKeyCreateMode,
 } from "./signing-keys-model";
 
-export function AptSigningKeyDialog({ repositoryName, disabled = false }: { repositoryName: string; disabled?: boolean }) {
+export function AptSigningKeyDialog({
+  repositoryName,
+  disabled = false,
+  onSetPrimarySigningKey,
+}: {
+  repositoryName: string;
+  disabled?: boolean;
+  onSetPrimarySigningKey?: (key: SigningKey) => Promise<void>;
+}) {
   const generateKey = useGenerateAptSigningKey();
   const importKey = useImportAptSigningKey();
+  const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<AptSigningKeyCreateMode>("generate");
+  const [useAsPrimary, setUseAsPrimary] = useState(true);
   const [error, setError] = useState("");
+
+  function changeOpen(nextOpen: boolean) {
+    if (nextOpen) {
+      setUseAsPrimary(true);
+      setError("");
+    }
+    setOpen(nextOpen);
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,16 +67,19 @@ export function AptSigningKeyDialog({ repositoryName, disabled = false }: { repo
       repositoryName,
       formData,
       formElement,
+      useAsPrimary,
       generateKey: generateKey.mutateAsync,
       importKey: importKey.mutateAsync,
+      ...(onSetPrimarySigningKey ? { setPrimarySigningKey: onSetPrimarySigningKey } : {}),
       setError,
+      close: () => setOpen(false),
     });
   }
 
   const isPending = generateKey.isPending || importKey.isPending;
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" disabled={disabled}>
           <KeyRound className="mr-2 h-4 w-4" />
@@ -95,6 +116,15 @@ export function AptSigningKeyDialog({ repositoryName, disabled = false }: { repo
               <Input name="passphrase" type="password" placeholder="Passphrase" required />
             </>
           )}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={useAsPrimary}
+              onChange={(event) => setUseAsPrimary(event.target.checked)}
+            />
+            Use as repository signing key
+          </label>
           <Button type="submit" disabled={isPending}>
             <Plus className="mr-2 h-4 w-4" />
             {mode === "generate" ? "Generate key" : "Import key"}
@@ -108,12 +138,28 @@ export function AptSigningKeyDialog({ repositoryName, disabled = false }: { repo
   );
 }
 
-export function AptSigningKeyList({ repositoryName, signingKeys }: { repositoryName: string; signingKeys: SigningKey[] }) {
+export function AptSigningKeyList({
+  repositoryName,
+  signingKeys,
+  currentSigningKeyId,
+}: {
+  repositoryName: string;
+  signingKeys: SigningKey[];
+  currentSigningKeyId: string | undefined;
+}) {
   const [selectedId, setSelectedId] = useState<string>();
   const [pendingRevokeKey, setPendingRevokeKey] = useState<{ id: string; name: string }>();
   const selected = signingKeys.find((key) => key.id === selectedId) ?? signingKeys[0];
   const revoke = useRevokeAptSigningKey();
-  const revokeDialogContent = pendingRevokeKey ? revokeAptSigningKeyDialogContent(pendingRevokeKey.name) : undefined;
+  const activeKeyCount = signingKeys.filter((key) => !key.revokedAt).length;
+  const pendingRevokeSigningKey = pendingRevokeKey
+    ? signingKeys.find((key) => key.id === pendingRevokeKey.id)
+    : undefined;
+  const revokeDialogContent = pendingRevokeKey ? revokeAptSigningKeyDialogContent({
+    signingKeyName: pendingRevokeKey.name,
+    isCurrent: pendingRevokeKey.id === currentSigningKeyId,
+    isLastActive: !pendingRevokeSigningKey?.revokedAt && activeKeyCount === 1,
+  }) : undefined;
 
   function closeRevokeDialog() {
     if (revoke.isPending) return;
