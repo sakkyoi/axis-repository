@@ -1,6 +1,6 @@
 import { File, Folder, PackagePlus, UploadCloud } from "lucide-react";
 import type { DragEvent } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRepositoryObjects } from "../../api/hooks";
 import { Button } from "../../components/ui/button";
 import { EmptyState, ErrorState } from "../../pages/shared";
@@ -12,29 +12,67 @@ import {
   repositoryBrowserRows,
   type RepositoryBrowserRow,
 } from "./repository-browser-model";
+import {
+  filesFromFileList,
+  repositoryBrowserUploadOverlay,
+} from "./repository-browser-upload-model";
 
 export function RepositoryBrowserSection({
   repository,
   pluginMetadata,
 }: RepositoryDetailSectionProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [prefix, setPrefix] = useState("");
   const [publishOpen, setPublishOpen] = useState(false);
-  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [dragDepth, setDragDepth] = useState(0);
   const objects = useRepositoryObjects(repository.name, prefix);
   const publishPlugin = getRepositoryPublishPlugin(repository.ecosystem);
   const FormComponent = publishPlugin?.FormComponent;
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
+  const overlay = repositoryBrowserUploadOverlay({
+    repositoryName: repository.name,
+    canPublish: Boolean(FormComponent),
+    isDraggingFiles: dragDepth > 0,
+  });
 
-  function onDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    const files = [...event.dataTransfer.files];
+  function handleFiles(files: File[]) {
     if (files.length === 0 || !FormComponent) return;
-    setDroppedFiles(files);
+    setSelectedFiles(files);
     setPublishOpen(true);
   }
 
+  function onDragEnter(event: DragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    setDragDepth((current) => current + 1);
+  }
+
+  function onDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    setDragDepth((current) => Math.max(0, current - 1));
+  }
+
+  function onDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+  }
+
+  function onDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragDepth(0);
+    handleFiles(filesFromFileList(event.dataTransfer.files));
+  }
+
   return (
-    <div className="grid min-h-0 gap-3">
+    <div
+      className="relative grid min-h-0 gap-3"
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <RepositoryBrowserBreadcrumbs
           repositoryName={repository.name}
@@ -42,33 +80,34 @@ export function RepositoryBrowserSection({
           onPrefixChange={setPrefix}
         />
         {FormComponent && (
-          <Button type="button" onClick={() => setPublishOpen((current) => !current)}>
+          <Button type="button" onClick={() => fileInputRef.current?.click()}>
             <PackagePlus className="mr-2 h-4 w-4" />
             Publish artifact
           </Button>
         )}
+        {FormComponent && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(event) => {
+              handleFiles(filesFromFileList(event.currentTarget.files));
+              event.currentTarget.value = "";
+            }}
+          />
+        )}
       </div>
 
       {publishOpen && FormComponent && (
-        <FormComponent repository={repository} pluginMetadata={pluginMetadata} droppedFiles={droppedFiles} />
+        <FormComponent repository={repository} pluginMetadata={pluginMetadata} droppedFiles={selectedFiles} />
       )}
 
-      <div
-        className="min-h-64 overflow-hidden rounded-md border border-border bg-background/40"
-        onDragOver={(event) => {
-          if (FormComponent) event.preventDefault();
-        }}
-        onDrop={onDrop}
-      >
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2 text-xs text-muted-foreground">
-          <UploadCloud className="h-4 w-4" />
-          Drop files here to publish, or browse repository contents.
-        </div>
+      <div className="min-h-64 overflow-hidden rounded-md border border-border bg-background/40">
         {objects.isLoading && <div className="p-3 text-sm text-muted-foreground">Loading objects...</div>}
         {objects.isError && <div className="p-3"><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
         {!objects.isLoading && !objects.isError && rows.length === 0 && (
           <div className="p-3">
-            <EmptyState message="No repository objects at this path." />
+            <EmptyState message={FormComponent ? "No objects here. Use Publish artifact or drop files on this page." : "No repository objects at this path."} />
           </div>
         )}
         {!objects.isLoading && !objects.isError && rows.length > 0 && (
@@ -76,12 +115,35 @@ export function RepositoryBrowserSection({
         )}
       </div>
 
+      {overlay && <RepositoryBrowserUploadOverlay overlay={overlay} />}
+
       <PublishSessionsSection
         repository={repository}
         pluginMetadata={pluginMetadata}
         {...(publishPlugin?.artifactSummary ? { artifactSummary: publishPlugin.artifactSummary } : {})}
         {...(publishPlugin?.SessionDetailComponent ? { SessionDetailComponent: publishPlugin.SessionDetailComponent } : {})}
       />
+    </div>
+  );
+}
+
+function RepositoryBrowserUploadOverlay({
+  overlay,
+}: {
+  overlay: NonNullable<ReturnType<typeof repositoryBrowserUploadOverlay>>;
+}) {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-background/70 p-6 backdrop-blur-sm">
+      <div className={`grid w-full max-w-md place-items-center gap-2 rounded-lg border border-dashed p-8 text-center shadow-lg ${
+        overlay.tone === "default"
+          ? "border-primary bg-panel text-foreground"
+          : "border-border bg-panel text-muted-foreground"
+      }`}
+      >
+        <UploadCloud className="h-8 w-8" />
+        <div className="text-base font-semibold">{overlay.title}</div>
+        <div className="text-sm text-muted-foreground">{overlay.description}</div>
+      </div>
     </div>
   );
 }

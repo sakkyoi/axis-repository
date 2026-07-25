@@ -1,0 +1,35 @@
+export interface RepositoryBrowserUploadOverlayInput {
+  repositoryName: string;
+  canPublish: boolean;
+  isDraggingFiles: boolean;
+}
+
+export interface RepositoryBrowserUploadOverlay {
+  tone: "default" | "muted";
+  title: string;
+  description: string;
+}
+
+export function repositoryBrowserUploadOverlay(
+  input: RepositoryBrowserUploadOverlayInput,
+): RepositoryBrowserUploadOverlay | undefined {
+  if (!input.isDraggingFiles) {
+    return undefined;
+  }
+  if (!input.canPublish) {
+    return {
+      tone: "muted",
+      title: "Publishing is unavailable",
+      description: "This repository does not support browser publishing.",
+    };
+  }
+  return {
+    tone: "default",
+    title: "Drop files to publish",
+    description: input.repositoryName,
+  };
+}
+
+export function filesFromFileList(files: FileList | null): File[] {
+  return files ? Array.from(files) : [];
+}
