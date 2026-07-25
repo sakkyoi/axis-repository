@@ -90,16 +90,11 @@ export interface PublishTokenScopeInput {
     read: boolean;
     publish: boolean;
   };
-  signingKeySelections: Record<string, string>;
-}
-
-export interface PublishTokenScopeComponentProps extends PublishTokenScopeInput {
-  onSigningKeySelectionChange: (repositoryName: string, signingKeyId: string) => void;
 }
 
 export interface PublishTokenScopeExtension {
-  Component: ComponentType<PublishTokenScopeComponentProps>;
-  missingSelections(input: PublishTokenScopeInput): string[];
+  deriveSigningKeyIds(input: PublishTokenScopeInput): string[];
+  missingRequiredScopes(input: PublishTokenScopeInput): string[];
 }
 
 export interface PublishSessionDetailComponentProps {

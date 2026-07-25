@@ -20,13 +20,22 @@ describe("publish token form model", () => {
   it("builds a publish token payload from selected repositories, permissions, and signing keys", () => {
     expect(buildCreatePublishTokenInput({
       name: "github-actions",
+      repositories: [
+        repository("debian-internal", "apt", { apt: { signingKeyId: "signing_key_prod" } }),
+        repository("python-internal", "pypi", {}),
+      ],
       selectedRepositories: ["debian-internal", "python-internal"],
       permissions: { read: true, publish: true },
-      signingKeySelections: {
-        "debian-internal": "signing_key_prod",
-      },
       expiration: { mode: "never", customDateTime: "" },
       now: new Date("2026-07-23T00:00:00.000Z"),
+      scopeExtensions: [{
+        deriveSigningKeyIds: ({ repositories }) =>
+          repositories.flatMap((repository) =>
+            repository.ecosystem === "apt" && typeof repository.config.apt === "object"
+              ? [(repository.config.apt as { signingKeyId: string }).signingKeyId]
+              : []),
+        missingRequiredScopes: () => [],
+      }],
     })).toEqual({
       name: "github-actions",
       repositories: ["debian-internal", "python-internal"],
@@ -39,9 +48,9 @@ describe("publish token form model", () => {
   it("deduplicates signing key ids and omits them when none are selected", () => {
     expect(buildCreatePublishTokenInput({
       name: "pypi-actions",
+      repositories: [repository("python-internal", "pypi", {})],
       selectedRepositories: ["python-internal"],
       permissions: { read: false, publish: true },
-      signingKeySelections: {},
       expiration: { mode: "never", customDateTime: "" },
       now: new Date("2026-07-23T00:00:00.000Z"),
     })).toEqual({
@@ -53,27 +62,37 @@ describe("publish token form model", () => {
 
     expect(buildCreatePublishTokenInput({
       name: "multi-apt",
+      repositories: [
+        repository("debian-a", "apt", { apt: { signingKeyId: "signing_key_shared" } }),
+        repository("debian-b", "apt", { apt: { signingKeyId: "signing_key_shared" } }),
+      ],
       selectedRepositories: ["debian-a", "debian-b"],
       permissions: { read: false, publish: true },
-      signingKeySelections: {
-        "debian-a": "signing_key_shared",
-        "debian-b": "signing_key_shared",
-      },
       expiration: { mode: "never", customDateTime: "" },
       now: new Date("2026-07-23T00:00:00.000Z"),
+      scopeExtensions: [{
+        deriveSigningKeyIds: ({ repositories }) =>
+          repositories.flatMap((repository) =>
+            repository.ecosystem === "apt" && typeof repository.config.apt === "object"
+              ? [(repository.config.apt as { signingKeyId: string }).signingKeyId]
+              : []),
+        missingRequiredScopes: () => [],
+      }],
     }).signingKeyIds).toEqual(["signing_key_shared"]);
   });
 
   it("omits signing key ids when publish permission is disabled", () => {
     expect(buildCreatePublishTokenInput({
       name: "reader",
+      repositories: [repository("debian-internal", "apt", { apt: { signingKeyId: "signing_key_prod" } })],
       selectedRepositories: ["debian-internal"],
       permissions: { read: true, publish: false },
-      signingKeySelections: {
-        "debian-internal": "signing_key_prod",
-      },
       expiration: { mode: "never", customDateTime: "" },
       now: new Date("2026-07-23T00:00:00.000Z"),
+      scopeExtensions: [{
+        deriveSigningKeyIds: () => ["signing_key_prod"],
+        missingRequiredScopes: () => [],
+      }],
     })).toEqual({
       name: "reader",
       repositories: ["debian-internal"],
@@ -85,9 +104,9 @@ describe("publish token form model", () => {
   it("includes publish token expiration in create payloads", () => {
     expect(buildCreatePublishTokenInput({
       name: "github-actions",
+      repositories: [repository("debian-internal", "apt", {})],
       selectedRepositories: ["debian-internal"],
       permissions: { read: false, publish: true },
-      signingKeySelections: {},
       expiration: { mode: "1h", customDateTime: "" },
       now: new Date("2026-07-23T00:00:00.000Z"),
     })).toMatchObject({

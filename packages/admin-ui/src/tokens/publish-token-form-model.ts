@@ -1,6 +1,7 @@
 import type { CreatePublishTokenInput } from "../api/client";
 import type { PublishToken, Repository } from "../api/schemas";
 import type { DestructiveActionDialogContent } from "../components/ui/destructive-action-dialog-model";
+import type { PublishTokenScopeExtension } from "../repositories/plugins/repository-ui-plugin-types";
 
 export interface PublishTokenPermissionState {
   read: boolean;
@@ -16,9 +17,10 @@ export interface PublishTokenExpirationState {
 
 export interface BuildCreatePublishTokenInputState {
   name: string;
+  repositories: Repository[];
   selectedRepositories: string[];
   permissions: PublishTokenPermissionState;
-  signingKeySelections: Record<string, string>;
+  scopeExtensions?: PublishTokenScopeExtension[];
   expiration?: PublishTokenExpirationState;
   now?: Date;
 }
@@ -28,9 +30,7 @@ export function buildCreatePublishTokenInput(state: BuildCreatePublishTokenInput
     ...(state.permissions.read ? ["read"] : []),
     ...(state.permissions.publish ? ["publish"] : []),
   ];
-  const signingKeyIds = state.permissions.publish
-    ? [...new Set(Object.values(state.signingKeySelections).filter(Boolean))]
-    : [];
+  const signingKeyIds = publishTokenSigningKeyIdsFromSelectedRepositories(state);
 
   return {
     name: state.name.trim(),
@@ -46,6 +46,20 @@ export function buildCreatePublishTokenInput(state: BuildCreatePublishTokenInput
       return expiresAt ? { expiresAt } : {};
     })(),
   };
+}
+
+export function publishTokenSigningKeyIdsFromSelectedRepositories(
+  state: Pick<BuildCreatePublishTokenInputState, "repositories" | "selectedRepositories" | "permissions" | "scopeExtensions">,
+): string[] {
+  if (!state.permissions.publish) return [];
+  const input = {
+    repositories: state.repositories,
+    selectedRepositories: state.selectedRepositories,
+    permissions: state.permissions,
+  };
+  return [...new Set((state.scopeExtensions ?? [])
+    .flatMap((extension) => extension.deriveSigningKeyIds(input))
+    .filter(Boolean))];
 }
 
 export function buildPublishTokenExpiresAt(input: {

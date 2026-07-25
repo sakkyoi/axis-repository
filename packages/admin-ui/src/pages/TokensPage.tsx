@@ -211,7 +211,6 @@ function CreateTokenDialog({
   const [selectedRepositories, setSelectedRepositories] = useState<string[]>([]);
   const [permissions, setPermissions] = useState<PublishTokenPermissionState>({ read: false, publish: true });
   const [expiration, setExpiration] = useState<PublishTokenExpirationState>({ mode: "never", customDateTime: "" });
-  const [signingKeySelections, setSigningKeySelections] = useState<Record<string, string>>({});
   const [scopeError, setScopeError] = useState("");
   const createToken = useCreatePublishToken();
   const publishTokenScopeExtensions = [
@@ -229,22 +228,15 @@ function CreateTokenDialog({
         ? [...current, repositoryName]
         : current.filter((name) => name !== repositoryName),
     );
-    if (!selected) {
-      setSigningKeySelections((current) => {
-        const { [repositoryName]: _removed, ...rest } = current;
-        return rest;
-      });
-    }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const missingScopeSelections = publishTokenScopeExtensions.flatMap((extension) =>
-      extension.missingSelections({
+    const missingScopes = publishTokenScopeExtensions.flatMap((extension) =>
+      extension.missingRequiredScopes({
         repositories,
         selectedRepositories,
         permissions,
-        signingKeySelections,
       }),
     );
     if (!name.trim()) {
@@ -259,17 +251,18 @@ function CreateTokenDialog({
       setScopeError("Select at least one permission");
       return;
     }
-    if (missingScopeSelections.length > 0) {
-      setScopeError(`Select required token scopes for: ${missingScopeSelections.join(", ")}`);
+    if (missingScopes.length > 0) {
+      setScopeError(`Selected repositories need setup before publish tokens can be created: ${missingScopes.join(", ")}`);
       return;
     }
 
     const result = await createToken.mutateAsync(buildCreatePublishTokenInput({
       name,
+      repositories,
       permissions,
       selectedRepositories,
-      signingKeySelections,
       expiration,
+      scopeExtensions: publishTokenScopeExtensions,
     }));
     setSecret(result.secret);
     setScopeError("");
@@ -376,17 +369,6 @@ function CreateTokenDialog({
               />
             </label>
           )}
-          {publishTokenScopeExtensions.map((extension) => (
-            <extension.Component
-              key={extension.Component.name}
-              repositories={repositories}
-              selectedRepositories={selectedRepositories}
-              permissions={permissions}
-              signingKeySelections={signingKeySelections}
-              onSigningKeySelectionChange={(repositoryName, signingKeyId) =>
-                setSigningKeySelections((current) => ({ ...current, [repositoryName]: signingKeyId }))}
-            />
-          ))}
           <Button type="submit" disabled={createToken.isPending}>Create</Button>
         </form>
         {scopeError && <ErrorState error={scopeError} />}

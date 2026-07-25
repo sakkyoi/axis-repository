@@ -131,9 +131,20 @@ describe("repository UI plugin registry", () => {
     expect(getRepositoryCreateFieldRenderers("pypi")?.["signing-key-provisioning"]).toBeUndefined();
   });
 
-  it("lets ecosystem UI plugins provide publish token scope UI", () => {
-    expect(getPublishTokenScopeExtension("apt")?.Component.name)
-      .toBe("AptSigningKeyTokenScopeFields");
+  it("lets ecosystem UI plugins provide publish token scope derivation", () => {
+    expect(getPublishTokenScopeExtension("apt")?.deriveSigningKeyIds({
+      repositories: [{
+        id: "repo_apt",
+        name: "debian-internal",
+        ecosystem: "apt",
+        visibility: "private",
+        config: { apt: { signingKeyId: "signing_key_prod" } },
+        createdAt: "2026-07-23T00:00:00.000Z",
+        updatedAt: "2026-07-23T00:00:00.000Z",
+      }],
+      selectedRepositories: ["debian-internal"],
+      permissions: { read: false, publish: true },
+    })).toEqual(["signing_key_prod"]);
     expect(getPublishTokenScopeExtension("pypi")).toBeUndefined();
   });
 
@@ -177,8 +188,8 @@ describe("repository UI plugin registry", () => {
     expect("PypiPublishSessionsSection" in pypiPublishUi).toBe(false);
   });
 
-  it("lets ecosystem UI plugins validate publish token scope selections", () => {
-    expect(getPublishTokenScopeExtension("apt")?.missingSelections({
+  it("lets ecosystem UI plugins validate missing publish token scopes", () => {
+    expect(getPublishTokenScopeExtension("apt")?.missingRequiredScopes({
       repositories: [
         {
           id: "repo_apt",
@@ -201,7 +212,6 @@ describe("repository UI plugin registry", () => {
       ],
       selectedRepositories: ["debian-internal", "python-internal"],
       permissions: { read: false, publish: true },
-      signingKeySelections: {},
     })).toEqual(["debian-internal"]);
   });
 });

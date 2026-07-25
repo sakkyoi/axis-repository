@@ -34,7 +34,6 @@ export { publishSessionArtifactSummary } from "./repositories/publish/repository
 export { useRepositoryArtifactPublisher } from "./repositories/publish/repository-publish-flow";
 export { asJson, EmptyState, ErrorState, formatDate } from "./pages/shared";
 export type {
-  PublishTokenScopeComponentProps,
   PublishTokenScopeInput,
   PublishSessionDetailComponentProps,
   RepositoryCreateFieldRendererProps,
