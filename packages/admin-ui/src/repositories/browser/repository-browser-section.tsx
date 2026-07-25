@@ -171,9 +171,11 @@ function RepositoryBrowserUploadOverlay({
   return (
     <div className={classes.backdrop}>
       <div className={classes.panel}>
-        <UploadCloud className="h-8 w-8" />
-        <div className="text-base font-semibold">{overlay.title}</div>
-        <div className="text-sm text-muted-foreground">{overlay.description}</div>
+        <div className={classes.content}>
+          <UploadCloud className="h-8 w-8" />
+          <div className="text-base font-semibold">{overlay.title}</div>
+          <div className="text-sm text-muted-foreground">{overlay.description}</div>
+        </div>
       </div>
     </div>
   );

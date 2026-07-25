@@ -33,14 +33,16 @@ export function repositoryBrowserUploadOverlay(
 export function repositoryBrowserUploadOverlayClasses(tone: RepositoryBrowserUploadOverlay["tone"]): {
   backdrop: string;
   panel: string;
+  content: string;
 } {
   return {
     backdrop: "pointer-events-none fixed inset-0 z-50 bg-background/70 p-6 backdrop-blur-sm",
-    panel: `grid h-full w-full place-items-center gap-2 rounded-lg border border-dashed p-8 text-center shadow-lg ${
+    panel: `grid h-full w-full place-items-center rounded-lg border border-dashed p-8 text-center shadow-lg ${
       tone === "default"
         ? "border-primary bg-panel/95 text-foreground"
         : "border-border bg-panel/95 text-muted-foreground"
     }`,
+    content: "grid place-items-center gap-2",
   };
 }
 

@@ -41,7 +41,8 @@ describe("repository browser upload model", () => {
   it("uses a full-screen drop panel instead of a small centered card", () => {
     expect(repositoryBrowserUploadOverlayClasses("default")).toEqual({
       backdrop: "pointer-events-none fixed inset-0 z-50 bg-background/70 p-6 backdrop-blur-sm",
-      panel: "grid h-full w-full place-items-center gap-2 rounded-lg border border-dashed p-8 text-center shadow-lg border-primary bg-panel/95 text-foreground",
+      panel: "grid h-full w-full place-items-center rounded-lg border border-dashed p-8 text-center shadow-lg border-primary bg-panel/95 text-foreground",
+      content: "grid place-items-center gap-2",
     });
     expect(repositoryBrowserUploadOverlayClasses("muted").panel).toContain("border-border bg-panel/95 text-muted-foreground");
   });
