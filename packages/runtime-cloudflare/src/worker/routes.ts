@@ -594,6 +594,27 @@ function parseAdminRepositoryArtifactsRebuildIndexPath(pathname: string): string
   return repositoryName;
 }
 
+function parseAdminRepositoryArtifactPath(pathname: string): {
+  repositoryName: string;
+  artifactId: string;
+} | null {
+  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/artifacts\/([^/]+)$/);
+  if (!match) return null;
+  const repositoryName = decodePathSegment(match[1] ?? "");
+  const artifactId = decodePathSegment(match[2] ?? "");
+  if (
+    !repositoryName
+    || repositoryName === "."
+    || repositoryName === ".."
+    || !artifactId
+    || artifactId === "."
+    || artifactId === ".."
+  ) {
+    throw new NotFoundError();
+  }
+  return { repositoryName, artifactId };
+}
+
 function parseAdminRepositoryPluginResourcePath(requestUrl: string): {
   repositoryName: string;
   namespace: string;
@@ -1009,6 +1030,41 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       artifactCount: result.artifacts.length,
     });
     return jsonResponse({ ...result, truncated: false });
+  }
+  const adminRepositoryArtifactPath = parseAdminRepositoryArtifactPath(url.pathname);
+  if (adminRepositoryArtifactPath) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method !== "DELETE") {
+      throw new NotFoundError();
+    }
+    const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactPath.repositoryName);
+    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
+    const artifacts = await dependencies.repositoryArtifactStore.listByRepository(repository.name);
+    const artifact = artifacts.find((candidate) => candidate.id === adminRepositoryArtifactPath.artifactId);
+    if (!artifact) {
+      throw new NotFoundError();
+    }
+    const deletedObjectKeys: string[] = [];
+    for (const objectKey of artifact.objectKeys) {
+      if (!objectKey.startsWith(`repositories/${repository.name}/`)) {
+        continue;
+      }
+      if (await dependencies.repositoryObjectStore.deleteObject(objectKey)) {
+        deletedObjectKeys.push(objectKey);
+      }
+    }
+    const activity = await dependencies.repositoryActivityService.recordArtifactDelete({
+      repositoryName: repository.name,
+      artifactId: artifact.id,
+      identity: artifact.identity,
+      summary: artifact.summary,
+      name: artifact.name,
+      ...(artifact.version !== undefined ? { version: artifact.version } : {}),
+      objectKeys: artifact.objectKeys,
+      deletedObjectKeys,
+    });
+    await dependencies.repositoryArtifactIndexService.rebuild({ repositoryName: repository.name });
+    return jsonResponse({ activity });
   }
   const adminRepositoryObjectDetailName = parseAdminRepositoryObjectDetailPath(url.pathname);
   if (adminRepositoryObjectDetailName) {

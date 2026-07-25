@@ -95,6 +95,20 @@ export function useRebuildRepositoryArtifactIndex(repositoryName: string | undef
   });
 }
 
+export function useDeleteRepositoryArtifact(repositoryName: string | undefined) {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (artifactId: string) => client.deleteRepositoryArtifact(repositoryName ?? "", artifactId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-object-detail", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
+    },
+  });
+}
+
 export function useRepositoryObjectDetail(repositoryName: string | undefined, path: string | undefined) {
   const client = useAxisClient();
   return useQuery({

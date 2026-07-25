@@ -1,9 +1,10 @@
-import { Eye, Package, RefreshCcw, RotateCw } from "lucide-react";
+import { Eye, Package, RefreshCcw, RotateCw, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useRebuildRepositoryArtifactIndex, useRepositoryArtifacts } from "../../api/hooks";
+import { useDeleteRepositoryArtifact, useRebuildRepositoryArtifactIndex, useRepositoryArtifacts } from "../../api/hooks";
 import type { RepositoryArtifact } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
 import { CopyToClipboardButton } from "../../components/ui/copy-to-clipboard-button";
+import { DestructiveActionDialog } from "../../components/ui/destructive-action-dialog";
 import {
   Dialog,
   DialogContent,
@@ -13,12 +14,31 @@ import {
 import { ErrorState } from "../../pages/shared";
 import { repositoryEmptyStatePanelClass } from "../detail/repository-empty-state-model";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
+import { repositoryArtifactDeleteDialogContent } from "./repository-artifacts-model";
 
 export function RepositoryArtifactsSection({ repository }: RepositoryDetailSectionProps) {
   const artifacts = useRepositoryArtifacts(repository.name);
   const rebuildIndex = useRebuildRepositoryArtifactIndex(repository.name);
+  const deleteArtifact = useDeleteRepositoryArtifact(repository.name);
   const [selectedArtifact, setSelectedArtifact] = useState<RepositoryArtifact>();
+  const [pendingDeleteArtifact, setPendingDeleteArtifact] = useState<RepositoryArtifact>();
   const rows = artifacts.data?.artifacts ?? [];
+
+  function closeDeleteDialog() {
+    if (deleteArtifact.isPending) return;
+    setPendingDeleteArtifact(undefined);
+    deleteArtifact.reset();
+  }
+
+  function confirmDeleteArtifact() {
+    if (!pendingDeleteArtifact) return;
+    deleteArtifact.mutate(pendingDeleteArtifact.id, {
+      onSuccess: () => {
+        setSelectedArtifact(undefined);
+        setPendingDeleteArtifact(undefined);
+      },
+    });
+  }
 
   return (
     <div className="grid gap-2">
@@ -66,10 +86,28 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
             <DialogTitle>Artifact detail</DialogTitle>
           </DialogHeader>
           <div className="min-h-0 overflow-y-auto pr-1">
-            {selectedArtifact && <RepositoryArtifactDetail artifact={selectedArtifact} />}
+            {selectedArtifact && (
+              <RepositoryArtifactDetail
+                artifact={selectedArtifact}
+                deleting={deleteArtifact.variables === selectedArtifact.id && deleteArtifact.isPending}
+                onDelete={() => setPendingDeleteArtifact(selectedArtifact)}
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>
+      {pendingDeleteArtifact && (
+        <DestructiveActionDialog
+          open={Boolean(pendingDeleteArtifact)}
+          onOpenChange={(open) => {
+            if (!open) closeDeleteDialog();
+          }}
+          pending={deleteArtifact.isPending}
+          error={deleteArtifact.isError ? deleteArtifact.error : undefined}
+          onConfirm={confirmDeleteArtifact}
+          {...repositoryArtifactDeleteDialogContent(pendingDeleteArtifact)}
+        />
+      )}
     </div>
   );
 }
@@ -133,7 +171,15 @@ function RepositoryArtifactsTable({
   );
 }
 
-function RepositoryArtifactDetail({ artifact }: { artifact: RepositoryArtifact }) {
+function RepositoryArtifactDetail({
+  artifact,
+  deleting,
+  onDelete,
+}: {
+  artifact: RepositoryArtifact;
+  deleting: boolean;
+  onDelete: () => void;
+}) {
   const primaryObjectUrl = artifact.primaryObjectKey
     ? `${window.location.origin}/${artifact.primaryObjectKey.split("/").map(encodeURIComponent).join("/")}`
     : undefined;
@@ -151,11 +197,15 @@ function RepositoryArtifactDetail({ artifact }: { artifact: RepositoryArtifact }
         <ArtifactDetailItem label="Publish session" value={artifact.publishSessionId ?? "-"} />
         <ArtifactDetailItem label="Primary object" value={artifact.primaryObjectKey ?? "-"} />
       </dl>
-      {primaryObjectUrl && (
-        <div className="flex flex-wrap justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
+        {primaryObjectUrl && (
           <CopyToClipboardButton type="button" variant="outline" text={primaryObjectUrl} label="Copy URL" copiedLabel="Copied" />
-        </div>
-      )}
+        )}
+        <Button type="button" variant="destructive" disabled={deleting} onClick={onDelete}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          {deleting ? "Deleting..." : "Delete"}
+        </Button>
+      </div>
       <div className="grid gap-2">
         <div className="text-xs font-medium text-muted-foreground">Objects</div>
         <ul className="grid gap-1 text-xs">

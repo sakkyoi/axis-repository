@@ -218,4 +218,22 @@ describe("repository publish sessions model", () => {
     expect(repositoryActivityStatusMeta(activity)).toEqual({ label: "rebuilt", variant: "default" });
     expect(repositoryActivitySummary(activity, publishSessionArtifactSummary)).toBe("2 indexed artifacts");
   });
+
+  it("labels artifact delete activities", () => {
+    const activity = {
+      id: "activity_1",
+      repositoryName: "debian-internal",
+      type: "artifact.delete" as const,
+      actor: "admin" as const,
+      summary: "Deleted artifact myapp 1.2.3 amd64",
+      metadata: {
+        artifactId: "artifact_1",
+      },
+      createdAt: "2026-07-23T00:00:00.000Z",
+    };
+
+    expect(repositoryActivityActionLabel(activity)).toBe("Deleted artifact");
+    expect(repositoryActivityStatusMeta(activity)).toEqual({ label: "deleted", variant: "destructive" });
+    expect(repositoryActivitySummary(activity, publishSessionArtifactSummary)).toBe("Deleted artifact myapp 1.2.3 amd64");
+  });
 });

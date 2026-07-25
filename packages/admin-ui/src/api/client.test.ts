@@ -549,6 +549,47 @@ describe("createAxisClient", () => {
     ]);
   });
 
+  it("deletes repository artifacts through an admin-scoped endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          activity: {
+            id: "activity_1",
+            repositoryName: "debian internal",
+            type: "artifact.delete",
+            actor: "admin",
+            summary: "Deleted artifact myapp 1.2.3 amd64",
+            metadata: {
+              artifactId: "artifact 1",
+              objectKeys: ["repositories/debian internal/pool/main/myapp.deb"],
+              deletedObjectKeys: ["repositories/debian internal/pool/main/myapp.deb"],
+            },
+            createdAt: "2026-07-24T00:00:00.000Z",
+          },
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.deleteRepositoryArtifact("debian internal", "artifact 1"))
+      .resolves.toMatchObject({
+        type: "artifact.delete",
+        metadata: { artifactId: "artifact 1" },
+      });
+    expect(requests).toEqual([
+      "DELETE /admin/repositories/debian%20internal/artifacts/artifact%201",
+    ]);
+  });
+
   it("gets repository object detail through an admin-scoped endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",

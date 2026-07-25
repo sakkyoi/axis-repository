@@ -145,6 +145,41 @@ describe("MemoryStateStore repository activities", () => {
       createdAt: "2026-07-12T00:01:00.000Z",
     });
   });
+
+  it("records artifact delete activities through the activity service", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryActivityService({
+      state,
+      clock: { now: () => new Date("2026-07-12T00:01:00.000Z") },
+      randomId: { create: (prefix) => `${prefix}_1` },
+    });
+
+    await expect(service.recordArtifactDelete({
+      repositoryName: "debian-internal",
+      artifactId: "artifact_1",
+      identity: "apt:main:myapp:1.2.3:amd64",
+      summary: "myapp 1.2.3 amd64",
+      name: "myapp",
+      version: "1.2.3",
+      objectKeys: ["repositories/debian-internal/pool/main/myapp.deb"],
+      deletedObjectKeys: ["repositories/debian-internal/pool/main/myapp.deb"],
+    })).resolves.toEqual({
+      id: "activity_1",
+      repositoryName: "debian-internal",
+      type: "artifact.delete",
+      actor: "admin",
+      summary: "Deleted artifact myapp 1.2.3 amd64",
+      metadata: {
+        artifactId: "artifact_1",
+        identity: "apt:main:myapp:1.2.3:amd64",
+        name: "myapp",
+        version: "1.2.3",
+        objectKeys: ["repositories/debian-internal/pool/main/myapp.deb"],
+        deletedObjectKeys: ["repositories/debian-internal/pool/main/myapp.deb"],
+      },
+      createdAt: "2026-07-12T00:01:00.000Z",
+    });
+  });
 });
 
 describe("MemoryStateStore repository artifacts", () => {

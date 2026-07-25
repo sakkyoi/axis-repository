@@ -232,6 +232,16 @@ export const artifactIndexRebuildActivitySchema = z.object({
   createdAt: z.string(),
 });
 
+export const artifactDeleteActivitySchema = z.object({
+  id: z.string(),
+  repositoryName: z.string(),
+  type: z.literal("artifact.delete"),
+  actor: z.literal("admin"),
+  summary: z.string(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+});
+
 export const publishActivitySchema = z.object({
   id: z.string(),
   repositoryName: z.string(),
@@ -247,6 +257,7 @@ export const repositoryActivitySchema = z.union([
   objectDeleteActivitySchema,
   objectUpdateActivitySchema,
   artifactIndexRebuildActivitySchema,
+  artifactDeleteActivitySchema,
   publishActivitySchema,
 ]);
 
@@ -258,6 +269,10 @@ export const repositoryActivitiesResponseSchema = z.object({
 
 export const repositoryObjectDeleteResponseSchema = z.object({
   activity: objectDeleteActivitySchema,
+});
+
+export const repositoryArtifactDeleteResponseSchema = z.object({
+  activity: artifactDeleteActivitySchema,
 });
 
 export const signingKeySchema = z.object({

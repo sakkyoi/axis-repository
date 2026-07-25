@@ -176,6 +176,8 @@ function RepositoryActivityItem({
         <SessionDetailComponent session={activity.session} artifactSummary={artifactSummary} />
       ) : activity.type === "artifact-index.rebuild" ? (
         <RepositoryArtifactIndexRebuildActivityDetail activity={activity} />
+      ) : activity.type === "artifact.delete" ? (
+        <RepositoryArtifactDeleteActivityDetail activity={activity} />
       ) : (
         <RepositoryObjectActivityDetail activity={activity} />
       )}
@@ -194,6 +196,26 @@ function RepositoryArtifactIndexRebuildActivityDetail({
     <div className="mt-3 grid gap-2 text-xs">
       <PublishSessionDetailList title="Artifact index" items={[activity.summary]} />
       <PublishSessionDetailList title="Indexed artifacts" items={[artifactCountText]} />
+    </div>
+  );
+}
+
+function RepositoryArtifactDeleteActivityDetail({
+  activity,
+}: {
+  activity: Extract<RepositoryActivity, { type: "artifact.delete" }>;
+}) {
+  const objectKeys = Array.isArray(activity.metadata.objectKeys)
+    ? activity.metadata.objectKeys.map(String)
+    : [];
+  const deletedObjectKeys = Array.isArray(activity.metadata.deletedObjectKeys)
+    ? activity.metadata.deletedObjectKeys.map(String)
+    : [];
+  return (
+    <div className="mt-3 grid gap-2 text-xs">
+      <PublishSessionDetailList title="Artifact" items={[activity.summary]} />
+      <PublishSessionDetailList title="Objects" items={objectKeys} />
+      <PublishSessionDetailList title="Deleted objects" items={deletedObjectKeys} />
     </div>
   );
 }

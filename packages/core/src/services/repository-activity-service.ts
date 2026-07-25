@@ -30,6 +30,17 @@ export interface RecordArtifactIndexRebuildInput {
   artifactCount: number;
 }
 
+export interface RecordArtifactDeleteInput {
+  repositoryName: string;
+  artifactId: string;
+  identity: string;
+  summary: string;
+  name: string;
+  version?: string;
+  objectKeys: string[];
+  deletedObjectKeys: string[];
+}
+
 export class RepositoryActivityService {
   constructor(private readonly options: RepositoryActivityServiceOptions) {}
 
@@ -86,6 +97,27 @@ export class RepositoryActivityService {
       summary: "Rebuilt artifact index",
       metadata: {
         artifactCount: input.artifactCount,
+      },
+      createdAt: this.options.clock.now().toISOString(),
+    };
+    await this.options.state.repositoryActivities.save(activity);
+    return activity;
+  }
+
+  async recordArtifactDelete(input: RecordArtifactDeleteInput): Promise<RepositoryActivityRecord> {
+    const activity: RepositoryActivityRecord = {
+      id: this.options.randomId.create("activity"),
+      repositoryName: input.repositoryName,
+      type: "artifact.delete",
+      actor: "admin",
+      summary: `Deleted artifact ${input.summary}`,
+      metadata: {
+        artifactId: input.artifactId,
+        identity: input.identity,
+        name: input.name,
+        ...(input.version !== undefined ? { version: input.version } : {}),
+        objectKeys: [...input.objectKeys],
+        deletedObjectKeys: [...input.deletedObjectKeys],
       },
       createdAt: this.options.clock.now().toISOString(),
     };

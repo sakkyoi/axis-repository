@@ -1938,6 +1938,65 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("deletes indexed artifacts by removing their repository objects and recording activity", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const { token, session } = await createPublishSession(app, harness.repositoryObjectStore);
+    const uploadId = session.uploads[0]?.uploadId;
+    expect(uploadId).toBeDefined();
+    await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/uploads/${uploadId}/verify`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/finalize`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    const artifactsResponse = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/artifacts",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const artifactsBody = await artifactsResponse.json() as { artifacts: Array<{ id: string; objectKeys: string[] }> };
+    const artifact = artifactsBody.artifacts[0];
+    expect(artifact).toBeDefined();
+
+    const deleted = await app.fetch(new Request(
+      `https://axis.example/admin/repositories/debian-internal/artifacts/${encodeURIComponent(artifact!.id)}`,
+      { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const artifactsAfterDelete = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/artifacts",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const activity = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/activity",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(deleted.status).toBe(200);
+    await expect(deleted.json()).resolves.toMatchObject({
+      activity: {
+        repositoryName: "debian-internal",
+        type: "artifact.delete",
+        actor: "admin",
+        summary: "Deleted artifact myapp 1.2.3 amd64",
+        metadata: {
+          artifactId: artifact!.id,
+          objectKeys: artifact!.objectKeys,
+        },
+      },
+    });
+    await expect(harness.repositoryObjectStore.headObject(artifact!.objectKeys[0]!)).resolves.toBeNull();
+    await expect(artifactsAfterDelete.json()).resolves.toEqual({ artifacts: [], truncated: false });
+    const activityBody = await activity.json() as { activities: Array<{ type: string; metadata: Record<string, unknown> }> };
+    expect(activityBody.activities[0]).toMatchObject({
+      type: "artifact.delete",
+      metadata: {
+        artifactId: artifact!.id,
+      },
+    });
+  });
+
   it("rebuilds repository artifact indexes from current storage", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
