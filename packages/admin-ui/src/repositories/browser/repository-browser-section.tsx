@@ -16,6 +16,7 @@ import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plug
 import {
   repositoryBrowserBreadcrumbs,
   repositoryBrowserLayoutClasses,
+  repositoryBrowserPublishDrawerContentClass,
   repositoryBrowserRows,
   type RepositoryBrowserRow,
 } from "./repository-browser-model";
@@ -39,6 +40,7 @@ export function RepositoryBrowserSection({
   const PreviewComponent = publishPlugin?.PreviewComponent;
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
   const layout = repositoryBrowserLayoutClasses();
+  const publishDrawerContentClass = repositoryBrowserPublishDrawerContentClass();
   const overlay = repositoryBrowserUploadOverlay({
     repositoryName: repository.name,
     canPublish: Boolean(PreviewComponent),
@@ -119,7 +121,7 @@ export function RepositoryBrowserSection({
         }
         closePublishPreview();
       }}>
-        <DialogContent className="bottom-0 left-0 top-auto max-h-[88dvh] w-full translate-x-0 translate-y-0 overflow-auto rounded-b-none sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-dvh sm:max-h-none sm:w-[min(92vw,420px)] sm:translate-x-0 sm:translate-y-0 sm:rounded-l-lg sm:rounded-r-none">
+        <DialogContent className={publishDrawerContentClass}>
           <DialogHeader>
             <DialogTitle>{publishPlugin?.title ?? "Publish artifact"}</DialogTitle>
           </DialogHeader>

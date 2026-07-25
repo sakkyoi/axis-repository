@@ -3,6 +3,7 @@ import type { RepositoryObjectsResponse } from "../../api/schemas";
 import {
   repositoryBrowserBreadcrumbs,
   repositoryBrowserLayoutClasses,
+  repositoryBrowserPublishDrawerContentClass,
   repositoryBrowserRows,
 } from "./repository-browser-model";
 
@@ -50,5 +51,13 @@ describe("repository browser model", () => {
       loading: "min-h-64 p-3 text-sm text-muted-foreground",
       error: "min-h-64 p-3",
     });
+  });
+
+  it("keeps publish drawer content pinned below the header", () => {
+    const className = repositoryBrowserPublishDrawerContentClass();
+
+    expect(className).toContain("content-start");
+    expect(className).toContain("sm:h-dvh");
+    expect(className).toContain("sm:right-0");
   });
 });
