@@ -1,11 +1,11 @@
-import type { AptRepositoryConfig } from "./config";
+import type { AptResolvedRepositoryConfig } from "./config";
 import type { AptPackageIndex } from "./packages";
 
 const textEncoder = new TextEncoder();
 
 export async function buildRelease(input: {
   repositoryName: string;
-  config: AptRepositoryConfig;
+  config: AptResolvedRepositoryConfig;
   publishDate: string;
   packageIndexes: AptPackageIndex[];
 }): Promise<string> {

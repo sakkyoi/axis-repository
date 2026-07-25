@@ -2,7 +2,7 @@ import {
   ValidationError,
   type PublishArtifactsInput,
 } from "@axis-repository/core";
-import { parseAptRepositoryConfig, validatePathSegment, type AptRepositoryConfig } from "./config";
+import { parseAptRepositoryConfig, validatePathSegment, type AptRepositoryConfig, type AptResolvedRepositoryConfig } from "./config";
 import {
   buildPackageIndexes,
   buildPackageStanza,
@@ -19,7 +19,7 @@ export type { AptPackageIndex, AptPoolCopy } from "./packages";
 export { parseAptRepositoryConfig, validateAptPublishArtifacts };
 
 export interface AptRepositoryMetadata {
-  config: AptRepositoryConfig;
+  config: AptResolvedRepositoryConfig;
   poolCopies: AptPoolCopy[];
   packageIndexes: AptPackageIndex[];
   packagesPath: string;
@@ -31,15 +31,19 @@ export interface AptRepositoryMetadata {
 }
 
 export async function buildAptRepositoryMetadata(input: PublishArtifactsInput): Promise<AptRepositoryMetadata> {
-  const config = parseAptRepositoryConfig(input.repository);
+  const parsedConfig = parseAptRepositoryConfig(input.repository);
   const repositoryName = validatePathSegment(input.repository.name, "repository name");
-  const releasePath = `repositories/${repositoryName}/dists/${config.codename}/Release`;
+  const releasePath = `repositories/${repositoryName}/dists/${parsedConfig.codename}/Release`;
   const stanzasByIndex = new Map<string, { component: string; architecture: string; stanzas: string[] }>();
   const poolCopies: AptPoolCopy[] = [];
   const validatedArtifacts = validateAptArtifacts({
     repository: input.repository,
     artifacts: input.artifacts.map((publishedArtifact) => publishedArtifact.artifact),
   });
+  const config: AptResolvedRepositoryConfig = {
+    ...parsedConfig,
+    architectures: effectiveArchitectures(parsedConfig, validatedArtifacts),
+  };
 
   for (const [index, publishedArtifact] of input.artifacts.entries()) {
     const validated = validatedArtifacts[index];
@@ -106,4 +110,22 @@ export async function buildAptRepositoryMetadata(input: PublishArtifactsInput): 
     packagesGz: firstIndex?.packagesGz ?? await gzip(new Uint8Array()),
     release,
   };
+}
+
+function effectiveArchitectures(
+  config: AptRepositoryConfig,
+  artifacts: Array<{ architecture: string }>,
+): string[] {
+  if (config.architectures) {
+    return config.architectures;
+  }
+
+  const concrete = uniqueSorted(artifacts
+    .map((artifact) => artifact.architecture)
+    .filter((architecture) => architecture !== "all"));
+  return concrete.length > 0 ? concrete : ["all"];
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }

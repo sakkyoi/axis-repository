@@ -6,7 +6,7 @@ import { repositoryConfigFieldsForStep } from "./repository-create-field-model";
 describe("repository create field model", () => {
   it("selects manifest fields for the requested wizard step", () => {
     expect(repositoryConfigFieldsForStep(aptPluginManifest.repositoryConfig, "config").map((field) => field.name))
-      .toEqual(["codename", "components", "architectures"]);
+      .toEqual(["codename", "components"]);
     expect(repositoryConfigFieldsForStep(aptPluginManifest.repositoryConfig, "dependencies").map((field) => field.name))
       .toEqual(["signingKeyId"]);
   });

@@ -4,52 +4,69 @@ import type { PublishSession } from "@axis-repository/admin-ui/plugin-ui";
 import {
   aptPublishSessionArtifactSummary,
   buildAptPublishArtifact,
-  defaultAptPublishFormValues,
+  readAptPublishPackageMetadata,
 } from "./publish-model";
 
+const textEncoder = new TextEncoder();
+
 describe("APT publish model", () => {
-  it("builds APT publish artifact metadata from form values and file", async () => {
-    const file = new File([new Uint8Array([1, 2, 3])], "myapp_1.2.3_amd64.deb", {
+  it("builds APT publish artifact metadata from Debian package control fields", async () => {
+    const bytes = debArchive({
+      control: [
+        "Package: myapp",
+        "Version: 1.2.3",
+        "Architecture: arm64",
+        "Maintainer: Release Team <release@example.com>",
+        "Description: My app",
+        "Section: utils",
+        "Priority: optional",
+        "Depends: libc6",
+      ].join("\n"),
+    });
+    const file = new File([arrayBufferFromBytes(bytes)], "myapp_1.2.3_arm64.deb", {
       type: "application/vnd.debian.binary-package",
     });
 
     await expect(
       buildAptPublishArtifact(file, {
-        packageName: "myapp",
-        version: "1.2.3",
-        architecture: "amd64",
         component: "main",
-        description: "My app",
-        maintainer: "Release Team <release@example.com>",
-        section: "utils",
-        priority: "optional",
       }),
     ).resolves.toMatchObject({
-      filename: "myapp_1.2.3_amd64.deb",
-      size: 3,
+      filename: "myapp_1.2.3_arm64.deb",
+      size: bytes.byteLength,
       contentType: "application/vnd.debian.binary-package",
-      sha256: "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
       metadata: {
         package: "myapp",
         version: "1.2.3",
-        architecture: "amd64",
+        architecture: "arm64",
         component: "main",
         description: "My app",
         maintainer: "Release Team <release@example.com>",
         section: "utils",
         priority: "optional",
+        depends: "libc6",
       },
     });
   });
 
-  it("infers default APT values from Debian package filenames", () => {
-    expect(defaultAptPublishFormValues("myapp_1.2.3_amd64.deb")).toMatchObject({
+  it("reads APT publish metadata for display from Debian package control fields", async () => {
+    const bytes = debArchive({
+      control: [
+        "Package: myapp",
+        "Version: 1.2.3",
+        "Architecture: all",
+        "Maintainer: Release Team <release@example.com>",
+        "Description: My app",
+      ].join("\n"),
+    });
+    const file = new File([arrayBufferFromBytes(bytes)], "custom-name.deb");
+
+    await expect(readAptPublishPackageMetadata(file)).resolves.toMatchObject({
       packageName: "myapp",
       version: "1.2.3",
-      architecture: "amd64",
-      component: "main",
-      section: "utils",
-      priority: "optional",
+      architecture: "all",
+      maintainer: "Release Team <release@example.com>",
+      description: "My app",
     });
   });
 
@@ -84,4 +101,66 @@ function session(): PublishSession {
     createdAt: "2026-07-23T00:00:00.000Z",
     expiresAt: "2026-07-23T00:10:00.000Z",
   };
+}
+
+function debArchive(input: { control: string }): Uint8Array {
+  return arArchive([
+    { name: "debian-binary", bytes: textEncoder.encode("2.0\n") },
+    { name: "control.tar", bytes: tarArchive([{ name: "./control", bytes: textEncoder.encode(input.control) }]) },
+    { name: "data.tar", bytes: tarArchive([]) },
+  ]);
+}
+
+function arArchive(entries: Array<{ name: string; bytes: Uint8Array }>): Uint8Array {
+  const chunks: Uint8Array[] = [textEncoder.encode("!<arch>\n")];
+  for (const entry of entries) {
+    const name = `${entry.name}/`.padEnd(16, " ");
+    const header = `${name}${"0".padEnd(12, " ")}${"0".padEnd(6, " ")}${"0".padEnd(6, " ")}${"100644".padEnd(8, " ")}${String(entry.bytes.byteLength).padEnd(10, " ")}\`\n`;
+    chunks.push(textEncoder.encode(header), entry.bytes);
+    if (entry.bytes.byteLength % 2) {
+      chunks.push(textEncoder.encode("\n"));
+    }
+  }
+  return concatBytes(chunks);
+}
+
+function tarArchive(entries: Array<{ name: string; bytes: Uint8Array }>): Uint8Array {
+  const chunks: Uint8Array[] = [];
+  for (const entry of entries) {
+    const header = new Uint8Array(512);
+    writeAscii(header, 0, 100, entry.name);
+    writeAscii(header, 100, 8, "0000644");
+    writeAscii(header, 108, 8, "0000000");
+    writeAscii(header, 116, 8, "0000000");
+    writeAscii(header, 124, 12, entry.bytes.byteLength.toString(8).padStart(11, "0"));
+    writeAscii(header, 136, 12, "00000000000");
+    header.fill(0x20, 148, 156);
+    header[156] = "0".charCodeAt(0);
+    writeAscii(header, 257, 6, "ustar");
+    writeAscii(header, 263, 2, "00");
+    const checksum = header.reduce((sum, byte) => sum + byte, 0);
+    writeAscii(header, 148, 8, `${checksum.toString(8).padStart(6, "0")}\0 `);
+    chunks.push(header, entry.bytes, new Uint8Array(Math.ceil(entry.bytes.byteLength / 512) * 512 - entry.bytes.byteLength));
+  }
+  chunks.push(new Uint8Array(1024));
+  return concatBytes(chunks);
+}
+
+function writeAscii(target: Uint8Array, offset: number, length: number, value: string): void {
+  target.set(textEncoder.encode(value).slice(0, length), offset);
+}
+
+function concatBytes(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
+}
+
+function arrayBufferFromBytes(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }

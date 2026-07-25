@@ -107,6 +107,17 @@ describe("APT metadata", () => {
     });
   });
 
+  it("accepts repository config without a fixed architecture allowlist", () => {
+    const repository = input().repository;
+    delete (repository.config.apt as Record<string, unknown>).architectures;
+
+    expect(parseAptRepositoryConfig(repository)).toEqual({
+      codename: "noble",
+      components: ["main"],
+      signingKeyId: "signing_key_prod",
+    });
+  });
+
   it("validates APT publish artifact request envelopes before uploads are verified", () => {
     const valid = input();
     expect(() =>
@@ -144,7 +155,7 @@ describe("APT metadata", () => {
       expect(() => parseAptRepositoryConfig(invalid.repository)).toThrow(`config.apt.${field} is required`);
     }
 
-    for (const field of ["components", "architectures"] as const) {
+    for (const field of ["components"] as const) {
       const empty = input();
       (empty.repository.config.apt as Record<string, unknown>)[field] = [];
       expect(() => parseAptRepositoryConfig(empty.repository)).toThrow(
@@ -155,6 +166,14 @@ describe("APT metadata", () => {
       (nonString.repository.config.apt as Record<string, unknown>)[field] = ["main", 1];
       expect(() => parseAptRepositoryConfig(nonString.repository)).toThrow(
         `config.apt.${field} must be a non-empty string array`,
+      );
+    }
+
+    for (const architectures of [[], ["amd64", 1]]) {
+      const invalid = input();
+      (invalid.repository.config.apt as Record<string, unknown>).architectures = architectures;
+      expect(() => parseAptRepositoryConfig(invalid.repository)).toThrow(
+        "config.apt.architectures must be a non-empty string array when provided",
       );
     }
   });
@@ -229,6 +248,38 @@ describe("APT metadata", () => {
       packagesGzPath: metadata.packagesGzPath,
       packages: metadata.packages,
     });
+  });
+
+  it("discovers repository architectures from uploaded package metadata when no allowlist is configured", async () => {
+    const discovered = input();
+    delete (discovered.repository.config.apt as Record<string, unknown>).architectures;
+    discovered.artifacts[0]!.artifact.filename = "myapp_1.2.3_arm64.deb";
+    discovered.artifacts[0]!.artifact.metadata.architecture = "arm64";
+
+    const metadata = await buildAptRepositoryMetadata(discovered);
+
+    expect(metadata.config.architectures).toEqual(["arm64"]);
+    expect(metadata.release).toContain("Architectures: arm64\n");
+    expect(metadata.packageIndexes.map((index) => index.relativePath)).toEqual([
+      "main/binary-arm64/Packages",
+    ]);
+  });
+
+  it("uses binary-all when architecture all is the only discovered architecture", async () => {
+    const discovered = input();
+    delete (discovered.repository.config.apt as Record<string, unknown>).architectures;
+    discovered.artifacts[0]!.artifact.filename = "portable_1.0.0_all.deb";
+    discovered.artifacts[0]!.artifact.metadata.package = "portable";
+    discovered.artifacts[0]!.artifact.metadata.version = "1.0.0";
+    discovered.artifacts[0]!.artifact.metadata.architecture = "all";
+
+    const metadata = await buildAptRepositoryMetadata(discovered);
+
+    expect(metadata.config.architectures).toEqual(["all"]);
+    expect(metadata.release).toContain("Architectures: all\n");
+    expect(metadata.packageIndexes.map((index) => index.relativePath)).toEqual([
+      "main/binary-all/Packages",
+    ]);
   });
 
   it("partitions Packages indexes by component and architecture and expands architecture all", async () => {

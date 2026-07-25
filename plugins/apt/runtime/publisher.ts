@@ -139,21 +139,21 @@ function aptArtifactMetadataFromDebControl(input: {
     : undefined;
 
   return {
-    package: metadataString(existing, "package") ?? input.control.package,
-    version: metadataString(existing, "version") ?? input.control.version,
-    architecture: metadataString(existing, "architecture") ?? input.control.architecture,
+    package: input.control.package,
+    version: input.control.version,
+    architecture: input.control.architecture,
     component: metadataString(existing, "component") ?? defaultComponent,
-    description: metadataString(existing, "description") ?? input.control.description,
-    maintainer: metadataString(existing, "maintainer") ?? input.control.maintainer,
-    section: metadataString(existing, "section") ?? input.control.section,
-    priority: metadataString(existing, "priority") ?? input.control.priority,
-    homepage: metadataString(existing, "homepage") ?? input.control.homepage,
-    depends: metadataString(existing, "depends") ?? input.control.depends,
-    recommends: metadataString(existing, "recommends") ?? input.control.recommends,
-    suggests: metadataString(existing, "suggests") ?? input.control.suggests,
-    conflicts: metadataString(existing, "conflicts") ?? input.control.conflicts,
-    replaces: metadataString(existing, "replaces") ?? input.control.replaces,
-    provides: metadataString(existing, "provides") ?? input.control.provides,
+    description: input.control.description,
+    maintainer: input.control.maintainer,
+    section: input.control.section,
+    priority: input.control.priority,
+    homepage: input.control.homepage,
+    depends: input.control.depends,
+    recommends: input.control.recommends,
+    suggests: input.control.suggests,
+    conflicts: input.control.conflicts,
+    replaces: input.control.replaces,
+    provides: input.control.provides,
   };
 }
 

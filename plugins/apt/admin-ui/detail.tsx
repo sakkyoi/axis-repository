@@ -116,8 +116,8 @@ function AptRepositoryFields({
         <Input value={values.components} onChange={(event) => onChange("components", event.target.value)} placeholder="main contrib" required />
       </label>
       <label className="grid gap-2">
-        <span className="text-sm font-medium">Architectures</span>
-        <Input value={values.architectures} onChange={(event) => onChange("architectures", event.target.value)} placeholder="amd64 arm64" required />
+        <span className="text-sm font-medium">Architecture allowlist</span>
+        <Input value={values.architectures} onChange={(event) => onChange("architectures", event.target.value)} placeholder="auto-detect" />
       </label>
       <label className="grid gap-2">
         <span className="text-sm font-medium">Signing key</span>

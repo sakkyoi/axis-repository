@@ -31,16 +31,6 @@ export const aptPluginManifest = {
         description: "Space or comma separated Debian components.",
       },
       {
-        name: "architectures",
-        label: "Architectures",
-        kind: "string-list",
-        step: "config",
-        required: true,
-        defaultValue: ["amd64"],
-        placeholder: "amd64 arm64",
-        description: "Space or comma separated Debian architectures.",
-      },
-      {
         name: "signingKeyId",
         label: "Signing key",
         kind: "signing-key",

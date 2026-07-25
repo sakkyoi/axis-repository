@@ -3,7 +3,7 @@ import {
   type PublishArtifactRequest,
   type Repository,
 } from "@axis-repository/core";
-import { parseAptRepositoryConfig, validatePathSegment, type AptRepositoryConfig } from "./config";
+import { parseAptRepositoryConfig, validatePathSegment, type AptResolvedRepositoryConfig, type AptRepositoryConfig } from "./config";
 
 export interface AptPoolCopy {
   sourceKey: string;
@@ -89,7 +89,7 @@ export function validateAptArtifacts(input: {
     if (!config.components.includes(component)) {
       throw new ValidationError("artifact metadata component is not configured for this repository");
     }
-    if (architecture !== "all" && !config.architectures.includes(architecture)) {
+    if (architecture !== "all" && config.architectures && !config.architectures.includes(architecture)) {
       throw new ValidationError("artifact metadata architecture is not configured for this repository");
     }
 
@@ -144,7 +144,7 @@ export function buildPackageStanza(input: {
 export async function buildPackageIndexes(input: {
   repositoryName: string;
   codename: string;
-  config: AptRepositoryConfig;
+  config: AptResolvedRepositoryConfig;
   stanzasByIndex: Map<string, { component: string; architecture: string; stanzas: string[] }>;
 }): Promise<AptPackageIndex[]> {
   const packageIndexes: AptPackageIndex[] = [];

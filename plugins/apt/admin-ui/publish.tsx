@@ -5,33 +5,45 @@ import {
   ErrorState,
   Input,
   PublishSessionDetailList,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   useRepositoryArtifactPublisher,
   type PublishSessionDetailComponentProps,
   type Repository,
 } from "@axis-repository/admin-ui/plugin-ui";
 import {
   buildAptPublishArtifact,
-  defaultAptPublishFormValues,
+  readAptPublishPackageMetadata,
+  type AptPublishPackageMetadata,
   type AptPublishFormValues,
 } from "./publish-model";
 
 export function AptPublishArtifactForm({ repository }: { repository: Repository }) {
   const publisher = useRepositoryArtifactPublisher(repository);
+  const components = aptRepositoryComponents(repository);
   const [file, setFile] = useState<File>();
-  const [values, setValues] = useState<AptPublishFormValues>(() => defaultAptPublishFormValues());
+  const [values, setValues] = useState<AptPublishFormValues>(() => ({ component: components[0] ?? "main" }));
+  const [metadata, setMetadata] = useState<AptPublishPackageMetadata>();
   const [error, setError] = useState("");
 
   function updateValue(key: keyof AptPublishFormValues, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
   }
 
-  function onFileSelected(nextFile: File | undefined) {
+  async function onFileSelected(nextFile: File | undefined) {
     setFile(nextFile);
-    if (nextFile) {
-      setValues((current) => ({
-        ...current,
-        ...defaultAptPublishFormValues(nextFile.name),
-      }));
+    setMetadata(undefined);
+    setError("");
+    if (!nextFile) {
+      return;
+    }
+    try {
+      setMetadata(await readAptPublishPackageMetadata(nextFile));
+    } catch (metadataError) {
+      setError(metadataError instanceof Error ? metadataError.message : String(metadataError));
     }
   }
 
@@ -58,18 +70,22 @@ export function AptPublishArtifactForm({ repository }: { repository: Repository 
       <Input
         type="file"
         accept=".deb,application/vnd.debian.binary-package"
-        onChange={(event) => onFileSelected(event.currentTarget.files?.[0])}
+        onChange={(event) => void onFileSelected(event.currentTarget.files?.[0])}
       />
-      <div className="grid gap-2 sm:grid-cols-2">
-        <PublishTextInput label="Package" value={values.packageName} onChange={(value) => updateValue("packageName", value)} />
-        <PublishTextInput label="Version" value={values.version} onChange={(value) => updateValue("version", value)} />
-        <PublishTextInput label="Architecture" value={values.architecture} onChange={(value) => updateValue("architecture", value)} />
-        <PublishTextInput label="Component" value={values.component} onChange={(value) => updateValue("component", value)} />
-        <PublishTextInput label="Section" value={values.section} onChange={(value) => updateValue("section", value)} />
-        <PublishTextInput label="Priority" value={values.priority} onChange={(value) => updateValue("priority", value)} />
-      </div>
-      <PublishTextInput label="Description" value={values.description} onChange={(value) => updateValue("description", value)} />
-      <PublishTextInput label="Maintainer" value={values.maintainer} onChange={(value) => updateValue("maintainer", value)} />
+      {metadata && <AptPackageMetadataPreview metadata={metadata} />}
+      <label className="grid gap-1">
+        <span className="text-xs font-medium text-muted-foreground">Component</span>
+        <Select value={values.component} onValueChange={(value) => updateValue("component", value)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {components.map((component) => (
+              <SelectItem key={component} value={component}>{component}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </label>
       <Button type="button" onClick={publishArtifact} disabled={publisher.isPublishing}>
         <PackagePlus className="mr-2 h-4 w-4" />
         Publish artifact
@@ -78,6 +94,43 @@ export function AptPublishArtifactForm({ repository }: { repository: Repository 
       {(error || publisher.error) && <ErrorState title="Publish failed" error={error || publisher.error} />}
     </div>
   );
+}
+
+function AptPackageMetadataPreview({ metadata }: { metadata: AptPublishPackageMetadata }) {
+  const rows = [
+    ["Package", metadata.packageName],
+    ["Version", metadata.version],
+    ["Architecture", metadata.architecture],
+    ["Maintainer", metadata.maintainer],
+    ["Description", metadata.description],
+    ["Section", metadata.section],
+    ["Priority", metadata.priority],
+    ["Depends", metadata.depends],
+  ].filter(([, value]) => value);
+
+  return (
+    <dl className="grid gap-2 rounded-md border border-border bg-panel/60 p-3 text-xs sm:grid-cols-2">
+      {rows.map(([label, value]) => (
+        <div key={label} className="grid gap-0.5">
+          <dt className="font-medium text-muted-foreground">{label}</dt>
+          <dd className="break-words text-foreground">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function aptRepositoryComponents(repository: Repository): string[] {
+  const apt = repository.config.apt;
+  if (!apt || typeof apt !== "object" || Array.isArray(apt)) {
+    return ["main"];
+  }
+  const components = (apt as Record<string, unknown>).components;
+  if (!Array.isArray(components)) {
+    return ["main"];
+  }
+  const parsed = components.filter((component): component is string => typeof component === "string" && component.length > 0);
+  return parsed.length > 0 ? parsed : ["main"];
 }
 
 export function AptPublishSessionDetail({
@@ -109,22 +162,5 @@ export function AptPublishSessionDetail({
         </div>
       )}
     </div>
-  );
-}
-
-function PublishTextInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="grid gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <Input value={value} onChange={(event) => onChange(event.target.value)} />
-    </label>
   );
 }

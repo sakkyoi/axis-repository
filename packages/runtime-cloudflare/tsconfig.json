@@ -9,6 +9,7 @@
     "../../plugins/bundled.ts",
     "../../plugins/*/plugin.ts",
     "../../plugins/*/manifest.ts",
+    "../../plugins/*/shared/**/*.ts",
     "../../plugins/*/runtime/**/*.ts"
   ]
 }

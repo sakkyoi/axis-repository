@@ -33,7 +33,6 @@ describe("repository create plugins", () => {
     expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step])).toEqual([
       ["codename", "text", "config"],
       ["components", "string-list", "config"],
-      ["architectures", "string-list", "config"],
       ["signingKeyId", "signing-key", "dependencies"],
     ]);
   });
@@ -47,7 +46,6 @@ describe("repository create plugins", () => {
       config: {
         codename: "noble",
         components: "main contrib",
-        architectures: "amd64 arm64",
       },
       dependencies: {
         signingKeyId: "signing_key_prod",
@@ -60,7 +58,6 @@ describe("repository create plugins", () => {
         apt: {
           codename: "noble",
           components: ["main", "contrib"],
-          architectures: ["amd64", "arm64"],
           signingKeyId: "signing_key_prod",
         },
       },

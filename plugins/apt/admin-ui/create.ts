@@ -75,7 +75,6 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
     config: {
       codename: stringDefault("codename"),
       components: stringListDefault("components"),
-      architectures: stringListDefault("architectures"),
     },
     dependencies: {
       signingKeyId: "",
@@ -89,7 +88,6 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
       return [
         ...validateRequiredTextField(state, "codename"),
         ...validateRequiredListField(state, "components"),
-        ...validateRequiredListField(state, "architectures"),
       ];
     }
     if (step === "dependencies") {

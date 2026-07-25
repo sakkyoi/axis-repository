@@ -4,8 +4,12 @@ import { aptPluginManifest } from "../manifest";
 export interface AptRepositoryConfig {
   codename: string;
   components: string[];
-  architectures: string[];
+  architectures?: string[];
   signingKeyId: string;
+}
+
+export interface AptResolvedRepositoryConfig extends AptRepositoryConfig {
+  architectures: string[];
 }
 
 const safePathSegmentPattern = /^[A-Za-z0-9][A-Za-z0-9._+~-]*$/;
@@ -15,12 +19,14 @@ export function parseAptRepositoryConfig(repository: Repository): AptRepositoryC
   const aptConfig = readRecord(repository.config[aptConfigNamespace]);
   const codename = requiredConfigString(aptConfig, "codename");
   const components = requiredConfigStringArray(aptConfig, "components");
-  const architectures = requiredConfigStringArray(aptConfig, "architectures");
+  const architectures = optionalConfigStringArray(aptConfig, "architectures");
 
   return {
     codename: validatePathSegment(codename, configPath("codename")),
     components: components.map((component) => validatePathSegment(component, configPath("components"))),
-    architectures: architectures.map((architecture) => validatePathSegment(architecture, configPath("architectures"))),
+    ...(architectures
+      ? { architectures: architectures.map((architecture) => validatePathSegment(architecture, configPath("architectures"))) }
+      : {}),
     signingKeyId: requiredConfigString(aptConfig, "signingKeyId"),
   };
 }
@@ -51,6 +57,17 @@ function requiredConfigStringArray(config: Record<string, unknown>, field: strin
   const value = config[field];
   if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
     throw new ValidationError(`${configPath(field)} must be a non-empty string array`);
+  }
+  return [...value];
+}
+
+function optionalConfigStringArray(config: Record<string, unknown>, field: string): string[] | undefined {
+  if (!(field in config)) {
+    return undefined;
+  }
+  const value = config[field];
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw new ValidationError(`${configPath(field)} must be a non-empty string array when provided`);
   }
   return [...value];
 }

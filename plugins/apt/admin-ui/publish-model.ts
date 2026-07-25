@@ -4,48 +4,59 @@ import {
   type PublishArtifact,
   type PublishSession,
 } from "@axis-repository/admin-ui/plugin-ui";
+import { readDebControlMetadata, type DebControlMetadata } from "../shared/deb-control";
 
 export interface AptPublishFormValues {
+  component: string;
+}
+
+export interface AptPublishPackageMetadata {
   packageName: string;
   version: string;
   architecture: string;
-  component: string;
-  description: string;
   maintainer: string;
-  section: string;
-  priority: string;
-}
-
-export function defaultAptPublishFormValues(filename = ""): AptPublishFormValues {
-  const match = filename.match(/^(.+)_([^_]+)_([^_]+)\.deb$/);
-  return {
-    packageName: match?.[1] ?? "",
-    version: match?.[2] ?? "",
-    architecture: match?.[3] ?? "amd64",
-    component: "main",
-    description: "",
-    maintainer: "",
-    section: "utils",
-    priority: "optional",
-  };
+  description: string;
+  section?: string;
+  priority?: string;
+  depends?: string;
+  recommends?: string;
+  suggests?: string;
+  conflicts?: string;
+  replaces?: string;
+  provides?: string;
+  homepage?: string;
 }
 
 export async function buildAptPublishArtifact(file: File, values: AptPublishFormValues): Promise<PublishArtifact> {
+  const control = await readDebControlMetadata(new Uint8Array(await file.arrayBuffer()));
   return {
     filename: file.name,
     size: file.size,
     sha256: await sha256Hex(file),
     contentType: file.type || "application/vnd.debian.binary-package",
-    metadata: {
-      package: values.packageName,
-      version: values.version,
-      architecture: values.architecture,
-      component: values.component,
-      description: values.description,
-      maintainer: values.maintainer,
-      section: values.section,
-      priority: values.priority,
-    },
+    metadata: aptArtifactMetadataFromDebControl(control, values.component),
+  };
+}
+
+export async function readAptPublishPackageMetadata(file: File): Promise<AptPublishPackageMetadata> {
+  const control = await readDebControlMetadata(new Uint8Array(await file.arrayBuffer()));
+  return {
+    packageName: control.package ?? "",
+    version: control.version ?? "",
+    architecture: control.architecture ?? "",
+    maintainer: control.maintainer ?? "",
+    description: control.description ?? "",
+    ...withoutUndefined({
+      section: control.section,
+      priority: control.priority,
+      depends: control.depends,
+      recommends: control.recommends,
+      suggests: control.suggests,
+      conflicts: control.conflicts,
+      replaces: control.replaces,
+      provides: control.provides,
+      homepage: control.homepage,
+    }),
   };
 }
 
@@ -59,4 +70,28 @@ export function aptPublishSessionArtifactSummary(session: PublishSession): strin
     return publishSessionArtifactSummary(session);
   }
   return `${packageName} ${version} ${architecture}, ${session.verifiedUploads.length} verified`;
+}
+
+function aptArtifactMetadataFromDebControl(control: DebControlMetadata, component: string): Record<string, unknown> {
+  return withoutUndefined({
+    package: control.package,
+    version: control.version,
+    architecture: control.architecture,
+    component,
+    description: control.description,
+    maintainer: control.maintainer,
+    section: control.section,
+    priority: control.priority,
+    homepage: control.homepage,
+    depends: control.depends,
+    recommends: control.recommends,
+    suggests: control.suggests,
+    conflicts: control.conflicts,
+    replaces: control.replaces,
+    provides: control.provides,
+  });
+}
+
+function withoutUndefined(input: Record<string, string | undefined>): Record<string, string> {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as Record<string, string>;
 }
