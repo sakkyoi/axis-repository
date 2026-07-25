@@ -3,12 +3,13 @@ import { aptPluginManifest } from "../manifest";
 
 export interface AptRepositoryConfig {
   codename: string;
-  components: string[];
+  components?: string[];
   architectures?: string[];
   signingKeyId: string;
 }
 
 export interface AptResolvedRepositoryConfig extends AptRepositoryConfig {
+  components: string[];
   architectures: string[];
 }
 
@@ -18,12 +19,12 @@ const aptConfigNamespace = aptPluginManifest.repositoryConfig.namespace;
 export function parseAptRepositoryConfig(repository: Repository): AptRepositoryConfig {
   const aptConfig = readRecord(repository.config[aptConfigNamespace]);
   const codename = requiredConfigString(aptConfig, "codename");
-  const components = requiredConfigStringArray(aptConfig, "components");
+  const components = optionalConfigStringArray(aptConfig, "components");
   const architectures = optionalConfigStringArray(aptConfig, "architectures");
 
   return {
     codename: validatePathSegment(codename, configPath("codename")),
-    components: components.map((component) => validatePathSegment(component, configPath("components"))),
+    ...(components ? { components: components.map((component) => validatePathSegment(component, configPath("components"))) } : {}),
     ...(architectures
       ? { architectures: architectures.map((architecture) => validatePathSegment(architecture, configPath("architectures"))) }
       : {}),
@@ -51,14 +52,6 @@ function requiredConfigString(config: Record<string, unknown>, field: string): s
     throw new ValidationError(`${configPath(field)} is required`);
   }
   return value;
-}
-
-function requiredConfigStringArray(config: Record<string, unknown>, field: string): string[] {
-  const value = config[field];
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
-    throw new ValidationError(`${configPath(field)} must be a non-empty string array`);
-  }
-  return [...value];
 }
 
 function optionalConfigStringArray(config: Record<string, unknown>, field: string): string[] | undefined {

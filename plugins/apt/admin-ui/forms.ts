@@ -20,7 +20,7 @@ const aptRepositoryFormSchema = z.object({
   name: z.string().trim().min(1, "Repository name is required"),
   visibility: z.enum(["private", "public"]),
   codename: z.string().trim().min(1, "Codename is required"),
-  components: z.string().trim().min(1, "Components are required"),
+  components: z.string().trim(),
   architectures: z.string().trim(),
   signingKeyId: z.string().trim().min(1, "Signing key is required"),
 });
@@ -33,24 +33,14 @@ function parseForm(values: AptRepositoryFormValues): z.infer<typeof aptRepositor
   return result.data;
 }
 
-function parseList(value: string, label: string): string[] {
-  const items = value
-    .split(/[\s,]+/g)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  if (items.length === 0) {
-    throw new Error(`${label} are required`);
-  }
-  return items;
-}
-
 function aptConfig(values: AptRepositoryFormValues): Record<string, unknown> {
   const parsed = parseForm(values);
+  const components = parseOptionalList(parsed.components);
   const architectures = parseOptionalList(parsed.architectures);
   return {
     apt: {
       codename: parsed.codename,
-      components: parseList(parsed.components, "Components"),
+      ...(components.length > 0 ? { components } : {}),
       ...(architectures.length > 0 ? { architectures } : {}),
       signingKeyId: parsed.signingKeyId,
     },

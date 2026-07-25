@@ -13,7 +13,7 @@ describe("APT repository forms", () => {
       name: "debian-internal",
       visibility: "private",
       codename: "noble",
-      components: "main contrib",
+      components: "",
       architectures: "",
       signingKeyId: "signing_key_prod",
     })).toEqual({
@@ -23,7 +23,6 @@ describe("APT repository forms", () => {
       config: {
         apt: {
           codename: "noble",
-          components: ["main", "contrib"],
           signingKeyId: "signing_key_prod",
         },
       },
@@ -73,7 +72,7 @@ describe("APT repository forms", () => {
       name: "ignored",
       visibility: "public",
       codename: "jammy",
-      components: "main",
+      components: "",
       architectures: "",
       signingKeyId: "signing_key_prod",
     })).toEqual({
@@ -81,7 +80,6 @@ describe("APT repository forms", () => {
       config: {
         apt: {
           codename: "jammy",
-          components: ["main"],
           signingKeyId: "signing_key_prod",
         },
       },

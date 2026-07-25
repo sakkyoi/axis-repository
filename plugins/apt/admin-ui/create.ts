@@ -7,13 +7,6 @@ import type {
 import { repositoryCreateStepsForConfig } from "@axis-repository/admin-ui/plugin-ui";
 import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "./forms";
 
-function splitList(value: string): string[] {
-  return value
-    .split(/[\s,]+/g)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function field(name: string): PluginRepositoryConfigFieldManifest {
   const configField = aptPluginManifest.repositoryConfig.fields.find((candidate) => candidate.name === name);
   if (!configField) {
@@ -27,11 +20,6 @@ function stringDefault(name: string): string {
   return typeof defaultValue === "string" ? defaultValue : "";
 }
 
-function stringListDefault(name: string): string {
-  const defaultValue = field(name).defaultValue;
-  return Array.isArray(defaultValue) ? defaultValue.join(" ") : "";
-}
-
 function requiredFieldError(name: string): string {
   return `${field(name).label} is required`;
 }
@@ -40,12 +28,6 @@ function validateRequiredTextField(state: RepositoryCreateWizardState, name: str
   const configField = field(name);
   if (!configField.required) return [];
   return state.config[name]?.trim() ? [] : [requiredFieldError(name)];
-}
-
-function validateRequiredListField(state: RepositoryCreateWizardState, name: string): string[] {
-  const configField = field(name);
-  if (!configField.required) return [];
-  return splitList(state.config[name] ?? "").length === 0 ? [requiredFieldError(name)] : [];
 }
 
 function validateRequiredDependencyField(state: RepositoryCreateWizardState, name: string): string[] {
@@ -74,7 +56,6 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
     visibility: "private",
     config: {
       codename: stringDefault("codename"),
-      components: stringListDefault("components"),
     },
     dependencies: {
       signingKeyId: "",
@@ -85,10 +66,7 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
       return state.name.trim() ? [] : ["Repository name is required"];
     }
     if (step === "config") {
-      return [
-        ...validateRequiredTextField(state, "codename"),
-        ...validateRequiredListField(state, "components"),
-      ];
+      return validateRequiredTextField(state, "codename");
     }
     if (step === "dependencies") {
       return validateRequiredDependencyField(state, "signingKeyId");

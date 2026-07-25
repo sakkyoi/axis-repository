@@ -68,7 +68,7 @@ export function validateAptArtifacts(input: {
     const packageName = requiredArtifactString(metadata, "package");
     const version = requiredArtifactString(metadata, "version");
     const architecture = requiredArtifactString(metadata, "architecture");
-    const component = requiredArtifactString(metadata, "component");
+    const component = optionalArtifactString(metadata, "component") ?? "main";
     const description = requiredArtifactString(metadata, "description");
     const maintainer = requiredArtifactString(metadata, "maintainer");
     const filename = validateArtifactFilename(artifact.filename);
@@ -86,7 +86,7 @@ export function validateAptArtifacts(input: {
     }
     validateOptionalControlFields(metadata);
 
-    if (!config.components.includes(component)) {
+    if ((config.components ?? ["main"]).includes(component) === false) {
       throw new ValidationError("artifact metadata component is not configured for this repository");
     }
     if (architecture !== "all" && config.architectures && !config.architectures.includes(architecture)) {
@@ -195,6 +195,17 @@ function requiredArtifactString(metadata: Record<string, unknown>, field: string
   const value = metadata[field];
   if (typeof value !== "string" || value.length === 0) {
     throw new ValidationError(`artifact metadata ${field} is required`);
+  }
+  return value;
+}
+
+function optionalArtifactString(metadata: Record<string, unknown>, field: string): string | undefined {
+  const value = metadata[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || value.length === 0) {
+    throw new ValidationError(`artifact metadata ${field} must be a non-empty string when provided`);
   }
   return value;
 }

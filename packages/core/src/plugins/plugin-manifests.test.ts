@@ -40,16 +40,6 @@ describe("shared plugin manifests", () => {
             description: "Debian distribution codename used under dists/.",
           },
           {
-            name: "components",
-            label: "Components",
-            kind: "string-list",
-            step: "config",
-            required: true,
-            defaultValue: ["main"],
-            placeholder: "main contrib",
-            description: "Space or comma separated Debian components.",
-          },
-          {
             name: "signingKeyId",
             label: "Signing key",
             kind: "signing-key",

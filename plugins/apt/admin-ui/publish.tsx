@@ -5,11 +5,6 @@ import {
   ErrorState,
   Input,
   PublishSessionDetailList,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   useRepositoryArtifactPublisher,
   type PublishSessionDetailComponentProps,
   type Repository,
@@ -18,20 +13,13 @@ import {
   buildAptPublishArtifact,
   readAptPublishPackageMetadata,
   type AptPublishPackageMetadata,
-  type AptPublishFormValues,
 } from "./publish-model";
 
 export function AptPublishArtifactForm({ repository }: { repository: Repository }) {
   const publisher = useRepositoryArtifactPublisher(repository);
-  const components = aptRepositoryComponents(repository);
   const [file, setFile] = useState<File>();
-  const [values, setValues] = useState<AptPublishFormValues>(() => ({ component: components[0] ?? "main" }));
   const [metadata, setMetadata] = useState<AptPublishPackageMetadata>();
   const [error, setError] = useState("");
-
-  function updateValue(key: keyof AptPublishFormValues, value: string) {
-    setValues((current) => ({ ...current, [key]: value }));
-  }
 
   async function onFileSelected(nextFile: File | undefined) {
     setFile(nextFile);
@@ -54,7 +42,7 @@ export function AptPublishArtifactForm({ repository }: { repository: Repository 
     }
     setError("");
     try {
-      const artifact = await buildAptPublishArtifact(file, values);
+      const artifact = await buildAptPublishArtifact(file);
       await publisher.publish({ files: [file], artifacts: [artifact] });
     } catch (publishError) {
       setError(publishError instanceof Error ? publishError.message : String(publishError));
@@ -73,19 +61,6 @@ export function AptPublishArtifactForm({ repository }: { repository: Repository 
         onChange={(event) => void onFileSelected(event.currentTarget.files?.[0])}
       />
       {metadata && <AptPackageMetadataPreview metadata={metadata} />}
-      <label className="grid gap-1">
-        <span className="text-xs font-medium text-muted-foreground">Component</span>
-        <Select value={values.component} onValueChange={(value) => updateValue("component", value)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {components.map((component) => (
-              <SelectItem key={component} value={component}>{component}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
       <Button type="button" onClick={publishArtifact} disabled={publisher.isPublishing}>
         <PackagePlus className="mr-2 h-4 w-4" />
         Publish artifact
@@ -118,19 +93,6 @@ function AptPackageMetadataPreview({ metadata }: { metadata: AptPublishPackageMe
       ))}
     </dl>
   );
-}
-
-function aptRepositoryComponents(repository: Repository): string[] {
-  const apt = repository.config.apt;
-  if (!apt || typeof apt !== "object" || Array.isArray(apt)) {
-    return ["main"];
-  }
-  const components = (apt as Record<string, unknown>).components;
-  if (!Array.isArray(components)) {
-    return ["main"];
-  }
-  const parsed = components.filter((component): component is string => typeof component === "string" && component.length > 0);
-  return parsed.length > 0 ? parsed : ["main"];
 }
 
 export function AptPublishSessionDetail({

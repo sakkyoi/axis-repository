@@ -42,6 +42,7 @@ export async function buildAptRepositoryMetadata(input: PublishArtifactsInput): 
   });
   const config: AptResolvedRepositoryConfig = {
     ...parsedConfig,
+    components: effectiveComponents(parsedConfig),
     architectures: effectiveArchitectures(parsedConfig, validatedArtifacts),
   };
 
@@ -124,6 +125,10 @@ function effectiveArchitectures(
     .map((artifact) => artifact.architecture)
     .filter((architecture) => architecture !== "all"));
   return concrete.length > 0 ? concrete : ["all"];
+}
+
+function effectiveComponents(config: AptRepositoryConfig): string[] {
+  return config.components ?? ["main"];
 }
 
 function uniqueSorted(values: string[]): string[] {

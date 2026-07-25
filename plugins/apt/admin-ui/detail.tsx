@@ -112,8 +112,8 @@ function AptRepositoryFields({
         <Input value={values.codename} onChange={(event) => onChange("codename", event.target.value)} placeholder="noble" required />
       </label>
       <label className="grid gap-2">
-        <span className="text-sm font-medium">Components</span>
-        <Input value={values.components} onChange={(event) => onChange("components", event.target.value)} placeholder="main contrib" required />
+        <span className="text-sm font-medium">Component allowlist</span>
+        <Input value={values.components} onChange={(event) => onChange("components", event.target.value)} placeholder="default: main" />
       </label>
       <label className="grid gap-2">
         <span className="text-sm font-medium">Architecture allowlist</span>

@@ -118,6 +118,25 @@ describe("APT metadata", () => {
     });
   });
 
+  it("accepts repository config without a component allowlist", async () => {
+    const repositoryInput = input();
+    delete (repositoryInput.repository.config.apt as Record<string, unknown>).components;
+    delete repositoryInput.artifacts[0]!.artifact.metadata.component;
+
+    expect(parseAptRepositoryConfig(repositoryInput.repository)).toEqual({
+      codename: "noble",
+      architectures: ["amd64"],
+      signingKeyId: "signing_key_prod",
+    });
+
+    const metadata = await buildAptRepositoryMetadata(repositoryInput);
+
+    expect(metadata.config.components).toEqual(["main"]);
+    expect(metadata.poolCopies[0]!.destinationKey).toBe("repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb");
+    expect(metadata.packagesPath).toBe("repositories/debian-internal/dists/noble/main/binary-amd64/Packages");
+    expect(metadata.release).toContain("Components: main\n");
+  });
+
   it("validates APT publish artifact request envelopes before uploads are verified", () => {
     const valid = input();
     expect(() =>
@@ -159,13 +178,13 @@ describe("APT metadata", () => {
       const empty = input();
       (empty.repository.config.apt as Record<string, unknown>)[field] = [];
       expect(() => parseAptRepositoryConfig(empty.repository)).toThrow(
-        `config.apt.${field} must be a non-empty string array`,
+        `config.apt.${field} must be a non-empty string array when provided`,
       );
 
       const nonString = input();
       (nonString.repository.config.apt as Record<string, unknown>)[field] = ["main", 1];
       expect(() => parseAptRepositoryConfig(nonString.repository)).toThrow(
-        `config.apt.${field} must be a non-empty string array`,
+        `config.apt.${field} must be a non-empty string array when provided`,
       );
     }
 
@@ -413,7 +432,7 @@ describe("APT metadata", () => {
   });
 
   it("rejects missing required APT artifact metadata", async () => {
-    for (const field of ["package", "version", "architecture", "component", "description", "maintainer"] as const) {
+    for (const field of ["package", "version", "architecture", "description", "maintainer"] as const) {
       const missing = input();
       delete missing.artifacts[0]!.artifact.metadata[field];
 

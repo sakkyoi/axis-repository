@@ -7,7 +7,7 @@ import {
 import { readDebControlMetadata, type DebControlMetadata } from "../shared/deb-control";
 
 export interface AptPublishFormValues {
-  component: string;
+  component?: string;
 }
 
 export interface AptPublishPackageMetadata {
@@ -27,7 +27,7 @@ export interface AptPublishPackageMetadata {
   homepage?: string;
 }
 
-export async function buildAptPublishArtifact(file: File, values: AptPublishFormValues): Promise<PublishArtifact> {
+export async function buildAptPublishArtifact(file: File, values: AptPublishFormValues = {}): Promise<PublishArtifact> {
   const control = await readDebControlMetadata(new Uint8Array(await file.arrayBuffer()));
   return {
     filename: file.name,
@@ -72,7 +72,7 @@ export function aptPublishSessionArtifactSummary(session: PublishSession): strin
   return `${packageName} ${version} ${architecture}, ${session.verifiedUploads.length} verified`;
 }
 
-function aptArtifactMetadataFromDebControl(control: DebControlMetadata, component: string): Record<string, unknown> {
+function aptArtifactMetadataFromDebControl(control: DebControlMetadata, component?: string): Record<string, unknown> {
   return withoutUndefined({
     package: control.package,
     version: control.version,

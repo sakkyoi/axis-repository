@@ -13,7 +13,7 @@ function aptClientRepositoryInfo(repository: Repository): AptClientRepositoryInf
     name: repository.name,
     visibility: repository.visibility,
     codename: config.codename,
-    components: config.components,
+    components: config.components ?? ["main"],
   };
 }
 

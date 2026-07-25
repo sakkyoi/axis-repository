@@ -27,11 +27,9 @@ describe("APT publish model", () => {
       type: "application/vnd.debian.binary-package",
     });
 
-    await expect(
-      buildAptPublishArtifact(file, {
-        component: "main",
-      }),
-    ).resolves.toMatchObject({
+    const artifact = await buildAptPublishArtifact(file);
+
+    expect(artifact).toMatchObject({
       filename: "myapp_1.2.3_arm64.deb",
       size: bytes.byteLength,
       contentType: "application/vnd.debian.binary-package",
@@ -39,7 +37,6 @@ describe("APT publish model", () => {
         package: "myapp",
         version: "1.2.3",
         architecture: "arm64",
-        component: "main",
         description: "My app",
         maintainer: "Release Team <release@example.com>",
         section: "utils",
@@ -47,6 +44,7 @@ describe("APT publish model", () => {
         depends: "libc6",
       },
     });
+    expect(artifact.metadata).not.toHaveProperty("component");
   });
 
   it("reads APT publish metadata for display from Debian package control fields", async () => {

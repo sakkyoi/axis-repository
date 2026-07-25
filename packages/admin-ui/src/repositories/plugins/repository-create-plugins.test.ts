@@ -32,7 +32,6 @@ describe("repository create plugins", () => {
     expect(plugin.repositoryConfig.namespace).toBe("apt");
     expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step])).toEqual([
       ["codename", "text", "config"],
-      ["components", "string-list", "config"],
       ["signingKeyId", "signing-key", "dependencies"],
     ]);
   });
@@ -45,7 +44,6 @@ describe("repository create plugins", () => {
       visibility: "private",
       config: {
         codename: "noble",
-        components: "main contrib",
       },
       dependencies: {
         signingKeyId: "signing_key_prod",
@@ -57,7 +55,6 @@ describe("repository create plugins", () => {
       config: {
         apt: {
           codename: "noble",
-          components: ["main", "contrib"],
           signingKeyId: "signing_key_prod",
         },
       },
