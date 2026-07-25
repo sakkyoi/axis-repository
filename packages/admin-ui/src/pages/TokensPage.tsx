@@ -11,9 +11,15 @@ import type { PublishToken, Repository } from "../api/schemas";
 import {
   buildCreatePublishTokenInput,
   initialPublishTokenSelection,
+  publishTokenDetailActionRowClass,
   publishTokenDetailBodyClass,
+  publishTokenRawMetadataClass,
+  publishTokenRawMetadataContainerClass,
   publishTokenRowStateClass,
+  publishTokenSummaryGridClass,
+  publishTokenSummaryItemClass,
   publishTokenSummaryItems,
+  publishTokenSummaryValueClass,
   repositoryDisplayLabel,
   revokePublishTokenDialogContent,
   type PublishTokenExpirationMode,
@@ -157,33 +163,35 @@ function PublishTokenDetail({
             <h2 className="truncate text-base font-semibold">{token.name}</h2>
             <p className="text-sm text-muted-foreground">Created {formatDate(token.createdAt)}</p>
           </div>
-          <Badge variant={token.revokedAt ? "destructive" : "success"}>
+          <Badge className="shrink-0" variant={token.revokedAt ? "destructive" : "success"}>
             {token.revokedAt ? "revoked" : "active"}
           </Badge>
         </div>
       </div>
       <div className={publishTokenDetailBodyClass()}>
-        <Button
-          variant="destructive"
-          disabled={Boolean(token.revokedAt) || revokePending}
-          onClick={onRevoke}
-        >
-          <RotateCcw className="mr-2 h-4 w-4" />
-          Revoke token
-        </Button>
-        <div className="grid gap-3">
+        <div className={publishTokenDetailActionRowClass()}>
+          <Button
+            variant="destructive"
+            disabled={Boolean(token.revokedAt) || revokePending}
+            onClick={onRevoke}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Revoke token
+          </Button>
+        </div>
+        <div className={publishTokenSummaryGridClass()}>
           {summaryItems.map(([label, value]) => (
-            <div key={label} className="grid gap-1 rounded-md border border-border bg-background/40 p-3">
+            <div key={label} className={publishTokenSummaryItemClass()}>
               <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
-              <span className="break-all text-sm">
+              <span className={publishTokenSummaryValueClass()}>
                 {label === "Created" || label === "Expires" && value !== "never" ? formatDate(value) : value}
               </span>
             </div>
           ))}
         </div>
-        <details>
+        <details className={publishTokenRawMetadataContainerClass()}>
           <summary className="cursor-pointer text-sm font-medium">Raw token metadata</summary>
-          <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">{asJson(token)}</pre>
+          <pre className={publishTokenRawMetadataClass()}>{asJson(token)}</pre>
         </details>
       </div>
     </aside>

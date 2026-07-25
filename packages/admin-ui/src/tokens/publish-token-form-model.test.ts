@@ -7,8 +7,12 @@ import {
   repositoryDisplayLabel,
   revokePublishTokenDialogContent,
   publishTokenDetailBodyClass,
+  publishTokenDetailActionRowClass,
+  publishTokenRawMetadataClass,
   publishTokenRowStateClass,
+  publishTokenSummaryItemClass,
   publishTokenSummaryItems,
+  publishTokenSummaryValueClass,
   tokenScopeSummary,
 } from "./publish-token-form-model";
 
@@ -128,6 +132,14 @@ describe("publish token form model", () => {
     expect(publishTokenDetailBodyClass()).toContain("content-start");
     expect(publishTokenDetailBodyClass()).toContain("h-full");
     expect(publishTokenDetailBodyClass()).toContain("overflow-y-auto");
+  });
+
+  it("keeps publish token detail content contained inside the detail pane", () => {
+    expect(publishTokenDetailActionRowClass()).toContain("justify-start");
+    expect(publishTokenSummaryItemClass()).toContain("min-w-0");
+    expect(publishTokenSummaryValueClass()).toContain("break-words");
+    expect(publishTokenRawMetadataClass()).toContain("min-w-0");
+    expect(publishTokenRawMetadataClass()).toContain("overflow-auto");
   });
 
   it("formats readonly publish token summary items", () => {

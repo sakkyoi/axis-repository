@@ -97,6 +97,30 @@ export function publishTokenDetailBodyClass(): string {
   return "grid h-full min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4";
 }
 
+export function publishTokenDetailActionRowClass(): string {
+  return "flex min-w-0 justify-start";
+}
+
+export function publishTokenSummaryGridClass(): string {
+  return "grid min-w-0 gap-3";
+}
+
+export function publishTokenSummaryItemClass(): string {
+  return "grid min-w-0 gap-1 rounded-md border border-border bg-background/40 p-3";
+}
+
+export function publishTokenSummaryValueClass(): string {
+  return "min-w-0 break-words text-sm";
+}
+
+export function publishTokenRawMetadataContainerClass(): string {
+  return "min-w-0";
+}
+
+export function publishTokenRawMetadataClass(): string {
+  return "mt-2 max-h-80 min-w-0 overflow-auto rounded-md bg-muted p-3 text-xs";
+}
+
 export function tokenScopeSummary(token: Pick<PublishToken, "repositories" | "permissions" | "signingKeyIds">): {
   repositories: string;
   permissions: string;
