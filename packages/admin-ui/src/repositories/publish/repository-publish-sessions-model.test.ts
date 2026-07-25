@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { PublishSession } from "../../api/schemas";
 import {
+  REPOSITORY_ACTIVITY_PAGE_SIZE,
   publishSessionArtifactSummary,
   publishSessionStatusMeta,
+  repositoryActivityPage,
   repositoryPublishSessionsView,
   sessionsForRepository,
 } from "./repository-publish-sessions-model";
@@ -130,5 +132,40 @@ describe("repository publish sessions model", () => {
       status: { label: "finalized", variant: "success" },
       session: publishSession,
     }]);
+  });
+
+  it("pages repository activities with an explicit load more state", () => {
+    const activities = Array.from({ length: 23 }, (_, index) => ({
+      id: `publish:pub_${index}`,
+      type: "publish" as const,
+      actionLabel: "Published artifact",
+      createdAt: `2026-07-23T00:${String(index).padStart(2, "0")}:00.000Z`,
+      status: { label: "finalized", variant: "success" as const },
+      session: session({ id: `pub_${index}` }),
+    }));
+
+    expect(repositoryActivityPage(activities)).toMatchObject({
+      visibleActivities: activities.slice(0, REPOSITORY_ACTIVITY_PAGE_SIZE),
+      visibleCount: REPOSITORY_ACTIVITY_PAGE_SIZE,
+      hasMoreActivities: true,
+      nextVisibleCount: 20,
+      totalCount: 23,
+    });
+
+    expect(repositoryActivityPage(activities, 20)).toMatchObject({
+      visibleActivities: activities.slice(0, 20),
+      visibleCount: 20,
+      hasMoreActivities: true,
+      nextVisibleCount: 23,
+      totalCount: 23,
+    });
+
+    expect(repositoryActivityPage(activities, 23)).toMatchObject({
+      visibleActivities: activities,
+      visibleCount: 23,
+      hasMoreActivities: false,
+      nextVisibleCount: 23,
+      totalCount: 23,
+    });
   });
 });

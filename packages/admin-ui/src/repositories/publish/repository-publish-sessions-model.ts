@@ -2,6 +2,8 @@ import type { PublishSession, PublishSessionStatus, Repository } from "../../api
 
 export type PublishSessionStatusVariant = "default" | "success" | "warning" | "destructive";
 
+export const REPOSITORY_ACTIVITY_PAGE_SIZE = 10;
+
 export interface RepositoryActivity {
   id: string;
   type: "publish";
@@ -40,6 +42,26 @@ export function repositoryActivityFromPublishSession(session: PublishSession): R
     createdAt: session.createdAt,
     status: publishSessionStatusMeta(session.status),
     session,
+  };
+}
+
+export function repositoryActivityPage(
+  activities: RepositoryActivity[],
+  visibleCount = REPOSITORY_ACTIVITY_PAGE_SIZE,
+): {
+  visibleActivities: RepositoryActivity[];
+  visibleCount: number;
+  hasMoreActivities: boolean;
+  nextVisibleCount: number;
+  totalCount: number;
+} {
+  const normalizedVisibleCount = Math.min(Math.max(visibleCount, REPOSITORY_ACTIVITY_PAGE_SIZE), activities.length);
+  return {
+    visibleActivities: activities.slice(0, normalizedVisibleCount),
+    visibleCount: normalizedVisibleCount,
+    hasMoreActivities: normalizedVisibleCount < activities.length,
+    nextVisibleCount: Math.min(normalizedVisibleCount + REPOSITORY_ACTIVITY_PAGE_SIZE, activities.length),
+    totalCount: activities.length,
   };
 }
 

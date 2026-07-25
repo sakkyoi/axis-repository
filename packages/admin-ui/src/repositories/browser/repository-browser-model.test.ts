@@ -3,6 +3,7 @@ import type { RepositoryObjectsResponse } from "../../api/schemas";
 import {
   repositoryBrowserActivityDrawerContentClass,
   repositoryBrowserBreadcrumbs,
+  repositoryBrowserDrawerBodyClass,
   repositoryBrowserLayoutClasses,
   repositoryBrowserPublishDrawerContentClass,
   repositoryBrowserRows,
@@ -58,15 +59,19 @@ describe("repository browser model", () => {
     const className = repositoryBrowserPublishDrawerContentClass();
 
     expect(className).toContain("content-start");
+    expect(className).toContain("grid-rows-[auto_minmax(0,1fr)]");
+    expect(className).toContain("overflow-hidden");
     expect(className).toContain("sm:h-dvh");
     expect(className).toContain("sm:right-0");
+    expect(repositoryBrowserDrawerBodyClass()).toBe("min-h-0 overflow-y-auto pr-1");
   });
 
   it("renders activity as a right side panel instead of inline content", () => {
     const className = repositoryBrowserActivityDrawerContentClass();
 
     expect(className).toContain("content-start");
-    expect(className).toContain("overflow-auto");
+    expect(className).toContain("grid-rows-[auto_minmax(0,1fr)]");
+    expect(className).toContain("overflow-hidden");
     expect(className).toContain("sm:h-dvh");
     expect(className).toContain("sm:right-0");
     expect(className).toContain("sm:w-[min(92vw,440px)]");

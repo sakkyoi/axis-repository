@@ -16,6 +16,7 @@ import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plug
 import {
   repositoryBrowserActivityDrawerContentClass,
   repositoryBrowserBreadcrumbs,
+  repositoryBrowserDrawerBodyClass,
   repositoryBrowserLayoutClasses,
   repositoryBrowserPublishDrawerContentClass,
   repositoryBrowserRows,
@@ -46,6 +47,7 @@ export function RepositoryBrowserSection({
   const layout = repositoryBrowserLayoutClasses();
   const publishDrawerContentClass = repositoryBrowserPublishDrawerContentClass();
   const activityDrawerContentClass = repositoryBrowserActivityDrawerContentClass();
+  const drawerBodyClass = repositoryBrowserDrawerBodyClass();
   const overlay = repositoryBrowserUploadOverlay({
     repositoryName: repository.name,
     canPublish: Boolean(PreviewComponent),
@@ -147,24 +149,26 @@ export function RepositoryBrowserSection({
           <DialogHeader>
             <DialogTitle>{publishPlugin?.title ?? "Publish artifact"}</DialogTitle>
           </DialogHeader>
-          {publishFileError ? (
-            <div className="grid gap-3">
-              <ErrorState title="Unsupported artifact" error={publishFileError} />
-              <div className="flex justify-end">
-                <Button type="button" variant="outline" onClick={closePublishPreview}>
-                  Close
-                </Button>
+          <div className={drawerBodyClass}>
+            {publishFileError ? (
+              <div className="grid gap-3">
+                <ErrorState title="Unsupported artifact" error={publishFileError} />
+                <div className="flex justify-end">
+                  <Button type="button" variant="outline" onClick={closePublishPreview}>
+                    Close
+                  </Button>
+                </div>
               </div>
-            </div>
-          ) : PreviewComponent && (
-            <PreviewComponent
-              repository={repository}
-              pluginMetadata={pluginMetadata}
-              droppedFiles={selectedFiles}
-              onCancel={closePublishPreview}
-              onPublished={closePublishPreview}
-            />
-          )}
+            ) : PreviewComponent && (
+              <PreviewComponent
+                repository={repository}
+                pluginMetadata={pluginMetadata}
+                droppedFiles={selectedFiles}
+                onCancel={closePublishPreview}
+                onPublished={closePublishPreview}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -173,13 +177,15 @@ export function RepositoryBrowserSection({
           <DialogHeader>
             <DialogTitle>Activity</DialogTitle>
           </DialogHeader>
-          <PublishSessionsSection
-            repository={repository}
-            pluginMetadata={pluginMetadata}
-            hideTitle
-            {...(publishPlugin?.artifactSummary ? { artifactSummary: publishPlugin.artifactSummary } : {})}
-            {...(publishPlugin?.SessionDetailComponent ? { SessionDetailComponent: publishPlugin.SessionDetailComponent } : {})}
-          />
+          <div className={drawerBodyClass}>
+            <PublishSessionsSection
+              repository={repository}
+              pluginMetadata={pluginMetadata}
+              hideTitle
+              {...(publishPlugin?.artifactSummary ? { artifactSummary: publishPlugin.artifactSummary } : {})}
+              {...(publishPlugin?.SessionDetailComponent ? { SessionDetailComponent: publishPlugin.SessionDetailComponent } : {})}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 

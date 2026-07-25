@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../../components/ui/textarea";
 import { asJson, ErrorState } from "../../pages/shared";
 import {
+  REPOSITORY_ACTIVITY_PAGE_SIZE,
   publishSessionArtifactSummary,
+  repositoryActivityPage,
   type RepositoryActivity,
   repositoryPublishSessionsView,
 } from "../publish/repository-publish-sessions-model";
@@ -91,16 +93,24 @@ export function PublishSessionsSection({
   SessionDetailComponent?: React.ComponentType<PublishSessionDetailComponentProps>;
   hideTitle?: boolean;
 }) {
+  const [visibleActivityCount, setVisibleActivityCount] = useState(REPOSITORY_ACTIVITY_PAGE_SIZE);
   const publishSessions = usePublishSessions();
   const publishSessionsView = repositoryPublishSessionsView(repository, publishSessions.data ?? []);
-  const activities = publishSessionsView.activities.slice(0, 5);
+  const activityPage = repositoryActivityPage(publishSessionsView.activities, visibleActivityCount);
+  const activities = activityPage.visibleActivities;
+
+  useEffect(() => {
+    setVisibleActivityCount(REPOSITORY_ACTIVITY_PAGE_SIZE);
+  }, [repository.name]);
 
   return (
     <section className="grid gap-2">
       <div className="flex items-center justify-between gap-3">
         {!hideTitle && <h3 className="text-sm font-semibold">Activity</h3>}
         {publishSessionsView.activities.length > 0 && (
-          <span className="text-xs text-muted-foreground">Latest {activities.length}</span>
+          <span className="text-xs text-muted-foreground">
+            {activityPage.visibleCount} of {activityPage.totalCount}
+          </span>
         )}
       </div>
       {publishSessions.isLoading && <p className="text-sm text-muted-foreground">Loading publish sessions...</p>}
@@ -120,6 +130,15 @@ export function PublishSessionsSection({
             SessionDetailComponent={SessionDetailComponent}
           />
         ))}
+      {!publishSessions.isLoading && !publishSessions.isError && activityPage.hasMoreActivities && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setVisibleActivityCount(activityPage.nextVisibleCount)}
+        >
+          Load more
+        </Button>
+      )}
     </section>
   );
 }

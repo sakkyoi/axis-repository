@@ -72,11 +72,15 @@ export function repositoryBrowserLayoutClasses(): {
 }
 
 export function repositoryBrowserPublishDrawerContentClass(): string {
-  return "content-start bottom-0 left-0 top-auto max-h-[88dvh] w-full translate-x-0 translate-y-0 overflow-auto rounded-b-none sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-dvh sm:max-h-none sm:w-[min(92vw,420px)] sm:translate-x-0 sm:translate-y-0 sm:rounded-l-lg sm:rounded-r-none";
+  return "content-start grid-rows-[auto_minmax(0,1fr)] bottom-0 left-0 top-auto max-h-[88dvh] w-full translate-x-0 translate-y-0 overflow-hidden rounded-b-none sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-dvh sm:max-h-none sm:w-[min(92vw,420px)] sm:translate-x-0 sm:translate-y-0 sm:rounded-l-lg sm:rounded-r-none";
 }
 
 export function repositoryBrowserActivityDrawerContentClass(): string {
-  return "content-start bottom-0 left-0 top-auto max-h-[88dvh] w-full translate-x-0 translate-y-0 overflow-auto rounded-b-none sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-dvh sm:max-h-none sm:w-[min(92vw,440px)] sm:translate-x-0 sm:translate-y-0 sm:rounded-l-lg sm:rounded-r-none";
+  return "content-start grid-rows-[auto_minmax(0,1fr)] bottom-0 left-0 top-auto max-h-[88dvh] w-full translate-x-0 translate-y-0 overflow-hidden rounded-b-none sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-dvh sm:max-h-none sm:w-[min(92vw,440px)] sm:translate-x-0 sm:translate-y-0 sm:rounded-l-lg sm:rounded-r-none";
+}
+
+export function repositoryBrowserDrawerBodyClass(): string {
+  return "min-h-0 overflow-y-auto pr-1";
 }
 
 function compareRows(left: Pick<RepositoryBrowserRow, "name">, right: Pick<RepositoryBrowserRow, "name">): number {
