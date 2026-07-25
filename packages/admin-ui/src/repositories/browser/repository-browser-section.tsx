@@ -1,4 +1,4 @@
-import { File, Folder, PackagePlus, UploadCloud } from "lucide-react";
+import { File, Folder, History, PackagePlus, UploadCloud } from "lucide-react";
 import type { DragEvent } from "react";
 import { useRef, useState } from "react";
 import { useRepositoryObjects } from "../../api/hooks";
@@ -14,6 +14,7 @@ import { PublishSessionsSection } from "../detail/repository-detail-shared";
 import { getRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
+  repositoryBrowserActivityDrawerContentClass,
   repositoryBrowserBreadcrumbs,
   repositoryBrowserLayoutClasses,
   repositoryBrowserPublishDrawerContentClass,
@@ -34,6 +35,7 @@ export function RepositoryBrowserSection({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [prefix, setPrefix] = useState("");
   const [publishOpen, setPublishOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [publishFileError, setPublishFileError] = useState("");
   const [dragDepth, setDragDepth] = useState(0);
@@ -43,6 +45,7 @@ export function RepositoryBrowserSection({
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
   const layout = repositoryBrowserLayoutClasses();
   const publishDrawerContentClass = repositoryBrowserPublishDrawerContentClass();
+  const activityDrawerContentClass = repositoryBrowserActivityDrawerContentClass();
   const overlay = repositoryBrowserUploadOverlay({
     repositoryName: repository.name,
     canPublish: Boolean(PreviewComponent),
@@ -107,12 +110,18 @@ export function RepositoryBrowserSection({
           prefix={prefix}
           onPrefixChange={setPrefix}
         />
-        {PreviewComponent && (
-          <Button type="button" onClick={() => fileInputRef.current?.click()}>
-            <PackagePlus className="mr-2 h-4 w-4" />
-            Publish artifact
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" onClick={() => setActivityOpen(true)}>
+            <History className="mr-2 h-4 w-4" />
+            Activity
           </Button>
-        )}
+          {PreviewComponent && (
+            <Button type="button" onClick={() => fileInputRef.current?.click()}>
+              <PackagePlus className="mr-2 h-4 w-4" />
+              Publish artifact
+            </Button>
+          )}
+        </div>
         {PreviewComponent && (
           <input
             ref={fileInputRef}
@@ -159,6 +168,21 @@ export function RepositoryBrowserSection({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
+        <DialogContent className={activityDrawerContentClass}>
+          <DialogHeader>
+            <DialogTitle>Activity</DialogTitle>
+          </DialogHeader>
+          <PublishSessionsSection
+            repository={repository}
+            pluginMetadata={pluginMetadata}
+            hideTitle
+            {...(publishPlugin?.artifactSummary ? { artifactSummary: publishPlugin.artifactSummary } : {})}
+            {...(publishPlugin?.SessionDetailComponent ? { SessionDetailComponent: publishPlugin.SessionDetailComponent } : {})}
+          />
+        </DialogContent>
+      </Dialog>
+
       <div className={layout.frame}>
         {objects.isLoading && <div className={layout.loading}>Loading objects...</div>}
         {objects.isError && <div className={layout.error}><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
@@ -176,12 +200,6 @@ export function RepositoryBrowserSection({
 
       {overlay && <RepositoryBrowserUploadOverlay overlay={overlay} />}
 
-      <PublishSessionsSection
-        repository={repository}
-        pluginMetadata={pluginMetadata}
-        {...(publishPlugin?.artifactSummary ? { artifactSummary: publishPlugin.artifactSummary } : {})}
-        {...(publishPlugin?.SessionDetailComponent ? { SessionDetailComponent: publishPlugin.SessionDetailComponent } : {})}
-      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RepositoryObjectsResponse } from "../../api/schemas";
 import {
+  repositoryBrowserActivityDrawerContentClass,
   repositoryBrowserBreadcrumbs,
   repositoryBrowserLayoutClasses,
   repositoryBrowserPublishDrawerContentClass,
@@ -59,5 +60,15 @@ describe("repository browser model", () => {
     expect(className).toContain("content-start");
     expect(className).toContain("sm:h-dvh");
     expect(className).toContain("sm:right-0");
+  });
+
+  it("renders activity as a right side panel instead of inline content", () => {
+    const className = repositoryBrowserActivityDrawerContentClass();
+
+    expect(className).toContain("content-start");
+    expect(className).toContain("overflow-auto");
+    expect(className).toContain("sm:h-dvh");
+    expect(className).toContain("sm:right-0");
+    expect(className).toContain("sm:w-[min(92vw,440px)]");
   });
 });

@@ -83,11 +83,13 @@ export function PublishSessionsSection({
   repository,
   artifactSummary = publishSessionArtifactSummary,
   SessionDetailComponent = GenericPublishSessionDetail,
+  hideTitle = false,
 }: {
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
   artifactSummary?: (session: PublishSession) => string;
   SessionDetailComponent?: React.ComponentType<PublishSessionDetailComponentProps>;
+  hideTitle?: boolean;
 }) {
   const publishSessions = usePublishSessions();
   const publishSessionsView = repositoryPublishSessionsView(repository, publishSessions.data ?? []);
@@ -96,7 +98,7 @@ export function PublishSessionsSection({
   return (
     <section className="grid gap-2">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold">Activity</h3>
+        {!hideTitle && <h3 className="text-sm font-semibold">Activity</h3>}
         {publishSessionsView.activities.length > 0 && (
           <span className="text-xs text-muted-foreground">Latest {activities.length}</span>
         )}
