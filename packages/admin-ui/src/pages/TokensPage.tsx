@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { DestructiveActionDialog } from "../components/ui/destructive-action-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { useCreatePublishToken, usePublishTokens, useRepositories, useRevokePublishToken } from "../api/hooks";
 import type { PublishToken, Repository } from "../api/schemas";
 import {
@@ -15,6 +16,8 @@ import {
   publishTokenSummaryItems,
   repositoryDisplayLabel,
   revokePublishTokenDialogContent,
+  type PublishTokenExpirationMode,
+  type PublishTokenExpirationState,
   type PublishTokenPermissionState,
 } from "../tokens/publish-token-form-model";
 import { getPublishTokenScopeExtension } from "../repositories/plugins/repository-ui-plugins";
@@ -199,6 +202,7 @@ function CreateTokenDialog({
   const [name, setName] = useState("");
   const [selectedRepositories, setSelectedRepositories] = useState<string[]>([]);
   const [permissions, setPermissions] = useState<PublishTokenPermissionState>({ read: false, publish: true });
+  const [expiration, setExpiration] = useState<PublishTokenExpirationState>({ mode: "never", customDateTime: "" });
   const [signingKeySelections, setSigningKeySelections] = useState<Record<string, string>>({});
   const [scopeError, setScopeError] = useState("");
   const createToken = useCreatePublishToken();
@@ -257,6 +261,7 @@ function CreateTokenDialog({
       permissions,
       selectedRepositories,
       signingKeySelections,
+      expiration,
     }));
     setSecret(result.secret);
     setScopeError("");
@@ -331,6 +336,38 @@ function CreateTokenDialog({
               read
             </label>
           </div>
+          <label className="grid gap-2">
+            <span className="text-sm font-medium">Expiration</span>
+            <Select
+              value={expiration.mode}
+              onValueChange={(value) =>
+                setExpiration((current) => ({ ...current, mode: value as PublishTokenExpirationMode }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="never">Never</SelectItem>
+                <SelectItem value="1h">1 hour</SelectItem>
+                <SelectItem value="1d">1 day</SelectItem>
+                <SelectItem value="7d">7 days</SelectItem>
+                <SelectItem value="30d">30 days</SelectItem>
+                <SelectItem value="custom">Custom date/time</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          {expiration.mode === "custom" && (
+            <label className="grid gap-2">
+              <span className="text-sm font-medium">Custom expiration</span>
+              <Input
+                type="datetime-local"
+                value={expiration.customDateTime}
+                onChange={(event) =>
+                  setExpiration((current) => ({ ...current, customDateTime: event.target.value }))}
+                required
+              />
+            </label>
+          )}
           {publishTokenScopeExtensions.map((extension) => (
             <extension.Component
               key={extension.Component.name}

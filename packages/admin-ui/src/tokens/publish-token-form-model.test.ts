@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PublishToken, Repository } from "../api/schemas";
 import {
   buildCreatePublishTokenInput,
+  buildPublishTokenExpiresAt,
   initialPublishTokenSelection,
   repositoryDisplayLabel,
   revokePublishTokenDialogContent,
@@ -20,6 +21,8 @@ describe("publish token form model", () => {
       signingKeySelections: {
         "debian-internal": "signing_key_prod",
       },
+      expiration: { mode: "never", customDateTime: "" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
     })).toEqual({
       name: "github-actions",
       repositories: ["debian-internal", "python-internal"],
@@ -35,6 +38,8 @@ describe("publish token form model", () => {
       selectedRepositories: ["python-internal"],
       permissions: { read: false, publish: true },
       signingKeySelections: {},
+      expiration: { mode: "never", customDateTime: "" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
     })).toEqual({
       name: "pypi-actions",
       repositories: ["python-internal"],
@@ -50,6 +55,8 @@ describe("publish token form model", () => {
         "debian-a": "signing_key_shared",
         "debian-b": "signing_key_shared",
       },
+      expiration: { mode: "never", customDateTime: "" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
     }).signingKeyIds).toEqual(["signing_key_shared"]);
   });
 
@@ -61,11 +68,26 @@ describe("publish token form model", () => {
       signingKeySelections: {
         "debian-internal": "signing_key_prod",
       },
+      expiration: { mode: "never", customDateTime: "" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
     })).toEqual({
       name: "reader",
       repositories: ["debian-internal"],
       permissions: ["read"],
       ecosystemScopes: {},
+    });
+  });
+
+  it("includes publish token expiration in create payloads", () => {
+    expect(buildCreatePublishTokenInput({
+      name: "github-actions",
+      selectedRepositories: ["debian-internal"],
+      permissions: { read: false, publish: true },
+      signingKeySelections: {},
+      expiration: { mode: "1h", customDateTime: "" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
+    })).toMatchObject({
+      expiresAt: "2026-07-23T01:00:00.000Z",
     });
   });
 
@@ -116,6 +138,34 @@ describe("publish token form model", () => {
       ["Created", "2026-07-23T00:00:00.000Z"],
       ["Expires", "never"],
     ]);
+  });
+
+  it("omits publish token expiration when set to never", () => {
+    expect(buildPublishTokenExpiresAt({
+      expiration: { mode: "never", customDateTime: "" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
+    })).toBeUndefined();
+  });
+
+  it("builds relative publish token expirations from the current time", () => {
+    expect(buildPublishTokenExpiresAt({
+      expiration: { mode: "7d", customDateTime: "" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
+    })).toBe("2026-07-30T00:00:00.000Z");
+  });
+
+  it("builds custom publish token expiration as an ISO string", () => {
+    expect(buildPublishTokenExpiresAt({
+      expiration: { mode: "custom", customDateTime: "2026-07-24T12:30" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
+    })).toBe(new Date("2026-07-24T12:30").toISOString());
+  });
+
+  it("rejects invalid custom publish token expiration", () => {
+    expect(() => buildPublishTokenExpiresAt({
+      expiration: { mode: "custom", customDateTime: "" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
+    })).toThrow("Custom expiration is required");
   });
 });
 
