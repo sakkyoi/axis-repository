@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AlertTriangle, Check, Copy } from "lucide-react";
 import { ErrorState } from "../../pages/shared";
 import { Button } from "./button";
@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "./input";
 import {
   destructiveConfirmationCopyLabel,
+  destructiveConfirmationCopiedResetMs,
   destructiveConfirmationLayoutClasses,
   destructiveConfirmationMatches,
 } from "./destructive-action-dialog-model";
@@ -33,6 +34,7 @@ export function DestructiveActionDialog({
 }: DestructiveActionDialogProps) {
   const [confirmationInput, setConfirmationInput] = useState("");
   const [copied, setCopied] = useState(false);
+  const copiedResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const confirmed = destructiveConfirmationMatches(confirmationInput, confirmationText);
   const confirmationLayout = destructiveConfirmationLayoutClasses();
 
@@ -41,6 +43,9 @@ export function DestructiveActionDialog({
     if (!nextOpen) {
       setConfirmationInput("");
       setCopied(false);
+      if (copiedResetTimeoutRef.current) {
+        clearTimeout(copiedResetTimeoutRef.current);
+      }
     }
     onOpenChange(nextOpen);
   }
@@ -49,6 +54,13 @@ export function DestructiveActionDialog({
     if (!confirmationText) return;
     await navigator.clipboard.writeText(confirmationText);
     setCopied(true);
+    if (copiedResetTimeoutRef.current) {
+      clearTimeout(copiedResetTimeoutRef.current);
+    }
+    copiedResetTimeoutRef.current = setTimeout(() => {
+      setCopied(false);
+      copiedResetTimeoutRef.current = undefined;
+    }, destructiveConfirmationCopiedResetMs());
   }
 
   return (

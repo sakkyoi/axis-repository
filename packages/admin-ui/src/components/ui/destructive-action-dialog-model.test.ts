@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   destructiveConfirmationCopyLabel,
+  destructiveConfirmationCopiedResetMs,
   destructiveConfirmationLayoutClasses,
   destructiveConfirmationMatches,
 } from "./destructive-action-dialog-model";
@@ -20,6 +21,10 @@ describe("destructive action dialog model", () => {
 
   it("builds an accessible label for copying confirmation text", () => {
     expect(destructiveConfirmationCopyLabel("delete object")).toBe("Copy delete object");
+  });
+
+  it("resets copied feedback after a short delay", () => {
+    expect(destructiveConfirmationCopiedResetMs()).toBe(1500);
   });
 
   it("keeps confirmation prompt and copy action inline", () => {

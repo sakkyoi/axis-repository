@@ -17,6 +17,10 @@ export function destructiveConfirmationCopyLabel(confirmationText: string): stri
   return `Copy ${confirmationText}`;
 }
 
+export function destructiveConfirmationCopiedResetMs(): number {
+  return 1500;
+}
+
 export function destructiveConfirmationLayoutClasses(): {
   prompt: string;
   token: string;
