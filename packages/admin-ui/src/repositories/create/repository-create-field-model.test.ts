@@ -1,5 +1,5 @@
-import { aptPluginManifest } from "../../../../../plugins/apt/manifest";
-import { pypiPluginManifest } from "../../../../../plugins/pypi/manifest";
+import { aptPluginManifest } from "@axis-repository/plugin-apt/manifest";
+import { pypiPluginManifest } from "@axis-repository/plugin-pypi/manifest";
 import { describe, expect, it } from "vitest";
 import { repositoryConfigFieldsForStep } from "./repository-create-field-model";
 

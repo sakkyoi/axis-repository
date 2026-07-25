@@ -86,6 +86,12 @@ importers:
 
   packages/admin-ui:
     dependencies:
+      '@axis-repository/plugin-apt':
+        specifier: workspace:*
+        version: link:../../plugins/apt
+      '@axis-repository/plugin-pypi':
+        specifier: workspace:*
+        version: link:../../plugins/pypi
       '@radix-ui/react-dialog':
         specifier: ^1.1.20
         version: 1.1.20(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -164,6 +170,12 @@ importers:
       '@axis-repository/core':
         specifier: workspace:*
         version: link:../core
+      '@axis-repository/plugin-apt':
+        specifier: workspace:*
+        version: link:../../plugins/apt
+      '@axis-repository/plugin-pypi':
+        specifier: workspace:*
+        version: link:../../plugins/pypi
       aws4fetch:
         specifier: ^1.0.20
         version: 1.0.20
@@ -174,6 +186,33 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20241218.0
         version: 4.20260702.1
+
+  plugins/apt:
+    dependencies:
+      '@axis-repository/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      openpgp:
+        specifier: ^6.3.1
+        version: 6.3.1
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  plugins/pypi:
+    dependencies:
+      '@axis-repository/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
 packages:
 

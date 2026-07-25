@@ -29,6 +29,8 @@
   },
   "dependencies": {
     "@axis-repository/core": "workspace:*",
+    "@axis-repository/plugin-apt": "workspace:*",
+    "@axis-repository/plugin-pypi": "workspace:*",
     "aws4fetch": "^1.0.20",
     "openpgp": "^6.3.1"
   },

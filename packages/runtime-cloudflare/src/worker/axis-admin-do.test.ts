@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AxisAdminDO, type AxisEnv } from "./axis-admin-do";
-import { debArchive } from "../../../../plugins/apt/runtime/deb-fixtures.test-support";
+import { debArchive } from "@axis-repository/plugin-apt/test-support";
 import type { DurableStorage } from "../storage/durable-state";
 
 class FakeDurableStorage implements DurableStorage {

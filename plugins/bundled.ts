@@ -1,16 +1,6 @@
-import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
-import { aptRepositoryPluginBundle } from "./apt/plugin";
-import { pypiRepositoryPluginBundle } from "./pypi/plugin";
-
-export interface RepositoryPluginBundle {
-  manifest: RepositoryPluginManifest;
-  catalog: {
-    enabled: boolean;
-    experimental: boolean;
-  };
-  runtime: boolean;
-  adminUi: boolean;
-}
+import type { RepositoryPluginBundle } from "@axis-repository/core/plugin-manifests";
+import { aptRepositoryPluginBundle } from "@axis-repository/plugin-apt";
+import { pypiRepositoryPluginBundle } from "@axis-repository/plugin-pypi";
 
 export const bundledRepositoryPlugins = [
   aptRepositoryPluginBundle,

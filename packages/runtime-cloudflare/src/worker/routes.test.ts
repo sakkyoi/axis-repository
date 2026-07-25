@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { createDevDependencyHarness } from "./dev-dependencies";
-import { debArchive } from "../../../../plugins/apt/runtime/deb-fixtures.test-support";
+import { debArchive } from "@axis-repository/plugin-apt/test-support";
 import type { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 
 afterEach(() => {

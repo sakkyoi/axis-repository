@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { aptPluginManifest } from "../../../../plugins/apt/manifest";
-import { pypiPluginManifest } from "../../../../plugins/pypi/manifest";
+import { aptPluginManifest } from "@axis-repository/plugin-apt/manifest";
+import { pypiPluginManifest } from "@axis-repository/plugin-pypi/manifest";
 
 const srcDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(srcDir, "..", "..", "..", "..");

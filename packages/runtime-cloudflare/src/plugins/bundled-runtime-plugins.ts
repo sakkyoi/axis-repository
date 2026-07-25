@@ -3,11 +3,11 @@ import type {
   ArtifactRepositoryPlugin,
   RepositorySecretCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { bundledRepositoryPlugins } from "../../../../plugins/bundled";
-import { AptPublisher } from "../../../../plugins/apt/runtime/publisher";
-import { createAptPlugin } from "../../../../plugins/apt/runtime/runtime";
-import { AptSigningKeyResource } from "../../../../plugins/apt/runtime/signing-keys";
-import { createPypiPlugin } from "../../../../plugins/pypi/runtime/runtime";
+import { aptRepositoryPluginBundle } from "@axis-repository/plugin-apt";
+import { AptPublisher } from "@axis-repository/plugin-apt/runtime/publisher";
+import { createAptPlugin, AptSigningKeyResource } from "@axis-repository/plugin-apt/runtime";
+import { pypiRepositoryPluginBundle } from "@axis-repository/plugin-pypi";
+import { createPypiPlugin } from "@axis-repository/plugin-pypi/runtime";
 
 interface AptReleaseSigner {
   clearSign(input: {
@@ -48,7 +48,7 @@ const bundledRuntimePluginFactories: Record<string, RuntimePluginFactory> = {
 };
 
 export function createBundledRuntimePlugins(input: BundledRuntimePluginInput): ArtifactRepositoryPlugin[] {
-  return bundledRepositoryPlugins
+  return [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
     .filter((plugin) => plugin.catalog.enabled && plugin.runtime)
     .map((plugin) => {
       const factory = bundledRuntimePluginFactories[plugin.manifest.ecosystem];

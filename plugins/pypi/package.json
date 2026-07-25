@@ -1,0 +1,19 @@
+{
+  "name": "@axis-repository/plugin-pypi",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./plugin.ts",
+    "./manifest": "./manifest.ts",
+    "./runtime": "./runtime/runtime.ts",
+    "./admin-ui": "./admin-ui/index.ts",
+    "./admin-ui/detail": "./admin-ui/detail.tsx",
+    "./admin-ui/publish": "./admin-ui/publish.tsx"
+  },
+  "dependencies": {
+    "@axis-repository/core": "workspace:*",
+    "react": "^19.2.8",
+    "zod": "^4.4.3"
+  }
+}

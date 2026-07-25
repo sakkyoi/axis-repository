@@ -17,13 +17,26 @@ const packageDirs = {
   adminUi: "packages/admin-ui",
   runtimeCloudflare: "packages/runtime-cloudflare",
   publishClient: "packages/publish-client",
+  pluginApt: "plugins/apt",
+  pluginPypi: "plugins/pypi",
 } as const;
+
+const packageSourceDirs: Record<keyof typeof packageDirs, string> = {
+  core: "packages/core/src",
+  adminUi: "packages/admin-ui/src",
+  runtimeCloudflare: "packages/runtime-cloudflare/src",
+  publishClient: "packages/publish-client/src",
+  pluginApt: "plugins/apt",
+  pluginPypi: "plugins/pypi",
+};
 
 const expectedExports: Record<keyof typeof packageDirs, string[]> = {
   core: [".", "./plugin-manifests"],
   adminUi: ["./plugin-ui"],
   runtimeCloudflare: [".", "./plugin-runtime", "./plugin-runtime/testing"],
   publishClient: [".", "./cli"],
+  pluginApt: [".", "./admin-ui", "./admin-ui/publish", "./manifest", "./runtime", "./runtime/publisher", "./test-support"],
+  pluginPypi: [".", "./admin-ui", "./admin-ui/detail", "./admin-ui/publish", "./manifest", "./runtime"],
 };
 
 const forbiddenWorkspaceDependencies: Record<keyof typeof packageDirs, string[]> = {
@@ -31,6 +44,8 @@ const forbiddenWorkspaceDependencies: Record<keyof typeof packageDirs, string[]>
   adminUi: ["@axis-repository/runtime-cloudflare", "@axis-repository/publish-client"],
   runtimeCloudflare: ["@axis-repository/admin-ui", "@axis-repository/publish-client"],
   publishClient: ["@axis-repository/admin-ui", "@axis-repository/runtime-cloudflare"],
+  pluginApt: ["@axis-repository/plugin-pypi", "@axis-repository/publish-client"],
+  pluginPypi: ["@axis-repository/plugin-apt", "@axis-repository/publish-client"],
 };
 
 const pluginImplementationImportPattern = /(?:^|[\\/])plugins[\\/][^\\/]+[\\/](?:runtime|admin-ui)(?:[\\/]|$)/;
@@ -62,6 +77,19 @@ function assertOnlyUsesExportedPackageSubpaths(filePath: string, source: string)
     "@axis-repository/admin-ui/plugin-ui",
     "@axis-repository/core",
     "@axis-repository/core/plugin-manifests",
+    "@axis-repository/plugin-apt",
+    "@axis-repository/plugin-apt/admin-ui",
+    "@axis-repository/plugin-apt/admin-ui/publish",
+    "@axis-repository/plugin-apt/manifest",
+    "@axis-repository/plugin-apt/runtime",
+    "@axis-repository/plugin-apt/runtime/publisher",
+    "@axis-repository/plugin-apt/test-support",
+    "@axis-repository/plugin-pypi",
+    "@axis-repository/plugin-pypi/admin-ui",
+    "@axis-repository/plugin-pypi/admin-ui/detail",
+    "@axis-repository/plugin-pypi/admin-ui/publish",
+    "@axis-repository/plugin-pypi/manifest",
+    "@axis-repository/plugin-pypi/runtime",
     "@axis-repository/runtime-cloudflare/plugin-runtime",
     "@axis-repository/runtime-cloudflare/plugin-runtime/testing",
   ]);
@@ -123,13 +151,20 @@ describe("package boundaries", () => {
     );
   });
 
+  test("workspace includes repository plugin packages", () => {
+    const workspace = readFileSync(path.join(rootDir, "pnpm-workspace.yaml"), "utf8");
+
+    expect(workspace).toContain("packages/*");
+    expect(workspace).toContain("plugins/*");
+  });
+
   test("plugin implementation import detection covers future ecosystems", () => {
     expect(pluginImplementationImportPattern.test("../../../plugins/npm/runtime/runtime")).toBe(true);
     expect(pluginImplementationImportPattern.test("../../../plugins/npm/admin-ui")).toBe(true);
   });
 
   test("plugin implementation imports stay centralized in registries and tests", () => {
-    const packageSourceFiles = Object.values(packageDirs).flatMap((packageDir) => listSourceFiles(`${packageDir}/src`));
+    const packageSourceFiles = Object.values(packageSourceDirs).flatMap((sourceDir) => listSourceFiles(sourceDir));
     for (const filePath of [...packageSourceFiles, ...listSourceFiles("plugins")]) {
       const normalizedPath = path.normalize(filePath);
       const source = readFileSync(path.join(rootDir, filePath), "utf8");
@@ -138,11 +173,9 @@ describe("package boundaries", () => {
       }
 
       expect(
-        normalizedPath === path.normalize("packages/runtime-cloudflare/src/plugins/bundled-runtime-plugins.ts") ||
-          normalizedPath === path.normalize("packages/admin-ui/src/repositories/plugins/repository-ui-plugins.ts") ||
-          normalizedPath.endsWith(".test.ts") ||
+        normalizedPath.endsWith(".test.ts") ||
           normalizedPath.endsWith(".test.tsx"),
-        `${filePath} must import plugin implementations through a package host loader or a focused test`,
+        `${filePath} must import plugin implementations through a package export`,
       ).toBe(true);
     }
   });
@@ -158,7 +191,8 @@ describe("package boundaries", () => {
     );
 
     expect(importSpecifiers(runtimeRegistrySource)).toContain("./bundled-runtime-plugins");
-    expect(importSpecifiers(adminUiRegistrySource)).toContain("../../../../../plugins/bundled");
+    expect(importSpecifiers(adminUiRegistrySource)).toContain("@axis-repository/plugin-apt/admin-ui");
+    expect(importSpecifiers(adminUiRegistrySource)).toContain("@axis-repository/plugin-pypi/admin-ui");
     expect(importSpecifiers(runtimeRegistrySource)).not.toContain("../../../plugins/runtime");
     expect(importSpecifiers(adminUiRegistrySource)).not.toContain("../../../plugins/admin-ui");
     expect(runtimeRegistrySource).not.toMatch(pluginImplementationImportPattern);
@@ -211,11 +245,18 @@ describe("package boundaries", () => {
     const runtimeImports = importSpecifiers(runtimeLoaderSource);
     const adminUiImports = importSpecifiers(adminUiRegistrySource);
 
-    expect(runtimeImports).toContain("../../../../plugins/bundled");
-    expect(runtimeImports.some((specifier) => /^..\/..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(true);
+    expect(runtimeImports).toContain("@axis-repository/plugin-apt");
+    expect(runtimeImports).toContain("@axis-repository/plugin-apt/runtime");
+    expect(runtimeImports).toContain("@axis-repository/plugin-apt/runtime/publisher");
+    expect(runtimeImports).toContain("@axis-repository/plugin-pypi");
+    expect(runtimeImports).toContain("@axis-repository/plugin-pypi/runtime");
+    expect(runtimeImports.some((specifier) => /^..\/..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(false);
     expect(runtimeImports.some((specifier) => /^..\/..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(false);
-    expect(adminUiImports).toContain("../../../../../plugins/bundled");
-    expect(adminUiImports.some((specifier) => /^..\/..\/..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(true);
+    expect(adminUiImports).toContain("@axis-repository/plugin-apt");
+    expect(adminUiImports).toContain("@axis-repository/plugin-apt/admin-ui");
+    expect(adminUiImports).toContain("@axis-repository/plugin-pypi");
+    expect(adminUiImports).toContain("@axis-repository/plugin-pypi/admin-ui");
+    expect(adminUiImports.some((specifier) => /^..\/..\/..\/..\/..\/plugins\/[^/]+\/admin-ui(?:\/|$)/.test(specifier))).toBe(false);
     expect(adminUiImports.some((specifier) => /^..\/..\/..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(false);
   });
 
@@ -228,6 +269,8 @@ describe("package boundaries", () => {
     expect(guide).toContain("@axis-repository/core/plugin-manifests");
     expect(guide).toContain("@axis-repository/runtime-cloudflare/plugin-runtime");
     expect(guide).toContain("@axis-repository/admin-ui/plugin-ui");
+    expect(guide).toContain("@axis-repository/plugin-<ecosystem>");
+    expect(guide).toContain("explicit package exports");
     expect(guide).toContain("plugins/catalog.ts");
     expect(guide).toContain("plugins/bundled.ts");
     expect(guide).toContain("RepositoryPluginBundle");

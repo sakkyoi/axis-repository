@@ -8,7 +8,7 @@ import {
   repositoryClientHelperDisplayText,
   repositoryDetailPlugins,
 } from "./repository-detail-plugins";
-import { pypiInstallCommandText, pypiSimpleIndexUrl } from "../../../../../plugins/pypi/admin-ui/detail";
+import { pypiInstallCommandText, pypiSimpleIndexUrl } from "@axis-repository/plugin-pypi/admin-ui/detail";
 
 describe("repository detail plugins", () => {
   it("exposes APT as a repository detail plugin", () => {

@@ -10,6 +10,8 @@ import { createAptAdminResources } from "./admin-resources";
 import { createAptClientHelpers } from "./client-helpers";
 import { parseAptRepositoryConfig, validateAptPublishArtifacts } from "./metadata";
 
+export { AptSigningKeyResource } from "./signing-keys";
+
 function repositoryForConfig(input: ValidateRepositoryConfigInput): Repository {
   return {
     id: "repo_validation",

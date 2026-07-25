@@ -1,4 +1,4 @@
-import type { RepositoryPluginBundle } from "../bundled";
+import type { RepositoryPluginBundle } from "@axis-repository/core/plugin-manifests";
 import { aptPluginManifest } from "./manifest";
 
 export const aptRepositoryPluginBundle = {

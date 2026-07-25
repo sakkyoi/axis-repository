@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { aptPluginManifest } from "../../../../../plugins/apt/manifest";
-import { pypiPluginManifest } from "../../../../../plugins/pypi/manifest";
-import * as aptPublishUi from "../../../../../plugins/apt/admin-ui/publish";
-import * as pypiPublishUi from "../../../../../plugins/pypi/admin-ui/publish";
+import { aptPluginManifest } from "@axis-repository/plugin-apt/manifest";
+import * as aptPublishUi from "@axis-repository/plugin-apt/admin-ui/publish";
+import { pypiPluginManifest } from "@axis-repository/plugin-pypi/manifest";
+import * as pypiPublishUi from "@axis-repository/plugin-pypi/admin-ui/publish";
 
 import { assertRepositoryUiPluginContracts } from "./repository-ui-plugins";
 import {

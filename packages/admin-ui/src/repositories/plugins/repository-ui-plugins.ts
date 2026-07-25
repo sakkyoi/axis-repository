@@ -16,9 +16,10 @@ import type {
   RepositoryPublishPlugin,
   RepositoryUiPlugin,
 } from "./repository-ui-plugin-types";
-import { bundledRepositoryPlugins } from "../../../../../plugins/bundled";
-import { aptRepositoryUiPlugin } from "../../../../../plugins/apt/admin-ui";
-import { pypiRepositoryUiPlugin } from "../../../../../plugins/pypi/admin-ui";
+import { aptRepositoryPluginBundle } from "@axis-repository/plugin-apt";
+import { aptRepositoryUiPlugin } from "@axis-repository/plugin-apt/admin-ui";
+import { pypiRepositoryPluginBundle } from "@axis-repository/plugin-pypi";
+import { pypiRepositoryUiPlugin } from "@axis-repository/plugin-pypi/admin-ui";
 
 type NonEmptyArray<T> = [T, ...T[]];
 
@@ -27,7 +28,7 @@ const bundledAdminUiPlugins: Record<string, RepositoryUiPlugin> = {
   pypi: pypiRepositoryUiPlugin,
 };
 
-export const repositoryUiPlugins = bundledRepositoryPlugins
+export const repositoryUiPlugins = [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
   .filter((plugin) => plugin.catalog.enabled && plugin.adminUi)
   .map((plugin) => {
     const uiPlugin = bundledAdminUiPlugins[plugin.manifest.ecosystem];

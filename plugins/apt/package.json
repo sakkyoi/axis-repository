@@ -1,0 +1,21 @@
+{
+  "name": "@axis-repository/plugin-apt",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./plugin.ts",
+    "./manifest": "./manifest.ts",
+    "./runtime": "./runtime/runtime.ts",
+    "./runtime/publisher": "./runtime/publisher.ts",
+    "./admin-ui": "./admin-ui/index.ts",
+    "./admin-ui/publish": "./admin-ui/publish.tsx",
+    "./test-support": "./runtime/deb-fixtures.test-support.ts"
+  },
+  "dependencies": {
+    "@axis-repository/core": "workspace:*",
+    "openpgp": "^6.3.1",
+    "react": "^19.2.8",
+    "zod": "^4.4.3"
+  }
+}

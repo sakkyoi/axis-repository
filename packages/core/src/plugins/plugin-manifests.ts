@@ -59,3 +59,13 @@ export interface RepositoryPluginManifest {
   clientHelpers?: PluginClientHelpersManifest;
   adminResources?: PluginAdminResourcesManifest;
 }
+
+export interface RepositoryPluginBundle {
+  manifest: RepositoryPluginManifest;
+  catalog: {
+    enabled: boolean;
+    experimental: boolean;
+  };
+  runtime: boolean;
+  adminUi: boolean;
+}

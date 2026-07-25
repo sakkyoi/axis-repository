@@ -11,6 +11,7 @@ Put each plugin under `plugins/<ecosystem>/`:
 
 ```text
 plugins/<ecosystem>/
+  package.json
   plugin.ts
   manifest.ts
   runtime/
@@ -26,6 +27,10 @@ plugins/<ecosystem>/
 
 Only add files that the ecosystem needs. For example, a plugin without
 format-specific publish UI does not need a `publish.tsx`.
+
+Each plugin directory is a private workspace package. Name it
+`@axis-repository/plugin-<ecosystem>` and expose only the subpaths that the host
+or focused tests need.
 
 ## Public Entrypoints
 
@@ -121,11 +126,11 @@ Client helpers and admin resources combine manifest descriptors with runtime
 handlers. The descriptor portion must match the shared manifest; the handler
 function belongs only to the runtime plugin.
 
-Runtime plugins are registered only in
-`plugins/<ecosystem>/plugin.ts`. The Cloudflare Worker host loads bundled
-runtime capabilities through `packages/runtime-cloudflare/src/default-plugins.ts`;
-do not import plugin runtime implementations from routes, services, or other
-runtime modules.
+Runtime plugins are exposed through the plugin package exports. The Cloudflare
+Worker host loads bundled runtime capabilities through
+`packages/runtime-cloudflare/src/plugins/bundled-runtime-plugins.ts`; do not
+import plugin runtime implementations from routes, services, or other runtime
+modules.
 
 Runtime tests may use
 `@axis-repository/runtime-cloudflare/plugin-runtime/testing` for host test
@@ -147,7 +152,8 @@ It intentionally ignores handler functions.
 ## Bundle And Catalog Lifecycle
 
 Every plugin must export one `RepositoryPluginBundle` from
-`plugins/<ecosystem>/plugin.ts`. The bundle is the plugin's self-description:
+`@axis-repository/plugin-<ecosystem>` (`plugins/<ecosystem>/plugin.ts`). The
+bundle is the plugin's self-description:
 
 ```ts
 export const exampleRepositoryPluginBundle = {
@@ -156,16 +162,30 @@ export const exampleRepositoryPluginBundle = {
     enabled: true,
     experimental: true,
   },
-  runtime: {
-    create: (input) => createExamplePlugin(input),
-  },
-  adminUi: exampleRepositoryUiPlugin,
+  runtime: true,
+  adminUi: true,
 } satisfies RepositoryPluginBundle;
 ```
 
-Add the bundle to `plugins/bundled.ts`. This is the only static bundled plugin
-list. TypeScript and Worker builds should not discover plugins by scanning the
-filesystem.
+Add explicit package exports in `plugins/<ecosystem>/package.json`, for example:
+
+```json
+{
+  "name": "@axis-repository/plugin-example",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./plugin.ts",
+    "./manifest": "./manifest.ts",
+    "./runtime": "./runtime/runtime.ts",
+    "./admin-ui": "./admin-ui/index.ts"
+  }
+}
+```
+
+Add the bundle package to `plugins/bundled.ts`. This is the only static bundled
+plugin list. TypeScript and Worker builds should not discover plugins by
+scanning the filesystem.
 
 `catalog.enabled` is the deployment catalog default. `catalog.experimental` is
 metadata exposed to clients for UI labeling and rollout policy. `runtime` means
@@ -224,11 +244,11 @@ plugins must use the manifest repository config. Detail, publish, field
 renderer, and token-scope extensions must declare behavior for the same
 ecosystem as the manifest.
 
-Admin UI plugins are registered only in
-`plugins/<ecosystem>/plugin.ts`. The admin UI host loads bundled UI capabilities
-through `packages/admin-ui/src/repository-ui-plugins.ts`. Pages and shared UI
-modules should ask the registry for plugin behavior instead of importing plugin
-implementations directly.
+Admin UI plugins are exposed through the plugin package exports. The admin UI
+host loads bundled UI capabilities through
+`packages/admin-ui/src/repositories/plugins/repository-ui-plugins.ts`. Pages and
+shared UI modules should ask the registry for plugin behavior instead of
+importing plugin implementations directly.
 
 The UI registry exposes `assertRepositoryUiPluginContracts()` for registry-level
 tests. It checks that UI plugin ecosystems are unique, create/detail/publish
@@ -239,13 +259,14 @@ refer to field kinds declared by the manifest.
 ## Adding A Plugin
 
 1. Add `plugins/<ecosystem>/manifest.ts`.
-2. Add runtime behavior under `plugins/<ecosystem>/runtime/`.
-3. Add admin UI behavior under `plugins/<ecosystem>/admin-ui/` if needed.
-4. Add `plugins/<ecosystem>/plugin.ts` with a `RepositoryPluginBundle`.
-5. Add the bundle to `plugins/bundled.ts`.
-6. Let package host loaders register runtime and admin UI capabilities from the bundle contract.
-7. Add focused tests beside the new plugin code.
-8. Run:
+2. Add `plugins/<ecosystem>/package.json` with explicit private package exports.
+3. Add runtime behavior under `plugins/<ecosystem>/runtime/`.
+4. Add admin UI behavior under `plugins/<ecosystem>/admin-ui/` if needed.
+5. Add `plugins/<ecosystem>/plugin.ts` with a `RepositoryPluginBundle`.
+6. Add the bundle package to `plugins/bundled.ts`.
+7. Let package host loaders register runtime and admin UI capabilities from package exports.
+8. Add focused tests beside the new plugin code.
+9. Run:
 
 ```bash
 pnpm test
