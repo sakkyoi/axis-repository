@@ -1,8 +1,9 @@
-import { Copy, Eye, Package, RefreshCcw, RotateCw } from "lucide-react";
+import { Eye, Package, RefreshCcw, RotateCw } from "lucide-react";
 import { useState } from "react";
 import { useRebuildRepositoryArtifactIndex, useRepositoryArtifacts } from "../../api/hooks";
 import type { RepositoryArtifact } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
+import { CopyToClipboardButton } from "../../components/ui/copy-to-clipboard-button";
 import {
   Dialog,
   DialogContent,
@@ -152,10 +153,7 @@ function RepositoryArtifactDetail({ artifact }: { artifact: RepositoryArtifact }
       </dl>
       {primaryObjectUrl && (
         <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => void navigator.clipboard.writeText(primaryObjectUrl)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copy URL
-          </Button>
+          <CopyToClipboardButton type="button" variant="outline" text={primaryObjectUrl} label="Copy URL" copiedLabel="Copied" />
         </div>
       )}
       <div className="grid gap-2">

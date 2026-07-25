@@ -1,9 +1,10 @@
-import { Copy, ExternalLink, File, Folder, Trash2, UploadCloud } from "lucide-react";
+import { ExternalLink, File, Folder, Trash2, UploadCloud } from "lucide-react";
 import type { DragEvent } from "react";
 import { useState } from "react";
 import { useDeleteRepositoryObject, useRepositoryObjectDetail, useRepositoryObjects } from "../../api/hooks";
 import type { RepositoryObjectDetail } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
+import { CopyToClipboardButton } from "../../components/ui/copy-to-clipboard-button";
 import { DestructiveActionDialog } from "../../components/ui/destructive-action-dialog";
 import {
   Dialog,
@@ -351,14 +352,7 @@ function RepositoryObjectDetailPanel({
         <RepositoryObjectDetailItem label="Repository URL" value={detail.repositoryUrl} />
       </dl>
       <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => void navigator.clipboard.writeText(detail.repositoryUrl)}
-        >
-          <Copy className="mr-2 h-4 w-4" />
-          Copy URL
-        </Button>
+        <CopyToClipboardButton type="button" variant="outline" text={detail.repositoryUrl} label="Copy URL" copiedLabel="Copied" />
         <Button type="button" variant="outline" onClick={() => window.open(detail.repositoryUrl, "_blank", "noopener,noreferrer")}>
           <ExternalLink className="mr-2 h-4 w-4" />
           Open

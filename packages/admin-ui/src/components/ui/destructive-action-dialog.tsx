@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, Check, Copy } from "lucide-react";
 import { ErrorState } from "../../pages/shared";
 import { Button } from "./button";
@@ -6,11 +6,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "./input";
 import {
   destructiveConfirmationCopyLabel,
-  destructiveConfirmationCopiedResetMs,
   destructiveConfirmationLayoutClasses,
   destructiveConfirmationMatches,
 } from "./destructive-action-dialog-model";
 import type { DestructiveActionDialogContent } from "./destructive-action-dialog-model";
+import { useClipboardCopyFeedback } from "./use-clipboard-copy-feedback";
 
 export interface DestructiveActionDialogProps extends DestructiveActionDialogContent {
   open: boolean;
@@ -33,8 +33,7 @@ export function DestructiveActionDialog({
   onConfirm,
 }: DestructiveActionDialogProps) {
   const [confirmationInput, setConfirmationInput] = useState("");
-  const [copied, setCopied] = useState(false);
-  const copiedResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const { copied, copyText, clearCopiedFeedback } = useClipboardCopyFeedback();
   const confirmed = destructiveConfirmationMatches(confirmationInput, confirmationText);
   const confirmationLayout = destructiveConfirmationLayoutClasses();
 
@@ -42,25 +41,14 @@ export function DestructiveActionDialog({
     if (pending && !nextOpen) return;
     if (!nextOpen) {
       setConfirmationInput("");
-      setCopied(false);
-      if (copiedResetTimeoutRef.current) {
-        clearTimeout(copiedResetTimeoutRef.current);
-      }
+      clearCopiedFeedback();
     }
     onOpenChange(nextOpen);
   }
 
   async function copyConfirmationText() {
     if (!confirmationText) return;
-    await navigator.clipboard.writeText(confirmationText);
-    setCopied(true);
-    if (copiedResetTimeoutRef.current) {
-      clearTimeout(copiedResetTimeoutRef.current);
-    }
-    copiedResetTimeoutRef.current = setTimeout(() => {
-      setCopied(false);
-      copiedResetTimeoutRef.current = undefined;
-    }, destructiveConfirmationCopiedResetMs());
+    await copyText(confirmationText);
   }
 
   return (
