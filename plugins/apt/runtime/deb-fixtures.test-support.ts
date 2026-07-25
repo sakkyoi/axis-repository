@@ -1,16 +1,24 @@
 import { gzipSync } from "node:zlib";
-import { create as createTarXz } from "tar-xz";
 
 const textEncoder = new TextEncoder();
+const controlTarXzFixture = "/Td6WFoAAAD/EtlBAgAhARAAAACocI6G4Af/AMJdABcLyOfZ5dHD1ZV9QtvcDlxsYucUrl4il7Em4XY0Mmd4zWXKEX3pitNZrbsmPuAzpPUTPlKd1qZVDG1Acr4sFRHL4NJBXzydVA0vPWjnh1EiddFNfqoRi2rrxPowSYh9MVzmNBmBU+1RIR7MAcn7ctJ7BrY8agbeeed+zaXN7OXvRN+9m+1W9shuvrCZbgmNVOk64sgLWiqFgQe6e5Hd80LEr10DRDEhkUJmlSaDhfDYxDgz2DaHGHuMv1isUN1SNQwAAAAAAAHWAYAQAAAUFy3LqAAK/AIAAAAAAFla";
 
 export async function debArchiveWithControlXz(input: { control: string }): Promise<Uint8Array> {
-  const controlTarXz = await collectBytes(createTarXz({
-    files: [{ name: "./control", source: textEncoder.encode(input.control) }],
-    preset: 1,
-  }));
+  const expectedControl = [
+    "Package: myapp",
+    "Version: 1.2.3",
+    "Architecture: amd64",
+    "Maintainer: Release Team <release@example.com>",
+    "Description: Example package",
+    "Depends: libc6",
+    "",
+  ].join("\n");
+  if (input.control !== expectedControl) {
+    throw new Error("The xz Debian fixture is static; update controlTarXzFixture for this control content.");
+  }
   return arArchive([
     { name: "debian-binary", bytes: textEncoder.encode("2.0\n") },
-    { name: "control.tar.xz", bytes: controlTarXz },
+    { name: "control.tar.xz", bytes: base64Bytes(controlTarXzFixture) },
     { name: "data.tar.gz", bytes: new Uint8Array(gzipSync(tarArchive([]))) },
   ]);
 }
@@ -73,10 +81,6 @@ function concatBytes(chunks: Uint8Array[]): Uint8Array {
   return output;
 }
 
-async function collectBytes(chunks: AsyncIterable<Uint8Array>): Promise<Uint8Array> {
-  const collected: Uint8Array[] = [];
-  for await (const chunk of chunks) {
-    collected.push(chunk);
-  }
-  return concatBytes(collected);
+function base64Bytes(value: string): Uint8Array {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
 }

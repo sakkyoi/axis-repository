@@ -57,7 +57,7 @@ When `UPLOAD_BACKEND` is unset, Axis uses `r2`.
 Start the local worker after choosing one of the `.dev.vars` blocks above:
 
 ```bash
-pnpm dlx wrangler@latest dev --config packages/runtime-cloudflare/wrangler.toml --local
+pnpm --filter @axis-repository/runtime-cloudflare dev
 ```
 
 The `--local` flag keeps Worker bindings local. This is sufficient for

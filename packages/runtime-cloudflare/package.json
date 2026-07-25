@@ -25,6 +25,8 @@
   "scripts": {
     "build": "pnpm --filter @axis-repository/admin-ui build && pnpm run build:worker",
     "build:worker": "node scripts/generate-admin-ui-assets.mjs && tsup src/index.ts src/plugin-runtime.ts src/plugin-runtime-testing.ts --format esm --dts",
+    "deploy:dry-run": "wrangler deploy --dry-run",
+    "dev": "wrangler dev --local",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -35,6 +37,7 @@
     "openpgp": "^6.3.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20241218.0"
+    "@cloudflare/workers-types": "^5.20260724.1",
+    "wrangler": "^4.114.0"
   }
 }

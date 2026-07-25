@@ -1,5 +1,5 @@
 import { ValidationError } from "@axis-repository/core";
-import { extract as extractTarXz } from "tar-xz";
+import { XzReadableStream } from "xz-decompress";
 
 export type DebControlMetadata = Record<string, string>;
 
@@ -63,13 +63,7 @@ async function decompressControlArchive(controlArchive: { name: string; bytes: U
 }
 
 async function readControlFileFromTarXz(bytes: Uint8Array): Promise<string> {
-  for await (const entry of extractTarXz(bytes)) {
-    if (entry.name === "control" || entry.name === "./control") {
-      return entry.text();
-    }
-  }
-
-  throw new ValidationError("APT artifact control archive does not contain a control file");
+  return readControlFileFromTar(await unxz(bytes));
 }
 
 function readControlFileFromTar(bytes: Uint8Array): string {
@@ -140,6 +134,11 @@ async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
   ) => Promise<{ gunzipSync(input: Uint8Array): Uint8Array }>;
   const { gunzipSync } = await dynamicImport("node:zlib");
   return new Uint8Array(gunzipSync(bytes));
+}
+
+async function unxz(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = new XzReadableStream(new Blob([bytes]).stream());
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 function readNullTerminatedText(bytes: Uint8Array): string {
