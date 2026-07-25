@@ -73,6 +73,15 @@ export function useRepositoryObjects(repositoryName: string | undefined, prefix:
   });
 }
 
+export function useRepositoryArtifacts(repositoryName: string | undefined) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["repository-artifacts", repositoryName],
+    queryFn: () => client.listRepositoryArtifacts(repositoryName ?? ""),
+    enabled: Boolean(repositoryName),
+  });
+}
+
 export function useRepositoryObjectDetail(repositoryName: string | undefined, path: string | undefined) {
   const client = useAxisClient();
   return useQuery({
@@ -90,6 +99,7 @@ export function useDeleteRepositoryObject(repositoryName: string | undefined) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-object-detail", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
     },
   });
@@ -140,6 +150,7 @@ export function useCreateAdminPublishSession() {
     onSuccess: (session) => {
       void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", session.repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", session.repositoryName] });
     },
   });
 }
@@ -153,6 +164,7 @@ export function useVerifyAdminPublishUpload() {
     onSuccess: (session) => {
       void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", session.repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", session.repositoryName] });
     },
   });
 }
@@ -167,6 +179,7 @@ export function useFinalizeAdminPublishSession() {
       void queryClient.invalidateQueries({ queryKey: ["repository-objects", session.repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-object-detail", session.repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", session.repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", session.repositoryName] });
     },
   });
 }

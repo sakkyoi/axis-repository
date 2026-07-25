@@ -5,6 +5,7 @@ import {
   repositoryClientHelperDisplayText,
 } from "../detail/repository-detail-shared";
 import { RepositoryBrowserSection } from "../browser/repository-browser-section";
+import { RepositoryArtifactsSection } from "../artifacts/repository-artifacts-section";
 import { RepositoryPublishSection } from "../publish/repository-publish-section";
 import type { RepositoryDetailPlugin, RepositoryDetailSection } from "./repository-ui-plugin-types";
 import {
@@ -18,6 +19,7 @@ export const repositoryDetailPlugins = repositoryDetailPluginsFromUiRegistry();
 
 export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
   { id: "settings", title: "Repository settings", placement: "settings", Component: RepositorySettingsSection },
+  { id: "repository-artifacts", title: "Artifacts", placement: "workspace", Component: RepositoryArtifactsSection },
   { id: "repository-browser", title: "Repository contents", placement: "workspace", Component: RepositoryBrowserSection },
   { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
 ];
@@ -45,9 +47,15 @@ function normalizeRepositoryDetailSections(sections: RepositoryDetailSection[]):
       ? { ...section, Component: RepositoryPublishSection }
       : section,
   );
-  if (normalizedSections.some((section) => section.id === "repository-browser")) {
-    return normalizedSections;
-  }
+  const hasArtifactsSection = normalizedSections.some((section) => section.id === "repository-artifacts");
+  const hasBrowserSection = normalizedSections.some((section) => section.id === "repository-browser");
+  if (hasArtifactsSection && hasBrowserSection) return normalizedSections;
+  const artifactsSection: RepositoryDetailSection = {
+    id: "repository-artifacts",
+    title: "Artifacts",
+    placement: "workspace",
+    Component: RepositoryArtifactsSection,
+  };
   const browserSection: RepositoryDetailSection = {
     id: "repository-browser",
     title: "Repository contents",
@@ -55,7 +63,8 @@ function normalizeRepositoryDetailSections(sections: RepositoryDetailSection[]):
     Component: RepositoryBrowserSection,
   };
   return [
-    browserSection,
+    ...(hasArtifactsSection ? [] : [artifactsSection]),
+    ...(hasBrowserSection ? [] : [browserSection]),
     ...normalizedSections,
   ];
 }

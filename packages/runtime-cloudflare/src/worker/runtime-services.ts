@@ -11,6 +11,7 @@ import {
   type RepositoryActivityService,
   PublishSessionService,
   type Repository,
+  type RepositoryArtifactStore,
   RepositoryService,
   type TokenPrincipal,
   type UpdateRepositoryInput,
@@ -78,6 +79,7 @@ export class PluginPublishSessionService {
       plugins: RepositoryRuntimePluginRegistry;
       pluginPolicyService: PluginPolicyService;
       repositoryActivityService?: RepositoryActivityService;
+      repositoryArtifactStore?: RepositoryArtifactStore;
     },
   ) {}
 
@@ -176,6 +178,18 @@ export class PluginPublishSessionService {
 
   private async finalizeAndRecordUpdates(input: FinalizePublishSessionInput): Promise<FinalizePublishSessionResult> {
     const result = await this.options.publishSessionService.finalize(input);
+    const repository = await this.options.repositoryService.getByName(result.session.repositoryName);
+    const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
+    const repositoryArtifactStore = this.options.repositoryArtifactStore;
+    if (repositoryArtifactStore) {
+      for (const artifact of plugin.publish.describeArtifacts?.({
+        repository,
+        session: result.session,
+        result: result.result,
+      }) ?? []) {
+        await repositoryArtifactStore.upsert(artifact);
+      }
+    }
     const repositoryActivityService = this.options.repositoryActivityService;
     if (!repositoryActivityService) {
       return result;

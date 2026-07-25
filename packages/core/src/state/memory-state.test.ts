@@ -4,6 +4,7 @@ import {
   RepositoryActivityService,
   type PublishSession,
   type PublishTokenRecord,
+  type RepositoryArtifactRecord,
   type RepositoryActivityRecord,
   type RepositorySecretRecord,
   type RepositoryPluginPolicyRecord,
@@ -119,6 +120,80 @@ describe("MemoryStateStore repository activities", () => {
       },
       createdAt: "2026-07-12T00:01:00.000Z",
     });
+  });
+});
+
+describe("MemoryStateStore repository artifacts", () => {
+  it("upserts repository artifacts and lists them newest first", async () => {
+    const state = new MemoryStateStore();
+    const oldArtifact: RepositoryArtifactRecord = {
+      id: "artifact_old",
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      identity: "apt:myapp:1.2.2:amd64",
+      name: "myapp",
+      version: "1.2.2",
+      summary: "myapp 1.2.2 amd64",
+      primaryObjectKey: "repositories/debian-internal/pool/main/m/myapp/myapp_1.2.2_amd64.deb",
+      objectKeys: ["repositories/debian-internal/pool/main/m/myapp/myapp_1.2.2_amd64.deb"],
+      metadata: { architecture: "amd64" },
+      publishedAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:00:00.000Z",
+      publishSessionId: "pub_old",
+    };
+    const newArtifact: RepositoryArtifactRecord = {
+      ...oldArtifact,
+      id: "artifact_new",
+      identity: "apt:myapp:1.2.3:amd64",
+      version: "1.2.3",
+      summary: "myapp 1.2.3 amd64",
+      publishedAt: "2026-07-12T00:01:00.000Z",
+      updatedAt: "2026-07-12T00:01:00.000Z",
+      publishSessionId: "pub_new",
+    };
+    await state.repositoryArtifacts.upsert(oldArtifact);
+    await state.repositoryArtifacts.upsert({ ...newArtifact, repositoryName: "python-internal" });
+    await state.repositoryArtifacts.upsert(newArtifact);
+
+    await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toEqual([
+      newArtifact,
+      oldArtifact,
+    ]);
+  });
+
+  it("replaces an existing artifact with the same repository identity", async () => {
+    const state = new MemoryStateStore();
+    const artifact: RepositoryArtifactRecord = {
+      id: "artifact_1",
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      identity: "apt:myapp:1.2.3:amd64",
+      name: "myapp",
+      version: "1.2.3",
+      summary: "myapp 1.2.3 amd64",
+      primaryObjectKey: "repositories/debian-internal/pool/main/m/myapp/myapp_1.2.3_amd64.deb",
+      objectKeys: ["repositories/debian-internal/pool/main/m/myapp/myapp_1.2.3_amd64.deb"],
+      metadata: { architecture: "amd64" },
+      publishedAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:00:00.000Z",
+      publishSessionId: "pub_1",
+    };
+
+    await state.repositoryArtifacts.upsert(artifact);
+    await state.repositoryArtifacts.upsert({
+      ...artifact,
+      id: "artifact_2",
+      primaryObjectKey: "repositories/debian-internal/pool/main/m/myapp/myapp_1.2.3_amd64.rebuilt.deb",
+      objectKeys: ["repositories/debian-internal/pool/main/m/myapp/myapp_1.2.3_amd64.rebuilt.deb"],
+      updatedAt: "2026-07-12T00:02:00.000Z",
+      publishSessionId: "pub_2",
+    });
+
+    await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toMatchObject([{
+      id: "artifact_2",
+      identity: "apt:myapp:1.2.3:amd64",
+      publishSessionId: "pub_2",
+    }]);
   });
 });
 

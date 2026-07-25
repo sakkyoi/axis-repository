@@ -58,6 +58,28 @@ export const repositoryObjectDetailResponseSchema = z.object({
   object: repositoryObjectDetailSchema,
 });
 
+export const repositoryArtifactSchema = z.object({
+  id: z.string(),
+  repositoryName: z.string(),
+  ecosystem: z.string(),
+  identity: z.string(),
+  name: z.string(),
+  version: z.string().optional(),
+  summary: z.string(),
+  primaryObjectKey: z.string().optional(),
+  objectKeys: z.array(z.string()),
+  metadata: z.record(z.string(), z.unknown()),
+  publishedAt: z.string(),
+  updatedAt: z.string(),
+  publishSessionId: z.string(),
+});
+
+export const repositoryArtifactsResponseSchema = z.object({
+  artifacts: z.array(repositoryArtifactSchema),
+  cursor: z.string().optional(),
+  truncated: z.boolean(),
+});
+
 export const repositoryPluginSchema = z.object({
   ecosystem: z.string(),
   name: z.string(),
@@ -247,6 +269,8 @@ export type RepositoryObjectDirectory = z.infer<typeof repositoryObjectDirectory
 export type RepositoryObject = z.infer<typeof repositoryObjectSchema>;
 export type RepositoryObjectDetail = z.infer<typeof repositoryObjectDetailSchema>;
 export type RepositoryObjectsResponse = z.infer<typeof repositoryObjectsResponseSchema>;
+export type RepositoryArtifact = z.infer<typeof repositoryArtifactSchema>;
+export type RepositoryArtifactsResponse = z.infer<typeof repositoryArtifactsResponseSchema>;
 export type RepositoryClientHelperAction = PluginClientHelperActionManifest;
 export type RepositoryPlugin = z.infer<typeof repositoryPluginSchema>;
 export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;

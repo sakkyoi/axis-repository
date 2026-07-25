@@ -4,6 +4,7 @@ import type {
   PublishArtifactsInput,
   PublishResult,
   Repository,
+  RepositoryArtifactRecord,
   TokenPrincipal,
 } from "@axis-repository/core";
 import type { RepositoryAdminResources } from "./repository-plugin-admin-resources";
@@ -43,6 +44,12 @@ export interface AuthorizePublishInput extends ValidatePublishArtifactsInput {
   principal: TokenPrincipal;
 }
 
+export interface DescribePublishedArtifactsInput {
+  repository: Repository;
+  session: PublishArtifactsInput["session"];
+  result: PublishResult;
+}
+
 export interface DerivedPublishPrincipalScope {
   ecosystemScopes?: Record<string, unknown>;
   signingKeyIds?: string[];
@@ -53,6 +60,7 @@ export interface RepositoryPublishLifecycle {
   derivePrincipalScope?(repository: Repository): DerivedPublishPrincipalScope;
   authorize(input: AuthorizePublishInput): void;
   finalize(input: PublishArtifactsInput): Promise<PublishResult>;
+  describeArtifacts?(input: DescribePublishedArtifactsInput): RepositoryArtifactRecord[];
 }
 
 export interface ArtifactRepositoryPlugin extends PublisherMetadata {

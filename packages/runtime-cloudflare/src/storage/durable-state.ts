@@ -2,6 +2,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  RepositoryArtifactRecord,
   RepositoryActivityRecord,
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
@@ -26,6 +27,9 @@ const repositorySecretNameKey = (namespace: string, repositoryName: string, name
   `repository-secret-name:${namespace}:${repositoryName}:${name}`;
 const repositoryPluginPolicyKey = (ecosystem: string) => `repository-plugin-policy:${ecosystem}`;
 const repositoryActivityKey = (id: string) => `repository-activity:${id}`;
+const repositoryArtifactKey = (id: string) => `repository-artifact:${id}`;
+const repositoryArtifactIdentityKey = (repositoryName: string, identity: string) =>
+  `repository-artifact-identity:${repositoryName}:${identity}`;
 
 function clonePublishSession(session: PublishSession): PublishSession {
   return JSON.parse(JSON.stringify(session)) as PublishSession;
@@ -226,6 +230,30 @@ export class DurableStateStore implements StateStore {
       await this.storage.put(repositoryActivityKey(record.id), record);
     },
   };
+
+  readonly repositoryArtifacts = {
+    listByRepository: async (repositoryName: string): Promise<RepositoryArtifactRecord[]> => {
+      const values = await this.storage.list<RepositoryArtifactRecord>({
+        prefix: "repository-artifact:",
+      });
+      return [...values.values()]
+        .filter((artifact) => artifact.repositoryName === repositoryName)
+        .sort(compareRepositoryArtifacts);
+    },
+    upsert: async (record: RepositoryArtifactRecord): Promise<void> => {
+      const identityKey = repositoryArtifactIdentityKey(record.repositoryName, record.identity);
+      const existingId = await this.storage.get<string>(identityKey);
+      if (existingId && existingId !== record.id) {
+        await this.storage.delete(repositoryArtifactKey(existingId));
+      }
+      const existing = await this.storage.get<RepositoryArtifactRecord>(repositoryArtifactKey(record.id));
+      if (existing) {
+        await this.storage.delete(repositoryArtifactIdentityKey(existing.repositoryName, existing.identity));
+      }
+      await this.storage.put(repositoryArtifactKey(record.id), record);
+      await this.storage.put(identityKey, record.id);
+    },
+  };
 }
 
 function comparePublishSessions(left: PublishSession, right: PublishSession): number {
@@ -236,4 +264,9 @@ function comparePublishSessions(left: PublishSession, right: PublishSession): nu
 function compareRepositoryActivities(left: RepositoryActivityRecord, right: RepositoryActivityRecord): number {
   const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
   return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
+}
+
+function compareRepositoryArtifacts(left: RepositoryArtifactRecord, right: RepositoryArtifactRecord): number {
+  const updatedAtOrder = right.updatedAt.localeCompare(left.updatedAt);
+  return updatedAtOrder === 0 ? left.id.localeCompare(right.id) : updatedAtOrder;
 }

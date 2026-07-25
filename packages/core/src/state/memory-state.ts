@@ -2,6 +2,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  RepositoryArtifactRecord,
   RepositoryActivityRecord,
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
@@ -22,6 +23,8 @@ export class MemoryStateStore implements StateStore {
   private readonly repositorySecretIdByName = new Map<string, string>();
   private readonly repositoryPluginPolicyByEcosystem = new Map<string, RepositoryPluginPolicyRecord>();
   private readonly repositoryActivityById = new Map<string, RepositoryActivityRecord>();
+  private readonly repositoryArtifactById = new Map<string, RepositoryArtifactRecord>();
+  private readonly repositoryArtifactIdByIdentity = new Map<string, string>();
 
   readonly repositories = {
     getByName: async (name: string): Promise<Repository | null> => {
@@ -168,6 +171,29 @@ export class MemoryStateStore implements StateStore {
       this.repositoryActivityById.set(record.id, record);
     },
   };
+
+  readonly repositoryArtifacts = {
+    listByRepository: async (repositoryName: string): Promise<RepositoryArtifactRecord[]> => {
+      return [...this.repositoryArtifactById.values()]
+        .filter((artifact) => artifact.repositoryName === repositoryName)
+        .sort(compareRepositoryArtifacts);
+    },
+    upsert: async (record: RepositoryArtifactRecord): Promise<void> => {
+      const identityIndex = repositoryArtifactIdentityIndex(record.repositoryName, record.identity);
+      const existingId = this.repositoryArtifactIdByIdentity.get(identityIndex);
+      if (existingId && existingId !== record.id) {
+        this.repositoryArtifactById.delete(existingId);
+      }
+      const existing = this.repositoryArtifactById.get(record.id);
+      if (existing) {
+        this.repositoryArtifactIdByIdentity.delete(
+          repositoryArtifactIdentityIndex(existing.repositoryName, existing.identity),
+        );
+      }
+      this.repositoryArtifactById.set(record.id, record);
+      this.repositoryArtifactIdByIdentity.set(identityIndex, record.id);
+    },
+  };
 }
 
 function comparePublishSessions(left: PublishSession, right: PublishSession): number {
@@ -178,6 +204,15 @@ function comparePublishSessions(left: PublishSession, right: PublishSession): nu
 function compareRepositoryActivities(left: RepositoryActivityRecord, right: RepositoryActivityRecord): number {
   const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
   return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
+}
+
+function compareRepositoryArtifacts(left: RepositoryArtifactRecord, right: RepositoryArtifactRecord): number {
+  const updatedAtOrder = right.updatedAt.localeCompare(left.updatedAt);
+  return updatedAtOrder === 0 ? left.id.localeCompare(right.id) : updatedAtOrder;
+}
+
+function repositoryArtifactIdentityIndex(repositoryName: string, identity: string): string {
+  return `${repositoryName}\0${identity}`;
 }
 
 function repositorySecretNameIndex(namespace: string, repositoryName: string, name: string): string {

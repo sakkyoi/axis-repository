@@ -1896,6 +1896,48 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(401);
   });
 
+  it("lists indexed repository artifacts through an admin route", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const { token, session } = await createPublishSession(app, harness.repositoryObjectStore);
+    const uploadId = session.uploads[0]?.uploadId;
+    expect(uploadId).toBeDefined();
+
+    const verify = await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/uploads/${uploadId}/verify`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    expect(verify.status).toBe(200);
+    const finalize = await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/finalize`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    expect(finalize.status).toBe(200);
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/artifacts",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      artifacts: [{
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        identity: "apt:main:myapp:1.2.3:amd64",
+        name: "myapp",
+        version: "1.2.3",
+        summary: "myapp 1.2.3 amd64",
+        primaryObjectKey: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb",
+        metadata: {
+          architecture: "amd64",
+          component: "main",
+        },
+      }],
+      truncated: false,
+    });
+  });
+
   it("returns repository object detail metadata through the admin file browser", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

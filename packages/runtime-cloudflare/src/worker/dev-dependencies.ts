@@ -7,6 +7,7 @@ import {
   RepositoryService,
   type Clock,
   type RandomId,
+  type RepositoryArtifactStore,
   type RepositoryObjectStore,
   type SecretHasher,
 } from "@axis-repository/core";
@@ -26,6 +27,7 @@ export interface AppDependencies {
   publishTokenService: PublishTokenService;
   publishSessionService: PluginPublishSessionService;
   repositoryActivityService: RepositoryActivityService;
+  repositoryArtifactStore: RepositoryArtifactStore;
   pluginPolicyService: PluginPolicyService;
   repositorySecrets: RepositorySecretService;
   repositoryObjectStore: RepositoryObjectStore;
@@ -98,8 +100,10 @@ export function createDevDependencyHarness(
         plugins: repositoryRuntimePlugins,
         pluginPolicyService,
         repositoryActivityService,
+        repositoryArtifactStore: state.repositoryArtifacts,
       }),
       repositoryActivityService,
+      repositoryArtifactStore: state.repositoryArtifacts,
       pluginPolicyService,
       repositorySecrets,
       repositoryObjectStore: objectStore,

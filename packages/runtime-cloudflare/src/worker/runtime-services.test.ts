@@ -3,6 +3,7 @@ import {
   PluginPolicyService,
   RepositoryActivityService,
   PublishSessionService,
+  type RepositoryArtifactRecord,
   RepositoryService,
   ValidationError,
   type ArtifactPublisher,
@@ -107,6 +108,7 @@ describe("PluginPublishSessionService", () => {
       repositoryService,
       plugins,
       pluginPolicyService: new PluginPolicyService({ state }),
+      repositoryArtifactStore: state.repositoryArtifacts,
     });
     const session = await corePublishSessionService.create({
       repositoryName: "debian-internal",
@@ -177,6 +179,7 @@ describe("PluginPublishSessionService", () => {
       repositoryService,
       plugins,
       pluginPolicyService: new PluginPolicyService({ state }),
+      repositoryArtifactStore: state.repositoryArtifacts,
     });
     const session = await corePublishSessionService.create({
       repositoryName: "debian-internal",
@@ -322,5 +325,80 @@ describe("PluginPublishSessionService", () => {
         contentType: "text/plain; charset=utf-8",
       },
     }]);
+  });
+
+  it("indexes plugin-described artifacts after finalize", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock, randomId });
+    await repositoryService.create({
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: {},
+    });
+    const indexedArtifact: RepositoryArtifactRecord = {
+      id: "artifact_myapp",
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      identity: "apt:myapp:1.2.3:amd64",
+      name: "myapp",
+      version: "1.2.3",
+      summary: "myapp 1.2.3 amd64",
+      primaryObjectKey: "repositories/debian-internal/pool/main/m/myapp/myapp_1.2.3_amd64.deb",
+      objectKeys: ["repositories/debian-internal/pool/main/m/myapp/myapp_1.2.3_amd64.deb"],
+      metadata: { architecture: "amd64" },
+      publishedAt: "2026-07-24T00:00:00.000Z",
+      updatedAt: "2026-07-24T00:00:00.000Z",
+      publishSessionId: "pub_fixed",
+    };
+    const plugins = new RepositoryRuntimePluginRegistry();
+    plugins.register({
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["publish"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({
+          publishedAt: "2026-07-24T00:00:00.000Z",
+          objects: [{
+            key: indexedArtifact.primaryObjectKey!,
+            contentType: "application/vnd.debian.binary-package",
+          }],
+        }),
+        describeArtifacts: () => [indexedArtifact],
+      },
+    });
+    const corePublishSessionService = new PublishSessionService({
+      state,
+      uploadBroker,
+      artifactPublisher: plugins,
+      clock,
+      randomId,
+    });
+    const service = new PluginPublishSessionService({
+      publishSessionService: corePublishSessionService,
+      repositoryService,
+      plugins,
+      pluginPolicyService: new PluginPolicyService({ state }),
+      repositoryArtifactStore: state.repositoryArtifacts,
+    });
+    const session = await corePublishSessionService.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await corePublishSessionService.verifyUpload({
+      sessionId: session.id,
+      uploadId: session.uploads[0]!.uploadId,
+      principal,
+    });
+
+    await service.finalize({ sessionId: session.id, principal });
+
+    await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toEqual([indexedArtifact]);
   });
 });

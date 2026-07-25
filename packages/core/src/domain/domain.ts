@@ -140,6 +140,22 @@ export interface PublishResult {
   publishedAt: string;
 }
 
+export interface RepositoryArtifactRecord {
+  id: string;
+  repositoryName: string;
+  ecosystem: Ecosystem;
+  identity: string;
+  name: string;
+  version?: string;
+  summary: string;
+  primaryObjectKey?: string;
+  objectKeys: string[];
+  metadata: Record<string, unknown>;
+  publishedAt: string;
+  updatedAt: string;
+  publishSessionId: string;
+}
+
 export interface PublishFailure {
   message: string;
   failedAt: string;

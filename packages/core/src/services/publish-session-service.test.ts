@@ -779,6 +779,7 @@ describe("PublishSessionService", () => {
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,
+      repositoryArtifacts: backingState.repositoryArtifacts,
     };
     const service = new PublishSessionService({
       state,
@@ -930,6 +931,7 @@ describe("PublishSessionService", () => {
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,
+      repositoryArtifacts: backingState.repositoryArtifacts,
       publishSessions: {
         ...backingState.publishSessions,
         save: async (session: PublishSession) => {
@@ -1019,6 +1021,7 @@ describe("PublishSessionService", () => {
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,
+      repositoryArtifacts: backingState.repositoryArtifacts,
       publishSessions: {
         ...backingState.publishSessions,
         update: async (id, updater) => {

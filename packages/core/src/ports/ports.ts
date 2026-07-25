@@ -6,6 +6,7 @@ import type {
   UploadedObject,
   UploadTarget,
   Repository,
+  RepositoryArtifactRecord,
   RepositoryActivityRecord,
   TokenPrincipal,
   PublishArtifactRequest,
@@ -147,6 +148,11 @@ export interface RepositoryActivityStore {
   save(record: RepositoryActivityRecord): Promise<void>;
 }
 
+export interface RepositoryArtifactStore {
+  listByRepository(repositoryName: string): Promise<RepositoryArtifactRecord[]>;
+  upsert(record: RepositoryArtifactRecord): Promise<void>;
+}
+
 export interface TokenVerifier {
   verifyPublishToken(token: string): Promise<TokenPrincipal | null>;
 }
@@ -158,4 +164,5 @@ export interface StateStore {
   repositorySecrets: RepositorySecretStore;
   repositoryPluginPolicies: RepositoryPluginPolicyStore;
   repositoryActivities: RepositoryActivityStore;
+  repositoryArtifacts: RepositoryArtifactStore;
 }

@@ -10,6 +10,7 @@ import {
   repositoryPluginSchema,
   repositoryPluginsResponseSchema,
   repositoryActivitiesResponseSchema,
+  repositoryArtifactsResponseSchema,
   repositoryObjectDeleteResponseSchema,
   repositoryObjectDetailResponseSchema,
   repositoryObjectsResponseSchema,
@@ -72,6 +73,7 @@ export interface AxisClient {
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
   listRepositoryObjects(name: string, prefix: string): Promise<ReturnType<typeof repositoryObjectsResponseSchema.parse>>;
+  listRepositoryArtifacts(name: string): Promise<ReturnType<typeof repositoryArtifactsResponseSchema.parse>>;
   getRepositoryObjectDetail(name: string, path: string): Promise<RepositoryObjectDetail>;
   deleteRepositoryObject(name: string, path: string): Promise<RepositoryActivity>;
   listRepositoryActivities(name: string, options?: ListRepositoryActivitiesOptions): Promise<ReturnType<typeof repositoryActivitiesResponseSchema.parse>>;
@@ -148,6 +150,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
         `/admin/repositories/${encodePathSegment(name)}/objects?prefix=${encodeURIComponent(prefix)}`,
       );
       return repositoryObjectsResponseSchema.parse(response.data);
+    },
+    async listRepositoryArtifacts(name: string) {
+      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/artifacts`);
+      return repositoryArtifactsResponseSchema.parse(response.data);
     },
     async getRepositoryObjectDetail(name: string, path: string) {
       const response = await http.get(

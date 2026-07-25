@@ -1,6 +1,7 @@
 export type {
   ArtifactRepositoryPlugin,
   AuthorizePublishInput,
+  DescribePublishedArtifactsInput,
   DerivedPublishPrincipalScope,
   PublisherMetadata,
   RepositoryPathServingRule,

@@ -574,6 +574,16 @@ function parseAdminRepositoryActivityPath(pathname: string): string | null {
   return repositoryName;
 }
 
+function parseAdminRepositoryArtifactsPath(pathname: string): string | null {
+  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/artifacts$/);
+  if (!match) return null;
+  const repositoryName = decodePathSegment(match[1] ?? "");
+  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
+    throw new NotFoundError();
+  }
+  return repositoryName;
+}
+
 function parseAdminRepositoryPluginResourcePath(requestUrl: string): {
   repositoryName: string;
   namespace: string;
@@ -961,6 +971,19 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       await repositoryActivityTimeline(dependencies, repository.name),
       repositoryActivityPageParams(url.searchParams),
     ));
+  }
+  const adminRepositoryArtifactsName = parseAdminRepositoryArtifactsPath(url.pathname);
+  if (adminRepositoryArtifactsName) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method !== "GET") {
+      throw new NotFoundError();
+    }
+    const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactsName);
+    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
+    return jsonResponse({
+      artifacts: await dependencies.repositoryArtifactStore.listByRepository(repository.name),
+      truncated: false,
+    });
   }
   const adminRepositoryObjectDetailName = parseAdminRepositoryObjectDetailPath(url.pathname);
   if (adminRepositoryObjectDetailName) {

@@ -27,6 +27,7 @@ describe("repository detail plugins", () => {
 
   it("exposes ordered detail sections per ecosystem", () => {
     expect(getRepositoryDetailPlugin("apt")?.sections.map((section) => section.id)).toEqual([
+      "repository-artifacts",
       "repository-browser",
       "settings",
       "advanced-json",
@@ -34,6 +35,7 @@ describe("repository detail plugins", () => {
       "client-helpers",
     ]);
     expect(getRepositoryDetailPlugin("pypi")?.sections.map((section) => section.id)).toEqual([
+      "repository-artifacts",
       "repository-browser",
       "settings",
       "client-helpers",
@@ -60,6 +62,7 @@ describe("repository detail plugins", () => {
   it("provides generic fallback sections for unknown ecosystems", () => {
     expect(genericRepositoryDetailSections.map((section) => section.id)).toEqual([
       "settings",
+      "repository-artifacts",
       "repository-browser",
       "advanced-json",
     ]);
@@ -67,6 +70,7 @@ describe("repository detail plugins", () => {
 
   it("splits repository workspace sections from settings sections", () => {
     expect(repositoryWorkspaceSectionsFor("apt").map((section) => section.id)).toEqual([
+      "repository-artifacts",
       "repository-browser",
       "client-helpers",
     ]);
@@ -76,6 +80,7 @@ describe("repository detail plugins", () => {
       "signing-keys",
     ]);
     expect(repositoryWorkspaceSectionsFor("pypi").map((section) => section.id)).toEqual([
+      "repository-artifacts",
       "repository-browser",
       "client-helpers",
       "install-hints",

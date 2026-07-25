@@ -3,6 +3,7 @@ import type {
   PublishSession,
   PublishTokenRecord,
   Repository,
+  RepositoryArtifactRecord,
   RepositoryActivityRecord,
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
@@ -99,6 +100,23 @@ const repositoryActivity = (overrides: Partial<RepositoryActivityRecord> = {}): 
     objectKey: "repositories/debian-internal/pool/main/app.deb",
   },
   createdAt: "2026-07-14T00:00:00.000Z",
+  ...overrides,
+});
+
+const repositoryArtifact = (overrides: Partial<RepositoryArtifactRecord> = {}): RepositoryArtifactRecord => ({
+  id: "artifact_1",
+  repositoryName: "debian-internal",
+  ecosystem: "apt",
+  identity: "apt:main:myapp:1.2.3:amd64",
+  name: "myapp",
+  version: "1.2.3",
+  summary: "myapp 1.2.3 amd64",
+  primaryObjectKey: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb",
+  objectKeys: ["repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb"],
+  metadata: { architecture: "amd64" },
+  publishedAt: "2026-07-14T00:00:00.000Z",
+  updatedAt: "2026-07-14T00:00:00.000Z",
+  publishSessionId: "pub_1",
   ...overrides,
 });
 
@@ -343,5 +361,23 @@ describe("DurableStateStore", () => {
 
     await expect(state.repositoryPluginPolicies.getByEcosystem("apt")).resolves.toEqual(apt);
     await expect(state.repositoryPluginPolicies.list()).resolves.toEqual([apt, pypi]);
+  });
+
+  it("upserts repository artifacts by repository identity", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    await state.repositoryArtifacts.upsert(repositoryArtifact({ id: "artifact_old", updatedAt: "2026-07-14T00:00:00.000Z" }));
+    await state.repositoryArtifacts.upsert(repositoryArtifact({
+      id: "artifact_new",
+      primaryObjectKey: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.rebuilt.deb",
+      objectKeys: ["repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.rebuilt.deb"],
+      updatedAt: "2026-07-14T00:02:00.000Z",
+      publishSessionId: "pub_2",
+    }));
+
+    await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toMatchObject([{
+      id: "artifact_new",
+      identity: "apt:main:myapp:1.2.3:amd64",
+      publishSessionId: "pub_2",
+    }]);
   });
 });
