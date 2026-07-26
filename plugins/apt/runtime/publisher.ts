@@ -13,6 +13,7 @@ import {
 import { objectBytes, type RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { readDebControlMetadata, type DebControlMetadata } from "./deb-control";
 import { buildAptRepositoryMetadata, parseAptRepositoryConfig } from "./metadata";
+import type { AptRepositoryConfig } from "./config";
 
 const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";
 const GZIP_CONTENT_TYPE = "application/gzip";
@@ -48,7 +49,7 @@ export class AptPublisher implements ArtifactPublisher {
     if (!input.session.requestedBy.signingKeyIds.includes(config.signingKeyId)) {
       throw new ValidationError("Publish token is not scoped to the repository signing key");
     }
-    const enrichedInput = await this.enrichArtifactsWithDebControlMetadata(input);
+    const enrichedInput = await this.enrichArtifactsWithDebControlMetadata(input, config);
     const metadata = await buildAptRepositoryMetadata(enrichedInput);
     const key = await this.options.signingKeys.getActivePrivateKey(
       metadata.config.signingKeyId,
@@ -105,16 +106,19 @@ export class AptPublisher implements ArtifactPublisher {
     };
   }
 
-  private async enrichArtifactsWithDebControlMetadata(input: PublishArtifactsInput): Promise<PublishArtifactsInput> {
+  private async enrichArtifactsWithDebControlMetadata(
+    input: PublishArtifactsInput,
+    config: AptRepositoryConfig,
+  ): Promise<PublishArtifactsInput> {
     return {
       ...input,
-      artifacts: await Promise.all(input.artifacts.map((artifact) => this.enrichArtifact(input, artifact))),
+      artifacts: await Promise.all(input.artifacts.map((artifact) => this.enrichArtifact(artifact, config))),
     };
   }
 
   private async enrichArtifact(
-    input: PublishArtifactsInput,
     artifact: PublishedArtifactInput,
+    config: AptRepositoryConfig,
   ): Promise<PublishedArtifactInput> {
     const object = await this.options.objectStore.getObject(artifact.verified.objectKey);
     if (!object) {
@@ -127,7 +131,7 @@ export class AptPublisher implements ArtifactPublisher {
       artifact: {
         ...artifact.artifact,
         metadata: aptArtifactMetadataFromDebControl({
-          repository: input.repository,
+          config,
           artifact: artifact.artifact,
           control,
         }),
@@ -150,18 +154,16 @@ function publishedObjectPrevious(previous: RepositoryObjectMetadata | null): Pic
 }
 
 function aptArtifactMetadataFromDebControl(input: {
-  repository: PublishArtifactsInput["repository"];
+  config: AptRepositoryConfig;
   artifact: PublishArtifactRequest;
   control: DebControlMetadata;
 }): Record<string, unknown> {
   const existing = input.artifact.metadata;
-  const aptConfig = input.repository.config.apt;
-  const configuredComponents = aptConfig && typeof aptConfig === "object" && !Array.isArray(aptConfig)
-    ? (aptConfig as Record<string, unknown>).components
-    : undefined;
-  const defaultComponent = Array.isArray(configuredComponents) && configuredComponents.length === 1 && typeof configuredComponents[0] === "string"
-    ? configuredComponents[0]
-    : undefined;
+  // Read the parsed config rather than reaching into config.apt directly: the
+  // namespace belongs to the manifest, and parseAptRepositoryConfig has already
+  // validated these values.
+  const configuredComponents = input.config.components;
+  const defaultComponent = configuredComponents?.length === 1 ? configuredComponents[0] : undefined;
 
   return {
     package: input.control.package,

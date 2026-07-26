@@ -1,4 +1,5 @@
 import type { RepositoryArtifactRecord, RepositoryObject, RepositoryObjectListItem, RepositoryObjectStore } from "@axis-repository/core";
+import { ValidationError } from "@axis-repository/core";
 import { pypiPluginManifest } from "../manifest";
 import type { ArtifactRepositoryPlugin, DescribePublishedArtifactsInput, RebuildRepositoryArtifactIndexInput } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { GenericManifestPublisher, createPrefixServingPredicate, listAllObjects, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
@@ -6,9 +7,15 @@ import { createPypiClientHelpers } from "./client-helpers";
 import { validatePypiRepositoryConfig } from "./config";
 
 export function createPypiPlugin(input?: { objectStore?: RepositoryObjectStore }): ArtifactRepositoryPlugin {
+  // Without a store there is nowhere to write. Fail loudly rather than
+  // reporting a successful publish that stored nothing.
   const publisher = input?.objectStore
     ? new GenericManifestPublisher({ objectStore: input.objectStore })
-    : { publish: async () => ({ publishedAt: new Date().toISOString(), objects: [] }) };
+    : {
+      publish: async (): Promise<never> => {
+        throw new ValidationError("PyPI repository plugin was created without an object store");
+      },
+    };
   return {
     ecosystem: "pypi",
     name: pypiPluginManifest.runtimeName,

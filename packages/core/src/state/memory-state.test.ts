@@ -134,6 +134,58 @@ describe("MemoryStateStore repository activities", () => {
     });
   });
 
+  it("records object update activities with their previous object metadata", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryActivityService({
+      state,
+      clock: { now: () => new Date("2026-07-12T00:01:00.000Z") },
+      randomId: { create: (prefix) => `${prefix}_1` },
+    });
+
+    await expect(service.recordObjectUpdate({
+      repositoryName: "debian-internal",
+      path: "dists/noble/Release",
+      objectKey: "repositories/debian-internal/dists/noble/Release",
+      contentType: "text/plain; charset=utf-8",
+      previousContentType: "text/plain",
+      previousSize: 120,
+      previousEtag: "\"old\"",
+    })).resolves.toEqual({
+      id: "activity_1",
+      repositoryName: "debian-internal",
+      type: "object.update",
+      actor: "admin",
+      summary: "Updated dists/noble/Release",
+      metadata: {
+        path: "dists/noble/Release",
+        objectKey: "repositories/debian-internal/dists/noble/Release",
+        contentType: "text/plain; charset=utf-8",
+        previousContentType: "text/plain",
+        previousSize: 120,
+        previousEtag: "\"old\"",
+      },
+      createdAt: "2026-07-12T00:01:00.000Z",
+    });
+  });
+
+  it("omits absent previous metadata from object update activities", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryActivityService({
+      state,
+      clock: { now: () => new Date("2026-07-12T00:01:00.000Z") },
+      randomId: { create: (prefix) => `${prefix}_1` },
+    });
+
+    const activity = await service.recordObjectUpdate({
+      repositoryName: "debian-internal",
+      path: "dists/noble/Release",
+      objectKey: "repositories/debian-internal/dists/noble/Release",
+      contentType: "text/plain",
+    });
+
+    expect(Object.keys(activity.metadata).sort()).toEqual(["contentType", "objectKey", "path"]);
+  });
+
   it("assigns monotonic activity timestamps when the clock does not advance", async () => {
     const state = new MemoryStateStore();
     let id = 0;
