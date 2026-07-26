@@ -8,6 +8,7 @@ import { AptPublisher } from "@axis-repository/plugin-apt/runtime/publisher";
 import { createAptPlugin, AptSigningKeyResource } from "@axis-repository/plugin-apt/runtime";
 import { pypiRepositoryPluginBundle } from "@axis-repository/plugin-pypi";
 import { createPypiPlugin } from "@axis-repository/plugin-pypi/runtime";
+import { scopeSecretsToEcosystem } from "./scoped-capabilities";
 
 interface AptReleaseSigner {
   clearSign(input: {
@@ -51,10 +52,12 @@ export function createBundledRuntimePlugins(input: BundledRuntimePluginInput): A
   return [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
     .filter((plugin) => plugin.catalog.enabled && plugin.runtime)
     .map((plugin) => {
-      const factory = bundledRuntimePluginFactories[plugin.manifest.ecosystem];
+      const ecosystem = plugin.manifest.ecosystem;
+      const factory = bundledRuntimePluginFactories[ecosystem];
       if (!factory) {
-        throw new Error(`Runtime plugin is not wired for ecosystem: ${plugin.manifest.ecosystem}`);
+        throw new Error(`Runtime plugin is not wired for ecosystem: ${ecosystem}`);
       }
-      return factory(input);
+      // Each plugin only ever sees the secret namespaces it owns.
+      return factory({ ...input, secrets: scopeSecretsToEcosystem(input.secrets, ecosystem) });
     });
 }

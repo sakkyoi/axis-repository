@@ -25,6 +25,7 @@ import { getRepositoryPluginCatalogEntry } from "../../../../plugins/catalog";
 import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { ensureRepositoryPluginEnabled } from "../plugins/repository-plugin-policy";
 import type { DeleteRepositoryArtifactResult } from "../plugins/repository-plugin-contract";
+import { scopeObjectStoreToRepository } from "../plugins/scoped-capabilities";
 
 export interface CreatePluginRepositoryInput extends CreateRepositoryInput {
   provisioning?: Record<string, unknown>;
@@ -277,7 +278,7 @@ export class PluginRepositoryArtifactIndexService {
     const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
     const artifacts = await plugin.artifacts?.rebuildIndex({
       repository,
-      objectStore: this.options.repositoryObjectStore,
+      objectStore: scopeObjectStoreToRepository(this.options.repositoryObjectStore, repository.name),
       now: this.options.clock.now(),
     }) ?? [];
     await this.options.repositoryArtifactStore.replaceByRepository(repository.name, artifacts);
@@ -301,7 +302,7 @@ export class PluginRepositoryArtifactIndexService {
     const deleteResult = await plugin.artifacts?.deleteArtifact?.({
       repository,
       artifact,
-      objectStore: this.options.repositoryObjectStore,
+      objectStore: scopeObjectStoreToRepository(this.options.repositoryObjectStore, repository.name),
     }) ?? await this.deleteArtifactObjects(repository, artifact);
     const rebuildResult = await this.rebuild({ repositoryName: repository.name });
     return {
