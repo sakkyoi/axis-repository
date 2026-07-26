@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+  embedded-admin-ui-assets:
+    # src/admin-ui-assets/generated.ts is a committed build artifact. Nothing at
+    # runtime notices when it drifts from packages/admin-ui/src, so the worker
+    # would quietly serve a stale UI. Rebuild it and fail if the result differs
+    # from what is committed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @axis-repository/admin-ui build
+
+      - run: node packages/runtime-cloudflare/scripts/generate-admin-ui-assets.mjs
+
+      - name: Check embedded admin UI assets are up to date
+        run: |
+          if ! git diff --quiet -- packages/runtime-cloudflare/src/admin-ui-assets/generated.ts; then
+            echo "::error::Embedded admin UI assets are stale. Run 'pnpm build' and commit the regenerated generated.ts."
+            git diff --stat -- packages/runtime-cloudflare/src/admin-ui-assets/generated.ts
+            exit 1
+          fi
+
+  deploy-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm deploy:dry-run

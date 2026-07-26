@@ -41,6 +41,14 @@ function routePath(filePath) {
   return `/${relativePath}`;
 }
 
+// The admin UI package builds the SPA and the plugin-ui library into the same
+// dist directory, so restrict the worker asset map to what the SPA actually
+// serves. Without this the worker ships plugin-ui.js and plugin-ui.d.ts and
+// serves them at public URLs.
+function isAdminUiAsset(path) {
+  return path === "/index.html" || path.startsWith("/assets/");
+}
+
 function contentType(filePath) {
   return contentTypes.get(extname(filePath)) ?? "application/octet-stream";
 }
@@ -50,13 +58,20 @@ async function main() {
   const entries = [];
 
   for (const file of files) {
+    const path = routePath(file);
+    if (!isAdminUiAsset(path)) {
+      continue;
+    }
     const bodyBase64 = (await readFile(file)).toString("base64");
     const asset = { contentType: contentType(file), bodyBase64 };
-    const path = routePath(file);
     entries.push([path, asset]);
     if (path === "/index.html") {
       entries.push(["/", asset]);
     }
+  }
+
+  if (!entries.some(([path]) => path === "/index.html")) {
+    throw new Error(`No admin UI index.html found under ${distRoot}; run the admin UI build first`);
   }
 
   entries.sort(([left], [right]) => left.localeCompare(right));
