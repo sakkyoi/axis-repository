@@ -13,6 +13,7 @@ import {
   initialPublishTokenSelection,
   publishTokenDetailActionRowClass,
   publishTokenDetailBodyClass,
+  publishTokenListEmptyClass,
   publishTokenRawMetadataClass,
   publishTokenRawMetadataContainerClass,
   publishTokenRowStateClass,
@@ -66,7 +67,7 @@ export function TokensPage() {
           <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
             <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
               {tokens.data.length === 0 ? (
-                <div className="p-4">
+                <div className={publishTokenListEmptyClass()}>
                   <EmptyState message="No publish tokens have been created." />
                 </div>
               ) : (

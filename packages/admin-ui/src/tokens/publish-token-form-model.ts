@@ -107,6 +107,10 @@ export function publishTokenRowStateClass(tokenName: string, selectedName: strin
     : "border-l-4 border-l-transparent hover:bg-muted/60";
 }
 
+export function publishTokenListEmptyClass(): string {
+  return "grid h-full min-h-0 place-items-center p-4";
+}
+
 export function publishTokenDetailBodyClass(): string {
   return "grid h-full min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4";
 }

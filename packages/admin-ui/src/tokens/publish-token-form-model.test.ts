@@ -8,6 +8,7 @@ import {
   revokePublishTokenDialogContent,
   publishTokenDetailBodyClass,
   publishTokenDetailActionRowClass,
+  publishTokenListEmptyClass,
   publishTokenRawMetadataClass,
   publishTokenRowStateClass,
   publishTokenSummaryItemClass,
@@ -159,6 +160,11 @@ describe("publish token form model", () => {
     expect(publishTokenSummaryValueClass()).toContain("break-words");
     expect(publishTokenRawMetadataClass()).toContain("min-w-0");
     expect(publishTokenRawMetadataClass()).toContain("overflow-auto");
+  });
+
+  it("keeps the empty publish token list filling its panel", () => {
+    expect(publishTokenListEmptyClass()).toContain("h-full");
+    expect(publishTokenListEmptyClass()).toContain("place-items-center");
   });
 
   it("formats readonly publish token summary items", () => {
