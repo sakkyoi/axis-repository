@@ -105,13 +105,14 @@ export function adminRefreshCookie(refreshToken: string, expiresAt: string): str
     `${adminRefreshCookieName}=${refreshToken}`,
     "Path=/admin/auth",
     "HttpOnly",
+    "Secure",
     "SameSite=Lax",
     `Expires=${new Date(expiresAt).toUTCString()}`,
   ].join("; ");
 }
 
 export function clearAdminRefreshCookie(): string {
-  return `${adminRefreshCookieName}=; Path=/admin/auth; HttpOnly; SameSite=Lax; Max-Age=0`;
+  return `${adminRefreshCookieName}=; Path=/admin/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }
 
 export function refreshTokenFromCookie(request: Request): string | undefined {

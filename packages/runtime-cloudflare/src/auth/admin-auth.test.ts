@@ -51,7 +51,12 @@ describe("admin refresh cookies", () => {
 
     expect(cookie).toContain("axis_admin_refresh=refresh-secret");
     expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("Secure");
+    expect(cookie).toContain("SameSite=Lax");
+    expect(cookie).toContain("Path=/admin/auth");
     expect(refreshTokenFromCookie(new Request("https://axis.example", { headers: { cookie } }))).toBe("refresh-secret");
     expect(clearAdminRefreshCookie()).toContain("Max-Age=0");
+    expect(clearAdminRefreshCookie()).toContain("Secure");
+    expect(clearAdminRefreshCookie()).toContain("HttpOnly");
   });
 });
