@@ -11,7 +11,16 @@ function missingAdminBindingResponse(): Response {
     JSON.stringify({
       error: { code: "service_unavailable", message: "Service Unavailable" },
     }),
-    { status: 503, headers: { "content-type": "application/json; charset=utf-8" } },
+    {
+      status: 503,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        // This response never reaches the app wrapper that adds these.
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "no-referrer",
+        "x-frame-options": "DENY",
+      },
+    },
   );
 }
 

@@ -158,6 +158,7 @@ describe("worker entrypoint", () => {
         const response = await worker.fetch(request, { ADMIN_UI_API_BASE_URL: "" } as unknown as AxisEnv);
 
         expect(response.status).toBe(503);
+        expect(response.headers.get("x-content-type-options")).toBe("nosniff");
         await expect(response.json()).resolves.toEqual({
           error: { code: "service_unavailable", message: "Service Unavailable" },
         });
