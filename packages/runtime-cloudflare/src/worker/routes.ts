@@ -26,6 +26,7 @@ import {
   repositoryPluginPolicyFields,
 } from "../plugins/repository-plugin-policy";
 import { dispatchRepositoryAdminResource } from "../plugins/repository-plugin-admin-resources";
+import { scopeSecretsToEcosystem } from "../plugins/scoped-capabilities";
 import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
 import { adminRefreshCookie, clearAdminRefreshCookie, refreshTokenFromCookie } from "../auth/admin-auth";
 
@@ -180,6 +181,9 @@ function optionalStringArrayField(body: Record<string, unknown>, key: string): s
   return [...value];
 }
 
+/** Upper bound on a declared artifact size; also the same-origin upload ceiling. */
+const MAX_ARTIFACT_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
+
 function parseArtifact(value: unknown, index: number): PublishArtifactRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new ValidationError(`artifacts[${index}] must be an object`);
@@ -192,8 +196,13 @@ function parseArtifact(value: unknown, index: number): PublishArtifactRequest {
   if (!/^[a-fA-F0-9]{64}$/.test(sha256)) {
     throw new ValidationError(`artifacts[${index}].sha256 must be a 64-character hex digest`);
   }
-  if (typeof size !== "number" || !Number.isFinite(size) || size < 0) {
-    throw new ValidationError(`artifacts[${index}].size must be a finite non-negative number`);
+  if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0) {
+    throw new ValidationError(`artifacts[${index}].size must be a non-negative integer`);
+  }
+  if (size > MAX_ARTIFACT_SIZE_BYTES) {
+    throw new ValidationError(
+      `artifacts[${index}].size must be at most ${MAX_ARTIFACT_SIZE_BYTES} bytes`,
+    );
   }
   const metadata = artifact.metadata ?? {};
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
@@ -877,20 +886,34 @@ function ensureUploadTargetIsWritable(session: PublishSession, target: UploadTar
   // PublishSessionService normalizes the same way.
   const persistedStatus = session.status as PublishSession["status"] | "created";
   const status = persistedStatus === "created" ? "pending_uploads" : persistedStatus;
-  if (status !== "pending_uploads" && status !== "ready") {
+  // Only before verification. Once a session is "ready" its uploads have been
+  // checksummed, and finalize trusts those recorded digests rather than
+  // re-reading the bytes, so a later write would publish content that does not
+  // match the signed index.
+  if (status !== "pending_uploads") {
     throw new ValidationError(`Publish session is not open: ${session.status}`);
   }
   const now = Date.now();
   const sessionExpiresAt = Date.parse(session.expiresAt);
   const targetExpiresAt = Date.parse(target.expiresAt);
-  if (Number.isFinite(sessionExpiresAt) && sessionExpiresAt <= now) {
+  // An unreadable timestamp means the bound is unknown, which must not read as
+  // "no bound".
+  if (!Number.isFinite(sessionExpiresAt) || sessionExpiresAt <= now) {
     throw new ValidationError("Publish session has expired");
   }
-  if (Number.isFinite(targetExpiresAt) && targetExpiresAt <= now) {
+  if (!Number.isFinite(targetExpiresAt) || targetExpiresAt <= now) {
     throw new ValidationError("Upload target has expired");
   }
 }
 
+/**
+ * Reads at most `expectedSize` bytes, incrementally.
+ *
+ * A declared content-length is only a hint: a chunked request omits it
+ * entirely. Buffering the whole body first and checking afterwards would let
+ * any caller stream unbounded data into the Durable Object, so the limit is
+ * enforced as the stream is consumed.
+ */
 async function readUploadBody(request: Request, expectedSize: number): Promise<Uint8Array> {
   const declaredLength = request.headers.get("content-length");
   if (declaredLength !== null) {
@@ -902,11 +925,35 @@ async function readUploadBody(request: Request, expectedSize: number): Promise<U
       throw new ValidationError("Uploaded object is larger than the declared artifact size");
     }
   }
-  const body = new Uint8Array(await request.arrayBuffer());
-  if (body.byteLength > expectedSize) {
-    throw new ValidationError("Uploaded object is larger than the declared artifact size");
+
+  const body = request.body;
+  if (!body) {
+    return new Uint8Array(0);
   }
-  return body;
+  const reader = (body as ReadableStream<Uint8Array>).getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  try {
+    for (;;) {
+      const next = await reader.read();
+      if (next.done) break;
+      received += next.value.byteLength;
+      if (received > expectedSize) {
+        throw new ValidationError("Uploaded object is larger than the declared artifact size");
+      }
+      chunks.push(next.value);
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+
+  const bytes = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 export async function dispatch(request: Request, dependencies: AppDependencies): Promise<Response> {
@@ -1301,7 +1348,10 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       request,
       path: adminPluginResourcePath.path,
       services: {
-        secrets: dependencies.repositorySecrets,
+        // Same scoping the plugin gets at construction. Handing over the raw
+        // service here would let any plugin that reads services.secrets reach
+        // every namespace and decrypt other plugins' secrets.
+        secrets: scopeSecretsToEcosystem(dependencies.repositorySecrets, plugin.ecosystem),
       },
     });
   }

@@ -51,6 +51,18 @@ describe("Pbkdf2PasswordHasher", () => {
     await expect(hasher.verify("password", weak)).resolves.toBe(true);
   });
 
+  it("keys the derivation with the pepper as well as the salt", async () => {
+    const password = "operator-password";
+    const stored = await hasher.hash(password);
+
+    // A copy of stored state without TOKEN_HASH_PEPPER must not be crackable,
+    // which is the property the previous keyed SHA-256 scheme had.
+    await expect(new Pbkdf2PasswordHasher("different-pepper", 1_000).verify(password, stored))
+      .resolves.toBe(false);
+    await expect(new Pbkdf2PasswordHasher("", 1_000).verify(password, stored)).resolves.toBe(false);
+    await expect(new Pbkdf2PasswordHasher("pepper", 1_000).verify(password, stored)).resolves.toBe(true);
+  });
+
   it("rejects malformed stored hashes instead of throwing", async () => {
     for (const malformed of [
       "pbkdf2-sha256$",

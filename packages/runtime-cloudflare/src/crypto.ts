@@ -52,10 +52,10 @@ export class Pbkdf2PasswordHasher implements PasswordHasher {
   private readonly legacyHasher: Sha256SecretHasher;
 
   constructor(
-    legacyPepper = "",
+    private readonly pepper = "",
     private readonly iterations: number = PBKDF2_ITERATIONS,
   ) {
-    this.legacyHasher = new Sha256SecretHasher(legacyPepper);
+    this.legacyHasher = new Sha256SecretHasher(pepper);
   }
 
   async hash(password: string): Promise<string> {
@@ -95,9 +95,13 @@ export class Pbkdf2PasswordHasher implements PasswordHasher {
   }
 
   private async deriveKey(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
+    // The pepper is mixed in as well as the salt, so a copy of stored state
+    // without TOKEN_HASH_PEPPER is not offline-crackable. The previous
+    // SHA-256 scheme was keyed this way and dropping it would have been a
+    // regression hidden inside an improvement.
     const key = await crypto.subtle.importKey(
       "raw",
-      new TextEncoder().encode(password),
+      new TextEncoder().encode(`${this.pepper}:${password}`),
       "PBKDF2",
       false,
       ["deriveBits"],

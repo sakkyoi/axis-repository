@@ -3437,6 +3437,137 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("bounds a chunked upload that declares no content-length", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const debBytes = aptDebFixture();
+    const debSha256 = await sha256Hex(debBytes);
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: validAptConfig(signingKey.id),
+    });
+    const response = await app.fetch(new Request("https://axis.example/admin/publish-sessions", {
+      method: "POST",
+      headers: { authorization: "Bearer dev-admin-token", "content-type": "application/json" },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "myapp_1.2.3_amd64.deb",
+          size: debBytes.byteLength,
+          sha256: debSha256,
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "myapp",
+            version: "1.2.3",
+            architecture: "amd64",
+            component: "main",
+            description: "Example package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    const session = (await response.json()) as { uploads: Array<{ url: string }> };
+    const upload = session.uploads[0]!;
+
+    // A streamed body carries no content-length, so the pre-check does not
+    // apply and the limit has to hold as the stream is consumed.
+    let pushed = 0;
+    const oversized = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pushed >= 64) {
+          controller.close();
+          return;
+        }
+        pushed += 1;
+        controller.enqueue(new Uint8Array(1024));
+      },
+    });
+
+    const uploadResponse = await app.fetch(new Request(`https://axis.example${upload.url}`, {
+      method: "PUT",
+      headers: { "content-type": "application/vnd.debian.binary-package" },
+      body: oversized,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" }));
+
+    expect(uploadResponse.status).toBe(400);
+    await expect(uploadResponse.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Uploaded object is larger than the declared artifact size",
+      },
+    });
+    expect(harness.repositoryObjectStore.objects).toHaveLength(0);
+  });
+
+  it("refuses to overwrite an upload after it has been verified", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const debBytes = aptDebFixture();
+    const debSha256 = await sha256Hex(debBytes);
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: validAptConfig(signingKey.id),
+    });
+    const response = await app.fetch(new Request("https://axis.example/admin/publish-sessions", {
+      method: "POST",
+      headers: { authorization: "Bearer dev-admin-token", "content-type": "application/json" },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "myapp_1.2.3_amd64.deb",
+          size: debBytes.byteLength,
+          sha256: debSha256,
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "myapp",
+            version: "1.2.3",
+            architecture: "amd64",
+            component: "main",
+            description: "Example package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    const session = (await response.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string; url: string }>;
+    };
+    const upload = session.uploads[0]!;
+
+    await app.fetch(new Request(`https://axis.example${upload.url}`, {
+      method: "PUT",
+      headers: { "content-type": "application/vnd.debian.binary-package" },
+      body: debBytes,
+    }));
+    const verifyResponse = await app.fetch(new Request(
+      `https://axis.example/admin/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+      { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(verifyResponse.status).toBe(200);
+
+    // finalize trusts the digest recorded at verify, so a later write would
+    // publish bytes the signed index does not describe.
+    const swapResponse = await app.fetch(new Request(`https://axis.example${upload.url}`, {
+      method: "PUT",
+      headers: { "content-type": "application/vnd.debian.binary-package" },
+      body: new Uint8Array(debBytes.byteLength),
+    }));
+
+    expect(swapResponse.status).toBe(400);
+    await expect(swapResponse.json()).resolves.toMatchObject({
+      error: { message: "Publish session is not open: ready" },
+    });
+  });
+
   it("accepts local memory uploads through same-origin upload targets", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
