@@ -1,9 +1,10 @@
-import { Ban, Info, Power, RotateCcw } from "lucide-react";
+import { Ban, Power, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { getRuntimeConfig } from "../runtime-config";
 import { useRepositoryPlugins, useUpdateRepositoryPluginPolicy } from "../api/hooks";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { HelpTrigger } from "../components/ui/help-trigger";
 import { repositoryPluginStatusRows } from "../repositories/plugins/plugin-lifecycle";
 import { ErrorState, PageShell } from "./shared";
 
@@ -181,24 +182,10 @@ export function SettingsPage() {
 
 function RepositoryPluginAvailabilityHelp() {
   const description = "Repository plugin availability is resolved from the deployment catalog plus admin policy overrides stored by this Axis runtime.";
-  const descriptionId = "repository-plugin-availability-help";
 
   return (
-    <span className="group relative inline-flex">
-      <button
-        type="button"
-        className="inline-flex size-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label="Repository plugin availability help"
-        aria-describedby={descriptionId}
-      >
-        <Info className="size-4" aria-hidden="true" />
-      </button>
-      <span
-        id={descriptionId}
-        className="pointer-events-none absolute left-1/2 top-7 z-20 hidden w-72 -translate-x-1/2 rounded-md border border-border bg-panel px-3 py-2 text-xs font-normal text-panel-foreground shadow-lg group-focus-within:block group-hover:block"
-      >
-        {description}
-      </span>
-    </span>
+    <HelpTrigger label="Repository plugin availability help">
+      {description}
+    </HelpTrigger>
   );
 }
