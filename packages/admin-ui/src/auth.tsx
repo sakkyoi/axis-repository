@@ -19,6 +19,19 @@ export function normalizeAccessToken(value: string): string {
   return value.trim();
 }
 
+export function authBootstrapStateFromRefresh(result: AdminAuthResponse | null): {
+  accessToken: string;
+  isAuthenticated: boolean;
+  shouldClearQueries: boolean;
+} {
+  const accessToken = result ? normalizeAccessToken(result.accessToken) : "";
+  return {
+    accessToken,
+    isAuthenticated: Boolean(accessToken),
+    shouldClearQueries: Boolean(accessToken),
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [accessToken, setAccessToken] = useState("");
@@ -39,9 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) {
           return;
         }
-        const refreshedAccessToken = result ? normalizeAccessToken(result.accessToken) : "";
-        setAccessToken(refreshedAccessToken);
-        if (refreshedAccessToken) {
+        const bootstrapState = authBootstrapStateFromRefresh(result);
+        setAccessToken(bootstrapState.accessToken);
+        if (bootstrapState.shouldClearQueries) {
           queryClient.clear();
         }
       })
