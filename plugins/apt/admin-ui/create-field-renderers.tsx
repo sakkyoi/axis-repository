@@ -17,7 +17,7 @@ import {
   type RepositoryCreateFieldRendererProps,
   type SigningKey,
 } from "@axis-repository/admin-ui/plugin-ui";
-import { activeSigningKeys } from "./forms";
+import { activeSigningKeys, signingKeySetupPanelClass } from "./forms";
 
 export function AptSigningKeySetupField({
   field,
@@ -49,8 +49,8 @@ export function AptSigningKeySetupField({
         <span className="text-sm font-medium">{field.label}</span>
         {field.description && <span className="text-xs text-muted-foreground">{field.description}</span>}
       </div>
-      <div className="rounded-lg border border-border bg-background p-4">
-        <div className="mb-3 flex items-center gap-2">
+      <div className={signingKeySetupPanelClass()}>
+        <div className="flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold">Signing key setup</h3>
         </div>

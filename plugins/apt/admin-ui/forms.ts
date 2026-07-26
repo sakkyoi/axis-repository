@@ -120,6 +120,10 @@ export function activeSigningKeys(keys: SigningKey[]): SigningKey[] {
   return keys.filter((key) => !key.revokedAt);
 }
 
+export function signingKeySetupPanelClass(): string {
+  return "grid gap-4 rounded-lg border border-border bg-background p-4";
+}
+
 function signingKeyProvisioning(values: AptRepositoryFormValues): Record<string, string> {
   const mode = values.signingKeyMode || "generate";
   if (mode === "existing") {

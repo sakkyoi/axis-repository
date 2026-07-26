@@ -4,6 +4,7 @@ import {
   buildAptRepositoryFormValues,
   buildCreateAptRepositoryInput,
   buildUpdateAptRepositoryInput,
+  signingKeySetupPanelClass,
 } from "./forms";
 import type { Repository, SigningKey } from "@axis-repository/admin-ui/plugin-ui";
 
@@ -149,6 +150,10 @@ describe("APT repository forms", () => {
     ];
 
     expect(activeSigningKeys(keys).map((key) => key.id)).toEqual(["signing_key_active"]);
+  });
+
+  it("keeps signing key setup controls separated from the heading", () => {
+    expect(signingKeySetupPanelClass()).toContain("gap-4");
   });
 });
 
