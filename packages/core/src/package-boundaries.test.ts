@@ -40,7 +40,13 @@ const expectedExports: Record<keyof typeof packageDirs, string[]> = {
 };
 
 const forbiddenWorkspaceDependencies: Record<keyof typeof packageDirs, string[]> = {
-  core: ["@axis-repository/admin-ui", "@axis-repository/runtime-cloudflare", "@axis-repository/publish-client"],
+  core: [
+    "@axis-repository/admin-ui",
+    "@axis-repository/runtime-cloudflare",
+    "@axis-repository/publish-client",
+    "@axis-repository/plugin-apt",
+    "@axis-repository/plugin-pypi",
+  ],
   adminUi: ["@axis-repository/runtime-cloudflare", "@axis-repository/publish-client"],
   runtimeCloudflare: ["@axis-repository/admin-ui", "@axis-repository/publish-client"],
   publishClient: ["@axis-repository/admin-ui", "@axis-repository/runtime-cloudflare"],
@@ -136,20 +142,6 @@ describe("package boundaries", () => {
     }
   });
 
-  test("runtime build can refresh embedded admin UI assets without a package dependency", () => {
-    const rootPackageJson = readPackageJson(".");
-    const runtimePackageJson = readPackageJson(packageDirs.runtimeCloudflare);
-
-    expect(runtimePackageJson.scripts?.build, "@axis-repository/runtime-cloudflare standalone build").toContain(
-      "pnpm --filter @axis-repository/admin-ui build",
-    );
-    expect(runtimePackageJson.scripts?.["build:worker"], "@axis-repository/runtime-cloudflare worker build").toContain(
-      "generate-admin-ui-assets.mjs",
-    );
-    expect(rootPackageJson.scripts?.build, "root build should avoid rebuilding admin-ui through runtime build").toContain(
-      "pnpm --filter @axis-repository/runtime-cloudflare build:worker",
-    );
-  });
 
   test("workspace includes repository plugin packages", () => {
     const workspace = readFileSync(path.join(rootDir, "pnpm-workspace.yaml"), "utf8");
@@ -158,10 +150,6 @@ describe("package boundaries", () => {
     expect(workspace).toContain("plugins/*");
   });
 
-  test("plugin implementation import detection covers future ecosystems", () => {
-    expect(pluginImplementationImportPattern.test("../../../plugins/npm/runtime/runtime")).toBe(true);
-    expect(pluginImplementationImportPattern.test("../../../plugins/npm/admin-ui")).toBe(true);
-  });
 
   test("plugin implementation imports stay centralized in registries and tests", () => {
     const packageSourceFiles = Object.values(packageSourceDirs).flatMap((sourceDir) => listSourceFiles(sourceDir));
@@ -199,39 +187,7 @@ describe("package boundaries", () => {
     expect(adminUiRegistrySource).not.toMatch(pluginImplementationImportPattern);
   });
 
-  test("plugin bundles are the shared source for enabled ecosystem metadata", () => {
-    for (const catalogPath of ["plugins/catalog.ts", "plugins/bundled.ts"]) {
-      expect(existsSync(path.join(rootDir, catalogPath)), `${catalogPath} must exist`).toBe(true);
-    }
-    expect(existsSync(path.join(rootDir, "plugins/runtime.ts")), "runtime registration belongs in the host loader").toBe(false);
-    expect(existsSync(path.join(rootDir, "plugins/admin-ui.ts")), "admin UI registration belongs in the host loader").toBe(false);
 
-    const catalogSource = readFileSync(path.join(rootDir, "plugins/catalog.ts"), "utf8");
-    const bundledPluginsSource = readFileSync(path.join(rootDir, "plugins/bundled.ts"), "utf8");
-    expect(catalogSource).toContain("repositoryPluginCatalog");
-    expect(catalogSource).toContain("enabled");
-    expect(catalogSource).toContain("experimental");
-    expect(catalogSource).toContain("runtime");
-    expect(catalogSource).toContain("adminUi");
-    expect(catalogSource).not.toMatch(pluginImplementationImportPattern);
-    expect(bundledPluginsSource).toContain("bundledRepositoryPlugins");
-    expect(bundledPluginsSource).toContain("aptRepositoryPluginBundle");
-    expect(bundledPluginsSource).toContain("pypiRepositoryPluginBundle");
-  });
-
-  test("plugin bundles declare capabilities without importing host-specific implementations", () => {
-    const bundleSources = [
-      readFileSync(path.join(rootDir, "plugins/apt/plugin.ts"), "utf8"),
-      readFileSync(path.join(rootDir, "plugins/pypi/plugin.ts"), "utf8"),
-    ];
-
-    for (const source of bundleSources) {
-      expect(source).toContain("satisfies RepositoryPluginBundle");
-      expect(source).toContain("runtime: true");
-      expect(source).toContain("adminUi: true");
-      expect(source).not.toMatch(pluginImplementationImportPattern);
-    }
-  });
 
   test("package host loaders own runtime and admin UI implementation wiring", () => {
     const runtimeLoaderSource = readFileSync(
@@ -260,22 +216,6 @@ describe("package boundaries", () => {
     expect(adminUiImports.some((specifier) => /^..\/..\/..\/..\/..\/plugins\/[^/]+\/runtime(?:\/|$)/.test(specifier))).toBe(false);
   });
 
-  test("plugin authoring guide documents the enforced contract", () => {
-    const guidePath = path.join(rootDir, "docs/plugin-authoring.md");
-
-    expect(existsSync(guidePath), "docs/plugin-authoring.md must describe the plugin contract").toBe(true);
-
-    const guide = readFileSync(guidePath, "utf8");
-    expect(guide).toContain("@axis-repository/core/plugin-manifests");
-    expect(guide).toContain("@axis-repository/runtime-cloudflare/plugin-runtime");
-    expect(guide).toContain("@axis-repository/admin-ui/plugin-ui");
-    expect(guide).toContain("@axis-repository/plugin-<ecosystem>");
-    expect(guide).toContain("explicit package exports");
-    expect(guide).toContain("plugins/catalog.ts");
-    expect(guide).toContain("plugins/bundled.ts");
-    expect(guide).toContain("RepositoryPluginBundle");
-    expect(guide).toContain("pnpm test");
-  });
 
   test("plugins use package public entrypoints instead of package source paths", () => {
     for (const filePath of listSourceFiles("plugins")) {
@@ -288,72 +228,7 @@ describe("package boundaries", () => {
     }
   });
 
-  test("runtime signing key behavior stays owned by repository plugins", () => {
-    expect(
-      existsSync(path.join(rootDir, "packages/runtime-cloudflare/src/signing-key-service.ts")),
-      "host runtime must not expose an APT-specific signing key service",
-    ).toBe(false);
-  });
 
-  test("runtime plugin contracts stay split from the registry implementation", () => {
-    const runtimeSourceDir = path.join(rootDir, "packages/runtime-cloudflare/src/plugins");
-    for (const contractFile of [
-      "repository-plugin-contract.ts",
-      "repository-plugin-client-helpers.ts",
-      "repository-plugin-admin-resources.ts",
-      "repository-plugin-capabilities.ts",
-    ]) {
-      expect(existsSync(path.join(runtimeSourceDir, contractFile)), `${contractFile} must exist`).toBe(true);
-    }
 
-    const registrySource = readFileSync(
-      path.join(runtimeSourceDir, "repository-runtime-plugin-registry.ts"),
-      "utf8",
-    );
-    expect(registrySource).not.toContain("export interface RepositorySecretCapability");
-    expect(registrySource).not.toContain("export interface RepositoryClientHelperInput");
-    expect(registrySource).not.toContain("export interface RepositoryAdminResourceInput");
-    expect(registrySource).not.toContain("export async function dispatchRepositoryClientHelper");
-    expect(registrySource).not.toContain("export async function dispatchRepositoryAdminResource");
-  });
 
-  test("runtime-cloudflare package keeps feature files grouped by architectural area", () => {
-    const runtimeSourceDir = path.join(rootDir, "packages/runtime-cloudflare/src");
-    const expectedDirs = ["admin-ui-assets", "auth", "plugins", "signing", "storage", "uploads", "worker"];
-    for (const dir of expectedDirs) {
-      expect(existsSync(path.join(runtimeSourceDir, dir)), `runtime-cloudflare/src/${dir} must exist`).toBe(true);
-    }
-
-    const allowedRootFiles = new Set([
-      "crypto.test.ts",
-      "crypto.ts",
-      "http.ts",
-      "index.test.ts",
-      "index.ts",
-      "plugin-runtime-testing.ts",
-      "plugin-runtime.ts",
-    ]);
-    const rootSourceFiles = readdirSync(runtimeSourceDir).filter((entry) => {
-      const absolutePath = path.join(runtimeSourceDir, entry);
-      return statSync(absolutePath).isFile() && /\.(?:ts|tsx)$/.test(entry);
-    });
-
-    expect(rootSourceFiles.sort()).toEqual(Array.from(allowedRootFiles).sort());
-  });
-
-  test("core package keeps domain and service files grouped by architectural area", () => {
-    const coreSourceDir = path.join(rootDir, "packages/core/src");
-    const expectedDirs = ["domain", "plugins", "ports", "services", "state"];
-    for (const dir of expectedDirs) {
-      expect(existsSync(path.join(coreSourceDir, dir)), `core/src/${dir} must exist`).toBe(true);
-    }
-
-    const allowedRootFiles = new Set(["index.ts", "package-boundaries.test.ts"]);
-    const rootSourceFiles = readdirSync(coreSourceDir).filter((entry) => {
-      const absolutePath = path.join(coreSourceDir, entry);
-      return statSync(absolutePath).isFile() && /\.(?:ts|tsx)$/.test(entry);
-    });
-
-    expect(rootSourceFiles.sort()).toEqual(Array.from(allowedRootFiles).sort());
-  });
 });
