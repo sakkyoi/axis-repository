@@ -107,4 +107,12 @@ describe("admin UI plugin layout", () => {
       expect(content).toContain('bodyClassName="min-h-0 content-stretch overflow-hidden"');
     }
   });
+
+  it("keeps repository plugin availability help inside the repository plugins section", () => {
+    const settingsPage = readFileSync(join(srcDir, "pages", "SettingsPage.tsx"), "utf8");
+
+    expect(settingsPage).toContain("RepositoryPluginAvailabilityHelp");
+    expect(settingsPage).toContain("<Info");
+    expect(settingsPage).not.toContain('<section className="rounded-lg border border-border bg-panel p-5 text-sm text-muted-foreground">');
+  });
 });

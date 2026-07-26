@@ -1,4 +1,4 @@
-import { Ban, Power, RotateCcw } from "lucide-react";
+import { Ban, Info, Power, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { getRuntimeConfig } from "../runtime-config";
 import { useRepositoryPlugins, useUpdateRepositoryPluginPolicy } from "../api/hooks";
@@ -36,7 +36,10 @@ export function SettingsPage() {
       </div>
       <section className="grid gap-3 rounded-lg border border-border bg-panel p-5">
         <div>
-          <h2 className="text-base font-semibold">Repository plugins</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold">Repository plugins</h2>
+            <RepositoryPluginAvailabilityHelp />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Static catalog lifecycle, runtime wiring, and admin UI support reported by this server.
           </p>
@@ -172,10 +175,26 @@ export function SettingsPage() {
           </div>
         )}
       </section>
-      <section className="rounded-lg border border-border bg-panel p-5 text-sm text-muted-foreground">
-        Repository plugin availability is resolved from the deployment catalog plus admin policy overrides stored by this
-        Axis runtime.
-      </section>
     </PageShell>
+  );
+}
+
+function RepositoryPluginAvailabilityHelp() {
+  const description = "Repository plugin availability is resolved from the deployment catalog plus admin policy overrides stored by this Axis runtime.";
+
+  return (
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        className="inline-flex size-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="Repository plugin availability help"
+        title={description}
+      >
+        <Info className="size-4" aria-hidden="true" />
+      </button>
+      <span className="pointer-events-none absolute left-1/2 top-7 z-20 hidden w-72 -translate-x-1/2 rounded-md border border-border bg-panel px-3 py-2 text-xs font-normal text-panel-foreground shadow-lg group-focus-within:block group-hover:block">
+        {description}
+      </span>
+    </span>
   );
 }
