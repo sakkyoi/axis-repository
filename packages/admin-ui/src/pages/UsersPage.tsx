@@ -2,6 +2,7 @@ import { UserPlus, Users } from "lucide-react";
 import { useAdminUsers } from "../api/hooks";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { adminUsersPanelClass, usersPageShellClass } from "../users/users-page-model";
 import { ErrorState, PageHeader, formatDate } from "./shared";
 
 export function UsersPage() {
@@ -9,7 +10,7 @@ export function UsersPage() {
   const users = adminUsers.data?.users ?? [];
 
   return (
-    <section className="grid h-full min-h-0 gap-5 overflow-y-auto pr-1">
+    <section className={usersPageShellClass()}>
       <PageHeader
         title="Users"
         description="Admin identities for this Axis Repository deployment."
@@ -21,7 +22,7 @@ export function UsersPage() {
         )}
       />
 
-      <section className="grid gap-3 rounded-lg border border-border bg-panel p-5">
+      <section className={adminUsersPanelClass()}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold">Admin users</h2>
