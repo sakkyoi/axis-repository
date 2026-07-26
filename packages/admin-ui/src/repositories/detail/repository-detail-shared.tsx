@@ -296,8 +296,8 @@ export function PublishSessionDetailList({ title, items }: { title: string; item
         <div className="text-muted-foreground">None</div>
       ) : (
         <ul className="grid gap-1">
-          {items.map((item) => (
-            <li key={item} className="break-all rounded bg-muted px-2 py-1">
+          {items.map((item, index) => (
+            <li key={`${index}:${item}`} className="break-all rounded bg-muted px-2 py-1">
               {item}
             </li>
           ))}

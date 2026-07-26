@@ -110,14 +110,10 @@ export interface AxisClient {
   deletePublishToken(name: string): Promise<void>;
 }
 
-function encodePathSegment(value: string): string {
-  return encodeURIComponent(value);
-}
-
 function repositoryPluginResourceUrl(name: string, namespace: string, path: readonly string[]): string {
-  const encodedPath = path.map(encodePathSegment).join("/");
+  const encodedPath = path.map((segment) => encodeURIComponent(segment)).join("/");
   const suffix = encodedPath ? `/${encodedPath}` : "";
-  return `/admin/repositories/${encodePathSegment(name)}/${encodePathSegment(namespace)}${suffix}`;
+  return `/admin/repositories/${encodeURIComponent(name)}/${encodeURIComponent(namespace)}${suffix}`;
 }
 
 function repositoryActivityUrl(name: string, options: ListRepositoryActivitiesOptions = {}): string {
@@ -129,7 +125,7 @@ function repositoryActivityUrl(name: string, options: ListRepositoryActivitiesOp
     searchParams.set("cursor", options.cursor);
   }
   const query = searchParams.toString();
-  return `/admin/repositories/${encodePathSegment(name)}/activity${query ? `?${query}` : ""}`;
+  return `/admin/repositories/${encodeURIComponent(name)}/activity${query ? `?${query}` : ""}`;
 }
 
 export function createAxisClient(options: HttpOptions): AxisClient {
@@ -171,7 +167,7 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       return repositoryPluginsResponseSchema.parse(response.data).plugins;
     },
     async updateRepositoryPluginPolicy(ecosystem: string, input: UpdateRepositoryPluginPolicyInput) {
-      const response = await http.patch(`/admin/repository-plugins/${encodePathSegment(ecosystem)}`, input);
+      const response = await http.patch(`/admin/repository-plugins/${encodeURIComponent(ecosystem)}`, input);
       return repositoryPluginSchema.parse(response.data);
     },
     async createRepository(input: CreateRepositoryInput) {
@@ -179,45 +175,45 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       return repositorySchema.parse(response.data);
     },
     async getRepository(name: string) {
-      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}`);
+      const response = await http.get(`/admin/repositories/${encodeURIComponent(name)}`);
       return repositorySchema.parse(response.data);
     },
     async updateRepository(name: string, input: UpdateRepositoryInput) {
-      const response = await http.patch(`/admin/repositories/${encodePathSegment(name)}`, input);
+      const response = await http.patch(`/admin/repositories/${encodeURIComponent(name)}`, input);
       return repositorySchema.parse(response.data);
     },
     async deleteRepository(name: string) {
-      await http.delete(`/admin/repositories/${encodePathSegment(name)}`);
+      await http.delete(`/admin/repositories/${encodeURIComponent(name)}`);
     },
     async listRepositoryObjects(name: string, prefix: string) {
       const response = await http.get(
-        `/admin/repositories/${encodePathSegment(name)}/objects?prefix=${encodeURIComponent(prefix)}`,
+        `/admin/repositories/${encodeURIComponent(name)}/objects?prefix=${encodeURIComponent(prefix)}`,
       );
       return repositoryObjectsResponseSchema.parse(response.data);
     },
     async listRepositoryArtifacts(name: string) {
-      const response = await http.get(`/admin/repositories/${encodePathSegment(name)}/artifacts`);
+      const response = await http.get(`/admin/repositories/${encodeURIComponent(name)}/artifacts`);
       return repositoryArtifactsResponseSchema.parse(response.data);
     },
     async rebuildRepositoryArtifactIndex(name: string) {
-      const response = await http.post(`/admin/repositories/${encodePathSegment(name)}/artifacts/rebuild-index`);
+      const response = await http.post(`/admin/repositories/${encodeURIComponent(name)}/artifacts/rebuild-index`);
       return repositoryArtifactsResponseSchema.parse(response.data);
     },
     async deleteRepositoryArtifact(name: string, artifactId: string) {
       const response = await http.delete(
-        `/admin/repositories/${encodePathSegment(name)}/artifacts/${encodePathSegment(artifactId)}`,
+        `/admin/repositories/${encodeURIComponent(name)}/artifacts/${encodeURIComponent(artifactId)}`,
       );
       return repositoryArtifactDeleteResponseSchema.parse(response.data);
     },
     async getRepositoryObjectDetail(name: string, path: string) {
       const response = await http.get(
-        `/admin/repositories/${encodePathSegment(name)}/objects/detail?path=${encodeURIComponent(path)}`,
+        `/admin/repositories/${encodeURIComponent(name)}/objects/detail?path=${encodeURIComponent(path)}`,
       );
       return repositoryObjectDetailResponseSchema.parse(response.data).object;
     },
     async deleteRepositoryObject(name: string, path: string) {
       const response = await http.delete(
-        `/admin/repositories/${encodePathSegment(name)}/objects?path=${encodeURIComponent(path)}`,
+        `/admin/repositories/${encodeURIComponent(name)}/objects?path=${encodeURIComponent(path)}`,
       );
       return repositoryObjectDeleteResponseSchema.parse(response.data).activity;
     },
@@ -227,7 +223,7 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     },
     async getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown> {
       const response = await http.get<unknown>(
-        `/admin/repositories/${encodePathSegment(name)}/${encodePathSegment(namespace)}/client/${encodePathSegment(action)}`,
+        `/admin/repositories/${encodeURIComponent(name)}/${encodeURIComponent(namespace)}/client/${encodeURIComponent(action)}`,
       );
       return response.data;
     },
@@ -263,13 +259,13 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     },
     async verifyAdminPublishUpload(sessionId: string, uploadId: string) {
       const response = await http.post<{ session: unknown }>(
-        `/admin/publish-sessions/${encodePathSegment(sessionId)}/uploads/${encodePathSegment(uploadId)}/verify`,
+        `/admin/publish-sessions/${encodeURIComponent(sessionId)}/uploads/${encodeURIComponent(uploadId)}/verify`,
       );
       return publishSessionSchema.parse(response.data.session);
     },
     async finalizeAdminPublishSession(sessionId: string) {
       const response = await http.post<{ session: unknown }>(
-        `/admin/publish-sessions/${encodePathSegment(sessionId)}/finalize`,
+        `/admin/publish-sessions/${encodeURIComponent(sessionId)}/finalize`,
       );
       return publishSessionSchema.parse(response.data.session);
     },
@@ -278,7 +274,7 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       return publishTokensResponseSchema.parse(response.data).publishTokens;
     },
     async getPublishToken(name: string) {
-      const response = await http.get(`/admin/publish-tokens/${encodePathSegment(name)}`);
+      const response = await http.get(`/admin/publish-tokens/${encodeURIComponent(name)}`);
       return publishTokenSchema.parse(response.data);
     },
     async createPublishToken(input: CreatePublishTokenInput) {
@@ -286,15 +282,15 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       return publishTokenCreateResponseSchema.parse(response.data);
     },
     async revokePublishToken(name: string) {
-      const response = await http.post(`/admin/publish-tokens/${encodePathSegment(name)}/revoke`);
+      const response = await http.post(`/admin/publish-tokens/${encodeURIComponent(name)}/revoke`);
       return publishTokenSchema.parse(response.data);
     },
     async rotatePublishToken(name: string) {
-      const response = await http.post(`/admin/publish-tokens/${encodePathSegment(name)}/rotate`);
+      const response = await http.post(`/admin/publish-tokens/${encodeURIComponent(name)}/rotate`);
       return publishTokenCreateResponseSchema.parse(response.data);
     },
     async deletePublishToken(name: string) {
-      await http.delete(`/admin/publish-tokens/${encodePathSegment(name)}`);
+      await http.delete(`/admin/publish-tokens/${encodeURIComponent(name)}`);
     },
   };
 }

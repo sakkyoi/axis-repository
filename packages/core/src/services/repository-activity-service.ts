@@ -48,6 +48,12 @@ export interface RecordArtifactDeleteInput {
 }
 
 export class RepositoryActivityService {
+  /**
+   * Activities created inside one clock tick must still sort deterministically.
+   * The counter is per instance, which is correct here because a Durable Object
+   * serves one repository's writes from a single instance; a multi-instance
+   * deployment would need the last timestamp read from storage instead.
+   */
   private lastCreatedAtMs = 0;
 
   constructor(private readonly options: RepositoryActivityServiceOptions) {}

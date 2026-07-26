@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { createPublishClient } from "./index";
 
@@ -47,7 +48,7 @@ export function parsePublishRequest(json: string): PublishRequestFile {
   return parsed;
 }
 
-async function fileSha256(bytes: Uint8Array): Promise<string> {
+function fileSha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
@@ -67,7 +68,7 @@ export async function runCli(args = process.argv.slice(2), env = process.env): P
         filename: artifact.filename ?? basename(artifact.path),
         contentType: artifact.contentType,
         size: bytes.byteLength,
-        sha256: await fileSha256(bytes),
+        sha256: fileSha256(bytes),
         body: new Blob([bytes]),
         metadata: artifact.metadata,
       };
@@ -82,7 +83,7 @@ export async function runCli(args = process.argv.slice(2), env = process.env): P
   console.log(JSON.stringify(result, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runCli().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

@@ -70,8 +70,10 @@ export function createPublishClient(options: PublishClientOptions): PublishClien
         }),
       });
 
-      for (const target of session.uploads) {
-        const artifact = input.artifacts.find((candidate) => candidate.filename === target.filename);
+      // The server pairs uploads to artifacts by index, so match on index
+      // here too. Correlating by filename would mis-pair duplicate names.
+      for (const [index, target] of session.uploads.entries()) {
+        const artifact = input.artifacts[index];
         if (!artifact) {
           throw new Error(`Axis publish session returned upload for unknown artifact: ${target.filename}`);
         }
