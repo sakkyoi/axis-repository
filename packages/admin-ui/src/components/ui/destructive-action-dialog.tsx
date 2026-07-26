@@ -25,7 +25,7 @@ export function DestructiveActionDialog({
   title,
   description,
   confirmLabel,
-  pendingLabel = confirmLabel,
+  pendingLabel,
   confirmationText,
   pending = false,
   error,

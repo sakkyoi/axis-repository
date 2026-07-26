@@ -15,7 +15,7 @@ export interface AuthContextValue {
   refreshAccessToken(): Promise<string | null>;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+export const AuthContext = createContext<AuthContextValue | null>(null);
 
 // Module scope so every provider mount and every API client share one refresh.
 const refreshSessionOnce = createSingleFlight<AdminAuthResponse | null>();
