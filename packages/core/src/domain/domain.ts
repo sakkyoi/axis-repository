@@ -124,9 +124,7 @@ export type PublishSessionStatus =
   | "ready"
   | "finalizing"
   | "finalized"
-  | "failed"
-  | "aborted"
-  | "expired";
+  | "failed";
 
 export interface PublishSession {
   id: string;

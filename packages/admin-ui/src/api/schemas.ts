@@ -166,8 +166,6 @@ export const publishSessionStatusSchema = z.enum([
   "finalizing",
   "finalized",
   "failed",
-  "aborted",
-  "expired",
 ]);
 
 export const tokenPrincipalSchema = z.object({

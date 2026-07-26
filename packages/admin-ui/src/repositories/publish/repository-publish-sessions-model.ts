@@ -128,8 +128,6 @@ export function publishSessionStatusMeta(status: PublishSessionStatus): {
     case "finalized":
       return { label: "finalized", variant: "success" };
     case "failed":
-    case "aborted":
-    case "expired":
       return { label: status, variant: "destructive" };
     case "pending_uploads":
       return { label: "pending uploads", variant: "warning" };
