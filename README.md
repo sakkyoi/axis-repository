@@ -195,9 +195,15 @@ Point that hostname at the same Worker. Once set:
   signing key URL, and the PyPI index URL all name the artifact origin, even
   when requested through the admin UI.
 
-Leave it unset and nothing changes. Turning it on **is** a breaking change for
-existing consumers: already-published `sources.list` entries and pip index URLs
-name the old hostname and will stop resolving, so plan it alongside updating
+Leave it unset and nothing changes.
+
+Turning it on breaks existing **consumers**, not existing **data**. Published
+metadata contains no absolute URLs — `Packages` records `Filename:` as a
+repository-relative path and `Release` lists relative paths — so every stored
+object, index, and signature stays valid and nothing needs republishing. What
+breaks is the hostname written into each client's configuration: an
+already-deployed `sources.list` entry or pip index URL names the old origin,
+which now answers 404 for `/repositories`. Plan the switch alongside updating
 whatever consumes the repository.
 
 ## Upload URLs Are Capabilities
