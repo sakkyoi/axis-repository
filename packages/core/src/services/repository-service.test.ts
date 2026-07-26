@@ -21,6 +21,58 @@ const randomId: RandomId = {
 };
 
 describe("RepositoryService", () => {
+  it("rejects repository names that are not a single safe path segment", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryService({ state, clock, randomId });
+
+    for (const name of [
+      "",
+      "   ",
+      "alpha/pool",
+      "alpha/simple",
+      "..",
+      ".",
+      "../escape",
+      "alpha:beta",
+      "-leading-hyphen",
+      ".leading-dot",
+      "with space",
+      "back\\slash",
+      "new\nline",
+      "a".repeat(101),
+    ]) {
+      await expect(
+        service.create({ name, ecosystem: "apt", visibility: "private", config: {} }),
+        `expected ${JSON.stringify(name)} to be rejected`,
+      ).rejects.toBeInstanceOf(ValidationError);
+    }
+
+    await expect(service.list()).resolves.toEqual([]);
+  });
+
+  it("accepts conventional repository names", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryService({ state, clock, randomId });
+
+    for (const name of ["debian-internal", "py_pkgs", "my.repo", "repo2", "A", "a".repeat(100)]) {
+      await expect(
+        service.create({ name, ecosystem: "apt", visibility: "private", config: {} }),
+      ).resolves.toMatchObject({ name });
+    }
+  });
+
+  it("prevents a repository from sharing an object key prefix with another", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryService({ state, clock, randomId });
+    await service.create({ name: "alpha", ecosystem: "apt", visibility: "public", config: {} });
+
+    // Without name validation this would write under `repositories/alpha/pool/`,
+    // where repository "alpha" serves and deletes it.
+    await expect(
+      service.create({ name: "alpha/pool", ecosystem: "apt", visibility: "private", config: {} }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
   it("creates and lists repositories", async () => {
     const state = new MemoryStateStore();
     const service = new RepositoryService({ state, clock, randomId });

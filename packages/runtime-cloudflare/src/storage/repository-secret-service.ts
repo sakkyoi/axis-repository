@@ -1,6 +1,7 @@
 import {
   NotFoundError,
   ValidationError,
+  assertValidRepositoryName,
   type Clock,
   type RandomId,
   type RepositorySecretRecord as StoredRepositorySecretRecord,
@@ -39,10 +40,20 @@ export class RepositorySecretService implements RepositorySecretCapability {
   }): Promise<RepositorySecretRecord> {
     const namespace = input.namespace.trim();
     if (!namespace) throw new ValidationError("Repository secret namespace is required");
+    if (namespace.includes(":")) {
+      throw new ValidationError("Repository secret namespace must not contain ':'");
+    }
     const repositoryName = input.repositoryName.trim();
     if (!repositoryName) throw new ValidationError("Repository secret repository name is required");
+    assertValidRepositoryName(repositoryName);
     const name = input.name.trim();
     if (!name) throw new ValidationError("Repository secret name is required");
+    // The stored name index is colon-joined (`<namespace>:<repository>:<name>`),
+    // so an unescaped ':' here would let one repository's entry collide with
+    // (and evict) another's.
+    if (name.includes(":")) {
+      throw new ValidationError("Repository secret name must not contain ':'");
+    }
     if (await this.options.state.repositorySecrets.getByName(name, repositoryName, namespace)) {
       throw new ValidationError(`Repository secret already exists in repository ${repositoryName}: ${name}`);
     }

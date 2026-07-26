@@ -28,7 +28,10 @@ export function parseAptRepositoryConfig(repository: Repository): AptRepositoryC
     ...(architectures
       ? { architectures: architectures.map((architecture) => validatePathSegment(architecture, configPath("architectures"))) }
       : {}),
-    signingKeyId: requiredConfigString(aptConfig, "signingKeyId"),
+    signingKeyId: validatePathSegment(
+      requiredConfigString(aptConfig, "signingKeyId"),
+      configPath("signingKeyId"),
+    ),
   };
 }
 

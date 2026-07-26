@@ -20,14 +20,37 @@ export interface RepositoryServiceOptions {
   randomId: RandomId;
 }
 
+const REPOSITORY_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const REPOSITORY_NAME_MAX_LENGTH = 100;
+
+/**
+ * Repository names are concatenated into object keys (`repositories/<name>/...`),
+ * durable storage keys (`repository:<name>`), and colon-joined secret index keys.
+ * A name containing `/` or `:` makes those key spaces overlap between
+ * repositories, so names must be a single safe path segment.
+ */
+export function assertValidRepositoryName(name: string): void {
+  if (!name) {
+    throw new ValidationError("Repository name is required");
+  }
+  if (name.length > REPOSITORY_NAME_MAX_LENGTH) {
+    throw new ValidationError(
+      `Repository name must be at most ${REPOSITORY_NAME_MAX_LENGTH} characters`,
+    );
+  }
+  if (!REPOSITORY_NAME_PATTERN.test(name)) {
+    throw new ValidationError(
+      "Repository name must start with a letter or digit and use only letters, digits, dot, underscore, or hyphen",
+    );
+  }
+}
+
 export class RepositoryService {
   constructor(private readonly options: RepositoryServiceOptions) {}
 
   async create(input: CreateRepositoryInput): Promise<Repository> {
     const name = input.name.trim();
-    if (!name) {
-      throw new ValidationError("Repository name is required");
-    }
+    assertValidRepositoryName(name);
     if (await this.options.state.repositories.getByName(name)) {
       throw new ValidationError(`Repository already exists: ${name}`);
     }
