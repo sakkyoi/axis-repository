@@ -113,23 +113,6 @@ export class DurableStateStore implements StateStore {
         return updated;
       });
     },
-    compareAndSetStatus: async (
-      id: string,
-      expectedStatus: PublishSession["status"],
-      session: PublishSession,
-    ): Promise<boolean> => {
-      if (session.id !== id) {
-        return false;
-      }
-      return this.withSessionMutation(async () => {
-        const current = (await this.storage.get<PublishSession>(sessionKey(id))) ?? null;
-        if (!current || current.status !== expectedStatus) {
-          return false;
-        }
-        await this.storage.put(sessionKey(id), session);
-        return true;
-      });
-    },
   };
 
   readonly publishTokens = {

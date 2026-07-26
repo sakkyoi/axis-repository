@@ -80,21 +80,6 @@ export class MemoryStateStore implements StateStore {
       this.publishSessionById.set(id, updated);
       return updated;
     },
-    compareAndSetStatus: async (
-      id: string,
-      expectedStatus: PublishSession["status"],
-      session: PublishSession,
-    ): Promise<boolean> => {
-      if (session.id !== id) {
-        return false;
-      }
-      const current = this.publishSessionById.get(id);
-      if (!current || current.status !== expectedStatus) {
-        return false;
-      }
-      this.publishSessionById.set(id, session);
-      return true;
-    },
   };
 
   readonly publishTokens = {

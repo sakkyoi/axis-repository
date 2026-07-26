@@ -191,49 +191,7 @@ describe("DurableStateStore", () => {
     await expect(state.publishSessions.get("pub_1")).resolves.toEqual(session);
   });
 
-  it("compare-and-sets publish session status only when the expected status matches", async () => {
-    const state = new DurableStateStore(new FakeDurableStorage());
-    await state.publishSessions.save(publishSession({ status: "ready" }));
 
-    await expect(
-      state.publishSessions.compareAndSetStatus(
-        "pub_1",
-        "ready",
-        publishSession({ status: "finalizing" }),
-      ),
-    ).resolves.toBe(true);
-    await expect(state.publishSessions.get("pub_1")).resolves.toMatchObject({
-      status: "finalizing",
-    });
-
-    await expect(
-      state.publishSessions.compareAndSetStatus(
-        "pub_1",
-        "ready",
-        publishSession({ status: "finalized" }),
-      ),
-    ).resolves.toBe(false);
-    await expect(state.publishSessions.get("pub_1")).resolves.toMatchObject({
-      status: "finalizing",
-    });
-  });
-
-  it("does not compare-and-set a publish session with a mismatched replacement id", async () => {
-    const state = new DurableStateStore(new FakeDurableStorage());
-    const original = publishSession({ status: "ready" });
-    await state.publishSessions.save(original);
-
-    await expect(
-      state.publishSessions.compareAndSetStatus(
-        "pub_1",
-        "ready",
-        publishSession({ id: "pub_2", status: "finalizing" }),
-      ),
-    ).resolves.toBe(false);
-
-    await expect(state.publishSessions.get("pub_1")).resolves.toEqual(original);
-    await expect(state.publishSessions.get("pub_2")).resolves.toBeNull();
-  });
 
   it("lists publish sessions sorted by created time descending", async () => {
     const state = new DurableStateStore(new FakeDurableStorage());

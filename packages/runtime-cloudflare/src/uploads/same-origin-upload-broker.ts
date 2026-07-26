@@ -63,7 +63,6 @@ export class SameOriginUploadBroker implements UploadBroker {
     };
   }
 
-  async abortUpload(): Promise<void> {}
 }
 
 async function sha256Hex(body: string | Uint8Array | ReadableStream): Promise<string> {

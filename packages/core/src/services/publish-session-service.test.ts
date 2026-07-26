@@ -68,7 +68,6 @@ const uploadBroker: UploadBroker = {
     size: expected.size,
     sha256: expected.sha256,
   }),
-  abortUpload: async () => {},
 };
 
 function createPublisher(): { publisher: ArtifactPublisher; calls: Parameters<ArtifactPublisher["publish"]>[0][] } {

@@ -61,7 +61,6 @@ export interface UploadBroker {
     expected: PublishArtifactRequest;
   }): Promise<UploadedObject>;
 
-  abortUpload(input: { target: UploadTarget }): Promise<void>;
 }
 
 export interface ArtifactPublisher {
@@ -143,11 +142,6 @@ export interface PublishSessionStore {
     id: string,
     updater: (current: PublishSession) => PublishSession,
   ): Promise<PublishSession | null>;
-  compareAndSetStatus(
-    id: string,
-    expectedStatus: PublishSession["status"],
-    session: PublishSession,
-  ): Promise<boolean>;
 }
 
 export interface PublishTokenStore {
@@ -195,10 +189,6 @@ export interface RepositoryArtifactStore {
   listByRepository(repositoryName: string): Promise<RepositoryArtifactRecord[]>;
   upsert(record: RepositoryArtifactRecord): Promise<void>;
   replaceByRepository(repositoryName: string, records: RepositoryArtifactRecord[]): Promise<void>;
-}
-
-export interface TokenVerifier {
-  verifyPublishToken(token: string): Promise<TokenPrincipal | null>;
 }
 
 export interface StateStore {

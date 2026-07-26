@@ -59,7 +59,6 @@ const uploadBroker: UploadBroker = {
     size: expected.size,
     sha256: expected.sha256,
   }),
-  abortUpload: async () => {},
 };
 
 function memoryObjectStore(existingKeys: string[] = []): RepositoryObjectStore {

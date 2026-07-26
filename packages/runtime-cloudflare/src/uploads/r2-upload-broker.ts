@@ -117,7 +117,6 @@ export class R2PresignedUploadBroker implements UploadBroker {
     };
   }
 
-  async abortUpload(): Promise<void> {}
 
   private getUploadTtlSeconds(now: Date, sessionExpiresAt: Date): number {
     const remainingSeconds = Math.max(0, Math.floor((sessionExpiresAt.getTime() - now.getTime()) / 1000));
