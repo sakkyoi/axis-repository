@@ -945,6 +945,18 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     return new Response(null, { status: 204, headers: { "set-cookie": clearAdminRefreshCookie() } });
   }
+  if (url.pathname === "/admin/auth/change-password") {
+    if (request.method !== "POST") {
+      throw new NotFoundError();
+    }
+    const principal = await requireAdmin(request, dependencies.adminAuthService);
+    const body = await readJsonObject(request);
+    await dependencies.adminAuthService.changeOwnPassword(principal, {
+      currentPassword: stringField(body, "currentPassword"),
+      newPassword: stringField(body, "newPassword"),
+    });
+    return new Response(null, { status: 204, headers: { "set-cookie": clearAdminRefreshCookie() } });
+  }
   if (url.pathname === "/admin/session") {
     if (request.method === "GET") {
       const token = requireBearer(request);

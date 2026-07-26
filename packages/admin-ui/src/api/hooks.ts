@@ -43,6 +43,13 @@ export function useAdminUsers() {
   });
 }
 
+export function useChangeOwnPassword() {
+  const client = useAxisClient();
+  return useMutation({
+    mutationFn: (input: { currentPassword: string; newPassword: string }) => client.changeOwnPassword(input),
+  });
+}
+
 export function useUpdateRepositoryPluginPolicy() {
   const client = useAxisClient();
   const queryClient = useQueryClient();

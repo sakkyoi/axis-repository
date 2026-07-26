@@ -538,6 +538,51 @@ describe("Cloudflare runtime routes", () => {
     expect(logoutResponse.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 
+  it("changes the current admin password and clears the refresh cookie", async () => {
+    const app = createApp();
+    const loginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "admin" }),
+    }));
+    const loginCookie = loginResponse.headers.get("set-cookie") ?? "";
+    const loginBody = await loginResponse.json() as { accessToken: string };
+
+    const changeResponse = await app.fetch(new Request("https://axis.example/admin/auth/change-password", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${loginBody.accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        currentPassword: "admin",
+        newPassword: "changed-password",
+      }),
+    }));
+
+    expect(changeResponse.status).toBe(204);
+    expect(changeResponse.headers.get("set-cookie")).toContain("Max-Age=0");
+    const staleRefreshResponse = await app.fetch(new Request("https://axis.example/admin/auth/refresh", {
+      method: "POST",
+      headers: { cookie: loginCookie },
+    }));
+    expect(staleRefreshResponse.status).toBe(401);
+
+    const oldLoginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "admin" }),
+    }));
+    expect(oldLoginResponse.status).toBe(401);
+
+    const newLoginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "changed-password" }),
+    }));
+    expect(newLoginResponse.status).toBe(200);
+  });
+
   it("lists seeded admin users and keeps user creation coming soon", async () => {
     const app = createApp();
     await app.fetch(new Request("https://axis.example/admin/auth/login", {

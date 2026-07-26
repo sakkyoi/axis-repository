@@ -3,6 +3,7 @@ import {
   AdminAuthService,
   MemoryStateStore,
   UnauthorizedError,
+  ValidationError,
   type AdminAccessTokenCodec,
   type Clock,
   type RandomId,
@@ -141,6 +142,47 @@ describe("AdminAuthService", () => {
     await service.logout(login.refreshToken);
 
     await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("changes the current admin password and revokes existing refresh sessions", async () => {
+    const state = new MemoryStateStore();
+    let sequence = 0;
+    const service = createService({
+      state,
+      randomId: { create: (prefix) => `${prefix}_${++sequence}` },
+    });
+    const login = await service.login({ username: "admin", password: "correct-password" });
+
+    await service.changeOwnPassword(login.principal, {
+      currentPassword: "correct-password",
+      newPassword: "changed-password",
+    });
+
+    await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.login({ username: "admin", password: "correct-password" }))
+      .rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.login({ username: "admin", password: "changed-password" }))
+      .resolves.toMatchObject({ principal: { username: "admin" } });
+  });
+
+  it("rejects own password changes with the wrong current password", async () => {
+    const service = createService();
+    const login = await service.login({ username: "admin", password: "correct-password" });
+
+    await expect(service.changeOwnPassword(login.principal, {
+      currentPassword: "wrong-password",
+      newPassword: "changed-password",
+    })).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("rejects short replacement admin passwords", async () => {
+    const service = createService();
+    const login = await service.login({ username: "admin", password: "correct-password" });
+
+    await expect(service.changeOwnPassword(login.principal, {
+      currentPassword: "correct-password",
+      newPassword: "short",
+    })).rejects.toThrow(new ValidationError("newPassword must be at least 8 characters"));
   });
 });
 

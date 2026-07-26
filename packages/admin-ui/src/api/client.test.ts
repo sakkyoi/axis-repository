@@ -357,6 +357,44 @@ describe("createAxisClient", () => {
     expect(requests).toEqual(["GET /admin/users"]);
   });
 
+  it("changes the current admin password through the auth endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      accessToken: "admin-secret",
+    });
+    const requests: Array<{ method: string; url: string; data: unknown }> = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push({
+        method: config.method?.toUpperCase() ?? "",
+        url: config.url ?? "",
+        data: config.data ? JSON.parse(String(config.data)) : undefined,
+      });
+      return {
+        data: undefined,
+        status: 204,
+        statusText: "No Content",
+        headers: {},
+        config,
+      };
+    };
+
+    await client.changeOwnPassword({
+      currentPassword: "current-password",
+      newPassword: "changed-password",
+    });
+
+    expect(requests).toEqual([
+      {
+        method: "POST",
+        url: "/admin/auth/change-password",
+        data: {
+          currentPassword: "current-password",
+          newPassword: "changed-password",
+        },
+      },
+    ]);
+  });
+
   it("creates repositories through the admin endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",

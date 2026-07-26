@@ -74,6 +74,7 @@ export interface AxisClient {
   loginAdmin(input: { username: string; password: string }): Promise<AdminAuthResponse>;
   refreshAdminSession(): Promise<AdminAuthResponse>;
   logoutAdmin(): Promise<void>;
+  changeOwnPassword(input: { currentPassword: string; newPassword: string }): Promise<void>;
   verifyAdminSession(): Promise<void>;
   listAdminUsers(): Promise<{ users: AdminUser[]; canCreateUsers: boolean }>;
   listRepositoryPlugins(): Promise<RepositoryPlugin[]>;
@@ -142,6 +143,9 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     },
     async logoutAdmin() {
       await http.post("/admin/auth/logout");
+    },
+    async changeOwnPassword(input: { currentPassword: string; newPassword: string }) {
+      await http.post("/admin/auth/change-password", input);
     },
     async verifyAdminSession() {
       const response = await http.get("/admin/session");

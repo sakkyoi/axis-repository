@@ -1,5 +1,5 @@
 import type { AdminPrincipal, AdminRefreshSessionRecord, AdminUserRecord } from "../domain/domain";
-import { UnauthorizedError } from "../domain/errors";
+import { UnauthorizedError, ValidationError } from "../domain/errors";
 import type { AdminAccessTokenCodec, Clock, RandomId, SecretHasher, StateStore } from "../ports/ports";
 
 export interface BootstrapOwnerCredentials {
@@ -69,6 +69,27 @@ export class AdminAuthService {
 
   verifyAccessToken(token: string): Promise<AdminPrincipal> {
     return this.options.accessTokens.verify(token);
+  }
+
+  async changeOwnPassword(
+    principal: AdminPrincipal,
+    input: { currentPassword: string; newPassword: string },
+  ): Promise<void> {
+    const newPassword = input.newPassword.trim();
+    if (newPassword.length < 8) {
+      throw new ValidationError("newPassword must be at least 8 characters");
+    }
+    const user = await this.options.state.adminUsers.getById(principal.subject);
+    if (!user || user.disabledAt || !(await this.options.hasher.verify(input.currentPassword, user.passwordHash))) {
+      throw new UnauthorizedError();
+    }
+    const now = this.options.clock.now().toISOString();
+    await this.options.state.adminUsers.save({
+      ...user,
+      passwordHash: await this.options.hasher.hash(newPassword),
+      updatedAt: now,
+    });
+    await this.revokeRefreshSessionsForSubject(user.id, now);
   }
 
   async listUsers(): Promise<AdminUserRecord[]> {
@@ -149,6 +170,16 @@ export class AdminAuthService {
       return session;
     }
     throw new UnauthorizedError();
+  }
+
+  private async revokeRefreshSessionsForSubject(subject: string, revokedAt: string): Promise<void> {
+    for (const session of await this.options.state.adminRefreshSessions.list()) {
+      if (session.subject !== subject || session.revokedAt) continue;
+      await this.options.state.adminRefreshSessions.save({
+        ...session,
+        revokedAt,
+      });
+    }
   }
 
   private accessTokenTtlMs(): number {
