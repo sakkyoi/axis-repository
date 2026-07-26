@@ -133,7 +133,7 @@ export function publishTokenDetailBodyClass(): string {
 }
 
 export function publishTokenDetailActionRowClass(): string {
-  return "flex min-w-0 justify-start";
+  return "grid w-full min-w-0 grid-cols-3 gap-2";
 }
 
 export function publishTokenSummaryGridClass(): string {

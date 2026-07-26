@@ -305,6 +305,8 @@ function PublishTokenDetail({
         <div className={publishTokenDetailActionRowClass()}>
           <Button
             variant="destructive"
+            size="sm"
+            className="w-full min-w-0 px-2"
             disabled={!lifecycle.active || actionPending}
             onClick={onRevoke}
           >
@@ -313,6 +315,8 @@ function PublishTokenDetail({
           </Button>
           <Button
             variant="outline"
+            size="sm"
+            className="w-full min-w-0 px-2"
             disabled={!lifecycle.active || actionPending}
             onClick={onRotate}
           >
@@ -321,6 +325,8 @@ function PublishTokenDetail({
           </Button>
           <Button
             variant="destructive"
+            size="sm"
+            className="w-full min-w-0 px-2"
             disabled={actionPending}
             onClick={onDelete}
           >

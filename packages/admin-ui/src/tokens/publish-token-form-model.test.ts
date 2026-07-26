@@ -179,7 +179,9 @@ describe("publish token form model", () => {
   });
 
   it("keeps publish token detail content contained inside the detail pane", () => {
-    expect(publishTokenDetailActionRowClass()).toContain("justify-start");
+    expect(publishTokenDetailActionRowClass()).toContain("w-full");
+    expect(publishTokenDetailActionRowClass()).toContain("grid-cols-3");
+    expect(publishTokenDetailActionRowClass()).toContain("gap-2");
     expect(publishTokenSummaryItemClass()).toContain("min-w-0");
     expect(publishTokenSummaryValueClass()).toContain("break-words");
     expect(publishTokenRawMetadataClass()).toContain("min-w-0");
