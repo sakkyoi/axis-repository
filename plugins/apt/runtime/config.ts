@@ -2,7 +2,10 @@ import { ValidationError, type Repository } from "@axis-repository/core";
 import { aptPluginManifest } from "../manifest";
 
 export interface AptRepositoryConfig {
+  /** The default publish target, and the only suite unless `suites` says otherwise. */
   codename: string;
+  /** Every suite this repository publishes; must contain `codename`. */
+  suites?: string[];
   components?: string[];
   architectures?: string[];
   signingKeyId: string;
@@ -20,6 +23,7 @@ export interface AptRepositoryConfig {
 }
 
 export interface AptResolvedRepositoryConfig extends AptRepositoryConfig {
+  suites: string[];
   components: string[];
   architectures: string[];
 }
@@ -38,15 +42,23 @@ export function parseAptRepositoryConfig(repository: Repository): AptRepositoryC
   const notAutomatic = optionalConfigBoolean(aptConfig, "notAutomatic");
   const butAutomaticUpgrades = optionalConfigBoolean(aptConfig, "butAutomaticUpgrades");
   const acquireByHash = optionalConfigBoolean(aptConfig, "acquireByHash");
+  const suites = optionalConfigStringArray(aptConfig, "suites")
+    ?.map((suite) => validatePathSegment(suite, configPath("suites")));
 
   if (butAutomaticUpgrades && !notAutomatic) {
     // apt only reads ButAutomaticUpgrades on a NotAutomatic suite; on its own
     // it silently does nothing, which looks like the pin was applied.
     throw new ValidationError(`${configPath("butAutomaticUpgrades")} requires ${configPath("notAutomatic")}`);
   }
+  if (suites && !suites.includes(codename)) {
+    // codename is where a publish goes when it does not name a suite, so a
+    // list that leaves it out would make every default publish fail.
+    throw new ValidationError(`${configPath("suites")} must include ${configPath("codename")}`);
+  }
 
   return {
     codename: validatePathSegment(codename, configPath("codename")),
+    ...(suites ? { suites: [...new Set(suites)] } : {}),
     ...(components ? { components: components.map((component) => validatePathSegment(component, configPath("components"))) } : {}),
     ...(architectures
       ? { architectures: architectures.map((architecture) => validatePathSegment(architecture, configPath("architectures"))) }
@@ -57,7 +69,7 @@ export function parseAptRepositoryConfig(repository: Repository): AptRepositoryC
     ),
     ...optionalReleaseText(aptConfig, "origin"),
     ...optionalReleaseText(aptConfig, "label"),
-    ...optionalReleaseText(aptConfig, "suite"),
+    ...suiteOverride(aptConfig, suites ?? [codename]),
     ...optionalReleaseText(aptConfig, "description"),
     ...optionalPositiveInteger(aptConfig, "validityDays"),
     ...(notAutomatic !== undefined ? { notAutomatic } : {}),
@@ -100,6 +112,21 @@ function optionalReleaseText(config: Record<string, unknown>, field: string): Re
     throw new ValidationError(`${configPath(field)} must not contain control characters`);
   }
   return { [field]: value };
+}
+
+/**
+ * Reads the `Suite:` override, which only makes sense for a single suite.
+ *
+ * Applying one name to every `dists/` tree would publish several suites that
+ * all claim to be the same one, so a repository publishing more than one has
+ * to let each `Release` name itself.
+ */
+function suiteOverride(config: Record<string, unknown>, suites: string[]): Record<string, string> {
+  const override = optionalReleaseText(config, "suite");
+  if (override.suite !== undefined && suites.length > 1) {
+    throw new ValidationError(`${configPath("suite")} cannot be set when ${configPath("suites")} has more than one entry`);
+  }
+  return override;
 }
 
 function optionalPositiveInteger(config: Record<string, unknown>, field: string): Record<string, number> {

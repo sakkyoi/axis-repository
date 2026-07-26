@@ -2,6 +2,7 @@ export interface AptClientRepositoryInfo {
   name: string;
   visibility: "private" | "public";
   codename: string;
+  suites: string[];
   components: string[];
 }
 
@@ -9,10 +10,15 @@ export interface AptSourceInfo {
   repository: string;
   ecosystem: "apt";
   baseUrl: string;
+  /** The suite a client gets when it does not choose one. */
   codename: string;
+  suites: string[];
   components: string[];
   keyringPath: string;
+  /** The sources.list line for the default suite. */
   sourceLine: string;
+  /** One line per suite, in the order the repository declares them. */
+  sourceLines: string[];
 }
 
 export interface AptInstallInfo {
@@ -22,6 +28,7 @@ export interface AptInstallInfo {
   keyringPath: string;
   sourceListPath: string;
   sourceLine: string;
+  sourceLines: string[];
   script: string;
   commands: string[];
   authConfPath?: string;
@@ -50,14 +57,21 @@ export function buildAptSourceInfo(input: {
 }): AptSourceInfo {
   const baseUrl = baseRepositoryUrl(input.origin, input.repository.name);
   const keyringPath = keyringPathForRepository(input.repository.name);
+  const components = [...input.repository.components];
+  const suites = input.repository.suites.length > 0 ? [...input.repository.suites] : [input.repository.codename];
+  const sourceLineFor = (suite: string) =>
+    `deb [signed-by=${keyringPath}] ${baseUrl} ${suite} ${components.join(" ")}`;
+
   return {
     repository: input.repository.name,
     ecosystem: "apt",
     baseUrl,
     codename: input.repository.codename,
-    components: [...input.repository.components],
+    suites,
+    components,
     keyringPath,
-    sourceLine: `deb [signed-by=${keyringPath}] ${baseUrl} ${input.repository.codename} ${input.repository.components.join(" ")}`,
+    sourceLine: sourceLineFor(input.repository.codename),
+    sourceLines: suites.map(sourceLineFor),
   };
 }
 
@@ -95,6 +109,9 @@ export function buildAptInstallInfo(input: {
   const source = buildAptSourceInfo(input);
   const keyUrl = `${source.baseUrl}/apt/key.gpg`;
   const sourceListPath = sourceListPathForRepository(input.repository.name);
+  // Every suite goes into the one sources.list file, so a repository that
+  // publishes several is configured by a single copy-and-paste.
+  const sourceListBody = source.sourceLines.join("\n");
   const install: Omit<AptInstallInfo, "script"> = {
     repository: input.repository.name,
     visibility: input.repository.visibility,
@@ -102,9 +119,12 @@ export function buildAptInstallInfo(input: {
     keyringPath: source.keyringPath,
     sourceListPath,
     sourceLine: source.sourceLine,
+    sourceLines: [...source.sourceLines],
     commands: [
       `curl -fsSL ${keyUrl} | sudo gpg --dearmor -o ${source.keyringPath}`,
-      `echo '${source.sourceLine}' | sudo tee ${sourceListPath}`,
+      source.sourceLines.length === 1
+        ? `echo '${source.sourceLine}' | sudo tee ${sourceListPath}`
+        : `sudo tee ${sourceListPath} <<'EOF'\n${sourceListBody}\nEOF`,
       "sudo apt update",
     ],
   };

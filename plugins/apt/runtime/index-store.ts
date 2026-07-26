@@ -7,7 +7,7 @@ import { listAllObjects, objectBytes } from "@axis-repository/runtime-cloudflare
 import { parseStanzas } from "../shared/stanza";
 import type { AptIndexFile } from "./index-files";
 import type { AptIndexMetadata } from "./metadata";
-import { indexKey, type AptIndexStanzas, type AptPoolCopy } from "./packages";
+import { indexKey, type AptPoolCopy, type AptSuiteIndexes } from "./packages";
 import {
   BY_HASH_SECTIONS,
   acquireByHashEnabled,
@@ -38,8 +38,22 @@ export interface AptReleaseSigner {
 const textDecoder = new TextDecoder();
 const packagesIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/binary-([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Packages$/;
 
-export function distsPrefix(repositoryName: string, codename: string): string {
-  return `repositories/${repositoryName}/dists/${codename}/`;
+export function distsPrefix(repositoryName: string, suite: string): string {
+  return `repositories/${repositoryName}/dists/${suite}/`;
+}
+
+/** Reads back the published indexes of every suite the repository declares. */
+export async function readAptSuiteIndexes(input: {
+  objectStore: RepositoryObjectStore;
+  repositoryName: string;
+  suites: string[];
+}): Promise<Map<string, AptSuiteIndexes>> {
+  return new Map(
+    await Promise.all(input.suites.map(async (suite) => [
+      suite,
+      await readAptPackageIndexes({ objectStore: input.objectStore, repositoryName: input.repositoryName, suite }),
+    ] as const)),
+  );
 }
 
 /**
@@ -54,11 +68,11 @@ export function distsPrefix(repositoryName: string, codename: string): string {
 export async function readAptPackageIndexes(input: {
   objectStore: RepositoryObjectStore;
   repositoryName: string;
-  codename: string;
-}): Promise<Map<string, AptIndexStanzas>> {
-  const prefix = distsPrefix(input.repositoryName, input.codename);
+  suite: string;
+}): Promise<AptSuiteIndexes> {
+  const prefix = distsPrefix(input.repositoryName, input.suite);
   const objects = await listAllObjects(input.objectStore, prefix);
-  const indexes = new Map<string, AptIndexStanzas>();
+  const indexes: AptSuiteIndexes = new Map();
 
   for (const object of objects) {
     const match = packagesIndexPattern.exec(object.key.slice(prefix.length));
@@ -104,15 +118,78 @@ export interface WrittenAptIndexes {
 export async function writeAptRepositoryIndexes(input: {
   objectStore: RepositoryObjectStore;
   repositoryName: string;
-  metadata: AptIndexMetadata;
+  suites: AptIndexMetadata[];
   signer: AptReleaseSigner;
   signingKey: { privateKeyArmored: string; passphrase: string };
   publishedAt: string;
   poolCopies?: AptPoolCopy[];
 }): Promise<WrittenAptIndexes> {
-  const prefix = distsPrefix(input.repositoryName, input.metadata.config.codename);
-  const { indexFiles, release, releasePath } = input.metadata;
   const poolCopies = input.poolCopies ?? [];
+  const prepared = await Promise.all(input.suites.map((metadata) => prepareSuiteWrite({
+    objectStore: input.objectStore,
+    repositoryName: input.repositoryName,
+    metadata,
+    signer: input.signer,
+    signingKey: input.signingKey,
+    publishedAt: input.publishedAt,
+  })));
+
+  const poolObjects: PublishedObject[] = poolCopies.map((copy) => ({
+    key: copy.destinationKey,
+    contentType: copy.contentType || DEB_CONTENT_TYPE,
+  }));
+  const objects = [...poolObjects, ...prepared.flatMap((suite) => suite.indexObjects)];
+  const previous = await capturePreviousObjectMetadata(input.objectStore, objects.map((object) => object.key));
+  const removedObjectKeys: string[] = [];
+  for (const suite of prepared) {
+    removedObjectKeys.push(...await removeStaleIndexObjects({
+      objectStore: input.objectStore,
+      prefix: suite.prefix,
+      keptKeys: new Set([
+        ...suite.indexObjects.map((object) => object.key),
+        ...suite.byHash.objects.map((object) => object.key),
+        ...suite.byHash.retainedKeys,
+      ]),
+    }));
+  }
+
+  for (const copy of poolCopies) {
+    await input.objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
+  }
+  for (const suite of prepared) {
+    await suite.commit();
+  }
+
+  return {
+    objects: objects.map((object) => withPreviousMetadata(object, previous.get(object.key) ?? null)),
+    removedObjectKeys,
+  };
+}
+
+interface PreparedSuiteWrite {
+  prefix: string;
+  indexObjects: PublishedObject[];
+  byHash: { objects: ByHashObject[]; retainedKeys: Set<string> };
+  commit(): Promise<void>;
+}
+
+/**
+ * Signs one suite and returns everything needed to write it, without writing.
+ *
+ * Every suite is signed before any of them is written, so a signing failure
+ * part way through leaves the repository exactly as it was rather than with
+ * some suites updated and others not.
+ */
+async function prepareSuiteWrite(input: {
+  objectStore: RepositoryObjectStore;
+  repositoryName: string;
+  metadata: AptIndexMetadata;
+  signer: AptReleaseSigner;
+  signingKey: { privateKeyArmored: string; passphrase: string };
+  publishedAt: string;
+}): Promise<PreparedSuiteWrite> {
+  const prefix = distsPrefix(input.repositoryName, input.metadata.suite);
+  const { indexFiles, release, releasePath } = input.metadata;
   const inReleasePath = `${prefix}InRelease`;
   const releaseGpgPath = `${prefix}Release.gpg`;
   const signingInput = {
@@ -123,53 +200,36 @@ export async function writeAptRepositoryIndexes(input: {
   };
   const inRelease = await input.signer.clearSign(signingInput);
   const releaseGpg = await input.signer.detachSign(signingInput);
-
-  const poolObjects: PublishedObject[] = poolCopies.map((copy) => ({
-    key: copy.destinationKey,
-    contentType: copy.contentType || DEB_CONTENT_TYPE,
-  }));
   const indexObjects: PublishedObject[] = [
     ...indexFiles.map((file) => ({ key: `${prefix}${file.relativePath}`, contentType: file.contentType })),
     { key: releasePath, contentType: TEXT_CONTENT_TYPE },
     { key: inReleasePath, contentType: TEXT_CONTENT_TYPE },
     { key: releaseGpgPath, contentType: PGP_SIGNATURE_CONTENT_TYPE },
   ];
-  const objects = [...poolObjects, ...indexObjects];
-  const previous = await capturePreviousObjectMetadata(input.objectStore, objects.map((object) => object.key));
   const byHash = acquireByHashEnabled(input.metadata.config)
     ? await planByHashObjects({ objectStore: input.objectStore, prefix, releasePath, indexFiles })
     : { objects: [], retainedKeys: new Set<string>() };
-  const removedObjectKeys = await removeStaleIndexObjects({
-    objectStore: input.objectStore,
-    prefix,
-    keptKeys: new Set([
-      ...indexObjects.map((object) => object.key),
-      ...byHash.objects.map((object) => object.key),
-      ...byHash.retainedKeys,
-    ]),
-  });
-
-  for (const copy of poolCopies) {
-    await input.objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
-  }
-  for (const file of indexFiles) {
-    const key = `${prefix}${file.relativePath}`;
-    if (file.text === undefined) {
-      await input.objectStore.putBytes(key, file.bytes, file.contentType);
-    } else {
-      await input.objectStore.putText(key, file.text, file.contentType);
-    }
-  }
-  for (const object of byHash.objects) {
-    await input.objectStore.putBytes(object.key, object.bytes, object.contentType);
-  }
-  await input.objectStore.putText(releasePath, release, TEXT_CONTENT_TYPE);
-  await input.objectStore.putText(inReleasePath, inRelease, TEXT_CONTENT_TYPE);
-  await input.objectStore.putText(releaseGpgPath, releaseGpg, PGP_SIGNATURE_CONTENT_TYPE);
 
   return {
-    objects: objects.map((object) => withPreviousMetadata(object, previous.get(object.key) ?? null)),
-    removedObjectKeys,
+    prefix,
+    indexObjects,
+    byHash,
+    commit: async () => {
+      for (const file of indexFiles) {
+        const key = `${prefix}${file.relativePath}`;
+        if (file.text === undefined) {
+          await input.objectStore.putBytes(key, file.bytes, file.contentType);
+        } else {
+          await input.objectStore.putText(key, file.text, file.contentType);
+        }
+      }
+      for (const object of byHash.objects) {
+        await input.objectStore.putBytes(object.key, object.bytes, object.contentType);
+      }
+      await input.objectStore.putText(releasePath, release, TEXT_CONTENT_TYPE);
+      await input.objectStore.putText(inReleasePath, inRelease, TEXT_CONTENT_TYPE);
+      await input.objectStore.putText(releaseGpgPath, releaseGpg, PGP_SIGNATURE_CONTENT_TYPE);
+    },
   };
 }
 

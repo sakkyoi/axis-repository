@@ -39,6 +39,7 @@ export async function checksumForSection(section: ReleaseChecksumSection, bytes:
 export async function buildRelease(input: {
   repositoryName: string;
   config: AptResolvedRepositoryConfig;
+  suite: string;
   publishDate: string;
   indexFiles: AptIndexFile[];
 }): Promise<string> {
@@ -57,8 +58,8 @@ export async function buildRelease(input: {
   return [
     `Origin: ${input.config.origin ?? input.repositoryName}`,
     `Label: ${input.config.label ?? input.repositoryName}`,
-    `Suite: ${input.config.suite ?? input.config.codename}`,
-    `Codename: ${input.config.codename}`,
+    `Suite: ${input.config.suite ?? input.suite}`,
+    `Codename: ${input.suite}`,
     `Date: ${publishedAt.toUTCString()}`,
     // Without this apt trusts a signed Release forever, so an attacker who can
     // serve stale bytes can hold a client on a known-vulnerable package set.

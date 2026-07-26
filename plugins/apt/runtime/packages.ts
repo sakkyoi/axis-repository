@@ -33,6 +33,7 @@ export interface ValidatedAptArtifact {
   packageName: string;
   version: string;
   architecture: string;
+  suite: string;
   component: string;
   description: string;
   maintainer: string;
@@ -45,6 +46,9 @@ export interface AptIndexStanzas {
   architecture: string;
   stanzas: DebianStanza[];
 }
+
+/** The published `Packages` indexes of one suite, keyed by component and architecture. */
+export type AptSuiteIndexes = Map<string, AptIndexStanzas>;
 
 /**
  * Control fields copied into a `Packages` stanza when the artifact carries
@@ -129,6 +133,7 @@ export function validateAptArtifacts(input: {
     const version = requiredArtifactString(metadata, "version");
     const architecture = requiredArtifactString(metadata, "architecture");
     const component = optionalArtifactString(metadata, "component") ?? "main";
+    const suite = optionalArtifactString(metadata, "suite") ?? config.codename;
     const description = requiredArtifactString(metadata, "description");
     const maintainer = requiredArtifactString(metadata, "maintainer");
     const filename = validateArtifactFilename(artifact.filename);
@@ -141,6 +146,7 @@ export function validateAptArtifacts(input: {
     validateControlField(maintainer, "artifact metadata maintainer");
     validatePathSegment(packageName, "artifact metadata package");
     validatePathSegment(component, "artifact metadata component");
+    validatePathSegment(suite, "artifact metadata suite");
     if (architecture !== "all") {
       validatePathSegment(architecture, "artifact metadata architecture");
     }
@@ -148,6 +154,9 @@ export function validateAptArtifacts(input: {
 
     if ((config.components ?? ["main"]).includes(component) === false) {
       throw new ValidationError("artifact metadata component is not configured for this repository");
+    }
+    if ((config.suites ?? [config.codename]).includes(suite) === false) {
+      throw new ValidationError("artifact metadata suite is not configured for this repository");
     }
     if (architecture !== "all" && config.architectures && !config.architectures.includes(architecture)) {
       throw new ValidationError("artifact metadata architecture is not configured for this repository");
@@ -158,6 +167,7 @@ export function validateAptArtifacts(input: {
       packageName,
       version,
       architecture,
+      suite,
       component,
       description,
       maintainer,
@@ -251,17 +261,20 @@ export function indexKey(component: string, architecture: string): string {
  */
 export function resolveAptRepositoryConfig(input: {
   config: AptRepositoryConfig;
-  existing: Map<string, AptIndexStanzas>;
+  existing: Iterable<AptSuiteIndexes>;
   publishedArchitectures?: string[];
 }): AptResolvedRepositoryConfig {
   const components = input.config.components ?? ["main"];
+  const suites = input.config.suites ?? [input.config.codename];
   if (input.config.architectures) {
-    return { ...input.config, components, architectures: input.config.architectures };
+    return { ...input.config, suites, components, architectures: input.config.architectures };
   }
 
   const discovered = new Set<string>();
-  for (const index of input.existing.values()) {
-    discovered.add(index.architecture);
+  for (const suiteIndexes of input.existing) {
+    for (const index of suiteIndexes.values()) {
+      discovered.add(index.architecture);
+    }
   }
   for (const architecture of input.publishedArchitectures ?? []) {
     if (architecture !== "all") {
@@ -270,7 +283,12 @@ export function resolveAptRepositoryConfig(input: {
   }
 
   const architectures = [...discovered].sort((left, right) => left.localeCompare(right));
-  return { ...input.config, components, architectures: architectures.length > 0 ? architectures : ["all"] };
+  return {
+    ...input.config,
+    suites,
+    components,
+    architectures: architectures.length > 0 ? architectures : ["all"],
+  };
 }
 
 /**
@@ -281,9 +299,9 @@ export function resolveAptRepositoryConfig(input: {
  * alone would silently drop every package published earlier.
  */
 export function mergePackageStanzas(
-  existing: Map<string, AptIndexStanzas>,
-  incoming: Map<string, AptIndexStanzas>,
-): Map<string, AptIndexStanzas> {
+  existing: AptSuiteIndexes,
+  incoming: AptSuiteIndexes,
+): AptSuiteIndexes {
   const merged = new Map<string, AptIndexStanzas>();
 
   for (const [key, index] of existing) {
@@ -312,7 +330,7 @@ export function mergePackageStanzas(
 
 export function buildPackageIndexes(input: {
   config: AptResolvedRepositoryConfig;
-  stanzasByIndex: Map<string, AptIndexStanzas>;
+  stanzasByIndex: AptSuiteIndexes;
 }): AptPackageIndex[] {
   const packageIndexes: AptPackageIndex[] = [];
 

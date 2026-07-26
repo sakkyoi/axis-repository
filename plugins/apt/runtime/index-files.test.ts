@@ -7,6 +7,7 @@ import type { AptResolvedRepositoryConfig } from "./config";
 
 const config: AptResolvedRepositoryConfig = {
   codename: "noble",
+  suites: ["noble"],
   components: ["main"],
   architectures: ["amd64", "arm64"],
   signingKeyId: "signing_key_prod",

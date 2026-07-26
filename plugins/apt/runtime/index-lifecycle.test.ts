@@ -62,6 +62,7 @@ interface FixturePackage {
   name: string;
   version: string;
   architecture?: string;
+  suite?: string;
 }
 
 function publishInput(sessionId: string, packages: FixturePackage[], repositoryOverrides = {}): PublishArtifactsInput {
@@ -97,7 +98,7 @@ function publishInput(sessionId: string, packages: FixturePackage[], repositoryO
           size: 1234,
           sha256: "a".repeat(64),
           contentType: "application/vnd.debian.binary-package",
-          metadata: { component: "main" },
+          metadata: { component: "main", ...(fixture.suite ? { suite: fixture.suite } : {}) },
         },
         upload: {
           uploadId: `upl_${index + 1}`,
@@ -172,6 +173,10 @@ function byHashKeys(objectStore: MemoryRepositoryObjectStore): string[] {
 }
 
 const PACKAGES_KEY = "repositories/debian-internal/dists/noble/main/binary-amd64/Packages";
+
+function packagesKey(suite: string, architecture = "amd64"): string {
+  return `repositories/debian-internal/dists/${suite}/main/binary-${architecture}/Packages`;
+}
 
 async function createHarness() {
   const state = new MemoryStateStore();
@@ -388,6 +393,86 @@ describe("APT index lifecycle", () => {
     expect(byHashKeys(harness.objectStore)).toEqual([]);
     expect(storedText(harness.objectStore, "repositories/debian-internal/dists/noble/Release"))
       .toContain("Acquire-By-Hash: no\n");
+  });
+
+  it("publishes each suite into its own dists tree", async () => {
+    const suites = { suites: ["noble", "jammy"] };
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }], suites);
+    await harness.publish("pub_2", [{ name: "beta", version: "2.0.0", suite: "jammy" }], suites);
+
+    expect(storedText(harness.objectStore, packagesKey("noble"))).toContain("Package: alpha\n");
+    expect(storedText(harness.objectStore, packagesKey("noble"))).not.toContain("Package: beta\n");
+    expect(storedText(harness.objectStore, packagesKey("jammy"))).toContain("Package: beta\n");
+    expect(storedText(harness.objectStore, packagesKey("jammy"))).not.toContain("Package: alpha\n");
+  });
+
+  it("names each suite in its own Release and signs both", async () => {
+    const suites = { suites: ["noble", "jammy"] };
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [
+      { name: "alpha", version: "1.0.0" },
+      { name: "beta", version: "2.0.0", suite: "jammy" },
+    ], suites);
+
+    const publicKey = await readKey({ armoredKey: harness.publicKeyArmored });
+    for (const suite of ["noble", "jammy"]) {
+      const release = storedText(harness.objectStore, `repositories/debian-internal/dists/${suite}/Release`) ?? "";
+      const inRelease = storedText(harness.objectStore, `repositories/debian-internal/dists/${suite}/InRelease`) ?? "";
+      expect(release).toContain(`Codename: ${suite}\n`);
+      expect(release).toContain(`Suite: ${suite}\n`);
+
+      const cleartext = await readCleartextMessage({ cleartextMessage: inRelease });
+      expect(cleartext.getText()).toBe(release);
+      const verified = await verify({ message: cleartext, verificationKeys: publicKey });
+      await expect(verified.signatures[0]!.verified).resolves.toBe(true);
+    }
+  });
+
+  it("shares one pool object between the suites that index it", async () => {
+    const suites = { suites: ["noble", "jammy"] };
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }], suites);
+    await harness.publish("pub_2", [{ name: "alpha", version: "1.0.0", suite: "jammy" }], suites);
+
+    expect(storedKeys(harness.objectStore).filter((key) => key.includes("/pool/"))).toEqual([
+      "repositories/debian-internal/pool/main/alpha/alpha_1.0.0_amd64.deb",
+    ]);
+    for (const suite of ["noble", "jammy"]) {
+      expect(storedText(harness.objectStore, packagesKey(suite))).toContain(
+        "Filename: pool/main/alpha/alpha_1.0.0_amd64.deb\n",
+      );
+    }
+  });
+
+  it("drops a deleted package from every suite that indexed it", async () => {
+    const suites = { suites: ["noble", "jammy"] };
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }], suites);
+    await harness.publish("pub_2", [
+      { name: "alpha", version: "1.0.0", suite: "jammy" },
+      { name: "beta", version: "2.0.0", suite: "jammy" },
+    ], suites);
+    await harness.objectStore.deleteObject("repositories/debian-internal/pool/main/alpha/alpha_1.0.0_amd64.deb");
+
+    await harness.reconcile(suites);
+
+    expect(storedText(harness.objectStore, packagesKey("jammy"))).toContain("Package: beta\n");
+    for (const suite of ["noble", "jammy"]) {
+      expect(storedText(harness.objectStore, packagesKey(suite)) ?? "").not.toContain("Package: alpha\n");
+    }
+  });
+
+  it("refuses a publish aimed at a suite the repository does not declare", async () => {
+    const harness = await createHarness();
+
+    await expect(harness.publish("pub_1", [{ name: "alpha", version: "1.0.0", suite: "jammy" }], {
+      suites: ["noble"],
+    })).rejects.toThrow("artifact metadata suite is not configured for this repository");
   });
 
   it("does not require a signing key to reconcile a repository that has published nothing", async () => {

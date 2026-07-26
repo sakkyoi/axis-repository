@@ -14,6 +14,7 @@ function aptClientRepositoryInfo(repository: Repository): AptClientRepositoryInf
     name: repository.name,
     visibility: repository.visibility,
     codename: config.codename,
+    suites: config.suites ?? [config.codename],
     components: config.components ?? ["main"],
   };
 }

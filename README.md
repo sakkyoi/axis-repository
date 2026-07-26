@@ -178,7 +178,8 @@ are set through `PATCH /admin/repositories/<name>` with a `config` object.
 
 | Field | Type | Effect |
 | --- | --- | --- |
-| `codename` | string | Required. The directory under `dists/`. |
+| `codename` | string | Required. The directory under `dists/`, and where a publish goes when it names no suite. |
+| `suites` | string[] | Every suite this repository publishes. Must contain `codename`. See below. |
 | `signingKeyId` | string | Required. Set when the repository is created. |
 | `components` | string[] | Allowed components; defaults to `["main"]`. A publish naming any other component is rejected. |
 | `architectures` | string[] | Pins the architectures in `Release`. Left unset, they are discovered from what has been published. |
@@ -198,6 +199,30 @@ often, or clients start refusing the repository.
 
 Free-text fields reject control characters. A newline in `Origin` would
 otherwise start a new `Release` field.
+
+### Several Suites In One Repository
+
+List them in `suites` to serve, say, `noble` and `jammy` from one repository:
+
+```json
+{ "config": { "apt": { "codename": "noble", "suites": ["noble", "jammy"] } } }
+```
+
+Each suite gets its own `dists/<suite>/` tree with its own signed `Release`,
+all signed by the repository's one key. The pool is shared: a `.deb` published
+to both suites is stored once and referenced from both indexes.
+
+A publish chooses its suite with the `suite` artifact metadata field, the same
+way `component` works, and defaults to `codename`. Publishing to a suite the
+repository does not list is rejected.
+
+`suite` (singular) overrides the `Suite:` field for a repository publishing one
+suite — `stable` for a repository whose codename is `bookworm`, say. It is
+rejected alongside more than one entry in `suites`, where it would publish
+several suites all claiming to be the same one.
+
+The `apt/source` and `apt/install` helpers return `sourceLines` with one entry
+per suite; `sourceLine` remains the default suite alone.
 
 ### Acquire-By-Hash
 

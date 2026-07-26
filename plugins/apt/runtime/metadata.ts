@@ -17,27 +17,32 @@ import {
   type AptIndexStanzas,
   type AptPackageIndex,
   type AptPoolCopy,
+  type AptSuiteIndexes,
 } from "./packages";
 import { buildRelease } from "./release";
 
 export type { AptRepositoryConfig } from "./config";
 export type { AptIndexFile } from "./index-files";
-export type { AptIndexStanzas, AptPackageIndex, AptPoolCopy } from "./packages";
+export type { AptIndexStanzas, AptPackageIndex, AptPoolCopy, AptSuiteIndexes } from "./packages";
 export { parseAptRepositoryConfig, validateAptPublishArtifacts, gzip };
 
 /** The indexes and signed-over `Release` that make up one published suite. */
 export interface AptIndexMetadata {
   config: AptResolvedRepositoryConfig;
-  stanzasByIndex: Map<string, AptIndexStanzas>;
+  suite: string;
+  stanzasByIndex: AptSuiteIndexes;
   packageIndexes: AptPackageIndex[];
-  /** Everything written under `dists/<codename>/` and listed in `Release`. */
+  /** Everything written under `dists/<suite>/` and listed in `Release`. */
   indexFiles: AptIndexFile[];
   releasePath: string;
   release: string;
 }
 
-export interface AptRepositoryMetadata extends AptIndexMetadata {
+export interface AptRepositoryMetadata {
+  config: AptResolvedRepositoryConfig;
   poolCopies: AptPoolCopy[];
+  /** One entry per suite the repository publishes, whether or not it changed. */
+  suites: AptIndexMetadata[];
 }
 
 /**
@@ -50,12 +55,12 @@ export interface AptRepositoryMetadata extends AptIndexMetadata {
  * in the pool while disappearing from `Packages`.
  */
 export async function buildAptRepositoryMetadata(
-  input: PublishArtifactsInput & { existingIndexes?: Map<string, AptIndexStanzas> },
+  input: PublishArtifactsInput & { existingIndexes?: Map<string, AptSuiteIndexes> },
 ): Promise<AptRepositoryMetadata> {
   const parsedConfig = parseAptRepositoryConfig(input.repository);
   const repositoryName = validatePathSegment(input.repository.name, "repository name");
-  const existingIndexes = input.existingIndexes ?? new Map<string, AptIndexStanzas>();
-  const incoming = new Map<string, AptIndexStanzas>();
+  const existingIndexes = input.existingIndexes ?? new Map<string, AptSuiteIndexes>();
+  const incomingBySuite = new Map<string, AptSuiteIndexes>();
   const poolCopies: AptPoolCopy[] = [];
   const validatedArtifacts = validateAptArtifacts({
     repository: input.repository,
@@ -63,7 +68,7 @@ export async function buildAptRepositoryMetadata(
   });
   const config = resolveAptRepositoryConfig({
     config: parsedConfig,
-    existing: existingIndexes,
+    existing: existingIndexes.values(),
     publishedArchitectures: validatedArtifacts.map((artifact) => artifact.architecture),
   });
 
@@ -86,34 +91,43 @@ export async function buildAptRepositoryMetadata(
       sha256: publishedArtifact.verified.sha256,
     });
 
+    // The pool is shared across suites, so the same object key is written once
+    // however many suites end up pointing at it.
     poolCopies.push({
       sourceKey: publishedArtifact.verified.objectKey,
       destinationKey: `repositories/${repositoryName}/${relativeFilename}`,
       contentType: validated.artifact.contentType,
     });
 
+    const incoming = incomingBySuite.get(validated.suite) ?? new Map<string, AptIndexStanzas>();
+    incomingBySuite.set(validated.suite, incoming);
     const targetArchitectures = validated.architecture === "all" ? config.architectures : [validated.architecture];
     for (const targetArchitecture of targetArchitectures) {
       addStanza(incoming, validated.component, targetArchitecture, packageStanza);
     }
   }
 
-  return {
-    ...(await buildAptIndexMetadata({
-      repositoryName,
-      config,
-      stanzasByIndex: mergePackageStanzas(existingIndexes, incoming),
-      publishDate: input.session.publishStartedAt ?? input.session.finalizingStartedAt ?? input.session.createdAt,
-    })),
-    poolCopies,
-  };
+  const publishDate = input.session.publishStartedAt ?? input.session.finalizingStartedAt ?? input.session.createdAt;
+  const suites = await Promise.all(config.suites.map((suite) => buildAptIndexMetadata({
+    repositoryName,
+    config,
+    suite,
+    stanzasByIndex: mergePackageStanzas(
+      existingIndexes.get(suite) ?? new Map<string, AptIndexStanzas>(),
+      incomingBySuite.get(suite) ?? new Map<string, AptIndexStanzas>(),
+    ),
+    publishDate,
+  })));
+
+  return { config, poolCopies, suites };
 }
 
 /** Builds indexes and `Release` from stanzas that are already settled. */
 export async function buildAptIndexMetadata(input: {
   repositoryName: string;
   config: AptResolvedRepositoryConfig;
-  stanzasByIndex: Map<string, AptIndexStanzas>;
+  suite: string;
+  stanzasByIndex: AptSuiteIndexes;
   publishDate: string;
 }): Promise<AptIndexMetadata> {
   const packageIndexes = buildPackageIndexes({
@@ -124,13 +138,15 @@ export async function buildAptIndexMetadata(input: {
 
   return {
     config: input.config,
+    suite: input.suite,
     stanzasByIndex: input.stanzasByIndex,
     packageIndexes,
     indexFiles,
-    releasePath: `repositories/${input.repositoryName}/dists/${input.config.codename}/Release`,
+    releasePath: `repositories/${input.repositoryName}/dists/${input.suite}/Release`,
     release: await buildRelease({
       repositoryName: input.repositoryName,
       config: input.config,
+      suite: input.suite,
       publishDate: input.publishDate,
       indexFiles,
     }),
@@ -139,9 +155,9 @@ export async function buildAptIndexMetadata(input: {
 
 /** Drops every stanza whose `Filename` matches, across all indexes. */
 export function removeStanzasByFilename(
-  stanzasByIndex: Map<string, AptIndexStanzas>,
+  stanzasByIndex: AptSuiteIndexes,
   relativeFilenames: Set<string>,
-): Map<string, AptIndexStanzas> {
+): AptSuiteIndexes {
   const remaining = new Map<string, AptIndexStanzas>();
 
   for (const [key, index] of stanzasByIndex) {
@@ -158,7 +174,7 @@ export function removeStanzasByFilename(
 }
 
 function addStanza(
-  indexes: Map<string, AptIndexStanzas>,
+  indexes: AptSuiteIndexes,
   component: string,
   architecture: string,
   stanza: DebianStanza,

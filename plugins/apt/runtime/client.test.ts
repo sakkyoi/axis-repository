@@ -11,6 +11,7 @@ const repository = {
   name: "debian-public",
   visibility: "public" as const,
   codename: "noble",
+  suites: ["noble"],
   components: ["main", "contrib"],
 };
 
@@ -30,10 +31,14 @@ describe("APT client helpers", () => {
       ecosystem: "apt",
       baseUrl: "https://axis.example/repositories/debian-public",
       codename: "noble",
+      suites: ["noble"],
       components: ["main", "contrib"],
       keyringPath: "/usr/share/keyrings/axis-debian-public.gpg",
       sourceLine:
         "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
+      sourceLines: [
+        "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
+      ],
     });
   });
 
@@ -49,6 +54,9 @@ describe("APT client helpers", () => {
       sourceListPath: "/etc/apt/sources.list.d/axis-debian-public.list",
       sourceLine:
         "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
+      sourceLines: [
+        "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
+      ],
       commands: [
         "curl -fsSL https://axis.example/repositories/debian-public/apt/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/axis-debian-public.gpg",
         "echo 'deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib' | sudo tee /etc/apt/sources.list.d/axis-debian-public.list",

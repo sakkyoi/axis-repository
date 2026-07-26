@@ -12,7 +12,7 @@ import {
 import { stanzaField, type DebianStanza } from "../shared/stanza";
 import { readDebControlMetadata } from "./deb-control";
 import { digestHex } from "./digest";
-import { readAptPackageIndexes, writeAptRepositoryIndexes, type AptReleaseSigner } from "./index-store";
+import { readAptSuiteIndexes, writeAptRepositoryIndexes, type AptReleaseSigner } from "./index-store";
 import { buildAptIndexMetadata, parseAptRepositoryConfig } from "./metadata";
 import {
   buildPackageStanza,
@@ -20,6 +20,7 @@ import {
   packageStanzaMetadata,
   resolveAptRepositoryConfig,
   type AptIndexStanzas,
+  type AptSuiteIndexes,
 } from "./packages";
 import { aptArtifactMetadataFromDebControl } from "./publisher";
 
@@ -29,6 +30,7 @@ interface ReconciledPoolEntry {
   component: string;
   architecture: string;
   stanza: DebianStanza;
+  suites: string[];
 }
 
 /**
@@ -42,7 +44,9 @@ interface ReconciledPoolEntry {
  *
  * Stanzas are reused wherever the pool object is already indexed, so the
  * common case does not re-download every package to recompute a digest it
- * already published.
+ * already published. A pool object no suite indexes cannot say where it
+ * belongs, so it is added to the default suite — the same place a publish
+ * that names no suite goes.
  */
 export async function reconcileAptRepository(input: {
   repository: Repository;
@@ -52,11 +56,12 @@ export async function reconcileAptRepository(input: {
   now: Date;
 }): Promise<RepositoryArtifactRecord[]> {
   const parsedConfig = parseAptRepositoryConfig(input.repository);
+  const suiteNames = parsedConfig.suites ?? [parsedConfig.codename];
   const repositoryPrefix = `repositories/${input.repository.name}/`;
-  const existingIndexes = await readAptPackageIndexes({
+  const existingIndexes = await readAptSuiteIndexes({
     objectStore: input.objectStore,
     repositoryName: input.repository.name,
-    codename: parsedConfig.codename,
+    suites: suiteNames,
   });
   const indexedStanzas = stanzasByFilename(existingIndexes);
   const poolObjects = (await listAllObjects(input.objectStore, `${repositoryPrefix}pool/`))
@@ -65,7 +70,8 @@ export async function reconcileAptRepository(input: {
   const entries: ReconciledPoolEntry[] = [];
   for (const object of poolObjects) {
     const relativeFilename = object.key.slice(repositoryPrefix.length);
-    const stanza = indexedStanzas.get(relativeFilename)
+    const indexed = indexedStanzas.get(relativeFilename);
+    const stanza = indexed?.stanza
       ?? await stanzaFromPoolObject({
         objectStore: input.objectStore,
         objectKey: object.key,
@@ -81,10 +87,11 @@ export async function reconcileAptRepository(input: {
       component: relativeFilename.split("/")[1] ?? "main",
       architecture: stanzaField(stanza, "Architecture") ?? "all",
       stanza,
+      suites: indexed?.suites ?? [parsedConfig.codename],
     });
   }
 
-  if (entries.length === 0 && existingIndexes.size === 0) {
+  if (entries.length === 0 && [...existingIndexes.values()].every((indexes) => indexes.size === 0)) {
     // Nothing has ever been published, so there is nothing to reconcile. Not
     // even a signing key is needed: writing an empty signed Release here would
     // make a rebuild fail on a repository that simply has no packages yet.
@@ -93,30 +100,22 @@ export async function reconcileAptRepository(input: {
 
   const config = resolveAptRepositoryConfig({
     config: parsedConfig,
-    existing: existingIndexes,
+    existing: existingIndexes.values(),
     publishedArchitectures: entries.map((entry) => entry.architecture),
   });
-  const stanzasByIndex = new Map<string, AptIndexStanzas>();
-  for (const entry of entries) {
-    const architectures = entry.architecture === "all" ? config.architectures : [entry.architecture];
-    for (const architecture of architectures) {
-      const key = indexKey(entry.component, architecture);
-      const index = stanzasByIndex.get(key) ?? { component: entry.component, architecture, stanzas: [] };
-      index.stanzas.push(entry.stanza);
-      stanzasByIndex.set(key, index);
-    }
-  }
-
   const publishedAt = input.now.toISOString();
+  const suites = await Promise.all(config.suites.map((suite) => buildAptIndexMetadata({
+    repositoryName: input.repository.name,
+    config,
+    suite,
+    stanzasByIndex: suiteStanzas(entries.filter((entry) => entry.suites.includes(suite)), config.architectures),
+    publishDate: publishedAt,
+  })));
+
   await writeAptRepositoryIndexes({
     objectStore: input.objectStore,
     repositoryName: input.repository.name,
-    metadata: await buildAptIndexMetadata({
-      repositoryName: input.repository.name,
-      config,
-      stanzasByIndex,
-      publishDate: publishedAt,
-    }),
+    suites,
     signer: input.signer,
     signingKey: await input.signingKeys.getActivePrivateKey(config.signingKeyId, input.repository.name),
     publishedAt,
@@ -125,14 +124,42 @@ export async function reconcileAptRepository(input: {
   return entries.map((entry) => artifactRecord(input.repository, entry, publishedAt));
 }
 
-function stanzasByFilename(indexes: Map<string, AptIndexStanzas>): Map<string, DebianStanza> {
-  const byFilename = new Map<string, DebianStanza>();
+function suiteStanzas(entries: ReconciledPoolEntry[], architectures: string[]): AptSuiteIndexes {
+  const stanzasByIndex: AptSuiteIndexes = new Map();
 
-  for (const index of indexes.values()) {
-    for (const stanza of index.stanzas) {
-      const filename = stanzaField(stanza, "Filename");
-      if (filename !== undefined && !byFilename.has(filename)) {
-        byFilename.set(filename, stanza);
+  for (const entry of entries) {
+    const targets = entry.architecture === "all" ? architectures : [entry.architecture];
+    for (const architecture of targets) {
+      const key = indexKey(entry.component, architecture);
+      const index: AptIndexStanzas = stanzasByIndex.get(key)
+        ?? { component: entry.component, architecture, stanzas: [] };
+      index.stanzas.push(entry.stanza);
+      stanzasByIndex.set(key, index);
+    }
+  }
+
+  return stanzasByIndex;
+}
+
+/** Records which suites already index each pool object, and under what stanza. */
+function stanzasByFilename(
+  suiteIndexes: Map<string, AptSuiteIndexes>,
+): Map<string, { stanza: DebianStanza; suites: string[] }> {
+  const byFilename = new Map<string, { stanza: DebianStanza; suites: string[] }>();
+
+  for (const [suite, indexes] of suiteIndexes) {
+    for (const index of indexes.values()) {
+      for (const stanza of index.stanzas) {
+        const filename = stanzaField(stanza, "Filename");
+        if (filename === undefined) {
+          continue;
+        }
+        const existing = byFilename.get(filename);
+        if (!existing) {
+          byFilename.set(filename, { stanza, suites: [suite] });
+        } else if (!existing.suites.includes(suite)) {
+          existing.suites.push(suite);
+        }
       }
     }
   }
@@ -183,10 +210,14 @@ function artifactRecord(
   entry: ReconciledPoolEntry,
   timestamp: string,
 ): RepositoryArtifactRecord {
-  const metadata = { ...packageStanzaMetadata(entry.stanza), component: entry.component };
-  const packageName = String(metadata.package ?? "");
-  const version = String(metadata.version ?? "");
-  const architecture = String(metadata.architecture ?? "");
+  const metadata: Record<string, unknown> = {
+    ...packageStanzaMetadata(entry.stanza),
+    component: entry.component,
+    suites: [...entry.suites],
+  };
+  const packageName = stanzaField(entry.stanza, "Package") ?? "";
+  const version = stanzaField(entry.stanza, "Version") ?? "";
+  const architecture = stanzaField(entry.stanza, "Architecture") ?? "";
   const identityParts = ["apt", entry.component, packageName, version, architecture];
 
   return {

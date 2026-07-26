@@ -10,7 +10,7 @@ import {
 import { objectBytes, type RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { debControlMetadataFields } from "./packages";
 import { readDebControlMetadata, type DebControlMetadata } from "./deb-control";
-import { readAptPackageIndexes, writeAptRepositoryIndexes, type AptReleaseSigner } from "./index-store";
+import { readAptSuiteIndexes, writeAptRepositoryIndexes, type AptReleaseSigner } from "./index-store";
 import { buildAptRepositoryMetadata, parseAptRepositoryConfig } from "./metadata";
 import type { AptRepositoryConfig } from "./config";
 
@@ -33,10 +33,10 @@ export class AptPublisher implements ArtifactPublisher {
     const enrichedInput = await this.enrichArtifactsWithDebControlMetadata(input, config, objectStore);
     const metadata = await buildAptRepositoryMetadata({
       ...enrichedInput,
-      existingIndexes: await readAptPackageIndexes({
+      existingIndexes: await readAptSuiteIndexes({
         objectStore,
         repositoryName: input.repository.name,
-        codename: config.codename,
+        suites: config.suites ?? [config.codename],
       }),
     });
     const key = await this.options.signingKeys.getActivePrivateKey(
@@ -47,7 +47,7 @@ export class AptPublisher implements ArtifactPublisher {
     const written = await writeAptRepositoryIndexes({
       objectStore,
       repositoryName: input.repository.name,
-      metadata,
+      suites: metadata.suites,
       signer: this.options.signer,
       signingKey: key,
       publishedAt,
@@ -111,6 +111,9 @@ export function aptArtifactMetadataFromDebControl(input: {
     version: input.control.version,
     architecture: input.control.architecture,
     component: metadataString(existing, "component") ?? defaultComponent,
+    // The suite is the publisher's choice, not something the .deb can state,
+    // so it has to survive being overwritten by the parsed control fields.
+    suite: metadataString(existing, "suite"),
     description: input.control.description,
     maintainer: input.control.maintainer,
   };

@@ -71,6 +71,10 @@ function createTestAptPlugin(options: Partial<RepositorySigningKeyCapability> = 
   return createAptPlugin({
     publisher: { publish: async () => ({ publishedAt: "2026-07-18T00:00:00.000Z", objects: [] }) },
     signingKeys: signingKeys(options),
+    signer: {
+      clearSign: async () => "-----BEGIN PGP SIGNED MESSAGE-----\n",
+      detachSign: async () => "-----BEGIN PGP SIGNATURE-----\n",
+    },
   });
 }
 

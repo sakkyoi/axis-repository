@@ -1,14 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError, type PublishArtifactsInput } from "@axis-repository/core";
-import { buildAptRepositoryMetadata, parseAptRepositoryConfig, validateAptPublishArtifacts, type AptRepositoryMetadata } from "./metadata";
+import { buildAptRepositoryMetadata, parseAptRepositoryConfig, validateAptPublishArtifacts, type AptIndexMetadata, type AptRepositoryMetadata } from "./metadata";
 import { md5Hex } from "../shared/md5";
 import type { AptIndexFile } from "./index-files";
 import type { AptPackageIndex } from "./packages";
 
 const textDecoder = new TextDecoder();
 
-function firstIndex(metadata: AptRepositoryMetadata): AptPackageIndex {
-  const index = metadata.packageIndexes[0];
+function suite(metadata: AptRepositoryMetadata, name?: string): AptIndexMetadata {
+  const wanted = name ?? metadata.config.codename;
+  const found = metadata.suites.find((candidate) => candidate.suite === wanted);
+  if (!found) {
+    throw new Error(`expected published suite ${wanted}`);
+  }
+  return found;
+}
+
+function firstIndex(metadata: AptRepositoryMetadata, name?: string): AptPackageIndex {
+  const index = suite(metadata, name).packageIndexes[0];
   if (!index) {
     throw new Error("expected at least one package index");
   }
@@ -16,7 +25,7 @@ function firstIndex(metadata: AptRepositoryMetadata): AptPackageIndex {
 }
 
 function indexFile(metadata: AptRepositoryMetadata, relativePath: string): AptIndexFile {
-  const file = metadata.indexFiles.find((candidate) => candidate.relativePath === relativePath);
+  const file = suite(metadata).indexFiles.find((candidate) => candidate.relativePath === relativePath);
   if (!file) {
     throw new Error(`expected an index file at ${relativePath}`);
   }
@@ -153,7 +162,7 @@ describe("APT metadata", () => {
     expect(metadata.config.components).toEqual(["main"]);
     expect(metadata.poolCopies[0]!.destinationKey).toBe("repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb");
     expect(firstIndex(metadata).relativePath).toBe("main/binary-amd64/Packages");
-    expect(metadata.release).toContain("Components: main\n");
+    expect(suite(metadata).release).toContain("Components: main\n");
   });
 
   it("validates APT publish artifact request envelopes before uploads are verified", () => {
@@ -256,40 +265,40 @@ describe("APT metadata", () => {
     expect(packagesFile.text).toBe(index.packages);
     expect(packagesGz.bytes.byteLength).toBeGreaterThan(0);
     await expect(gunzip(packagesGz.bytes)).resolves.toBe(index.packages);
-    expect(metadata.releasePath).toBe("repositories/debian-internal/dists/noble/Release");
-    expect(metadata.release).toContain("Origin: debian-internal\n");
-    expect(metadata.release).toContain("Label: debian-internal\n");
-    expect(metadata.release).toContain("Suite: noble\n");
-    expect(metadata.release).toContain("Codename: noble\n");
-    expect(metadata.release).toContain("Date: Sat, 18 Jul 2026 00:10:00 GMT\n");
-    expect(metadata.release).toContain("Architectures: amd64\n");
-    expect(metadata.release).toContain("Components: main\n");
-    expect(metadata.release).toContain("Acquire-By-Hash: yes\n");
-    expect(metadata.release).not.toContain("Valid-Until:");
-    expect(metadata.release).not.toContain("NotAutomatic:");
-    expect(metadata.release).toContain("MD5Sum:\n");
-    expect(metadata.release).toContain("SHA256:\n");
-    expect(metadata.release).toContain("SHA512:\n");
-    expect(metadata.release).toContain(
+    expect(suite(metadata).releasePath).toBe("repositories/debian-internal/dists/noble/Release");
+    expect(suite(metadata).release).toContain("Origin: debian-internal\n");
+    expect(suite(metadata).release).toContain("Label: debian-internal\n");
+    expect(suite(metadata).release).toContain("Suite: noble\n");
+    expect(suite(metadata).release).toContain("Codename: noble\n");
+    expect(suite(metadata).release).toContain("Date: Sat, 18 Jul 2026 00:10:00 GMT\n");
+    expect(suite(metadata).release).toContain("Architectures: amd64\n");
+    expect(suite(metadata).release).toContain("Components: main\n");
+    expect(suite(metadata).release).toContain("Acquire-By-Hash: yes\n");
+    expect(suite(metadata).release).not.toContain("Valid-Until:");
+    expect(suite(metadata).release).not.toContain("NotAutomatic:");
+    expect(suite(metadata).release).toContain("MD5Sum:\n");
+    expect(suite(metadata).release).toContain("SHA256:\n");
+    expect(suite(metadata).release).toContain("SHA512:\n");
+    expect(suite(metadata).release).toContain(
       ` ${md5Hex(packagesFile.bytes)} ${packagesFile.bytes.byteLength} main/binary-amd64/Packages\n`,
     );
 
     const packagesBytes = packagesFile.bytes;
-    expect(metadata.release).toContain(
+    expect(suite(metadata).release).toContain(
       ` ${await digestHex("SHA-256", packagesBytes)} ${packagesBytes.byteLength} main/binary-amd64/Packages\n`,
     );
-    expect(metadata.release).toContain(
+    expect(suite(metadata).release).toContain(
       ` ${await digestHex("SHA-256", packagesGz.bytes)} ${packagesGz.bytes.byteLength} main/binary-amd64/Packages.gz\n`,
     );
-    expect(metadata.release).toContain(
+    expect(suite(metadata).release).toContain(
       ` ${await digestHex("SHA-512", packagesBytes)} ${packagesBytes.byteLength} main/binary-amd64/Packages\n`,
     );
-    expect(metadata.release).toContain(
+    expect(suite(metadata).release).toContain(
       ` ${await digestHex("SHA-512", packagesGz.bytes)} ${packagesGz.bytes.byteLength} main/binary-amd64/Packages.gz\n`,
     );
-    expect(metadata.packageIndexes).toHaveLength(1);
+    expect(suite(metadata).packageIndexes).toHaveLength(1);
     expect(index).toMatchObject({ component: "main", architecture: "amd64" });
-    expect(metadata.indexFiles.map((file) => file.relativePath)).toEqual([
+    expect(suite(metadata).indexFiles.map((file) => file.relativePath)).toEqual([
       "main/binary-amd64/Packages",
       "main/binary-amd64/Packages.gz",
       "main/i18n/Translation-en",
@@ -306,8 +315,8 @@ describe("APT metadata", () => {
     const metadata = await buildAptRepositoryMetadata(discovered);
 
     expect(metadata.config.architectures).toEqual(["arm64"]);
-    expect(metadata.release).toContain("Architectures: arm64\n");
-    expect(metadata.packageIndexes.map((index) => index.relativePath)).toEqual([
+    expect(suite(metadata).release).toContain("Architectures: arm64\n");
+    expect(suite(metadata).packageIndexes.map((index) => index.relativePath)).toEqual([
       "main/binary-arm64/Packages",
     ]);
   });
@@ -323,8 +332,8 @@ describe("APT metadata", () => {
     const metadata = await buildAptRepositoryMetadata(discovered);
 
     expect(metadata.config.architectures).toEqual(["all"]);
-    expect(metadata.release).toContain("Architectures: all\n");
-    expect(metadata.packageIndexes.map((index) => index.relativePath)).toEqual([
+    expect(suite(metadata).release).toContain("Architectures: all\n");
+    expect(suite(metadata).packageIndexes.map((index) => index.relativePath)).toEqual([
       "main/binary-all/Packages",
     ]);
   });
@@ -401,7 +410,7 @@ describe("APT metadata", () => {
     ];
 
     const metadata = await buildAptRepositoryMetadata(multi);
-    const indexesByPath = new Map(metadata.packageIndexes.map((index) => [index.relativePath, index]));
+    const indexesByPath = new Map(suite(metadata).packageIndexes.map((index) => [index.relativePath, index]));
 
     expect([...indexesByPath.keys()]).toEqual([
       "main/binary-amd64/Packages",
@@ -414,8 +423,8 @@ describe("APT metadata", () => {
     expect(indexesByPath.get("main/binary-arm64/Packages")!.packages).toContain("Package: worker\n");
     expect(indexesByPath.get("contrib/binary-amd64/Packages")!.packages).toContain("Package: addon\n");
 
-    for (const file of metadata.indexFiles) {
-      expect(metadata.release).toContain(` ${file.relativePath}\n`);
+    for (const file of suite(metadata).indexFiles) {
+      expect(suite(metadata).release).toContain(` ${file.relativePath}\n`);
     }
   });
 
@@ -523,16 +532,16 @@ describe("APT metadata", () => {
 
     const metadata = await buildAptRepositoryMetadata(configured);
 
-    expect(metadata.release).toContain("Origin: Example Ltd\n");
-    expect(metadata.release).toContain("Label: Example internal packages\n");
-    expect(metadata.release).toContain("Suite: stable\n");
-    expect(metadata.release).toContain("Codename: noble\n");
-    expect(metadata.release).toContain("Description: Internal builds for Example Ltd\n");
-    expect(metadata.release).toContain("Date: Sat, 18 Jul 2026 00:10:00 GMT\n");
-    expect(metadata.release).toContain("Valid-Until: Sat, 25 Jul 2026 00:10:00 GMT\n");
-    expect(metadata.release).toContain("NotAutomatic: yes\n");
-    expect(metadata.release).toContain("ButAutomaticUpgrades: yes\n");
-    expect(metadata.release).toContain("Acquire-By-Hash: no\n");
+    expect(suite(metadata).release).toContain("Origin: Example Ltd\n");
+    expect(suite(metadata).release).toContain("Label: Example internal packages\n");
+    expect(suite(metadata).release).toContain("Suite: stable\n");
+    expect(suite(metadata).release).toContain("Codename: noble\n");
+    expect(suite(metadata).release).toContain("Description: Internal builds for Example Ltd\n");
+    expect(suite(metadata).release).toContain("Date: Sat, 18 Jul 2026 00:10:00 GMT\n");
+    expect(suite(metadata).release).toContain("Valid-Until: Sat, 25 Jul 2026 00:10:00 GMT\n");
+    expect(suite(metadata).release).toContain("NotAutomatic: yes\n");
+    expect(suite(metadata).release).toContain("ButAutomaticUpgrades: yes\n");
+    expect(suite(metadata).release).toContain("Acquire-By-Hash: no\n");
   });
 
   it("rejects Release settings that apt would silently ignore or that could inject a field", () => {
@@ -680,7 +689,7 @@ describe("APT metadata", () => {
 
     const orderedPackages = firstIndex(orderedMetadata).packages;
     expect(orderedPackages).toBe(firstIndex(reversedMetadata).packages);
-    expect(orderedMetadata.release).toBe(reversedMetadata.release);
+    expect(suite(orderedMetadata).release).toBe(suite(reversedMetadata).release);
     expect(orderedPackages.indexOf("Package: alpha\n")).toBeLessThan(
       orderedPackages.indexOf("Package: zeta\n"),
     );

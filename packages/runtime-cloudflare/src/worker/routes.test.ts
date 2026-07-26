@@ -1370,6 +1370,7 @@ describe("Cloudflare runtime routes", () => {
       config: {
         apt: {
           codename: "noble",
+          suites: ["noble", "jammy"],
           components: ["main", "contrib"],
           architectures: ["amd64"],
           signingKeyId: signingKey.id,
@@ -1387,10 +1388,17 @@ describe("Cloudflare runtime routes", () => {
       ecosystem: "apt",
       baseUrl: "https://axis.example/repositories/debian-public",
       codename: "noble",
+      suites: ["noble", "jammy"],
       components: ["main", "contrib"],
       keyringPath: "/usr/share/keyrings/axis-debian-public.gpg",
       sourceLine:
         "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
+      // A repository publishing several suites needs a line for each, or the
+      // ones a client never lists are unreachable however well they publish.
+      sourceLines: [
+        "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
+        "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public jammy main contrib",
+      ],
     });
   });
 
