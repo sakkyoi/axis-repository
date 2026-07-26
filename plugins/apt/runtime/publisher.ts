@@ -38,18 +38,20 @@ interface AptReleaseSigner {
 export class AptPublisher implements ArtifactPublisher {
   constructor(
     private readonly options: {
-      objectStore: RepositoryObjectStore;
+      /** Resolves the store for the repository being published to. */
+      objectStoreFor: (repositoryName: string) => RepositoryObjectStore;
       signingKeys: RepositorySigningKeyCapability;
       signer: AptReleaseSigner;
     },
   ) {}
 
   async publish(input: PublishArtifactsInput): Promise<PublishResult> {
+    const objectStore = this.options.objectStoreFor(input.repository.name);
     const config = parseAptRepositoryConfig(input.repository);
     if (!input.session.requestedBy.signingKeyIds.includes(config.signingKeyId)) {
       throw new ValidationError("Publish token is not scoped to the repository signing key");
     }
-    const enrichedInput = await this.enrichArtifactsWithDebControlMetadata(input, config);
+    const enrichedInput = await this.enrichArtifactsWithDebControlMetadata(input, config, objectStore);
     const metadata = await buildAptRepositoryMetadata(enrichedInput);
     const key = await this.options.signingKeys.getActivePrivateKey(
       metadata.config.signingKeyId,
@@ -81,21 +83,21 @@ export class AptPublisher implements ArtifactPublisher {
       { key: releaseGpgPath, contentType: PGP_SIGNATURE_CONTENT_TYPE },
     ];
     const previousByKey = new Map(
-      await Promise.all(publishedObjects.map(async (object) => [object.key, await this.options.objectStore.headObject(object.key)] as const)),
+      await Promise.all(publishedObjects.map(async (object) => [object.key, await objectStore.headObject(object.key)] as const)),
     );
 
     for (const copy of metadata.poolCopies) {
-      await this.options.objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
+      await objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
     }
 
     for (const packageIndex of metadata.packageIndexes) {
-      await this.options.objectStore.putText(packageIndex.packagesPath, packageIndex.packages, TEXT_CONTENT_TYPE);
-      await this.options.objectStore.putBytes(packageIndex.packagesGzPath, packageIndex.packagesGz, GZIP_CONTENT_TYPE);
+      await objectStore.putText(packageIndex.packagesPath, packageIndex.packages, TEXT_CONTENT_TYPE);
+      await objectStore.putBytes(packageIndex.packagesGzPath, packageIndex.packagesGz, GZIP_CONTENT_TYPE);
     }
 
-    await this.options.objectStore.putText(metadata.releasePath, metadata.release, TEXT_CONTENT_TYPE);
-    await this.options.objectStore.putText(inReleasePath, inRelease, TEXT_CONTENT_TYPE);
-    await this.options.objectStore.putText(releaseGpgPath, releaseGpg, PGP_SIGNATURE_CONTENT_TYPE);
+    await objectStore.putText(metadata.releasePath, metadata.release, TEXT_CONTENT_TYPE);
+    await objectStore.putText(inReleasePath, inRelease, TEXT_CONTENT_TYPE);
+    await objectStore.putText(releaseGpgPath, releaseGpg, PGP_SIGNATURE_CONTENT_TYPE);
 
     return {
       publishedAt,
@@ -109,18 +111,22 @@ export class AptPublisher implements ArtifactPublisher {
   private async enrichArtifactsWithDebControlMetadata(
     input: PublishArtifactsInput,
     config: AptRepositoryConfig,
+    objectStore: RepositoryObjectStore,
   ): Promise<PublishArtifactsInput> {
     return {
       ...input,
-      artifacts: await Promise.all(input.artifacts.map((artifact) => this.enrichArtifact(artifact, config))),
+      artifacts: await Promise.all(
+        input.artifacts.map((artifact) => this.enrichArtifact(artifact, config, objectStore)),
+      ),
     };
   }
 
   private async enrichArtifact(
     artifact: PublishedArtifactInput,
     config: AptRepositoryConfig,
+    objectStore: RepositoryObjectStore,
   ): Promise<PublishedArtifactInput> {
-    const object = await this.options.objectStore.getObject(artifact.verified.objectKey);
+    const object = await objectStore.getObject(artifact.verified.objectKey);
     if (!object) {
       throw new ValidationError("APT artifact upload object could not be read for metadata parsing");
     }

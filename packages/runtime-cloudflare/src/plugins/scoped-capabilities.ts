@@ -107,3 +107,12 @@ export function scopeObjectStoreToRepository(
     deleteObject: async (key) => objectStore.deleteObject(requireWritable(key)),
   };
 }
+
+/** Resolves a repository-scoped object store on demand. */
+export type RepositoryObjectStoreFactory = (repositoryName: string) => RepositoryObjectStore;
+
+export function repositoryScopedObjectStoreFactory(
+  objectStore: RepositoryObjectStore,
+): RepositoryObjectStoreFactory {
+  return (repositoryName) => scopeObjectStoreToRepository(objectStore, repositoryName);
+}

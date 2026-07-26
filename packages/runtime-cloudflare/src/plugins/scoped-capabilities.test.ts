@@ -3,7 +3,12 @@ import { MemoryStateStore, NotFoundError, ValidationError, type Clock, type Rand
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import { SecretEncryption } from "../storage/secret-encryption";
-import { ownsSecretNamespace, scopeObjectStoreToRepository, scopeSecretsToEcosystem } from "./scoped-capabilities";
+import {
+  ownsSecretNamespace,
+  repositoryScopedObjectStoreFactory,
+  scopeObjectStoreToRepository,
+  scopeSecretsToEcosystem,
+} from "./scoped-capabilities";
 
 const clock: Clock = { now: () => new Date("2026-07-26T00:00:00.000Z") };
 
@@ -126,3 +131,31 @@ describe("scopeObjectStoreToRepository", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe("repositoryScopedObjectStoreFactory", () => {
+  it("confines each repository's publisher to its own key space", async () => {
+    const store = new MemoryRepositoryObjectStore();
+    const objectStoreFor = repositoryScopedObjectStoreFactory(store);
+
+    const first = objectStoreFor("debian-internal");
+    const second = objectStoreFor("debian-staging");
+
+    await first.putText("repositories/debian-internal/dists/noble/Release", "a", "text/plain");
+    await second.putText("repositories/debian-staging/dists/noble/Release", "b", "text/plain");
+
+    // A publisher holding one repository's store cannot reach another's, which
+    // is what makes the publish path scoped rather than conventional.
+    await expect(
+      first.putText("repositories/debian-staging/dists/noble/Release", "hijacked", "text/plain"),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      first.getObject("repositories/debian-staging/dists/noble/Release"),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    expect(store.objects.map((object) => object.key).sort()).toEqual([
+      "repositories/debian-internal/dists/noble/Release",
+      "repositories/debian-staging/dists/noble/Release",
+    ]);
+  });
+});
+

@@ -147,7 +147,7 @@ describe("AptPublisher", () => {
       "application/vnd.debian.binary-package",
     );
     const publisher = new AptPublisher({
-      objectStore,
+      objectStoreFor: () => objectStore,
       signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
@@ -228,7 +228,7 @@ describe("AptPublisher", () => {
       component: "main",
     };
     const publisher = new AptPublisher({
-      objectStore,
+      objectStoreFor: () => objectStore,
       signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
@@ -328,7 +328,7 @@ describe("AptPublisher", () => {
       );
     }
     const publisher = new AptPublisher({
-      objectStore,
+      objectStoreFor: () => objectStore,
       signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
@@ -366,7 +366,7 @@ describe("AptPublisher", () => {
       "text/plain",
     );
     const publisher = new AptPublisher({
-      objectStore,
+      objectStoreFor: () => objectStore,
       signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
@@ -397,12 +397,12 @@ describe("AptPublisher", () => {
       );
     }
     const firstPublisher = new AptPublisher({
-      objectStore: firstStore,
+      objectStoreFor: () => firstStore,
       signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
     const secondPublisher = new AptPublisher({
-      objectStore: secondStore,
+      objectStoreFor: () => secondStore,
       signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
@@ -418,7 +418,7 @@ describe("AptPublisher", () => {
     const state = new MemoryStateStore();
     const { service: signingKeyService } = await createSigningKey(state);
     const publisher = new AptPublisher({
-      objectStore: new MemoryRepositoryObjectStore(),
+      objectStoreFor: () => new MemoryRepositoryObjectStore(),
       signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
@@ -437,7 +437,7 @@ describe("AptPublisher", () => {
       "application/vnd.debian.binary-package",
     );
     const publisher = new AptPublisher({
-      objectStore,
+      objectStoreFor: () => objectStore,
       signingKeys: signingKeyService,
       signer: new OpenPgpSigner(),
     });
@@ -456,7 +456,7 @@ describe("AptPublisher", () => {
       "application/vnd.debian.binary-package",
     );
     const publisher = new AptPublisher({
-      objectStore,
+      objectStoreFor: () => objectStore,
       signingKeys: signingKeyService,
       signer: {
         clearSign: async () => "-----BEGIN PGP SIGNED MESSAGE-----\n",

@@ -1,4 +1,4 @@
-import type { RepositoryObjectStore } from "@axis-repository/core";
+
 import type {
   ArtifactRepositoryPlugin,
   RepositorySecretCapability,
@@ -8,7 +8,7 @@ import { AptPublisher } from "@axis-repository/plugin-apt/runtime/publisher";
 import { createAptPlugin, AptSigningKeyResource } from "@axis-repository/plugin-apt/runtime";
 import { pypiRepositoryPluginBundle } from "@axis-repository/plugin-pypi";
 import { createPypiPlugin } from "@axis-repository/plugin-pypi/runtime";
-import { scopeSecretsToEcosystem } from "./scoped-capabilities";
+import { scopeSecretsToEcosystem, type RepositoryObjectStoreFactory } from "./scoped-capabilities";
 
 interface AptReleaseSigner {
   clearSign(input: {
@@ -26,7 +26,8 @@ interface AptReleaseSigner {
 }
 
 export interface BundledRuntimePluginInput {
-  objectStore: RepositoryObjectStore;
+  /** Repository-scoped stores, resolved per publish rather than shared. */
+  objectStoreFor: RepositoryObjectStoreFactory;
   secrets: RepositorySecretCapability;
   aptReleaseSigner: AptReleaseSigner;
 }
@@ -38,14 +39,14 @@ const bundledRuntimePluginFactories: Record<string, RuntimePluginFactory> = {
     const signingKeys = new AptSigningKeyResource({ secrets: input.secrets });
     return createAptPlugin({
       publisher: new AptPublisher({
-        objectStore: input.objectStore,
+        objectStoreFor: input.objectStoreFor,
         signingKeys,
         signer: input.aptReleaseSigner,
       }),
       signingKeys,
     });
   },
-  pypi: (input) => createPypiPlugin({ objectStore: input.objectStore }),
+  pypi: (input) => createPypiPlugin({ objectStoreFor: input.objectStoreFor }),
 };
 
 export function createBundledRuntimePlugins(input: BundledRuntimePluginInput): ArtifactRepositoryPlugin[] {

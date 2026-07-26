@@ -6,11 +6,13 @@ import { GenericManifestPublisher, createPrefixServingPredicate, listAllObjects,
 import { createPypiClientHelpers } from "./client-helpers";
 import { validatePypiRepositoryConfig } from "./config";
 
-export function createPypiPlugin(input?: { objectStore?: RepositoryObjectStore }): ArtifactRepositoryPlugin {
+export function createPypiPlugin(input?: {
+  objectStoreFor?: (repositoryName: string) => RepositoryObjectStore;
+}): ArtifactRepositoryPlugin {
   // Without a store there is nowhere to write. Fail loudly rather than
   // reporting a successful publish that stored nothing.
-  const publisher = input?.objectStore
-    ? new GenericManifestPublisher({ objectStore: input.objectStore })
+  const publisher = input?.objectStoreFor
+    ? new GenericManifestPublisher({ objectStoreFor: input.objectStoreFor })
     : {
       publish: async (): Promise<never> => {
         throw new ValidationError("PyPI repository plugin was created without an object store");

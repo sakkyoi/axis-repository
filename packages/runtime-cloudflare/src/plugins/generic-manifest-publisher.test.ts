@@ -46,7 +46,7 @@ describe("GenericManifestPublisher", () => {
   it("writes an immutable repository publish manifest", async () => {
     const objectStore = new MemoryRepositoryObjectStore();
     const publisher = new GenericManifestPublisher({
-      objectStore,
+      objectStoreFor: () => objectStore,
       now: () => new Date("2026-07-12T00:01:00.000Z"),
     });
     const input: PublishArtifactsInput = {
@@ -150,7 +150,7 @@ describe("GenericManifestPublisher", () => {
       "text/plain",
     );
     const publisher = new GenericManifestPublisher({
-      objectStore,
+      objectStoreFor: () => objectStore,
       now: () => new Date("2026-07-12T00:01:00.000Z"),
     });
     const input: PublishArtifactsInput = {
@@ -198,7 +198,7 @@ describe("GenericManifestPublisher", () => {
 
   it("surfaces immutable publish manifest write failures", async () => {
     const objectStore = new FailingPublishObjectStore();
-    const publisher = new GenericManifestPublisher({ objectStore });
+    const publisher = new GenericManifestPublisher({ objectStoreFor: () => objectStore });
     const input: PublishArtifactsInput = {
       repository: {
         id: "repo_1",
@@ -238,7 +238,7 @@ describe("GenericManifestPublisher", () => {
   it("uses the stable publish start time across retry leases", async () => {
     const objectStore = new MemoryRepositoryObjectStore();
     const publisher = new GenericManifestPublisher({
-      objectStore,
+      objectStoreFor: () => objectStore,
       now: () => new Date("2026-07-12T00:05:00.000Z"),
     });
     const baseInput: PublishArtifactsInput = {
