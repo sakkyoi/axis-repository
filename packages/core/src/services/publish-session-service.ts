@@ -137,6 +137,12 @@ export class PublishSessionService {
       metadata: cloneMetadataRecord(artifact.metadata),
     }));
 
+    // Authorize on the requested name first: repository lookup and the
+    // ecosystem-mismatch message would otherwise tell an out-of-scope token
+    // which repositories exist and what they are.
+    this.requirePublishPermission(input.principal);
+    this.requireRepositoryScope(input.principal, input.repositoryName);
+
     const repository = await this.options.state.repositories.getByName(input.repositoryName);
     if (!repository) {
       throw new NotFoundError(`Repository not found: ${input.repositoryName}`);
@@ -144,8 +150,6 @@ export class PublishSessionService {
     if (repository.ecosystem !== input.ecosystem) {
       throw new ValidationError(`Repository ${repository.name} is not a ${input.ecosystem} repository`);
     }
-    this.requirePublishPermission(input.principal);
-    this.requireRepositoryScope(input.principal, repository.name);
     if (artifacts.length === 0) {
       throw new ValidationError("At least one artifact is required");
     }
@@ -189,6 +193,8 @@ export class PublishSessionService {
     if (!session) {
       throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
     }
+    this.requirePublishPermission(input.principal);
+    this.requireRepositoryScope(input.principal, session.repositoryName);
     const openStatus = normalizeOpenStatus(session.status);
     if (openStatus !== "pending_uploads" && openStatus !== "ready") {
       throw new ValidationError(`Publish session is not open: ${session.status}`);
@@ -196,8 +202,6 @@ export class PublishSessionService {
     if (isExpired(session, this.options.clock.now())) {
       throw new ValidationError("Publish session has expired");
     }
-    this.requirePublishPermission(input.principal);
-    this.requireRepositoryScope(input.principal, session.repositoryName);
 
     const uploadIndex = session.uploads.findIndex((upload) => upload.uploadId === input.uploadId);
     if (uploadIndex === -1) {

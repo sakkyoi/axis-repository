@@ -1231,7 +1231,66 @@ describe("PublishSessionService", () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  it("rejects unknown repositories", async () => {
+  it("requires the publish permission before anything else", async () => {
+    const state = new MemoryStateStore();
+    await state.repositories.save({
+      id: "repo_apt",
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: {},
+      createdAt: "2026-07-23T00:00:00.000Z",
+      updatedAt: "2026-07-23T00:00:00.000Z",
+    });
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+    const readOnly: TokenPrincipal = { ...principal, permissions: ["read"] };
+
+    await expect(
+      service.create({ repositoryName: "debian-internal", ecosystem: "apt", principal: readOnly, artifacts: [artifact] }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(service.list({ principal: readOnly })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      service.get({ sessionId: "pub_1", principal: readOnly }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("rejects a repository whose ecosystem does not match the request", async () => {
+    const state = new MemoryStateStore();
+    await state.repositories.save({
+      id: "repo_apt",
+      name: "debian-internal",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
+      createdAt: "2026-07-23T00:00:00.000Z",
+      updatedAt: "2026-07-23T00:00:00.000Z",
+    });
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+
+    await expect(
+      service.create({ repositoryName: "debian-internal", ecosystem: "apt", principal, artifacts: [artifact] }),
+    ).rejects.toThrow("Repository debian-internal is not a apt repository");
+  });
+
+  it("requires at least one artifact", async () => {
+    const state = new MemoryStateStore();
+    await state.repositories.save({
+      id: "repo_apt",
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: {},
+      createdAt: "2026-07-23T00:00:00.000Z",
+      updatedAt: "2026-07-23T00:00:00.000Z",
+    });
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+
+    await expect(
+      service.create({ repositoryName: "debian-internal", ecosystem: "apt", principal, artifacts: [] }),
+    ).rejects.toThrow("At least one artifact is required");
+  });
+
+  it("rejects unknown repositories the token is scoped to", async () => {
     const service = new PublishSessionService({
       state: new MemoryStateStore(),
       uploadBroker,
@@ -1241,11 +1300,33 @@ describe("PublishSessionService", () => {
 
     await expect(
       service.create({
-        repositoryName: "missing",
+        repositoryName: "debian-internal",
         ecosystem: "apt",
         principal,
-        artifacts: [],
+        artifacts: [artifact],
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("does not reveal whether an out-of-scope repository exists", async () => {
+    const state = new MemoryStateStore();
+    await state.repositories.save({
+      id: "repo_other",
+      name: "debian-staging",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
+      createdAt: "2026-07-23T00:00:00.000Z",
+      updatedAt: "2026-07-23T00:00:00.000Z",
+    });
+    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
+
+    // An existing out-of-scope repository and a missing one must fail the same
+    // way, so the error cannot be used to enumerate repositories or ecosystems.
+    for (const repositoryName of ["debian-staging", "does-not-exist"]) {
+      await expect(
+        service.create({ repositoryName, ecosystem: "apt", principal, artifacts: [artifact] }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    }
   });
 });

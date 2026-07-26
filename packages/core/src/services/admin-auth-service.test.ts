@@ -182,6 +182,57 @@ describe("AdminAuthService", () => {
     })).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
+  it("rejects a refresh token whose session has expired", async () => {
+    let currentTime = new Date("2026-07-26T00:00:00.000Z");
+    const movingClock: Clock = { now: () => currentTime };
+    let sequence = 0;
+    const service = createService({
+      clock: movingClock,
+      refreshTokenTtlSeconds: 60,
+      randomId: { create: (prefix) => `${prefix}_${++sequence}` },
+    });
+    const login = await service.login({ username: "admin", password: "correct-password" });
+
+    // Refresh rotates the token, so assert expiry against the current one;
+    // the superseded token would be rejected for the wrong reason.
+    const current = await service.refresh(login.refreshToken);
+    expect(current.refreshToken).not.toBe(login.refreshToken);
+
+    currentTime = new Date("2026-07-26T00:02:00.000Z");
+
+    await expect(service.refresh(current.refreshToken)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.logout(current.refreshToken)).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("seeds the bootstrap owner from a precomputed password hash", async () => {
+    const state = new MemoryStateStore();
+    const service = createService({
+      state,
+      bootstrapOwner: { username: "admin", passwordHash: "pw:seeded-password" },
+    });
+
+    await expect(service.login({ username: "admin", password: "seeded-password" }))
+      .resolves.toMatchObject({ principal: { username: "admin", role: "owner" } });
+    await expect(state.adminUsers.getByUsername("admin")).resolves.toMatchObject({
+      passwordHash: "pw:seeded-password",
+    });
+  });
+
+  it("refuses to sign in when no bootstrap owner is configured", async () => {
+    const service = new AdminAuthService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+      passwordHasher,
+      accessTokens,
+    });
+
+    await expect(service.login({ username: "admin", password: "correct-password" }))
+      .rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.listUsers()).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
   it("rewrites password hashes stored under weaker parameters on successful login", async () => {
     const state = new MemoryStateStore();
     await state.adminUsers.save({
