@@ -15,7 +15,8 @@
       "types": "./dist/plugins/plugin-manifests.d.ts",
       "import": "./dist/plugins/plugin-manifests.js",
       "default": "./dist/plugins/plugin-manifests.js"
-    }
+    },
+    "./test-support": "./src/state/state-store-contract.test-support.ts"
   },
   "scripts": {
     "build": "tsup src/index.ts src/plugins/plugin-manifests.ts --format esm --dts",

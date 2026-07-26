@@ -31,7 +31,7 @@ const packageSourceDirs: Record<keyof typeof packageDirs, string> = {
 };
 
 const expectedExports: Record<keyof typeof packageDirs, string[]> = {
-  core: [".", "./plugin-manifests"],
+  core: [".", "./plugin-manifests", "./test-support"],
   adminUi: ["./plugin-ui"],
   runtimeCloudflare: [".", "./plugin-runtime", "./plugin-runtime/testing"],
   publishClient: [".", "./cli"],
@@ -81,6 +81,7 @@ function assertOnlyUsesExportedPackageSubpaths(filePath: string, source: string)
     "@axis-repository/admin-ui/plugin-ui",
     "@axis-repository/core",
     "@axis-repository/core/plugin-manifests",
+    "@axis-repository/core/test-support",
     "@axis-repository/plugin-apt",
     "@axis-repository/plugin-apt/admin-ui",
     "@axis-repository/plugin-apt/admin-ui/publish",
