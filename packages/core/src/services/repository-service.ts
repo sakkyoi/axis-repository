@@ -112,11 +112,14 @@ export class RepositoryService {
     await this.options.state.publishSessions.deleteByRepository(repository.name);
 
     for (const token of await this.options.state.publishTokens.list()) {
-      if (!token.repositories.includes(repository.name) && !token.signingKeyIds.some((id) => repositorySecretIds.has(id))) {
+      // Tokens persisted before signing key scopes existed have no
+      // signingKeyIds, which PublishTokenService already tolerates.
+      const tokenSigningKeyIds = token.signingKeyIds ?? [];
+      if (!token.repositories.includes(repository.name) && !tokenSigningKeyIds.some((id) => repositorySecretIds.has(id))) {
         continue;
       }
       const repositories = token.repositories.filter((candidate) => candidate !== repository.name);
-      const signingKeyIds = token.signingKeyIds.filter((id) => !repositorySecretIds.has(id));
+      const signingKeyIds = tokenSigningKeyIds.filter((id) => !repositorySecretIds.has(id));
       await this.options.state.publishTokens.save({
         ...token,
         repositories,

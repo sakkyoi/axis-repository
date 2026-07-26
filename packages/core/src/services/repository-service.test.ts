@@ -173,6 +173,34 @@ describe("RepositoryService", () => {
     );
   });
 
+  it("cascades deletion across tokens persisted without signing key scopes", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryService({ state, clock, randomId });
+    await service.create({
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: {},
+    });
+    const legacyToken = publishToken({
+      name: "legacy-actions",
+      repositories: ["debian-internal"],
+    });
+    // PublishTokenService tolerates records stored before signing key scopes
+    // existed; repository deletion has to as well or the cascade aborts partway.
+    delete (legacyToken as Partial<PublishTokenRecord>).signingKeyIds;
+    await state.publishTokens.save(legacyToken);
+
+    await expect(service.delete("debian-internal")).resolves.toBeUndefined();
+
+    await expect(state.repositories.getByName("debian-internal")).resolves.toBeNull();
+    await expect(state.publishTokens.getByName("legacy-actions")).resolves.toMatchObject({
+      repositories: [],
+      signingKeyIds: [],
+      revokedAt: "2026-07-13T00:00:00.000Z",
+    });
+  });
+
   it("deletes repositories and cascades repository-owned state", async () => {
     const state = new MemoryStateStore();
     const service = new RepositoryService({ state, clock, randomId });
