@@ -5,6 +5,9 @@ export class AxisError extends Error {
     public readonly status: number,
   ) {
     super(message);
+    // Without this every subclass logs as "Error: ...", losing the class that
+    // determines the HTTP status.
+    this.name = new.target.name;
   }
 }
 

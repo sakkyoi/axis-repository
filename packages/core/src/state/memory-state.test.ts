@@ -348,6 +348,31 @@ const repositorySecret = (overrides: Partial<RepositorySecretRecord> = {}): Repo
 });
 
 describe("MemoryStateStore", () => {
+  it("does not let callers mutate stored state through returned records", async () => {
+    const state = new MemoryStateStore();
+    await state.repositories.save({
+      id: "repo_1",
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: { apt: { codename: "noble" } },
+      createdAt: "2026-07-13T00:00:00.000Z",
+      updatedAt: "2026-07-13T00:00:00.000Z",
+    });
+
+    const read = await state.repositories.getByName("debian-internal");
+    (read!.config.apt as Record<string, unknown>).codename = "trixie";
+    const [listed] = await state.repositories.list();
+    listed!.visibility = "public";
+
+    // The durable adapter round-trips through storage, so it can never alias.
+    // This adapter has to match, or dev and production diverge.
+    await expect(state.repositories.getByName("debian-internal")).resolves.toMatchObject({
+      visibility: "private",
+      config: { apt: { codename: "noble" } },
+    });
+  });
+
   it("deletes repositories by name", async () => {
     const state = new MemoryStateStore();
     await state.repositories.save({

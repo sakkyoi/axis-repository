@@ -22,11 +22,36 @@ export interface RepositoryPublishFlowInput {
   verifyUpload(input: { sessionId: string; uploadId: string }): Promise<unknown>;
   finalizeSession(sessionId: string): Promise<unknown>;
   refresh(): Promise<unknown>;
-  onStatus(status: string): void;
+  onPhase(phase: RepositoryPublishPhase): void;
+}
+
+/**
+ * Phases the publish flow moves through. Kept separate from the labels so busy
+ * state does not depend on display copy.
+ */
+export type RepositoryPublishPhase =
+  | "idle"
+  | "preparing"
+  | "uploading"
+  | "verifying"
+  | "finalizing"
+  | "published";
+
+const repositoryPublishPhaseLabels: Record<RepositoryPublishPhase, string> = {
+  idle: "",
+  preparing: "Preparing artifacts...",
+  uploading: "Uploading artifacts...",
+  verifying: "Verifying uploads...",
+  finalizing: "Finalizing repository...",
+  published: "Published.",
+};
+
+export function repositoryPublishStatusLabel(phase: RepositoryPublishPhase): string {
+  return repositoryPublishPhaseLabels[phase];
 }
 
 export async function publishRepositoryArtifacts(input: RepositoryPublishFlowInput): Promise<void> {
-  input.onStatus("Preparing artifacts...");
+  input.onPhase("preparing");
   const session = await input.createSession({
     repositoryName: input.repositoryName,
     ecosystem: input.ecosystem,
@@ -36,22 +61,22 @@ export async function publishRepositoryArtifacts(input: RepositoryPublishFlowInp
     throw new Error("Publish session did not return enough upload targets.");
   }
 
-  input.onStatus("Uploading artifacts...");
+  input.onPhase("uploading");
   for (const [index, file] of input.files.entries()) {
     const upload = session.uploads[index];
     if (!upload) throw new Error("Publish session did not return enough upload targets.");
     await input.uploadArtifact(upload, file);
   }
 
-  input.onStatus("Verifying uploads...");
+  input.onPhase("verifying");
   for (const upload of session.uploads.slice(0, input.files.length)) {
     await input.verifyUpload({ sessionId: session.id, uploadId: upload.uploadId });
   }
 
-  input.onStatus("Finalizing repository...");
+  input.onPhase("finalizing");
   await input.finalizeSession(session.id);
   await input.refresh();
-  input.onStatus("Published.");
+  input.onPhase("published");
 }
 
 export function useRepositoryArtifactPublisher(repository: Repository) {
@@ -60,13 +85,14 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
   const createSession = useCreateAdminPublishSession();
   const verifyUpload = useVerifyAdminPublishUpload();
   const finalizeSession = useFinalizeAdminPublishSession();
-  const [status, setStatus] = useState("");
+  const [phase, setPhase] = useState<RepositoryPublishPhase>("idle");
   const [error, setError] = useState("");
+  const status = repositoryPublishStatusLabel(phase);
   const isPublishing =
     createSession.isPending ||
     verifyUpload.isPending ||
     finalizeSession.isPending ||
-    status === "Uploading artifacts...";
+    phase === "uploading";
 
   async function publish(input: { files: File[]; artifacts: PublishArtifact[] }) {
     setError("");
@@ -86,11 +112,11 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
             queryClient.invalidateQueries({ queryKey: ["repository-objects", repository.name] }),
           ]);
         },
-        onStatus: setStatus,
+        onPhase: setPhase,
       });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
-      setStatus("");
+      setPhase("idle");
     }
   }
 

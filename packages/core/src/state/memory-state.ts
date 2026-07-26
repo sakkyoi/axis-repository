@@ -12,8 +12,25 @@ import type {
 } from "../domain/domain";
 import type { StateStore } from "../ports/ports";
 
+/**
+ * Snapshots a record on the way in and out of the store.
+ *
+ * The durable adapter serializes to storage and deserializes on read, so
+ * callers there can never alias stored state. This in-memory adapter backs the
+ * dev worker and the tests, and without cloning it would hand out live
+ * references, letting a caller mutate stored state by accident and behave
+ * differently from production.
+ */
+function snapshot<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function snapshotAll<T>(values: T[]): T[] {
+  return values.map(snapshot);
+}
+
 function clonePublishSession(session: PublishSession): PublishSession {
-  return JSON.parse(JSON.stringify(session)) as PublishSession;
+  return snapshot(session);
 }
 
 export class MemoryStateStore implements StateStore {
@@ -33,15 +50,16 @@ export class MemoryStateStore implements StateStore {
 
   readonly repositories = {
     getByName: async (name: string): Promise<Repository | null> => {
-      return this.repositoryByName.get(name) ?? null;
+      const repository = this.repositoryByName.get(name);
+      return repository ? snapshot(repository) : null;
     },
     list: async (): Promise<Repository[]> => {
-      return [...this.repositoryByName.values()].sort((left, right) =>
+      return snapshotAll([...this.repositoryByName.values()].sort((left, right) =>
         left.name.localeCompare(right.name),
-      );
+      ));
     },
     save: async (repository: Repository): Promise<void> => {
-      this.repositoryByName.set(repository.name, repository);
+      this.repositoryByName.set(repository.name, snapshot(repository));
     },
     deleteByName: async (name: string): Promise<boolean> => {
       return this.repositoryByName.delete(name);
@@ -50,13 +68,14 @@ export class MemoryStateStore implements StateStore {
 
   readonly publishSessions = {
     get: async (id: string): Promise<PublishSession | null> => {
-      return this.publishSessionById.get(id) ?? null;
+      const session = this.publishSessionById.get(id);
+      return session ? snapshot(session) : null;
     },
     list: async (): Promise<PublishSession[]> => {
-      return [...this.publishSessionById.values()].sort(comparePublishSessions);
+      return snapshotAll([...this.publishSessionById.values()].sort(comparePublishSessions));
     },
     save: async (session: PublishSession): Promise<void> => {
-      this.publishSessionById.set(session.id, session);
+      this.publishSessionById.set(session.id, snapshot(session));
     },
     deleteByRepository: async (repositoryName: string): Promise<number> => {
       let deleted = 0;
@@ -84,16 +103,18 @@ export class MemoryStateStore implements StateStore {
 
   readonly publishTokens = {
     getById: async (id: string): Promise<PublishTokenRecord | null> => {
-      return this.publishTokenById.get(id) ?? null;
+      const token = this.publishTokenById.get(id);
+      return token ? snapshot(token) : null;
     },
     getByName: async (name: string): Promise<PublishTokenRecord | null> => {
       const id = this.publishTokenIdByName.get(name);
-      return id ? this.publishTokenById.get(id) ?? null : null;
+      const token = id ? this.publishTokenById.get(id) : undefined;
+      return token ? snapshot(token) : null;
     },
     list: async (): Promise<PublishTokenRecord[]> => {
-      return [...this.publishTokenById.values()].sort((left, right) =>
+      return snapshotAll([...this.publishTokenById.values()].sort((left, right) =>
         left.name.localeCompare(right.name),
-      );
+      ));
     },
     save: async (token: PublishTokenRecord): Promise<void> => {
       const existingToken = this.publishTokenById.get(token.id);
@@ -106,7 +127,7 @@ export class MemoryStateStore implements StateStore {
         this.publishTokenById.delete(existingTokenIdForName);
       }
 
-      this.publishTokenById.set(token.id, token);
+      this.publishTokenById.set(token.id, snapshot(token));
       this.publishTokenIdByName.set(token.name, token.id);
     },
     deleteByName: async (name: string): Promise<boolean> => {
@@ -122,16 +143,18 @@ export class MemoryStateStore implements StateStore {
 
   readonly adminUsers = {
     getById: async (id: string): Promise<AdminUserRecord | null> => {
-      return this.adminUserById.get(id) ?? null;
+      const user = this.adminUserById.get(id);
+      return user ? snapshot(user) : null;
     },
     getByUsername: async (username: string): Promise<AdminUserRecord | null> => {
       const id = this.adminUserIdByUsername.get(username);
-      return id ? this.adminUserById.get(id) ?? null : null;
+      const user = id ? this.adminUserById.get(id) : undefined;
+      return user ? snapshot(user) : null;
     },
     list: async (): Promise<AdminUserRecord[]> => {
-      return [...this.adminUserById.values()].sort((left, right) =>
+      return snapshotAll([...this.adminUserById.values()].sort((left, right) =>
         left.username.localeCompare(right.username),
-      );
+      ));
     },
     save: async (user: AdminUserRecord): Promise<void> => {
       const existingUser = this.adminUserById.get(user.id);
@@ -144,14 +167,15 @@ export class MemoryStateStore implements StateStore {
         this.adminUserById.delete(existingUserIdForUsername);
       }
 
-      this.adminUserById.set(user.id, user);
+      this.adminUserById.set(user.id, snapshot(user));
       this.adminUserIdByUsername.set(user.username, user.id);
     },
   };
 
   readonly adminRefreshSessions = {
     get: async (id: string): Promise<AdminRefreshSessionRecord | null> => {
-      return this.adminRefreshSessionById.get(id) ?? null;
+      const session = this.adminRefreshSessionById.get(id);
+      return session ? snapshot(session) : null;
     },
     list: async (): Promise<AdminRefreshSessionRecord[]> => {
       return [...this.adminRefreshSessionById.values()].sort((left, right) =>

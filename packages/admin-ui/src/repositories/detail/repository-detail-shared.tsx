@@ -18,13 +18,17 @@ import {
   repositoryActivitySummary,
   type RepositoryActivity,
 } from "../publish/repository-publish-sessions-model";
-import type { PublishSessionDetailComponentProps, RepositoryDetailSection } from "../plugins/repository-ui-plugin-types";
+import type {
+  PublishSessionDetailComponentProps,
+  RepositoryDetailSection,
+  RepositoryDetailSectionProps,
+} from "../plugins/repository-ui-plugin-types";
 
-export function GenericRepositoryDetail({ repository }: { repository: Repository; pluginMetadata: RepositoryPlugin | undefined }) {
+export function GenericRepositoryDetail({ repository }: { repository: Repository }) {
   return (
     <>
-      <RepositorySettingsSection repository={repository} pluginMetadata={undefined} />
-      <AdvancedJsonConfigSection repository={repository} pluginMetadata={undefined} />
+      <RepositorySettingsSection repository={repository} />
+      <RepositoryJsonConfigEditor repository={repository} />
     </>
   );
 }
@@ -56,12 +60,7 @@ export function RepositoryDetailSections({
   );
 }
 
-export function RepositorySettingsSection({
-  repository,
-}: {
-  repository: Repository;
-  pluginMetadata: RepositoryPlugin | undefined;
-}) {
+export function RepositorySettingsSection({ repository }: { repository: Repository }) {
   const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
   const updateRepository = useUpdateRepository();
 
@@ -304,12 +303,11 @@ export function PublishSessionDetailList({ title, items }: { title: string; item
   );
 }
 
-export function AdvancedJsonConfigSection({
-  repository,
-}: {
-  repository: Repository;
-  pluginMetadata: RepositoryPlugin | undefined;
-}) {
+/**
+ * Registered as a detail section, so it takes the full section props even
+ * though it only needs the repository.
+ */
+export function AdvancedJsonConfigSection({ repository }: RepositoryDetailSectionProps) {
   return <RepositoryJsonConfigEditor repository={repository} />;
 }
 

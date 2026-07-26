@@ -12,6 +12,14 @@ import type {
 } from "./repository-plugin-contract";
 import { publicClientHelperAction } from "./repository-plugin-client-helpers";
 
+/**
+ * Copies the metadata a caller could otherwise mutate in place.
+ *
+ * The lifecycle objects (publish, artifacts, create) are shared by reference:
+ * they hold the plugin's behaviour, and re-wrapping them would not stop a
+ * caller reassigning a hook anyway. Only host code holds these descriptors, so
+ * the guarantee is "metadata is a copy", not "the descriptor is frozen".
+ */
 function clonePlugin(descriptor: ArtifactRepositoryPlugin): ArtifactRepositoryPlugin {
   return {
     ...descriptor,

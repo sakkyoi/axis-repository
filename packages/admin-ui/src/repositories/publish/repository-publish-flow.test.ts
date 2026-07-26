@@ -63,20 +63,22 @@ describe("repository publish flow", () => {
         calls.push("finalize");
       }),
       refresh,
-      onStatus: (status) => calls.push(`status:${status}`),
+      onPhase: (phase) => calls.push(`phase:${phase}`),
     });
 
+    // Phases are identifiers rather than display copy, so rewording a label
+    // no longer rewrites this test.
     expect(calls).toEqual([
-      "status:Preparing artifacts...",
+      "phase:preparing",
       "create",
-      "status:Uploading artifacts...",
+      "phase:uploading",
       "upload",
-      "status:Verifying uploads...",
+      "phase:verifying",
       "verify",
-      "status:Finalizing repository...",
+      "phase:finalizing",
       "finalize",
       "refresh",
-      "status:Published.",
+      "phase:published",
     ]);
   });
 
@@ -92,7 +94,7 @@ describe("repository publish flow", () => {
         verifyUpload: async () => undefined,
         finalizeSession: async () => undefined,
         refresh: async () => undefined,
-        onStatus: () => undefined,
+        onPhase: () => undefined,
       }),
     ).rejects.toThrow("Publish session did not return enough upload targets.");
   });
