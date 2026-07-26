@@ -21,7 +21,7 @@ import {
   type VerifyPublishUploadInput,
   type VerifyPublishUploadResult,
 } from "@axis-repository/core";
-import { getRepositoryPluginCatalogEntry } from "../../../../plugins/catalog";
+import { getRepositoryPluginCatalogEntry } from "@axis-repository/plugin-catalog";
 import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { ensureRepositoryPluginEnabled } from "../plugins/repository-plugin-policy";
 import type { DeleteRepositoryArtifactResult } from "../plugins/repository-plugin-contract";

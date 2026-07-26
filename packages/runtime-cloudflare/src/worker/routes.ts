@@ -17,7 +17,7 @@ import {
   type RepositoryObjectMetadata,
   type RepositoryObjectRange,
 } from "@axis-repository/core";
-import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "../../../../plugins/catalog";
+import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "@axis-repository/plugin-catalog";
 import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "../admin-ui-assets";
 import type { AppDependencies } from "./dev-dependencies";
 import { isStringArray, optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "../http";
@@ -427,6 +427,25 @@ function decodePathSegment(segment: string): string {
   }
 }
 
+/** A decoded path segment must be non-empty and must not be a traversal step. */
+function requireSafePathSegment(segment: string): string {
+  const decoded = decodePathSegment(segment);
+  if (!decoded || decoded === "." || decoded === "..") {
+    throw new NotFoundError();
+  }
+  return decoded;
+}
+
+/**
+ * Matches `pathname` against an admin repository route and returns the decoded
+ * captures, or null when the route does not apply.
+ */
+function matchAdminRepositoryPath(pathname: string, pattern: RegExp): string[] | null {
+  const match = pathname.match(pattern);
+  if (!match) return null;
+  return match.slice(1).map((segment) => requireSafePathSegment(segment ?? ""));
+}
+
 function parseRepositoryObjectPath(requestUrl: string): { repositoryName: string; relativePath: string } | null {
   const rawPath = rawPathname(requestUrl);
   const prefix = "/repositories/";
@@ -438,10 +457,7 @@ function parseRepositoryObjectPath(requestUrl: string): { repositoryName: string
   if (rawSegments.length < 2) {
     return null;
   }
-  const decodedSegments = rawSegments.map(decodePathSegment);
-  if (decodedSegments.some((segment) => !segment || segment === "." || segment === "..")) {
-    throw new NotFoundError();
-  }
+  const decodedSegments = rawSegments.map(requireSafePathSegment);
   const [repositoryName, ...relativeSegments] = decodedSegments;
   if (!repositoryName || relativeSegments.length === 0) {
     return null;
@@ -463,11 +479,7 @@ function parseAdminResourcePath(requestUrl: string, collection: string): string 
   if (rawSegments.length !== 1) {
     return null;
   }
-  const value = decodePathSegment(rawSegments[0] ?? "");
-  if (!value || value === "." || value === "..") {
-    throw new NotFoundError();
-  }
-  return value;
+  return requireSafePathSegment(rawSegments[0] ?? "");
 }
 
 function parseAdminResourceActionPath(requestUrl: string, collection: string, action: string): string | null {
@@ -480,11 +492,7 @@ function parseAdminResourceActionPath(requestUrl: string, collection: string, ac
   if (rawSegments.length !== 2 || rawSegments[1] !== action) {
     return null;
   }
-  const value = decodePathSegment(rawSegments[0] ?? "");
-  if (!value || value === "." || value === "..") {
-    throw new NotFoundError();
-  }
-  return value;
+  return requireSafePathSegment(rawSegments[0] ?? "");
 }
 
 function parseRepositoryUpdate(body: Record<string, unknown>): {
@@ -527,26 +535,11 @@ function parseRepositoryClientHelperPath(requestUrl: string): {
     return null;
   }
   const [rawRepositoryName, rawNamespace, rawAction] = rawSegments;
-  if (!rawRepositoryName || !rawNamespace || !rawAction) {
-    throw new NotFoundError();
-  }
-  const repositoryName = decodePathSegment(rawRepositoryName);
-  const namespace = decodePathSegment(rawNamespace);
-  const action = decodePathSegment(rawAction);
-  if (
-    !repositoryName
-    || repositoryName === "."
-    || repositoryName === ".."
-    || !namespace
-    || namespace === "."
-    || namespace === ".."
-    || !action
-    || action === "."
-    || action === ".."
-  ) {
-    throw new NotFoundError();
-  }
-  return { repositoryName, namespace, action };
+  return {
+    repositoryName: requireSafePathSegment(rawRepositoryName ?? ""),
+    namespace: requireSafePathSegment(rawNamespace ?? ""),
+    action: requireSafePathSegment(rawAction ?? ""),
+  };
 }
 
 function repositoryClientHelpers(dependencies: AppDependencies, repository: Repository, namespace: string) {
@@ -606,96 +599,37 @@ function parseAdminRepositoryClientHelperPath(pathname: string): {
   namespace: string;
   action: string;
 } | null {
-  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/([^/]+)\/client\/([^/]+)$/);
-  if (!match) return null;
-  const repositoryName = decodePathSegment(match[1] ?? "");
-  const namespace = decodePathSegment(match[2] ?? "");
-  const action = decodePathSegment(match[3] ?? "");
-  if (
-    !repositoryName
-    || repositoryName === "."
-    || repositoryName === ".."
-    || !namespace
-    || namespace === "."
-    || namespace === ".."
-    || !action
-    || action === "."
-    || action === ".."
-  ) {
-    throw new NotFoundError();
-  }
-  return { repositoryName, namespace, action };
+  const segments = matchAdminRepositoryPath(pathname, ADMIN_REPOSITORY_ROUTES.clientHelper);
+  if (!segments) return null;
+  return { repositoryName: segments[0]!, namespace: segments[1]!, action: segments[2]! };
 }
 
-function parseAdminRepositoryObjectsPath(pathname: string): string | null {
-  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/objects$/);
-  if (!match) return null;
-  const repositoryName = decodePathSegment(match[1] ?? "");
-  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
-    throw new NotFoundError();
-  }
-  return repositoryName;
-}
 
-function parseAdminRepositoryObjectDetailPath(pathname: string): string | null {
-  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/objects\/detail$/);
-  if (!match) return null;
-  const repositoryName = decodePathSegment(match[1] ?? "");
-  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
-    throw new NotFoundError();
-  }
-  return repositoryName;
-}
 
-function parseAdminRepositoryActivityPath(pathname: string): string | null {
-  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/activity$/);
-  if (!match) return null;
-  const repositoryName = decodePathSegment(match[1] ?? "");
-  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
-    throw new NotFoundError();
-  }
-  return repositoryName;
-}
 
-function parseAdminRepositoryArtifactsPath(pathname: string): string | null {
-  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/artifacts$/);
-  if (!match) return null;
-  const repositoryName = decodePathSegment(match[1] ?? "");
-  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
-    throw new NotFoundError();
-  }
-  return repositoryName;
-}
 
-function parseAdminRepositoryArtifactsRebuildIndexPath(pathname: string): string | null {
-  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/artifacts\/rebuild-index$/);
-  if (!match) return null;
-  const repositoryName = decodePathSegment(match[1] ?? "");
-  if (!repositoryName || repositoryName === "." || repositoryName === "..") {
-    throw new NotFoundError();
-  }
-  return repositoryName;
+
+const ADMIN_REPOSITORY_ROUTES = {
+  objects: /^\/admin\/repositories\/([^/]+)\/objects$/,
+  objectDetail: /^\/admin\/repositories\/([^/]+)\/objects\/detail$/,
+  activity: /^\/admin\/repositories\/([^/]+)\/activity$/,
+  artifacts: /^\/admin\/repositories\/([^/]+)\/artifacts$/,
+  artifactsRebuildIndex: /^\/admin\/repositories\/([^/]+)\/artifacts\/rebuild-index$/,
+  artifact: /^\/admin\/repositories\/([^/]+)\/artifacts\/([^/]+)$/,
+  clientHelper: /^\/admin\/repositories\/([^/]+)\/([^/]+)\/client\/([^/]+)$/,
+} as const;
+
+function adminRepositoryNameFor(pathname: string, pattern: RegExp): string | null {
+  return matchAdminRepositoryPath(pathname, pattern)?.[0] ?? null;
 }
 
 function parseAdminRepositoryArtifactPath(pathname: string): {
   repositoryName: string;
   artifactId: string;
 } | null {
-  const match = pathname.match(/^\/admin\/repositories\/([^/]+)\/artifacts\/([^/]+)$/);
-  if (!match) return null;
-  const repositoryName = decodePathSegment(match[1] ?? "");
-  const artifactId = decodePathSegment(match[2] ?? "");
-  if (
-    !repositoryName
-    || repositoryName === "."
-    || repositoryName === ".."
-    || !artifactId
-    || artifactId === "."
-    || artifactId === ".."
-  ) {
-    throw new NotFoundError();
-  }
-  return { repositoryName, artifactId };
+  const segments = matchAdminRepositoryPath(pathname, ADMIN_REPOSITORY_ROUTES.artifact);
+  if (!segments) return null;
+  return { repositoryName: segments[0]!, artifactId: segments[1]! };
 }
 
 function parseAdminRepositoryPluginResourcePath(requestUrl: string): {
@@ -713,24 +647,11 @@ function parseAdminRepositoryPluginResourcePath(requestUrl: string): {
     return null;
   }
   const [rawRepositoryName, rawNamespace, ...rawPathSegments] = rawSegments;
-  if (!rawRepositoryName || !rawNamespace || rawPathSegments.some((segment) => !segment)) {
-    throw new NotFoundError();
-  }
-  const repositoryName = decodePathSegment(rawRepositoryName);
-  const namespace = decodePathSegment(rawNamespace);
-  const path = rawPathSegments.map(decodePathSegment);
-  if (
-    !repositoryName
-    || repositoryName === "."
-    || repositoryName === ".."
-    || !namespace
-    || namespace === "."
-    || namespace === ".."
-    || path.some((segment) => !segment || segment === "." || segment === "..")
-  ) {
-    throw new NotFoundError();
-  }
-  return { repositoryName, namespace, path };
+  return {
+    repositoryName: requireSafePathSegment(rawRepositoryName ?? ""),
+    namespace: requireSafePathSegment(rawNamespace ?? ""),
+    path: rawPathSegments.map(requireSafePathSegment),
+  };
 }
 
 async function ensureRepositoryPathIsServable(
@@ -1216,7 +1137,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       origin: url.origin,
     });
   }
-  const adminRepositoryActivityName = parseAdminRepositoryActivityPath(url.pathname);
+  const adminRepositoryActivityName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.activity);
   if (adminRepositoryActivityName) {
     await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "GET") {
@@ -1229,7 +1150,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       repositoryActivityPageParams(url.searchParams),
     ));
   }
-  const adminRepositoryArtifactsName = parseAdminRepositoryArtifactsPath(url.pathname);
+  const adminRepositoryArtifactsName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.artifacts);
   if (adminRepositoryArtifactsName) {
     await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "GET") {
@@ -1242,7 +1163,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       truncated: false,
     });
   }
-  const adminRepositoryArtifactsRebuildName = parseAdminRepositoryArtifactsRebuildIndexPath(url.pathname);
+  const adminRepositoryArtifactsRebuildName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.artifactsRebuildIndex);
   if (adminRepositoryArtifactsRebuildName) {
     await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "POST") {
@@ -1289,7 +1210,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const { artifact, artifacts, ...deleteResult } = result;
     return jsonResponse({ activity, artifact, artifacts, ...deleteResult, truncated: false });
   }
-  const adminRepositoryObjectDetailName = parseAdminRepositoryObjectDetailPath(url.pathname);
+  const adminRepositoryObjectDetailName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.objectDetail);
   if (adminRepositoryObjectDetailName) {
     await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "GET") {
@@ -1311,7 +1232,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       metadata,
     }));
   }
-  const adminRepositoryObjectsName = parseAdminRepositoryObjectsPath(url.pathname);
+  const adminRepositoryObjectsName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.objects);
   if (adminRepositoryObjectsName) {
     await requireAdmin(request, dependencies.adminAuthService);
     const repository = await dependencies.repositoryService.getByName(adminRepositoryObjectsName);
