@@ -7,6 +7,7 @@ import {
   type AdminAccessTokenCodec,
   type Clock,
   type RandomId,
+  type PasswordHasher,
   type SecretHasher,
 } from "../index";
 
@@ -21,6 +22,12 @@ const randomId: RandomId = {
 const hasher: SecretHasher = {
   hash: async (secret) => `hash:${secret}`,
   verify: async (secret, hash) => hash === `hash:${secret}`,
+};
+
+const passwordHasher: PasswordHasher = {
+  hash: async (password) => `pw:${password}`,
+  verify: async (password, hash) => hash === `pw:${password}` || hash === `legacy:${password}`,
+  needsRehash: (hash) => hash.startsWith("legacy:"),
 };
 
 const accessTokens: AdminAccessTokenCodec = {
@@ -175,6 +182,46 @@ describe("AdminAuthService", () => {
     })).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
+  it("rewrites password hashes stored under weaker parameters on successful login", async () => {
+    const state = new MemoryStateStore();
+    await state.adminUsers.save({
+      id: "admin_user_legacy",
+      username: "admin",
+      displayName: "admin",
+      passwordHash: "legacy:correct-password",
+      role: "owner",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const service = createService({ state });
+
+    await expect(service.login({ username: "admin", password: "wrong" }))
+      .rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(state.adminUsers.getByUsername("admin")).resolves.toMatchObject({
+      passwordHash: "legacy:correct-password",
+    });
+
+    const login = await service.login({ username: "admin", password: "correct-password" });
+
+    expect(login.principal.subject).toBe("admin_user_legacy");
+    await expect(state.adminUsers.getByUsername("admin")).resolves.toMatchObject({
+      passwordHash: "pw:correct-password",
+      updatedAt: "2026-07-26T00:00:00.000Z",
+    });
+  });
+
+  it("leaves an up-to-date password hash untouched on login", async () => {
+    const state = new MemoryStateStore();
+    const service = createService({ state });
+
+    await service.login({ username: "admin", password: "correct-password" });
+    const seeded = await state.adminUsers.getByUsername("admin");
+
+    await service.login({ username: "admin", password: "correct-password" });
+
+    await expect(state.adminUsers.getByUsername("admin")).resolves.toEqual(seeded);
+  });
+
   it("rejects short replacement admin passwords", async () => {
     const service = createService();
     const login = await service.login({ username: "admin", password: "correct-password" });
@@ -192,6 +239,7 @@ function createService(overrides: Partial<ConstructorParameters<typeof AdminAuth
     clock,
     randomId,
     hasher,
+    passwordHasher,
     bootstrapOwner: {
       username: "admin",
       password: "correct-password",

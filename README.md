@@ -45,6 +45,13 @@ the owner user has been seeded into state, the bootstrap password secret can be
 removed. Keep `AXIS_SESSION_SECRET`; it is still required to sign and verify
 admin sessions.
 
+Admin passwords are stored with PBKDF2-HMAC-SHA256 using a per-user salt, and
+the iteration count is embedded in the stored hash so it can be raised later
+without invalidating existing passwords. `AXIS_ADMIN_PASSWORD_HASH` accepts
+either a `pbkdf2-sha256$<iterations>$<salt>$<key>` value or the older
+`sha256:<hex>` form. Accounts seeded under the older form keep working and are
+rewritten to PBKDF2 on the owner's next successful sign-in.
+
 `UPLOAD_BACKEND=local-r2` creates same-origin `PUT` upload URLs and stores
 uploaded artifacts through the Worker `AXIS_OBJECTS` R2 binding. Under
 `wrangler dev --local`, Wrangler keeps this R2 state in local development state

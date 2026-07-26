@@ -11,6 +11,7 @@ import {
   type RandomId,
   type RepositoryArtifactStore,
   type RepositoryObjectStore,
+  type PasswordHasher,
   type SecretHasher,
 } from "@axis-repository/core";
 import type { AdminUiRuntimeConfig } from "../admin-ui-assets";
@@ -76,6 +77,13 @@ export function createDevDependencyHarness(
     hash: async (secret: string): Promise<string> => `dev:${secret}`,
     verify: async (secret: string, hash: string): Promise<boolean> => hash === `dev:${secret}`,
   };
+  // Deliberately not a KDF: the dev harness backs the test suite, where a real
+  // work factor would cost seconds across hundreds of logins.
+  const passwordHasher: PasswordHasher = {
+    hash: async (password: string): Promise<string> => `dev:${password}`,
+    verify: async (password: string, hash: string): Promise<boolean> => hash === `dev:${password}`,
+    needsRehash: (): boolean => false,
+  };
   let refreshSequence = 0;
   const adminAuthService = new AdminAuthService({
     state,
@@ -89,6 +97,7 @@ export function createDevDependencyHarness(
       },
     },
     hasher,
+    passwordHasher,
     bootstrapOwner: {
       username: adminUsername,
       password: adminPassword,

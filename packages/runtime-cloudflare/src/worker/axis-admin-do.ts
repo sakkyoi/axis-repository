@@ -8,7 +8,7 @@ import {
   type Clock,
 } from "@axis-repository/core";
 import { createApp } from "./app";
-import { WebCryptoRandomId, Sha256SecretHasher } from "../crypto";
+import { WebCryptoRandomId, Sha256SecretHasher, Pbkdf2PasswordHasher } from "../crypto";
 import { HmacAdminAccessTokenCodec } from "../auth/admin-auth";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import { DurableStateStore, type DurableStorage } from "../storage/durable-state";
@@ -82,8 +82,11 @@ function bootstrapOwnerFromEnv(env: AxisEnv): { username: string; password?: str
   }
   const username = env.AXIS_ADMIN_USERNAME;
   if (env.AXIS_ADMIN_PASSWORD_HASH !== undefined && env.AXIS_ADMIN_PASSWORD_HASH !== "") {
-    if (!env.AXIS_ADMIN_PASSWORD_HASH.startsWith("sha256:")) {
-      throw new Error("AXIS_ADMIN_PASSWORD_HASH must use sha256 format");
+    if (
+      !env.AXIS_ADMIN_PASSWORD_HASH.startsWith("sha256:")
+      && !env.AXIS_ADMIN_PASSWORD_HASH.startsWith("pbkdf2-sha256$")
+    ) {
+      throw new Error("AXIS_ADMIN_PASSWORD_HASH must use sha256 or pbkdf2-sha256 format");
     }
     return { username, passwordHash: env.AXIS_ADMIN_PASSWORD_HASH };
   }
@@ -111,12 +114,14 @@ export function createDurableObjectDependencies(
   const clock: Clock = { now: () => new Date() };
   const randomId = new WebCryptoRandomId();
   const hasher = new Sha256SecretHasher(env.TOKEN_HASH_PEPPER);
+  const passwordHasher = new Pbkdf2PasswordHasher(env.TOKEN_HASH_PEPPER);
   const bootstrapOwner = bootstrapOwnerFromEnv(env);
   const adminAuthService = new AdminAuthService({
     state,
     clock,
     randomId,
     hasher,
+    passwordHasher,
     ...(bootstrapOwner === undefined ? {} : { bootstrapOwner }),
     accessTokens: new HmacAdminAccessTokenCodec(requiredEnv(env.AXIS_SESSION_SECRET, "AXIS_SESSION_SECRET")),
   });

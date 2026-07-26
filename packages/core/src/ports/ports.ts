@@ -26,9 +26,26 @@ export interface RandomId {
   create(prefix: string): string;
 }
 
+/**
+ * Digests high-entropy machine secrets (publish tokens, refresh tokens). A fast
+ * digest is appropriate here: the secrets are randomly generated, so there is
+ * nothing to brute force, and verification scans stored records.
+ */
 export interface SecretHasher {
   hash(secret: string): Promise<string>;
   verify(secret: string, hash: string): Promise<boolean>;
+}
+
+/**
+ * Digests human-chosen passwords. Distinct from {@link SecretHasher} because
+ * passwords are low entropy and need a per-user salt and a deliberate work
+ * factor; verification is a single lookup by username, so the cost is bounded.
+ */
+export interface PasswordHasher {
+  hash(password: string): Promise<string>;
+  verify(password: string, hash: string): Promise<boolean>;
+  /** True when the stored hash uses outdated parameters and should be rewritten. */
+  needsRehash(hash: string): boolean;
 }
 
 export interface UploadBroker {

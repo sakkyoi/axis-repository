@@ -1,6 +1,6 @@
 import type { AdminPrincipal, AdminRefreshSessionRecord, AdminUserRecord } from "../domain/domain";
 import { UnauthorizedError, ValidationError } from "../domain/errors";
-import type { AdminAccessTokenCodec, Clock, RandomId, SecretHasher, StateStore } from "../ports/ports";
+import type { AdminAccessTokenCodec, Clock, PasswordHasher, RandomId, SecretHasher, StateStore } from "../ports/ports";
 
 export interface BootstrapOwnerCredentials {
   username: string;
@@ -13,7 +13,10 @@ export interface AdminAuthServiceOptions {
   state: StateStore;
   clock: Clock;
   randomId: RandomId;
+  /** Digests refresh tokens. */
   hasher: SecretHasher;
+  /** Digests admin passwords. */
+  passwordHasher: PasswordHasher;
   bootstrapOwner?: BootstrapOwnerCredentials;
   accessTokens: AdminAccessTokenCodec;
   accessTokenTtlSeconds?: number;
@@ -34,15 +37,36 @@ export class AdminAuthService {
   async login(input: { username: string; password: string }): Promise<AdminAuthTokenSet> {
     await this.ensureBootstrapOwner();
     const user = await this.options.state.adminUsers.getByUsername(input.username);
-    if (!user || user.disabledAt || !(await this.options.hasher.verify(input.password, user.passwordHash))) {
+    if (!user || user.disabledAt || !(await this.options.passwordHasher.verify(input.password, user.passwordHash))) {
       throw new UnauthorizedError();
     }
     const sessionId = this.options.randomId.create("admin_session");
     return this.createTokenSetForUser({
       sessionId,
-      user,
+      user: await this.upgradePasswordHashIfNeeded(user, input.password),
       createdAt: this.options.clock.now(),
     });
+  }
+
+  /**
+   * Rewrites a password hash stored under weaker parameters. This is the only
+   * moment the plaintext is available, so a deployment migrating to a stronger
+   * KDF converts each account on its owner's next successful sign-in.
+   */
+  private async upgradePasswordHashIfNeeded(
+    user: AdminUserRecord,
+    password: string,
+  ): Promise<AdminUserRecord> {
+    if (!this.options.passwordHasher.needsRehash(user.passwordHash)) {
+      return user;
+    }
+    const upgraded: AdminUserRecord = {
+      ...user,
+      passwordHash: await this.options.passwordHasher.hash(password),
+      updatedAt: this.options.clock.now().toISOString(),
+    };
+    await this.options.state.adminUsers.save(upgraded);
+    return upgraded;
   }
 
   async refresh(refreshToken: string): Promise<AdminAuthTokenSet> {
@@ -80,13 +104,13 @@ export class AdminAuthService {
       throw new ValidationError("newPassword must be at least 8 characters");
     }
     const user = await this.options.state.adminUsers.getById(principal.subject);
-    if (!user || user.disabledAt || !(await this.options.hasher.verify(input.currentPassword, user.passwordHash))) {
+    if (!user || user.disabledAt || !(await this.options.passwordHasher.verify(input.currentPassword, user.passwordHash))) {
       throw new UnauthorizedError();
     }
     const now = this.options.clock.now().toISOString();
     await this.options.state.adminUsers.save({
       ...user,
-      passwordHash: await this.options.hasher.hash(newPassword),
+      passwordHash: await this.options.passwordHasher.hash(newPassword),
       updatedAt: now,
     });
     await this.revokeRefreshSessionsForSubject(user.id, now);
@@ -114,7 +138,7 @@ export class AdminAuthService {
       id: this.options.randomId.create("admin_user"),
       username,
       displayName: bootstrap.displayName?.trim() || username,
-      passwordHash: bootstrap.passwordHash ?? await this.options.hasher.hash(bootstrap.password ?? ""),
+      passwordHash: bootstrap.passwordHash ?? await this.options.passwordHasher.hash(bootstrap.password ?? ""),
       role: "owner",
       createdAt: now,
       updatedAt: now,
