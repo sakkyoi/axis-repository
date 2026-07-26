@@ -24,7 +24,7 @@ describe("PageShell", () => {
     expect(html).toContain("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5");
     expect(html).toContain("Tokens");
     expect(html).toContain("Create scoped automation tokens.");
-    expect(html).toContain("min-h-0 overflow-y-auto pr-1");
+    expect(html).toContain("grid min-h-0 content-start gap-5 overflow-y-auto pr-1");
     expect(html).not.toContain("mb-5");
   });
 

@@ -56,7 +56,7 @@ export function PageShell({
   return (
     <section className={cn("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5", className)}>
       <PageHeader title={title} description={description} action={action} />
-      <div className={cn("min-h-0 overflow-y-auto pr-1", bodyClassName)}>
+      <div className={cn("grid min-h-0 content-start gap-5 overflow-y-auto pr-1", bodyClassName)}>
         {children}
       </div>
     </section>
