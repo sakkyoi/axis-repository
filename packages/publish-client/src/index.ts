@@ -75,7 +75,7 @@ export function createPublishClient(options: PublishClientOptions): PublishClien
       for (const [index, target] of session.uploads.entries()) {
         const artifact = input.artifacts[index];
         if (!artifact) {
-          throw new Error(`Axis publish session returned upload for unknown artifact: ${target.filename}`);
+          throw new Error(`Axis publish session returned more uploads than artifacts: ${target.filename}`);
         }
 
         await uploadArtifact(target, artifact);

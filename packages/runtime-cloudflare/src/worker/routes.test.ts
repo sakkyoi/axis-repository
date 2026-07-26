@@ -524,6 +524,31 @@ describe("Cloudflare runtime routes", () => {
     expect(logoutResponse.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 
+  it("clears the refresh cookie even when the session is already gone", async () => {
+    const app = createApp(createDevDependencies());
+    const loginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "admin-local-password" }),
+    }));
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+
+    const first = await app.fetch(new Request("https://axis.example/admin/auth/logout", {
+      method: "POST",
+      headers: { cookie },
+    }));
+    const second = await app.fetch(new Request("https://axis.example/admin/auth/logout", {
+      method: "POST",
+      headers: { cookie },
+    }));
+
+    // A second logout must still clear, or the browser keeps presenting a dead
+    // token forever.
+    expect(first.status).toBe(204);
+    expect(second.status).toBe(204);
+    expect(second.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
   it("changes the current admin password and clears the refresh cookie", async () => {
     const app = createApp(createDevDependencies());
     const loginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {

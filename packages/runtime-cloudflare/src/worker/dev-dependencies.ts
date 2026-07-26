@@ -119,10 +119,20 @@ export function createDevDependencyHarness(
       },
     },
   });
-  // verifyAccessToken now requires a live session, and the fake codec above
-  // hands out a principal without anyone signing in. Seed the matching session
-  // so the harness models a signed-in owner. MemoryStateStore applies writes
-  // before its promise settles, so this is in place for the first request.
+  // verifyAccessToken requires a live session and an enabled user, and the fake
+  // codec above hands out a principal without anyone signing in. Seed both so
+  // the harness models an owner who has already signed in. MemoryStateStore
+  // applies writes before its promise settles, so these are in place for the
+  // first request.
+  void state.adminUsers.save({
+    id: "admin_user_dev",
+    username: adminUsername,
+    displayName: adminUsername,
+    passwordHash: `dev:${adminPassword}`,
+    role: "owner",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  });
   void state.adminRefreshSessions.save({
     id: "admin_session_dev",
     subject: "admin_user_dev",

@@ -144,7 +144,7 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       await http.post("/admin/auth/logout", undefined, withSessionCookie);
     },
     async changeOwnPassword(input: { currentPassword: string; newPassword: string }) {
-      await http.post("/admin/auth/change-password", input, withSessionCookie);
+      await http.post("/admin/auth/change-password", input);
     },
     async getAdminSession() {
       const response = await http.get("/admin/session");

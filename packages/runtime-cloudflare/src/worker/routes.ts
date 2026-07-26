@@ -1003,7 +1003,9 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     const refreshToken = refreshTokenFromCookie(request);
     if (refreshToken) {
-      await dependencies.adminAuthService.logout(refreshToken);
+      // An already-expired or already-revoked session still has to clear the
+      // cookie, or the browser keeps presenting a dead token forever.
+      await dependencies.adminAuthService.logout(refreshToken).catch(() => undefined);
     }
     return new Response(null, { status: 204, headers: { "set-cookie": clearAdminRefreshCookie() } });
   }

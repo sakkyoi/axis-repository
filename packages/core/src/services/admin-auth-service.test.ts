@@ -201,6 +201,30 @@ describe("AdminAuthService", () => {
       .resolves.toMatchObject({ principal: { username: "admin" } });
   });
 
+  it("stops honouring access tokens once the user is disabled", async () => {
+    const state = new MemoryStateStore();
+    const service = createService({ state });
+    const login = await service.login({ username: "admin", password: "correct-password" });
+    const user = await state.adminUsers.getByUsername("admin");
+
+    await state.adminUsers.save({ ...user!, disabledAt: "2026-07-26T00:01:00.000Z" });
+
+    // Otherwise a disabled account keeps working for the rest of the access
+    // token's lifetime.
+    await expect(service.verifyAccessToken(login.accessToken))
+      .rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("clears a logout for a session that is already gone", async () => {
+    const service = createService();
+    const login = await service.login({ username: "admin", password: "correct-password" });
+    await service.logout(login.refreshToken);
+
+    // The route swallows this so the cookie is still cleared; the service is
+    // free to report it.
+    await expect(service.logout(login.refreshToken)).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
   it("stops honouring access tokens once the session is logged out", async () => {
     const service = createService();
     const login = await service.login({ username: "admin", password: "correct-password" });

@@ -80,8 +80,11 @@ export class AdminAuthService {
     const session = await this.findValidRefreshSession(refreshToken);
     // A sliding window with no ceiling means one session can be extended
     // indefinitely, so cap it against the time it was first created.
-    const sessionAgeMs = this.options.clock.now().getTime() - Date.parse(session.createdAt);
-    if (sessionAgeMs >= this.sessionAbsoluteTtlMs()) {
+    const sessionStartedAt = Date.parse(session.createdAt);
+    if (!Number.isFinite(sessionStartedAt)) {
+      throw new UnauthorizedError();
+    }
+    if (this.options.clock.now().getTime() - sessionStartedAt >= this.sessionAbsoluteTtlMs()) {
       throw new UnauthorizedError();
     }
     const user = await this.options.state.adminUsers.getById(session.subject);
@@ -117,7 +120,12 @@ export class AdminAuthService {
     if (!session || session.revokedAt) {
       throw new UnauthorizedError();
     }
-    if (Date.parse(session.expiresAt) <= this.options.clock.now().getTime()) {
+    const expiresAt = Date.parse(session.expiresAt);
+    if (!Number.isFinite(expiresAt) || expiresAt <= this.options.clock.now().getTime()) {
+      throw new UnauthorizedError();
+    }
+    const user = await this.options.state.adminUsers.getById(principal.subject);
+    if (!user || user.disabledAt) {
       throw new UnauthorizedError();
     }
     return principal;
