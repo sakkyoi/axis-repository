@@ -64,6 +64,15 @@ interface FixturePackage {
   architecture?: string;
   suite?: string;
   files?: string[];
+  /** Publishes the package as an installer .udeb rather than a .deb. */
+  installer?: boolean;
+}
+
+/** An uploaded file that is not a binary package: a .dsc or one of its tarballs. */
+interface FixtureFile {
+  filename: string;
+  body: string;
+  suite?: string;
 }
 
 function publishInput(sessionId: string, packages: FixturePackage[], repositoryOverrides = {}): PublishArtifactsInput {
@@ -91,7 +100,7 @@ function publishInput(sessionId: string, packages: FixturePackage[], repositoryO
     },
     artifacts: packages.map((fixture, index) => {
       const architecture = fixture.architecture ?? "amd64";
-      const filename = `${fixture.name}_${fixture.version}_${architecture}.deb`;
+      const filename = `${fixture.name}_${fixture.version}_${architecture}.${fixture.installer ? "udeb" : "deb"}`;
       const objectKey = `_staging/uploads/${sessionId}/upl_${index + 1}/${filename}`;
       return {
         artifact: {
@@ -129,7 +138,7 @@ async function seedUploads(
 ): Promise<void> {
   for (const [index, fixture] of packages.entries()) {
     const architecture = fixture.architecture ?? "amd64";
-    const filename = `${fixture.name}_${fixture.version}_${architecture}.deb`;
+    const filename = `${fixture.name}_${fixture.version}_${architecture}.${fixture.installer ? "udeb" : "deb"}`;
     await objectStore.putBytes(
       `_staging/uploads/${sessionId}/upl_${index + 1}/${filename}`,
       debArchive({
@@ -177,6 +186,27 @@ function byHashKeys(objectStore: MemoryRepositoryObjectStore): string[] {
 
 const PACKAGES_KEY = "repositories/debian-internal/dists/noble/main/binary-amd64/Packages";
 const CONTENTS_KEY = "repositories/debian-internal/dists/noble/main/Contents-amd64.gz";
+const INSTALLER_PACKAGES_KEY = "repositories/debian-internal/dists/noble/main/debian-installer/binary-amd64/Packages";
+const SOURCES_KEY = "repositories/debian-internal/dists/noble/main/source/Sources";
+
+function dsc(input: { version: string }): string {
+  const revision = input.version.split("-")[1] ?? "1";
+  return [
+    "Format: 3.0 (quilt)",
+    "Source: myapp",
+    "Binary: myapp",
+    "Architecture: any",
+    `Version: ${input.version}`,
+    "Maintainer: Release Team <release@example.com>",
+    "Checksums-Sha256:",
+    ` ${"a".repeat(64)} 12 myapp_1.2.3.orig.tar.xz`,
+    ` ${"b".repeat(64)} 14 myapp_1.2.3-${revision}.debian.tar.xz`,
+    "Files:",
+    ` ${"c".repeat(32)} 12 myapp_1.2.3.orig.tar.xz`,
+    ` ${"d".repeat(32)} 14 myapp_1.2.3-${revision}.debian.tar.xz`,
+    "",
+  ].join("\n");
+}
 
 async function gunzipStored(objectStore: MemoryRepositoryObjectStore, key: string): Promise<string> {
   const value = [...objectStore.objects].reverse().find((candidate) => candidate.key === key)?.value;
@@ -210,6 +240,39 @@ async function createHarness() {
     async publish(sessionId: string, packages: FixturePackage[], repositoryOverrides = {}) {
       await seedUploads(objectStore, sessionId, packages);
       return publisher.publish(publishInput(sessionId, packages, repositoryOverrides));
+    },
+    async publishFiles(sessionId: string, files: FixtureFile[], repositoryOverrides = {}) {
+      const input = publishInput(sessionId, [], repositoryOverrides);
+      input.artifacts = await Promise.all(files.map(async (file, index) => {
+        const objectKey = `_staging/uploads/${sessionId}/upl_${index + 1}/${file.filename}`;
+        await objectStore.putText(objectKey, file.body, "text/plain");
+        return {
+          artifact: {
+            filename: file.filename,
+            size: file.body.length,
+            sha256: "a".repeat(64),
+            contentType: "text/plain",
+            metadata: { component: "main", ...(file.suite ? { suite: file.suite } : {}) },
+          },
+          upload: {
+            uploadId: `upl_${index + 1}`,
+            filename: file.filename,
+            objectKey,
+            method: "PUT",
+            url: "https://uploads.local",
+            headers: {},
+            expiresAt: "2026-07-18T00:20:00.000Z",
+          },
+          verified: {
+            uploadId: `upl_${index + 1}`,
+            objectKey,
+            size: file.body.length,
+            sha256: "a".repeat(64),
+            verifiedAt: "2026-07-18T00:05:00.000Z",
+          },
+        };
+      }));
+      return publisher.publish(input);
     },
     async reconcile(repositoryOverrides = {}) {
       return reconcileAptRepository({
@@ -542,6 +605,88 @@ describe("APT index lifecycle", () => {
     const contents = await gunzipStored(harness.objectStore, CONTENTS_KEY);
     expect(contents).not.toContain("usr/bin/alpha");
     expect(contents).toContain("usr/bin/beta utils/beta\n");
+  });
+
+  it("publishes installer packages into their own debian-installer index", async () => {
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [
+      { name: "alpha", version: "1.0.0" },
+      { name: "alpha-udeb", version: "1.0.0", installer: true },
+    ]);
+
+    expect(storedText(harness.objectStore, PACKAGES_KEY)).toContain("Package: alpha\n");
+    expect(storedText(harness.objectStore, PACKAGES_KEY)).not.toContain("Package: alpha-udeb\n");
+    expect(storedText(harness.objectStore, INSTALLER_PACKAGES_KEY)).toContain("Package: alpha-udeb\n");
+    expect(storedText(harness.objectStore, "repositories/debian-internal/dists/noble/Release"))
+      .toContain("main/debian-installer/binary-amd64/Packages\n");
+  });
+
+  it("publishes a source package into a Sources index", async () => {
+    const harness = await createHarness();
+
+    await harness.publishFiles("pub_1", [
+      { filename: "myapp_1.2.3.orig.tar.xz", body: "orig tarball" },
+      { filename: "myapp_1.2.3-1.debian.tar.xz", body: "debian tarball" },
+      { filename: "myapp_1.2.3-1.dsc", body: dsc({ version: "1.2.3-1" }) },
+    ]);
+
+    const sources = storedText(harness.objectStore, SOURCES_KEY) ?? "";
+    expect(sources).toContain("Package: myapp\n");
+    expect(sources).toContain("Directory: pool/main/myapp\n");
+    expect(sources).toContain("myapp_1.2.3-1.dsc");
+    expect(storedKeys(harness.objectStore)).toEqual(expect.arrayContaining([
+      "repositories/debian-internal/pool/main/myapp/myapp_1.2.3-1.dsc",
+      "repositories/debian-internal/pool/main/myapp/myapp_1.2.3.orig.tar.xz",
+      "repositories/debian-internal/pool/main/myapp/myapp_1.2.3-1.debian.tar.xz",
+    ]));
+    expect(storedText(harness.objectStore, "repositories/debian-internal/dists/noble/Release"))
+      .toContain("main/source/Sources\n");
+  });
+
+  it("refuses a .dsc whose tarballs were never uploaded", async () => {
+    const harness = await createHarness();
+
+    await expect(harness.publishFiles("pub_1", [
+      { filename: "myapp_1.2.3-1.dsc", body: dsc({ version: "1.2.3-1" }) },
+    ])).rejects.toThrow("APT source .dsc references a file that was not uploaded");
+  });
+
+  it("accepts a revision that reuses an orig tarball already in the pool", async () => {
+    const harness = await createHarness();
+
+    await harness.publishFiles("pub_1", [
+      { filename: "myapp_1.2.3.orig.tar.xz", body: "orig tarball" },
+      { filename: "myapp_1.2.3-1.debian.tar.xz", body: "debian tarball" },
+      { filename: "myapp_1.2.3-1.dsc", body: dsc({ version: "1.2.3-1" }) },
+    ]);
+    // The second revision ships only a new debian.tar, as dpkg-buildpackage
+    // does when the upstream tarball has not changed.
+    await harness.publishFiles("pub_2", [
+      { filename: "myapp_1.2.3-2.debian.tar.xz", body: "debian tarball two" },
+      { filename: "myapp_1.2.3-2.dsc", body: dsc({ version: "1.2.3-2" }) },
+    ]);
+
+    const sources = storedText(harness.objectStore, SOURCES_KEY) ?? "";
+    expect(sources).toContain("Version: 1.2.3-1\n");
+    expect(sources).toContain("Version: 1.2.3-2\n");
+  });
+
+  it("drops a source package from Sources once its .dsc is gone", async () => {
+    const harness = await createHarness();
+
+    await harness.publishFiles("pub_1", [
+      { filename: "myapp_1.2.3.orig.tar.xz", body: "orig tarball" },
+      { filename: "myapp_1.2.3-1.debian.tar.xz", body: "debian tarball" },
+      { filename: "myapp_1.2.3-1.dsc", body: dsc({ version: "1.2.3-1" }) },
+    ]);
+    await harness.objectStore.deleteObject("repositories/debian-internal/pool/main/myapp/myapp_1.2.3-1.dsc");
+
+    await harness.reconcile();
+
+    expect(storedText(harness.objectStore, SOURCES_KEY)).toBeUndefined();
+    expect(storedText(harness.objectStore, "repositories/debian-internal/dists/noble/Release"))
+      .not.toContain("main/source/Sources");
   });
 
   it("does not require a signing key to reconcile a repository that has published nothing", async () => {

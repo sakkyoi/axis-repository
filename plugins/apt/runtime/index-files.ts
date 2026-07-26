@@ -2,6 +2,7 @@ import { formatStanza, stanzaField, type DebianStanza } from "../shared/stanza";
 import type { AptResolvedRepositoryConfig } from "./config";
 import { formatContentsIndex, type AptContentsIndexes } from "./contents";
 import { descriptionDigest, gzip, indexKey, type AptPackageIndex } from "./packages";
+import { formatSourcesIndex } from "./sources";
 
 export const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";
 export const GZIP_CONTENT_TYPE = "application/gzip";
@@ -28,6 +29,7 @@ export async function buildAptIndexFiles(input: {
   config: AptResolvedRepositoryConfig;
   packageIndexes: AptPackageIndex[];
   contentsByIndex?: AptContentsIndexes;
+  sourcesByComponent?: Map<string, DebianStanza[]>;
 }): Promise<AptIndexFile[]> {
   const files: AptIndexFile[] = [];
 
@@ -35,7 +37,7 @@ export async function buildAptIndexFiles(input: {
     files.push(...await compressedVariants(packageIndex.relativePath, packageIndex.packages));
 
     const contents = formatContentsIndex(
-      input.contentsByIndex?.get(indexKey(packageIndex.component, packageIndex.architecture))
+      input.contentsByIndex?.get(indexKey(packageIndex.component, packageIndex.architecture, packageIndex.installer))
         ?? new Map<string, string[]>(),
     );
     if (contents !== undefined) {
@@ -47,6 +49,11 @@ export async function buildAptIndexFiles(input: {
   }
 
   for (const component of input.config.components) {
+    const sources = formatSourcesIndex(input.sourcesByComponent?.get(component) ?? []);
+    if (sources !== undefined) {
+      files.push(...await compressedVariants(`${component}/source/Sources`, sources));
+    }
+
     const translation = buildTranslationIndex(
       input.packageIndexes.filter((packageIndex) => packageIndex.component === component),
     );

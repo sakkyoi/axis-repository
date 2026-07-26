@@ -1399,6 +1399,10 @@ describe("Cloudflare runtime routes", () => {
         "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
         "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public jammy main contrib",
       ],
+      sourcePackageLines: [
+        "deb-src [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
+        "deb-src [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public jammy main contrib",
+      ],
     });
   });
 

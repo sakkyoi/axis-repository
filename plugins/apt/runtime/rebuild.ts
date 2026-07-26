@@ -16,6 +16,7 @@ import {
   readAptSuiteStates,
   suiteContentsIndexes,
   suitePackageIndexes,
+  suiteSourceIndexes,
   writeAptRepositoryIndexes,
   type AptReleaseSigner,
 } from "./index-store";
@@ -29,12 +30,21 @@ import {
   type AptSuiteIndexes,
 } from "./packages";
 import { aptArtifactMetadataFromDebControl } from "./publisher";
+import { buildSourceStanza, parseDsc, sourceStanzaFilenames } from "./sources";
 
 interface ReconciledPoolEntry {
   objectKey: string;
   relativeFilename: string;
   component: string;
   architecture: string;
+  installer: boolean;
+  stanza: DebianStanza;
+  suites: string[];
+}
+
+interface ReconciledSourceEntry {
+  objectKey: string;
+  component: string;
   stanza: DebianStanza;
   suites: string[];
 }
@@ -72,8 +82,16 @@ export async function reconcileAptRepository(input: {
   const existingIndexes = suitePackageIndexes(published);
   const existingContents = suiteContentsIndexes(published);
   const indexedStanzas = stanzasByFilename(existingIndexes);
-  const poolObjects = (await listAllObjects(input.objectStore, `${repositoryPrefix}pool/`))
+  const allPoolObjects = await listAllObjects(input.objectStore, `${repositoryPrefix}pool/`);
+  const poolObjects = allPoolObjects
     .filter((object) => object.key.endsWith(".deb") || object.key.endsWith(".udeb"));
+  const sourceEntries = await reconcileSourceEntries({
+    objectStore: input.objectStore,
+    repositoryPrefix,
+    poolObjects: allPoolObjects.filter((object) => object.key.endsWith(".dsc")),
+    existingSources: suiteSourceIndexes(published),
+    defaultSuite: parsedConfig.codename,
+  });
 
   const entries: ReconciledPoolEntry[] = [];
   for (const object of poolObjects) {
@@ -94,12 +112,15 @@ export async function reconcileAptRepository(input: {
       relativeFilename,
       component: relativeFilename.split("/")[1] ?? "main",
       architecture: stanzaField(stanza, "Architecture") ?? "all",
+      installer: object.key.endsWith(".udeb"),
       stanza,
       suites: indexed?.suites ?? [parsedConfig.codename],
     });
   }
 
-  if (entries.length === 0 && [...existingIndexes.values()].every((indexes) => indexes.size === 0)) {
+  const nothingPublished = [...published.values()]
+    .every((state) => state.packages.size === 0 && state.sources.size === 0);
+  if (entries.length === 0 && sourceEntries.length === 0 && nothingPublished) {
     // Nothing has ever been published, so there is nothing to reconcile. Not
     // even a signing key is needed: writing an empty signed Release here would
     // make a rebuild fail on a repository that simply has no packages yet.
@@ -118,6 +139,7 @@ export async function reconcileAptRepository(input: {
     suite,
     stanzasByIndex: suiteStanzas(entries.filter((entry) => entry.suites.includes(suite)), config.architectures),
     existingContents: existingContents.get(suite),
+    incomingSources: sourcesByComponent(sourceEntries.filter((entry) => entry.suites.includes(suite))),
     publishDate: publishedAt,
   })));
 
@@ -139,15 +161,86 @@ function suiteStanzas(entries: ReconciledPoolEntry[], architectures: string[]): 
   for (const entry of entries) {
     const targets = entry.architecture === "all" ? architectures : [entry.architecture];
     for (const architecture of targets) {
-      const key = indexKey(entry.component, architecture);
+      const key = indexKey(entry.component, architecture, entry.installer);
       const index: AptIndexStanzas = stanzasByIndex.get(key)
-        ?? { component: entry.component, architecture, stanzas: [] };
+        ?? {
+          component: entry.component,
+          architecture,
+          ...(entry.installer ? { installer: true } : {}),
+          stanzas: [],
+        };
       index.stanzas.push(entry.stanza);
       stanzasByIndex.set(key, index);
     }
   }
 
   return stanzasByIndex;
+}
+
+function sourcesByComponent(entries: ReconciledSourceEntry[]): Map<string, DebianStanza[]> {
+  const byComponent = new Map<string, DebianStanza[]>();
+  for (const entry of entries) {
+    byComponent.set(entry.component, [...(byComponent.get(entry.component) ?? []), entry.stanza]);
+  }
+  return byComponent;
+}
+
+/**
+ * Rebuilds the source stanzas from the `.dsc` files still in the pool.
+ *
+ * A `.dsc` is small and self-describing, so unlike a `.deb` it is cheap to
+ * re-read; the stanza is derived fresh rather than salvaged from the index.
+ * Which suites a source package belongs to still comes from the indexes, since
+ * the pool cannot say.
+ */
+async function reconcileSourceEntries(input: {
+  objectStore: RepositoryObjectStore;
+  repositoryPrefix: string;
+  poolObjects: Array<{ key: string }>;
+  existingSources: Map<string, Map<string, DebianStanza[]>>;
+  defaultSuite: string;
+}): Promise<ReconciledSourceEntry[]> {
+  const suitesByDsc = new Map<string, string[]>();
+  for (const [suite, byComponent] of input.existingSources) {
+    for (const stanza of [...byComponent.values()].flat()) {
+      for (const filename of sourceStanzaFilenames(stanza)) {
+        if (!filename.endsWith(".dsc")) {
+          continue;
+        }
+        const suites = suitesByDsc.get(filename) ?? [];
+        if (!suites.includes(suite)) {
+          suites.push(suite);
+        }
+        suitesByDsc.set(filename, suites);
+      }
+    }
+  }
+
+  const entries: ReconciledSourceEntry[] = [];
+  for (const object of input.poolObjects) {
+    const stored = await input.objectStore.getObject(object.key);
+    if (!stored) {
+      continue;
+    }
+    const relativeFilename = object.key.slice(input.repositoryPrefix.length);
+    const segments = relativeFilename.split("/");
+    const component = segments[1] ?? "main";
+    const bytes = await objectBytes(stored);
+    const dsc = parseDsc(bytes);
+    entries.push({
+      objectKey: object.key,
+      component,
+      stanza: await buildSourceStanza({
+        dsc,
+        dscFile: { name: segments[segments.length - 1] ?? relativeFilename, size: bytes.byteLength, bytes },
+        component,
+        directory: segments.slice(0, -1).join("/"),
+      }),
+      suites: suitesByDsc.get(relativeFilename) ?? [input.defaultSuite],
+    });
+  }
+
+  return entries;
 }
 
 /** Records which suites already index each pool object, and under what stanza. */

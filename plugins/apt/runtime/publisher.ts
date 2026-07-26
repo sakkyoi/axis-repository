@@ -7,19 +7,22 @@ import {
   type PublishResult,
   type RepositoryObjectStore,
 } from "@axis-repository/core";
-import { objectBytes, type RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { debControlMetadataFields } from "./packages";
+import { listAllObjects, objectBytes, type RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { aptArtifactKind, debControlMetadataFields } from "./packages";
 import { readDebControlMetadata, type DebControlMetadata } from "./deb-control";
 import { readDebFilePaths } from "../shared/deb-files";
 import {
   readAptSuiteStates,
   suiteContentsIndexes,
   suitePackageIndexes,
+  suiteSourceIndexes,
   writeAptRepositoryIndexes,
   type AptReleaseSigner,
 } from "./index-store";
 import { buildAptRepositoryMetadata, parseAptRepositoryConfig } from "./metadata";
 import type { AptRepositoryConfig } from "./config";
+
+const textDecoder = new TextDecoder();
 
 export class AptPublisher implements ArtifactPublisher {
   constructor(
@@ -47,6 +50,8 @@ export class AptPublisher implements ArtifactPublisher {
       ...enrichedInput,
       existingIndexes: suitePackageIndexes(published),
       existingContents: suiteContentsIndexes(published),
+      existingSources: suiteSourceIndexes(published),
+      poolFilenames: await poolFilenames(objectStore, input.repository.name),
     });
     const key = await this.options.signingKeys.getActivePrivateKey(
       metadata.config.signingKeyId,
@@ -89,7 +94,23 @@ export class AptPublisher implements ArtifactPublisher {
       throw new ValidationError("APT artifact upload object could not be read for metadata parsing");
     }
 
+    const kind = aptArtifactKind(artifact.artifact.filename);
+    if (kind === "source-component") {
+      // A tarball carries no metadata of its own; the .dsc describes it.
+      return artifact;
+    }
+
     const bytes = await objectBytes(object);
+    if (kind === "source") {
+      return {
+        ...artifact,
+        artifact: {
+          ...artifact.artifact,
+          metadata: { ...artifact.artifact.metadata, dscText: textDecoder.decode(bytes) },
+        },
+      };
+    }
+
     const control = await readDebControlMetadata(bytes);
     return {
       ...artifact,
@@ -108,6 +129,19 @@ export class AptPublisher implements ArtifactPublisher {
       },
     };
   }
+}
+
+/**
+ * Lists what the pool already holds, as repository-relative paths.
+ *
+ * A `.dsc` may point at an `.orig.tar` uploaded with an earlier revision, so
+ * publishing has to be able to see that it is already there rather than
+ * demanding it again.
+ */
+async function poolFilenames(objectStore: RepositoryObjectStore, repositoryName: string): Promise<Set<string>> {
+  const prefix = `repositories/${repositoryName}/`;
+  const objects = await listAllObjects(objectStore, `${prefix}pool/`);
+  return new Set(objects.map((object) => object.key.slice(prefix.length)));
 }
 
 export function aptArtifactMetadataFromDebControl(input: {

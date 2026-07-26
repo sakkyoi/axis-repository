@@ -19,6 +19,8 @@ export interface AptSourceInfo {
   sourceLine: string;
   /** One line per suite, in the order the repository declares them. */
   sourceLines: string[];
+  /** The `deb-src` counterparts, for fetching source packages. */
+  sourcePackageLines: string[];
 }
 
 export interface AptInstallInfo {
@@ -59,8 +61,8 @@ export function buildAptSourceInfo(input: {
   const keyringPath = keyringPathForRepository(input.repository.name);
   const components = [...input.repository.components];
   const suites = input.repository.suites.length > 0 ? [...input.repository.suites] : [input.repository.codename];
-  const sourceLineFor = (suite: string) =>
-    `deb [signed-by=${keyringPath}] ${baseUrl} ${suite} ${components.join(" ")}`;
+  const sourceLineFor = (suite: string, kind: "deb" | "deb-src" = "deb") =>
+    `${kind} [signed-by=${keyringPath}] ${baseUrl} ${suite} ${components.join(" ")}`;
 
   return {
     repository: input.repository.name,
@@ -71,7 +73,8 @@ export function buildAptSourceInfo(input: {
     components,
     keyringPath,
     sourceLine: sourceLineFor(input.repository.codename),
-    sourceLines: suites.map(sourceLineFor),
+    sourceLines: suites.map((suite) => sourceLineFor(suite)),
+    sourcePackageLines: suites.map((suite) => sourceLineFor(suite, "deb-src")),
   };
 }
 

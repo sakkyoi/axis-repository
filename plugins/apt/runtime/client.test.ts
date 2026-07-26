@@ -39,6 +39,9 @@ describe("APT client helpers", () => {
       sourceLines: [
         "deb [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
       ],
+      sourcePackageLines: [
+        "deb-src [signed-by=/usr/share/keyrings/axis-debian-public.gpg] https://axis.example/repositories/debian-public noble main contrib",
+      ],
     });
   });
 

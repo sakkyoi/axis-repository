@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { md5Hex } from "../shared/md5";
 import { parseStanzas, stanzaField } from "../shared/stanza";
 import { buildTranslationIndex } from "./index-files";
-import { buildPackageIndexes, descriptionDigest, withDescriptionDigest, type AptIndexStanzas } from "./packages";
+import { buildPackageIndexes, descriptionDigest, indexKey, withDescriptionDigest, type AptIndexStanzas } from "./packages";
 import type { AptResolvedRepositoryConfig } from "./config";
 
 const config: AptResolvedRepositoryConfig = {
@@ -26,7 +26,7 @@ function stanza(input: { name: string; architecture: string; description: string
 function stanzasByIndex(entries: Array<{ architecture: string; stanzas: ReturnType<typeof stanza>[] }>) {
   return new Map<string, AptIndexStanzas>(
     entries.map((entry) => [
-      `main\0${entry.architecture}`,
+      indexKey("main", entry.architecture),
       { component: "main", architecture: entry.architecture, stanzas: entry.stanzas },
     ]),
   );

@@ -200,6 +200,33 @@ often, or clients start refusing the repository.
 Free-text fields reject control characters. A newline in `Origin` would
 otherwise start a new `Release` field.
 
+### Source Packages And Installer Packages
+
+A publish session can carry more than binary packages. What a file is, is
+decided by its name:
+
+| Name | Where it goes |
+| --- | --- |
+| `*.deb` | `<component>/binary-<arch>/Packages` |
+| `*.udeb` | `<component>/debian-installer/binary-<arch>/Packages` |
+| `*.dsc` | `<component>/source/Sources` |
+| `*.tar.{gz,xz,bz2,zst,lzma}`, `*.diff.gz` | the pool, named by the `.dsc` |
+
+Source packages are published by uploading the `.dsc` together with the
+tarballs it names, into the same session. The `.dsc` is authoritative: the
+`Sources` stanza is derived from it, `Directory:` points at
+`pool/<component>/<source>/`, and the `.dsc` is added to every checksum list
+because it describes the other files but never itself.
+
+Every file a `.dsc` names must be reachable, either uploaded in the same
+session or already in the pool. That second case is the usual Debian workflow:
+a new revision ships only a `.debian.tar` and reuses the `.orig.tar` already
+published. A `.dsc` whose files are missing is rejected rather than published,
+because it would advertise a source package apt cannot fetch.
+
+The `apt/source` and `apt/install` helpers return `sourcePackageLines`, the
+`deb-src` counterpart of `sourceLines`.
+
 ### Contents Indexes
 
 Each component publishes `dists/<suite>/<component>/Contents-<arch>.gz`, which

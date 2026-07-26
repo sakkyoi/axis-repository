@@ -21,6 +21,7 @@ export interface AptPoolCopy {
 export interface AptPackageIndex {
   component: string;
   architecture: string;
+  installer?: boolean;
   /** Path under `dists/<codename>/`, as `Release` lists it. */
   relativePath: string;
   packages: string;
@@ -29,6 +30,7 @@ export interface AptPackageIndex {
 }
 
 export interface ValidatedAptArtifact {
+  kind: "binary" | "installer";
   artifact: PublishArtifactRequest;
   packageName: string;
   version: string;
@@ -42,11 +44,43 @@ export interface ValidatedAptArtifact {
   filePaths: string[];
 }
 
+/** A `.dsc` or one of the tarballs it points at. */
+export interface ValidatedAptSourceArtifact {
+  kind: "source" | "source-component";
+  artifact: PublishArtifactRequest;
+  filename: string;
+  component: string;
+  suite: string;
+  /** The `.dsc` text, present only on the source control file itself. */
+  dscText?: string;
+}
+
+export type ValidatedAptEntry = ValidatedAptArtifact | ValidatedAptSourceArtifact;
+
 /** Groups the stanzas that belong in one `<component>/binary-<architecture>/Packages`. */
 export interface AptIndexStanzas {
   component: string;
   architecture: string;
+  /** Installer packages live in their own index under `debian-installer/`. */
+  installer?: boolean;
   stanzas: DebianStanza[];
+}
+
+/**
+ * What an uploaded file is, decided by its name.
+ *
+ * A publish session can hold binary packages, installer packages, and the
+ * `.dsc` and tarballs of a source package, and each ends up in a different
+ * index — or, for the tarballs, in no index of its own at all.
+ */
+export type AptArtifactKind = "binary" | "installer" | "source" | "source-component";
+
+export function aptArtifactKind(filename: string): AptArtifactKind | undefined {
+  if (installerFilenamePattern.test(filename)) return "installer";
+  if (binaryFilenamePattern.test(filename)) return "binary";
+  if (sourceControlFilenamePattern.test(filename)) return "source";
+  if (sourceComponentFilenamePattern.test(filename)) return "source-component";
+  return undefined;
 }
 
 /** The published `Packages` indexes of one suite, keyed by component and architecture. */
@@ -108,7 +142,12 @@ export const debControlMetadataFields = [
   ["tag", "tag"],
 ] as const;
 
-const safeDebFilenamePattern = /^[A-Za-z0-9][A-Za-z0-9._+~-]*\.u?deb$/;
+const safeArtifactNamePattern = /^[A-Za-z0-9][A-Za-z0-9._+~-]*$/;
+const binaryFilenamePattern = /\.deb$/;
+const installerFilenamePattern = /\.udeb$/;
+const sourceControlFilenamePattern = /\.dsc$/;
+// The tarballs and diff a .dsc points at; dpkg has used all of these.
+const sourceComponentFilenamePattern = /\.(tar\.(gz|xz|bz2|zst|lzma)|diff\.gz)$/;
 // Rejecting control characters is the point: they would let a hostile deb
 // control field inject extra stanza lines into a Packages index.
 // eslint-disable-next-line no-control-regex
@@ -124,47 +163,68 @@ export function validateAptPublishArtifacts(input: {
   }
 }
 
+export function indexRelativePath(index: { component: string; architecture: string; installer?: boolean }): string {
+  return index.installer
+    ? `${index.component}/debian-installer/binary-${index.architecture}/Packages`
+    : `${index.component}/binary-${index.architecture}/Packages`;
+}
+
 export function validateAptArtifacts(input: {
   repository: Repository;
   artifacts: PublishArtifactRequest[];
-}): ValidatedAptArtifact[] {
+}): ValidatedAptEntry[] {
   const config = parseAptRepositoryConfig(input.repository);
   return input.artifacts.map((artifact) => {
     const metadata = artifact.metadata;
-    const packageName = requiredArtifactString(metadata, "package");
-    const version = requiredArtifactString(metadata, "version");
-    const architecture = requiredArtifactString(metadata, "architecture");
+    const filename = validateArtifactFilename(artifact.filename);
+    const kind = aptArtifactKind(filename);
     const component = optionalArtifactString(metadata, "component") ?? "main";
     const suite = optionalArtifactString(metadata, "suite") ?? config.codename;
-    const description = requiredArtifactString(metadata, "description");
-    const maintainer = requiredArtifactString(metadata, "maintainer");
-    const filename = validateArtifactFilename(artifact.filename);
-
-    validateControlField(packageName, "artifact metadata package");
-    validateControlField(version, "artifact metadata version");
-    validateControlField(architecture, "artifact metadata architecture");
     validateControlField(component, "artifact metadata component");
-    validateMultiLineControlField(description, "artifact metadata description");
-    validateControlField(maintainer, "artifact metadata maintainer");
-    validatePathSegment(packageName, "artifact metadata package");
     validatePathSegment(component, "artifact metadata component");
     validatePathSegment(suite, "artifact metadata suite");
-    if (architecture !== "all") {
-      validatePathSegment(architecture, "artifact metadata architecture");
-    }
-    validateOptionalControlFields(metadata);
-
     if ((config.components ?? ["main"]).includes(component) === false) {
       throw new ValidationError("artifact metadata component is not configured for this repository");
     }
     if ((config.suites ?? [config.codename]).includes(suite) === false) {
       throw new ValidationError("artifact metadata suite is not configured for this repository");
     }
+
+    if (kind === "source" || kind === "source-component") {
+      const dscText = metadata.dscText;
+      return {
+        kind,
+        artifact,
+        filename,
+        component,
+        suite,
+        ...(typeof dscText === "string" ? { dscText } : {}),
+      };
+    }
+
+    const packageName = requiredArtifactString(metadata, "package");
+    const version = requiredArtifactString(metadata, "version");
+    const architecture = requiredArtifactString(metadata, "architecture");
+    const description = requiredArtifactString(metadata, "description");
+    const maintainer = requiredArtifactString(metadata, "maintainer");
+
+    validateControlField(packageName, "artifact metadata package");
+    validateControlField(version, "artifact metadata version");
+    validateControlField(architecture, "artifact metadata architecture");
+    validateMultiLineControlField(description, "artifact metadata description");
+    validateControlField(maintainer, "artifact metadata maintainer");
+    validatePathSegment(packageName, "artifact metadata package");
+    if (architecture !== "all") {
+      validatePathSegment(architecture, "artifact metadata architecture");
+    }
+    validateOptionalControlFields(metadata);
+
     if (architecture !== "all" && config.architectures && !config.architectures.includes(architecture)) {
       throw new ValidationError("artifact metadata architecture is not configured for this repository");
     }
 
     return {
+      kind: kind === "installer" ? "installer" : "binary",
       artifact,
       packageName,
       version,
@@ -250,8 +310,8 @@ export function packageStanzaIdentity(stanza: DebianStanza): string {
   ].join("\0");
 }
 
-export function indexKey(component: string, architecture: string): string {
-  return `${component}\0${architecture}`;
+export function indexKey(component: string, architecture: string, installer = false): string {
+  return `${component}\0${architecture}\0${installer ? "udeb" : "deb"}`;
 }
 
 /**
@@ -339,22 +399,25 @@ export function buildPackageIndexes(input: {
 
   for (const component of input.config.components) {
     for (const architecture of input.config.architectures) {
-      const index = input.stanzasByIndex.get(indexKey(component, architecture));
-      if (index === undefined || index.stanzas.length === 0) {
-        continue;
+      for (const installer of [false, true]) {
+        const index = input.stanzasByIndex.get(indexKey(component, architecture, installer));
+        if (index === undefined || index.stanzas.length === 0) {
+          continue;
+        }
+
+        const stanzas = index.stanzas
+          .map((stanza) => withDescriptionDigest(stanza))
+          .sort((left, right) => comparePackageStanzas(left, right));
+
+        packageIndexes.push({
+          component,
+          architecture,
+          ...(installer ? { installer } : {}),
+          relativePath: indexRelativePath({ component, architecture, installer }),
+          packages: stanzas.map((stanza) => formatStanza(stanza)).join("\n"),
+          stanzas,
+        });
       }
-
-      const stanzas = index.stanzas
-        .map((stanza) => withDescriptionDigest(stanza))
-        .sort((left, right) => comparePackageStanzas(left, right));
-
-      packageIndexes.push({
-        component,
-        architecture,
-        relativePath: `${component}/binary-${architecture}/Packages`,
-        packages: stanzas.map((stanza) => formatStanza(stanza)).join("\n"),
-        stanzas,
-      });
     }
   }
 
@@ -442,7 +505,8 @@ function validateArtifactFilename(filename: string): string {
     filename.includes("?") ||
     filename.includes("#") ||
     controlCharacterPattern.test(filename) ||
-    !safeDebFilenamePattern.test(filename)
+    !safeArtifactNamePattern.test(filename) ||
+    aptArtifactKind(filename) === undefined
   ) {
     throw new ValidationError("artifact filename is not safe");
   }

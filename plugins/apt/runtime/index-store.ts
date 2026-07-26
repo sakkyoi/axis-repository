@@ -4,7 +4,7 @@ import type {
   RepositoryObjectStore,
 } from "@axis-repository/core";
 import { listAllObjects, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { parseStanzas } from "../shared/stanza";
+import { parseStanzas, type DebianStanza } from "../shared/stanza";
 import { streamFromBytes } from "../shared/tar";
 import { parseContentsIndex, type AptContentsIndexes } from "./contents";
 import type { AptIndexFile } from "./index-files";
@@ -38,7 +38,8 @@ export interface AptReleaseSigner {
 }
 
 const textDecoder = new TextDecoder();
-const packagesIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/binary-([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Packages$/;
+const packagesIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/(debian-installer\/)?binary-([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Packages$/;
+const sourcesIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/source\/Sources$/;
 const contentsIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Contents-([A-Za-z0-9][A-Za-z0-9._+~-]*)\.gz$/;
 
 export function distsPrefix(repositoryName: string, suite: string): string {
@@ -49,6 +50,7 @@ export function distsPrefix(repositoryName: string, suite: string): string {
 export interface AptSuiteState {
   packages: AptSuiteIndexes;
   contents: AptContentsIndexes;
+  sources: Map<string, DebianStanza[]>;
 }
 
 /** Reads back the published state of every suite the repository declares. */
@@ -73,6 +75,10 @@ export function suiteContentsIndexes(states: Map<string, AptSuiteState>): Map<st
   return new Map([...states].map(([suite, state]) => [suite, state.contents]));
 }
 
+export function suiteSourceIndexes(states: Map<string, AptSuiteState>): Map<string, Map<string, DebianStanza[]>> {
+  return new Map([...states].map(([suite, state]) => [suite, state.sources]));
+}
+
 /**
  * Reads back the `Packages` indexes a repository already publishes.
  *
@@ -91,14 +97,14 @@ export async function readAptSuiteState(input: {
   const objects = await listAllObjects(input.objectStore, prefix);
   const packages: AptSuiteIndexes = new Map();
   const contents: AptContentsIndexes = new Map();
+  const sources = new Map<string, DebianStanza[]>();
 
   for (const object of objects) {
     const relativePath = object.key.slice(prefix.length);
     const packagesMatch = packagesIndexPattern.exec(relativePath);
     const contentsMatch = contentsIndexPattern.exec(relativePath);
-    const component = packagesMatch?.[1] ?? contentsMatch?.[1];
-    const architecture = packagesMatch?.[2] ?? contentsMatch?.[2];
-    if (!component || !architecture) {
+    const sourcesMatch = sourcesIndexPattern.exec(relativePath);
+    if (!packagesMatch && !contentsMatch && !sourcesMatch) {
       continue;
     }
 
@@ -107,10 +113,22 @@ export async function readAptSuiteState(input: {
       continue;
     }
     const bytes = await objectBytes(stored);
+
+    if (sourcesMatch?.[1]) {
+      sources.set(sourcesMatch[1], parseStanzas(textDecoder.decode(bytes)));
+      continue;
+    }
+    const component = packagesMatch?.[1] ?? contentsMatch?.[1];
+    const architecture = packagesMatch?.[3] ?? contentsMatch?.[2];
+    if (!component || !architecture) {
+      continue;
+    }
     if (packagesMatch) {
-      packages.set(indexKey(component, architecture), {
+      const installer = packagesMatch[2] !== undefined;
+      packages.set(indexKey(component, architecture, installer), {
         component,
         architecture,
+        ...(installer ? { installer } : {}),
         stanzas: parseStanzas(textDecoder.decode(bytes)),
       });
     } else {
@@ -118,7 +136,7 @@ export async function readAptSuiteState(input: {
     }
   }
 
-  return { packages, contents };
+  return { packages, contents, sources };
 }
 
 /** `Contents` is published gzipped only, so reading it back has to undo that. */

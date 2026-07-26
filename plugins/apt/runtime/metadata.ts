@@ -11,6 +11,7 @@ import {
   type AptContentsIndexes,
 } from "./contents";
 import { buildAptIndexFiles, type AptIndexFile } from "./index-files";
+import { buildSourceStanza, mergeSourceStanzas, parseDsc } from "./sources";
 import {
   buildPackageIndexes,
   buildPackageStanza,
@@ -24,6 +25,8 @@ import {
   type AptPackageIndex,
   type AptPoolCopy,
   type AptSuiteIndexes,
+  type ValidatedAptEntry,
+  type ValidatedAptSourceArtifact,
 } from "./packages";
 import { buildRelease } from "./release";
 
@@ -39,6 +42,8 @@ export interface AptIndexMetadata {
   suite: string;
   stanzasByIndex: AptSuiteIndexes;
   contentsByIndex: AptContentsIndexes;
+  /** Source package stanzas per component, for `<component>/source/Sources`. */
+  sourcesByComponent: Map<string, DebianStanza[]>;
   packageIndexes: AptPackageIndex[];
   /** Everything written under `dists/<suite>/` and listed in `Release`. */
   indexFiles: AptIndexFile[];
@@ -66,14 +71,19 @@ export async function buildAptRepositoryMetadata(
   input: PublishArtifactsInput & {
     existingIndexes?: Map<string, AptSuiteIndexes>;
     existingContents?: Map<string, AptContentsIndexes>;
+    existingSources?: Map<string, Map<string, DebianStanza[]>>;
+    /** Repository-relative pool paths already stored, for source components. */
+    poolFilenames?: Set<string>;
   },
 ): Promise<AptRepositoryMetadata> {
   const parsedConfig = parseAptRepositoryConfig(input.repository);
   const repositoryName = validatePathSegment(input.repository.name, "repository name");
   const existingIndexes = input.existingIndexes ?? new Map<string, AptSuiteIndexes>();
   const existingContents = input.existingContents ?? new Map<string, AptContentsIndexes>();
+  const existingSources = input.existingSources ?? new Map<string, Map<string, DebianStanza[]>>();
   const incomingBySuite = new Map<string, AptSuiteIndexes>();
   const incomingContents = new Map<string, AptContentsIndexes>();
+  const incomingSources = new Map<string, Map<string, DebianStanza[]>>();
   const poolCopies: AptPoolCopy[] = [];
   const validatedArtifacts = validateAptArtifacts({
     repository: input.repository,
@@ -82,13 +92,47 @@ export async function buildAptRepositoryMetadata(
   const config = resolveAptRepositoryConfig({
     config: parsedConfig,
     existing: existingIndexes.values(),
-    publishedArchitectures: validatedArtifacts.map((artifact) => artifact.architecture),
+    publishedArchitectures: validatedArtifacts
+      .filter((artifact) => !isSourceArtifact(artifact))
+      .map((artifact) => artifact.architecture),
   });
+
+  const sourceComponents = new Map<string, { validated: ValidatedAptSourceArtifact; verifiedSize: number }>();
+  for (const [index, publishedArtifact] of input.artifacts.entries()) {
+    const validated = validatedArtifacts[index];
+    if (validated?.kind === "source-component") {
+      sourceComponents.set(validated.filename, { validated, verifiedSize: publishedArtifact.verified.size });
+      poolCopies.push({
+        sourceKey: publishedArtifact.verified.objectKey,
+        destinationKey: `repositories/${repositoryName}/${sourcePoolDirectory(validated)}/${validated.filename}`,
+        contentType: validated.artifact.contentType,
+      });
+    }
+  }
 
   for (const [index, publishedArtifact] of input.artifacts.entries()) {
     const validated = validatedArtifacts[index];
     if (!validated) {
       throw new ValidationError("APT artifact validation mismatch");
+    }
+    if (isSourceArtifact(validated)) {
+      if (validated.kind === "source") {
+        const source = await buildPublishedSourceStanza({
+          repositoryName,
+          validated,
+          sourceComponents,
+          poolFilenames: input.poolFilenames ?? new Set(),
+        });
+        poolCopies.push({
+          sourceKey: publishedArtifact.verified.objectKey,
+          destinationKey: `repositories/${repositoryName}/${source.directory}/${validated.filename}`,
+          contentType: validated.artifact.contentType,
+        });
+        const bySuite = incomingSources.get(validated.suite) ?? new Map<string, DebianStanza[]>();
+        incomingSources.set(validated.suite, bySuite);
+        bySuite.set(validated.component, [...(bySuite.get(validated.component) ?? []), source.stanza]);
+      }
+      continue;
     }
 
     const relativeFilename = `pool/${validated.component}/${validated.packageName}/${validated.filename}`;
@@ -119,9 +163,9 @@ export async function buildAptRepositoryMetadata(
     const contentsName = contentsNameForStanza(packageStanza, validated.component);
     const targetArchitectures = validated.architecture === "all" ? config.architectures : [validated.architecture];
     for (const targetArchitecture of targetArchitectures) {
-      addStanza(incoming, validated.component, targetArchitecture, packageStanza);
+      addStanza(incoming, validated.component, targetArchitecture, validated.kind === "installer", packageStanza);
       if (contentsName !== undefined && validated.filePaths.length > 0) {
-        const key = indexKey(validated.component, targetArchitecture);
+        const key = indexKey(validated.component, targetArchitecture, validated.kind === "installer");
         const index = contents.get(key) ?? new Map<string, string[]>();
         index.set(contentsName, [...validated.filePaths]);
         contents.set(key, index);
@@ -140,6 +184,8 @@ export async function buildAptRepositoryMetadata(
     ),
     existingContents: existingContents.get(suite),
     incomingContents: incomingContents.get(suite),
+    existingSources: existingSources.get(suite),
+    incomingSources: incomingSources.get(suite),
     publishDate,
   })));
 
@@ -154,6 +200,8 @@ export async function buildAptIndexMetadata(input: {
   stanzasByIndex: AptSuiteIndexes;
   existingContents?: AptContentsIndexes | undefined;
   incomingContents?: AptContentsIndexes | undefined;
+  existingSources?: Map<string, DebianStanza[]> | undefined;
+  incomingSources?: Map<string, DebianStanza[]> | undefined;
   publishDate: string;
 }): Promise<AptIndexMetadata> {
   const packageIndexes = buildPackageIndexes({
@@ -165,13 +213,29 @@ export async function buildAptIndexMetadata(input: {
     existing: input.existingContents,
     incoming: input.incomingContents,
   });
-  const indexFiles = await buildAptIndexFiles({ config: input.config, packageIndexes, contentsByIndex });
+  const sourcesByComponent = new Map<string, DebianStanza[]>();
+  for (const component of input.config.components) {
+    const merged = mergeSourceStanzas(
+      input.existingSources?.get(component) ?? [],
+      input.incomingSources?.get(component) ?? [],
+    );
+    if (merged.length > 0) {
+      sourcesByComponent.set(component, merged);
+    }
+  }
+  const indexFiles = await buildAptIndexFiles({
+    config: input.config,
+    packageIndexes,
+    contentsByIndex,
+    sourcesByComponent,
+  });
 
   return {
     config: input.config,
     suite: input.suite,
     stanzasByIndex: input.stanzasByIndex,
     contentsByIndex,
+    sourcesByComponent,
     packageIndexes,
     indexFiles,
     releasePath: `repositories/${input.repositoryName}/dists/${input.suite}/Release`,
@@ -246,10 +310,86 @@ function addStanza(
   indexes: AptSuiteIndexes,
   component: string,
   architecture: string,
+  installer: boolean,
   stanza: DebianStanza,
 ): void {
-  const key = indexKey(component, architecture);
-  const index = indexes.get(key) ?? { component, architecture, stanzas: [] };
+  const key = indexKey(component, architecture, installer);
+  const index = indexes.get(key)
+    ?? { component, architecture, ...(installer ? { installer } : {}), stanzas: [] };
   index.stanzas.push(stanza);
   indexes.set(key, index);
+}
+
+function isSourceArtifact(entry: ValidatedAptEntry): entry is ValidatedAptSourceArtifact {
+  return entry.kind === "source" || entry.kind === "source-component";
+}
+
+function sourcePoolDirectory(validated: ValidatedAptSourceArtifact): string {
+  const sourceName = sourceNameForComponentFile(validated.filename);
+  return `pool/${validated.component}/${validatePathSegment(sourceName, "source package name")}`;
+}
+
+/**
+ * Recovers the source package name from a component filename.
+ *
+ * Every file of a source package is named `<source>_<version>...`, so the part
+ * before the first underscore is what puts them all in one pool directory.
+ */
+function sourceNameForComponentFile(filename: string): string {
+  return filename.split("_")[0] ?? filename;
+}
+
+/**
+ * Turns an uploaded `.dsc` into the stanza its `Sources` index publishes.
+ *
+ * Every file the `.dsc` names has to be reachable, either uploaded in this
+ * session or already in the pool from an earlier one — re-uploading an
+ * unchanged `.orig.tar` on every revision is the common Debian workflow, and
+ * requiring it would break that. A `.dsc` whose tarballs are missing would
+ * publish a source package apt cannot fetch.
+ */
+async function buildPublishedSourceStanza(input: {
+  repositoryName: string;
+  validated: ValidatedAptSourceArtifact;
+  sourceComponents: Map<string, { validated: ValidatedAptSourceArtifact; verifiedSize: number }>;
+  poolFilenames: Set<string>;
+}): Promise<{ stanza: DebianStanza; directory: string }> {
+  const { validated } = input;
+  if (validated.dscText === undefined) {
+    throw new ValidationError("APT source .dsc could not be read");
+  }
+
+  const dscBytes = new TextEncoder().encode(validated.dscText);
+  const dsc = parseDsc(dscBytes);
+  const directory = `pool/${validated.component}/${validatePathSegment(dsc.sourceName, "source package name")}`;
+
+  for (const file of dsc.files) {
+    validateSourceComponentName(file.name);
+    const uploaded = input.sourceComponents.get(file.name);
+    if (uploaded) {
+      if (uploaded.validated.component !== validated.component || uploaded.validated.suite !== validated.suite) {
+        throw new ValidationError(`APT source file is published to a different component or suite: ${file.name}`);
+      }
+      continue;
+    }
+    if (!input.poolFilenames.has(`${directory}/${file.name}`)) {
+      throw new ValidationError(`APT source .dsc references a file that was not uploaded: ${file.name}`);
+    }
+  }
+
+  return {
+    directory,
+    stanza: await buildSourceStanza({
+      dsc,
+      dscFile: { name: validated.filename, size: dscBytes.byteLength, bytes: dscBytes },
+      component: validated.component,
+      directory,
+    }),
+  };
+}
+
+function validateSourceComponentName(name: string): void {
+  if (name.includes("/") || name.includes("\\") || name === "." || name === ".." || !/^[A-Za-z0-9][A-Za-z0-9._+~-]*$/.test(name)) {
+    throw new ValidationError(`APT source .dsc names an unsafe file: ${name}`);
+  }
 }
