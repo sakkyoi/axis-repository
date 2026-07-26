@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import worker, { AxisAdminDO } from "./index";
 import type { AxisEnv } from "./worker/axis-admin-do";
 import type { DurableStorage } from "./storage/durable-state";
@@ -139,19 +139,42 @@ describe("worker entrypoint", () => {
     expect(namespace.requestedNames).toEqual(["global", "global"]);
   });
 
-  it("passes admin UI runtime config from Worker env into the fallback app", async () => {
-    const root = await worker.fetch(
-      new Request("https://axis.example/"),
-      { ADMIN_UI_API_BASE_URL: "https://fallback-api.example/base" } as unknown as AxisEnv,
-    );
-    const response = await worker.fetch(
-      new Request("https://axis.example/ui/"),
-      { ADMIN_UI_API_BASE_URL: "https://fallback-api.example/base" } as unknown as AxisEnv,
-    );
+  it("refuses every request when the AxisAdminDO binding is missing", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      for (const request of [
+        new Request("https://axis.example/"),
+        new Request("https://axis.example/ui/"),
+        new Request("https://axis.example/health"),
+        new Request("https://axis.example/admin/repositories", {
+          headers: { authorization: "Bearer dev-admin-token" },
+        }),
+        new Request("https://axis.example/admin/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ username: "admin", password: "admin" }),
+        }),
+      ]) {
+        const response = await worker.fetch(request, { ADMIN_UI_API_BASE_URL: "" } as unknown as AxisEnv);
 
-    expect(root.status).toBe(302);
-    expect(root.headers.get("location")).toBe("/ui/");
-    expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toContain('"apiBaseUrl":"https://fallback-api.example/base"');
+        expect(response.status).toBe(503);
+        await expect(response.json()).resolves.toEqual({
+          error: { code: "service_unavailable", message: "Service Unavailable" },
+        });
+      }
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("refuses requests when no env is supplied at all", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await worker.fetch(new Request("https://axis.example/health"));
+
+      expect(response.status).toBe(503);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });

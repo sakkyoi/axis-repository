@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
-import { createDevDependencyHarness } from "./dev-dependencies";
+import { createDevDependencies, createDevDependencyHarness } from "./dev-dependencies";
 import { debArchive } from "@axis-repository/plugin-apt/test-support";
 import type { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 
@@ -240,7 +240,7 @@ function basicAuth(secret: string, username = "axis"): string {
 
 describe("Cloudflare runtime routes", () => {
   it("responds to health checks", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(new Request("https://axis.example/health"));
 
     expect(response.status).toBe(200);
@@ -248,7 +248,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("returns not found for unknown API routes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(new Request("https://axis.example/api/missing"));
 
     expect(response.status).toBe(404);
@@ -258,7 +258,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("redirects root requests to the admin UI namespace", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(new Request("https://axis.example/"));
 
     expect(response.status).toBe(302);
@@ -266,7 +266,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("redirects bare admin UI namespace requests to the canonical trailing slash", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(new Request("https://axis.example/ui"));
 
     expect(response.status).toBe(302);
@@ -274,7 +274,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("serves the admin UI shell under the /ui namespace", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(new Request("https://axis.example/ui/repositories"));
 
     expect(response.status).toBe(200);
@@ -300,7 +300,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("serves admin UI assets without taking over API routes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const shell = await app.fetch(new Request("https://axis.example/ui/"));
     const shellHtml = await shell.text();
@@ -317,7 +317,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("does not serve the admin UI shell for reserved namespace roots", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const admin = await app.fetch(new Request("https://axis.example/admin"));
     const api = await app.fetch(new Request("https://axis.example/api"));
@@ -332,7 +332,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("does not serve the admin UI shell for non-namespaced login routes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const response = await app.fetch(new Request("https://axis.example/login"));
 
@@ -340,22 +340,8 @@ describe("Cloudflare runtime routes", () => {
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
   });
 
-  it("reuses the default app across worker fetches", async () => {
-    vi.resetModules();
-    const fetch = vi.fn(async () => new Response("ok"));
-    const createApp = vi.fn(() => ({ fetch }));
-    vi.doMock("./app", () => ({ createApp }));
-
-    const worker = (await import("../index")).default;
-    await worker.fetch(new Request("https://axis.example/first"));
-    await worker.fetch(new Request("https://axis.example/second"));
-
-    expect(createApp).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledTimes(2);
-  });
-
   it("creates and lists repositories through admin routes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const createResponse = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
@@ -464,7 +450,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects admin repository routes without an access token", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(new Request("https://axis.example/admin/repositories"));
 
     expect(response.status).toBe(401);
@@ -474,7 +460,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("verifies valid admin access tokens through the admin session route", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(
       new Request("https://axis.example/admin/session", {
         headers: { authorization: "Bearer dev-admin-token" },
@@ -496,7 +482,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("logs in, refreshes, and logs out admin sessions", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const loginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -539,7 +525,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("changes the current admin password and clears the refresh cookie", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const loginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -584,7 +570,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("lists seeded admin users and keeps user creation coming soon", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await app.fetch(new Request("https://axis.example/admin/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -622,7 +608,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects invalid admin access tokens through the admin session route", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(
       new Request("https://axis.example/admin/session", {
         headers: { authorization: "Bearer wrong-token" },
@@ -636,7 +622,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects invalid repository visibility", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
@@ -659,7 +645,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("creates pypi repositories when the PyPI plugin is enabled", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
@@ -686,7 +672,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("lists repository plugin metadata through admin routes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const response = await app.fetch(
       new Request("https://axis.example/admin/repository-plugins", {
@@ -765,7 +751,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("updates repository plugin policy overrides through admin routes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const disableResponse = await app.fetch(
       new Request("https://axis.example/admin/repository-plugins/apt", {
@@ -863,7 +849,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("fails closed for repository creation when a plugin is disabled by policy", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     await app.fetch(
       new Request("https://axis.example/admin/repository-plugins/apt", {
@@ -981,7 +967,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("requires admin auth before listing repository plugin metadata", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const response = await app.fetch(new Request("https://axis.example/admin/repository-plugins"));
 
@@ -1027,7 +1013,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects creating apt repositories with invalid config", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
@@ -1056,7 +1042,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("provisions APT signing keys during repository creation", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const response = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
@@ -1108,7 +1094,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("gets repositories by name through admin routes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createRepository(app, {
       name: "debian-internal",
       ecosystem: "apt",
@@ -1132,7 +1118,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("updates repository visibility and config through admin routes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
       name: "debian-internal",
@@ -1179,7 +1165,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects immutable repository fields on admin updates", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createRepository(app, {
       name: "debian-internal",
       ecosystem: "apt",
@@ -1204,7 +1190,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("validates repository config on admin updates", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createRepository(app, {
       name: "debian-internal",
       ecosystem: "apt",
@@ -1237,7 +1223,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("serves the apt repository signing public key", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
       name: "debian-public",
@@ -1257,7 +1243,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("serves private apt signing keys without read auth", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
       name: "debian-private",
@@ -1275,7 +1261,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("serves private apt client helpers through admin-scoped endpoints", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
       name: "debian-private",
@@ -1317,7 +1303,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("also serves private apt signing keys when basic read-token auth is present", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
       name: "debian-private",
@@ -1343,7 +1329,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("returns apt source information using the request origin", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
       name: "debian-public",
@@ -1377,7 +1363,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("returns public apt install instructions", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
       name: "debian-public",
@@ -1405,7 +1391,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("returns private apt install auth template without requiring or exposing a token secret", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const signingKey = await createSigningKey(app);
     await createRepository(app, {
       name: "debian-private",
@@ -1510,7 +1496,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("serves the default PyPI simple URL client helper", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createRepository(app, {
       name: "python-public",
       ecosystem: "pypi",
@@ -2547,7 +2533,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects malformed repository activity pagination parameters", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createRepository(app, {
       name: "debian-private",
       ecosystem: "apt",
@@ -2692,7 +2678,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("creates a publish token and starts a publish session", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     await app.fetch(
       new Request("https://axis.example/admin/repositories", {
@@ -2767,7 +2753,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("starts a publish session from the publish client request shape", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
     const token = await createToken(app, {
       name: "github-actions",
@@ -2816,7 +2802,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("lists publish sessions scoped to the publish token repositories", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
     await createRepository(app, { name: "debian-staging", ecosystem: "apt" });
     const internalToken = await createToken(app, {
@@ -2893,7 +2879,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("lists all publish sessions through the admin endpoint", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
     await createRepository(app, { name: "debian-staging", ecosystem: "apt" });
     const internalToken = await createToken(app, {
@@ -3114,7 +3100,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("gets a publish session by id and rejects tokens outside the repository scope", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
     const internalToken = await createToken(app, {
       name: "internal-ci",
@@ -3365,7 +3351,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects apt publish sessions without signing key scope before creating uploads", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createRepository(app, {
       name: "debian-internal",
       ecosystem: "apt",
@@ -3481,7 +3467,7 @@ describe("Cloudflare runtime routes", () => {
       userIDs: [{ name: "Axis Test", email: "axis@example.test" }],
       passphrase: "correct-passphrase",
     });
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const signingKeyResponse = await app.fetch(
       new Request("https://axis.example/admin/repositories/debian-prod/apt/signing-keys/import", {
@@ -3611,7 +3597,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("fails closed before publishing a repository with no registered plugin", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const createRepository = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
@@ -3633,7 +3619,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects finalizing before uploads are verified", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const { token, session } = await createPublishSession(app);
 
     const response = await app.fetch(
@@ -3650,7 +3636,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects finalizing without a bearer token", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const { session } = await createPublishSession(app);
 
     const response = await app.fetch(
@@ -3666,7 +3652,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("does not expose publish token hashes when listing publish tokens", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const createResponse = await app.fetch(
       new Request("https://axis.example/admin/publish-tokens", {
@@ -3701,7 +3687,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("records the admin user principal as the publish token owner", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const createResponse = await app.fetch(
       new Request("https://axis.example/admin/publish-tokens", {
@@ -3751,7 +3737,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("gets publish tokens by name without exposing secrets or hashes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const secret = await createToken(app, {
       name: "github-actions",
       repositories: ["debian-internal"],
@@ -3777,7 +3763,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("revokes publish tokens by name without exposing secrets or hashes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const secret = await createToken(app, {
       name: "github-actions",
       repositories: ["debian-internal"],
@@ -3803,7 +3789,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("revokes publish tokens idempotently through admin routes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createToken(app, {
       name: "github-actions",
       repositories: ["debian-internal"],
@@ -3832,7 +3818,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rotates publish tokens by name and returns the one-time secret", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const originalSecret = await createToken(app, {
       name: "github-actions",
       repositories: ["debian-internal"],
@@ -3860,7 +3846,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("deletes publish tokens by name", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     await createToken(app, {
       name: "github-actions",
       repositories: ["debian-internal"],
@@ -3886,7 +3872,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("returns not found for missing publish token admin resources", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const detail = await app.fetch(
       new Request("https://axis.example/admin/publish-tokens/missing", {
@@ -3905,7 +3891,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("creates a publish token with an expiration", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
     const expiresAt = "2030-01-01T00:00:00.000Z";
 
     const response = await app.fetch(
@@ -3932,7 +3918,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("creates a publish token with signing key scopes", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const response = await app.fetch(
       new Request("https://axis.example/admin/publish-tokens", {
@@ -3965,7 +3951,7 @@ describe("Cloudflare runtime routes", () => {
       userIDs: [{ name: "Axis Test", email: "axis@example.test" }],
       passphrase: "correct-passphrase",
     });
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const createResponse = await app.fetch(
       new Request("https://axis.example/admin/repositories/debian-prod/apt/signing-keys/import", {
@@ -4070,7 +4056,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("returns not found for missing APT signing key admin detail", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const response = await app.fetch(
       new Request("https://axis.example/admin/repositories/debian-prod/apt/signing-keys/signing_key_missing", {
@@ -4082,7 +4068,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("requires admin auth for APT signing key revoke paths before method dispatch", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const response = await app.fetch(
       new Request("https://axis.example/admin/repositories/debian-prod/apt/signing-keys/signing_key_missing/revoke"),
@@ -4095,7 +4081,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("creates a publish token with an explicit empty signing key scope", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const response = await app.fetch(
       new Request("https://axis.example/admin/publish-tokens", {
@@ -4121,7 +4107,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects publish token signing key scopes with non-string values", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const response = await app.fetch(
       new Request("https://axis.example/admin/publish-tokens", {
@@ -4147,7 +4133,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects invalid publish token expirations", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     const response = await app.fetch(
       new Request("https://axis.example/admin/publish-tokens", {
@@ -4173,7 +4159,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects malformed publish session artifacts", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     await app.fetch(
       new Request("https://axis.example/admin/repositories", {
@@ -4225,7 +4211,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("rejects publish session artifacts with invalid sha256 digests", async () => {
-    const app = createApp();
+    const app = createApp(createDevDependencies());
 
     await app.fetch(
       new Request("https://axis.example/admin/repositories", {

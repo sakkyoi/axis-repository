@@ -1,26 +1,26 @@
-import { createApp } from "./worker/app";
 import { AxisAdminDO, type AxisEnv } from "./worker/axis-admin-do";
-import { createDevDependencies } from "./worker/dev-dependencies";
 
 export { AxisAdminDO };
 
-const fallbackApps = new Map<string, ReturnType<typeof createApp>>();
-
-function fallbackAppFor(env?: AxisEnv): ReturnType<typeof createApp> {
-  const apiBaseUrl = env?.ADMIN_UI_API_BASE_URL ?? "";
-  const cached = fallbackApps.get(apiBaseUrl);
-  if (cached) return cached;
-  const app = createApp(createDevDependencies(undefined, { apiBaseUrl }));
-  fallbackApps.set(apiBaseUrl, app);
-  return app;
+// The Durable Object owns all persistent state, auth, and secrets. Without its
+// binding there is no safe way to serve a request, so refuse rather than fall
+// back to an unauthenticated in-memory app.
+function missingAdminBindingResponse(): Response {
+  console.error("AXIS_ADMIN Durable Object binding is not configured; refusing to serve requests");
+  return new Response(
+    JSON.stringify({
+      error: { code: "service_unavailable", message: "Service Unavailable" },
+    }),
+    { status: 503, headers: { "content-type": "application/json; charset=utf-8" } },
+  );
 }
 
 export default {
   fetch(request: Request, env?: AxisEnv): Promise<Response> {
-    if (env?.AXIS_ADMIN) {
-      const id = env.AXIS_ADMIN.idFromName("global");
-      return env.AXIS_ADMIN.get(id).fetch(request);
+    if (!env?.AXIS_ADMIN) {
+      return Promise.resolve(missingAdminBindingResponse());
     }
-    return fallbackAppFor(env).fetch(request);
+    const id = env.AXIS_ADMIN.idFromName("global");
+    return env.AXIS_ADMIN.get(id).fetch(request);
   },
 };

@@ -1,8 +1,8 @@
-import { createDevDependencies, type AppDependencies } from "./dev-dependencies";
+import type { AppDependencies } from "./dev-dependencies";
 import type { AxisApp } from "./routes";
 import { dispatch, errorResponse } from "./routes";
 
-export function createApp(dependencies: AppDependencies = createDevDependencies()): AxisApp {
+export function createApp(dependencies: AppDependencies): AxisApp {
   return {
     async fetch(request: Request): Promise<Response> {
       try {
