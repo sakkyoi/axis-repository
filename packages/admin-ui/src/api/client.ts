@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance } from "axios";
-import { createHttpClient, type HttpOptions } from "./http";
+import { createHttpClient, withSessionCookie, type HttpOptions } from "./http";
 import {
   adminSessionSchema,
   adminAuthResponseSchema,
@@ -137,18 +137,18 @@ export function createAxisClient(options: HttpOptions): AxisClient {
   return {
     http,
     async loginAdmin(input: { username: string; password: string }) {
-      const response = await http.post("/admin/auth/login", input);
+      const response = await http.post("/admin/auth/login", input, withSessionCookie);
       return adminAuthResponseSchema.parse(response.data);
     },
     async refreshAdminSession() {
-      const response = await http.post("/admin/auth/refresh");
+      const response = await http.post("/admin/auth/refresh", undefined, withSessionCookie);
       return adminAuthResponseSchema.parse(response.data);
     },
     async logoutAdmin() {
-      await http.post("/admin/auth/logout");
+      await http.post("/admin/auth/logout", undefined, withSessionCookie);
     },
     async changeOwnPassword(input: { currentPassword: string; newPassword: string }) {
-      await http.post("/admin/auth/change-password", input);
+      await http.post("/admin/auth/change-password", input, withSessionCookie);
     },
     async getAdminSession() {
       const response = await http.get("/admin/session");

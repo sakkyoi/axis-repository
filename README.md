@@ -170,5 +170,16 @@ repositories/<repository-name>/publishes/<session-id>.json
 Format-specific repository indexes and repository heads for apt, PyPI, and npm
 are future publishers.
 
+## Admin UI API Base URL
+
+`ADMIN_UI_API_BASE_URL` is injected into the admin UI shell and used as the API
+base for admin requests. It must resolve to the **same origin** that serves the
+admin UI; a path prefix such as `/axis` is the intended use, for deployments
+behind a reverse proxy that mounts Axis under a subpath.
+
+Axis deliberately emits no `Access-Control-Allow-Origin` headers, so pointing
+this at a different origin does not work in a browser. Leave it unset for a
+normal deployment.
+
 Cloudflare deploy configuration lives in root `wrangler.jsonc`. Keep local
 secrets in root `.dev.vars`.

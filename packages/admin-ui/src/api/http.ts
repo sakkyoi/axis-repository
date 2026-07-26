@@ -17,11 +17,18 @@ export function serverErrorMessage(data: unknown): string | undefined {
   return typeof message === "string" && message.trim() ? message : undefined;
 }
 
+/**
+ * Only the refresh and logout endpoints authenticate with the session cookie;
+ * everything else uses the bearer header. Sending credentials by default would
+ * attach the cookie to every request for no benefit.
+ */
+export const withSessionCookie = { withCredentials: true } as const;
+
 export function createHttpClient(options: HttpOptions): AxiosInstance {
   const http = axios.create({
     baseURL: normalizeBaseUrl(options.baseUrl),
     timeout: 15000,
-    withCredentials: true,
+    withCredentials: false,
   });
   const token = options.accessToken?.trim() ?? "";
   if (token) {
