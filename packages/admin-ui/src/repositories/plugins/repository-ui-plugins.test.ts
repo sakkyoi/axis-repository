@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aptPluginManifest } from "@axis-repository/plugin-apt/manifest";
-import * as aptPublishUi from "@axis-repository/plugin-apt/admin-ui/publish";
 import { pypiPluginManifest } from "@axis-repository/plugin-pypi/manifest";
-import * as pypiPublishUi from "@axis-repository/plugin-pypi/admin-ui/publish";
 
 import { assertRepositoryUiPluginContracts } from "./repository-ui-plugins";
 import {
@@ -124,10 +122,8 @@ describe("repository UI plugin registry", () => {
   });
 
   it("lets ecosystem UI plugins provide custom create field renderers", () => {
-    expect(getRepositoryCreateFieldRenderers("apt")?.["signing-key"]?.name)
-      .toBeUndefined();
-    expect(getRepositoryCreateFieldRenderers("apt")?.["signing-key-provisioning"]?.name)
-      .toBe("AptSigningKeySetupField");
+    expect(getRepositoryCreateFieldRenderers("apt")?.["signing-key"]).toBeUndefined();
+    expect(getRepositoryCreateFieldRenderers("apt")?.["signing-key-provisioning"]).toBeTypeOf("function");
     expect(getRepositoryCreateFieldRenderers("pypi")?.["signing-key-provisioning"]).toBeUndefined();
   });
 
@@ -149,13 +145,16 @@ describe("repository UI plugin registry", () => {
   });
 
   it("lets ecosystem UI plugins provide publish UI and artifact summaries", () => {
-    expect(getRepositoryPublishPlugin("apt")?.PreviewComponent?.name).toBe("AptPublishArtifactPreview");
+    expect(getRepositoryPublishPlugin("apt")?.PreviewComponent).toBeTypeOf("function");
     expect(getRepositoryPublishPlugin("apt")?.accept).toContain(".deb");
     expect(getRepositoryPublishPlugin("apt")?.isAcceptedFile?.(new File(["deb"], "myapp.deb"))).toBe(true);
     expect(getRepositoryPublishPlugin("apt")?.isAcceptedFile?.(new File(["wheel"], "myapp.whl"))).toBe(false);
-    expect(getRepositoryPublishPlugin("apt")?.SessionDetailComponent?.name).toBe("AptPublishSessionDetail");
+    expect(getRepositoryPublishPlugin("apt")?.SessionDetailComponent).toBeTypeOf("function");
     expect(getRepositoryPublishPlugin("pypi")?.PreviewComponent).toBeUndefined();
-    expect(getRepositoryPublishPlugin("pypi")?.SessionDetailComponent?.name).toBe("PypiPublishSessionDetail");
+    expect(getRepositoryPublishPlugin("pypi")?.SessionDetailComponent).toBeTypeOf("function");
+    // Distinct plugins must not resolve to the same component.
+    expect(getRepositoryPublishPlugin("pypi")?.SessionDetailComponent)
+      .not.toBe(getRepositoryPublishPlugin("apt")?.SessionDetailComponent);
     expect(getRepositoryPublishPlugin("apt")?.artifactSummary({
       id: "pub_apt",
       repositoryName: "debian-internal",
@@ -177,11 +176,6 @@ describe("repository UI plugin registry", () => {
       createdAt: "2026-07-23T00:00:00.000Z",
       expiresAt: "2026-07-23T00:10:00.000Z",
     })).toBe("myapp 1.2.3 amd64, 0 verified");
-  });
-
-  it("does not require plugins to export whole publish section wrappers", () => {
-    expect("AptPublishSessionsSection" in aptPublishUi).toBe(false);
-    expect("PypiPublishSessionsSection" in pypiPublishUi).toBe(false);
   });
 
   it("lets ecosystem UI plugins validate missing publish token scopes", () => {

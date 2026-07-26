@@ -1,5 +1,5 @@
 import type { ArtifactPublisher, PublishArtifactsInput } from "@axis-repository/core";
-import { ValidationError } from "@axis-repository/core";
+import { NotFoundError, ValidationError } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
 import {
   RepositoryRuntimePluginRegistry,
@@ -255,40 +255,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     );
   });
 
-  it("keeps lifecycle hooks on registered plugins", () => {
-    const registry = new RepositoryRuntimePluginRegistry();
-    const publisher = publisherReturning("apt.json");
-    const calls: string[] = [];
-    registry.register({
-      ecosystem: "apt",
-      name: "apt-test",
-      version: "0.0.0",
-      capabilities: ["package-index"],
-      canServeRepositoryPath: () => false,
-      validateRepositoryConfig: () => calls.push("config"),
-      publish: publishLifecycle(publisher.publisher, {
-        validateArtifacts: () => calls.push("artifacts"),
-        authorize: () => calls.push("authorize"),
-      }),
-    });
-
-    const input = publishInput("apt");
-    const plugin = registry.requirePlugin("apt");
-    plugin.validateRepositoryConfig({ ecosystem: "apt", config: {} });
-    plugin.publish.validateArtifacts({
-      repository: input.repository,
-      artifacts: input.session.artifacts,
-    });
-    plugin.publish.authorize({
-      repository: input.repository,
-      principal: input.session.requestedBy,
-      artifacts: input.session.artifacts,
-    });
-
-    expect(calls).toEqual(["config", "artifacts", "authorize"]);
-  });
-
-  it("keeps publish lifecycle hooks grouped under the publish capability", async () => {
+  it("exposes every registered lifecycle hook through requirePlugin", async () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const calls: string[] = [];
     registry.register({
@@ -315,6 +282,8 @@ describe("RepositoryRuntimePluginRegistry", () => {
       },
     });
 
+    // The registry stores and hands back hooks; PluginPublishSessionService is
+    // what sequences them, and runtime-services.test.ts covers that ordering.
     const input = publishInput("apt");
     const plugin = registry.requirePlugin("apt");
     plugin.validateRepositoryConfig({ ecosystem: "apt", config: {} });
@@ -333,7 +302,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
       publishedAt: "2026-07-18T00:00:30.000Z",
       objects: [{ key: "apt.json", contentType: "application/json; charset=utf-8" }],
     });
-    expect(calls).toEqual(["config", "artifacts", "scope", "authorize", "finalize"]);
+    // Each registered hook was reachable and delegated to the registered
+    // implementation rather than being dropped by clonePlugin.
+    expect(new Set(calls)).toEqual(new Set(["config", "artifacts", "scope", "authorize", "finalize"]));
   });
 
   it("keeps client helper metadata on registered plugins without exposing mutable action lists", () => {
@@ -429,11 +400,15 @@ describe("RepositoryRuntimePluginRegistry", () => {
     await expect(response.text()).resolves.toBe("install apt-internal");
     expect(helpers.actions.find((action) => action.name === "install")?.public).toBe(true);
     expect(helpers.actions.find((action) => action.name === "private-diagnostic")?.public).toBe(false);
-    await expect(dispatchRepositoryClientHelper(helpers, {
+    // The class decides the HTTP status, and toThrow(errorInstance) only
+    // compares the message, so assert the class separately.
+    const missingHelper = dispatchRepositoryClientHelper(helpers, {
       repository: publishInput("apt").repository,
       action: "missing",
       origin: "https://axis.example",
-    })).rejects.toThrow(new ValidationError("Repository client helper is not configured: missing"));
+    });
+    await expect(missingHelper).rejects.toBeInstanceOf(NotFoundError);
+    await expect(missingHelper).rejects.toThrow("Repository client helper is not configured: missing");
   });
 
   it("keeps admin resource routes on registered plugins without exposing mutable metadata", async () => {
@@ -483,7 +458,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
       services: {},
     });
     await expect(response.text()).resolves.toBe("revoked key_1");
-    await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
+    const unmatchedRoute = dispatchRepositoryAdminResource(plugin.adminResources!, {
       repositoryName: "apt-internal",
       repository: publishInput("apt").repository,
       request: new Request("https://axis.example/admin/repositories/apt-internal/apt/signing-keys/key_1", {
@@ -491,7 +466,11 @@ describe("RepositoryRuntimePluginRegistry", () => {
       }),
       path: ["signing-keys", "key_1"],
       services: {},
-    })).rejects.toThrow(new ValidationError("Repository admin resource route is not configured: DELETE signing-keys/key_1"));
+    });
+    await expect(unmatchedRoute).rejects.toBeInstanceOf(NotFoundError);
+    await expect(unmatchedRoute).rejects.toThrow(
+      "Repository admin resource route is not configured: DELETE signing-keys/key_1",
+    );
   });
 
   it("rejects invalid admin resource route metadata at registration time", () => {
