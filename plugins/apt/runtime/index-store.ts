@@ -5,8 +5,10 @@ import type {
 } from "@axis-repository/core";
 import { listAllObjects, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { parseStanzas } from "../shared/stanza";
+import { digestHex } from "./digest";
 import type { AptIndexMetadata } from "./metadata";
-import { indexKey, type AptIndexStanzas, type AptPoolCopy } from "./packages";
+import { indexKey, type AptIndexStanzas, type AptPackageIndex, type AptPoolCopy } from "./packages";
+import { acquireByHashEnabled } from "./release";
 
 export const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";
 export const GZIP_CONTENT_TYPE = "application/gzip";
@@ -28,8 +30,16 @@ export interface AptReleaseSigner {
   }): Promise<string>;
 }
 
+const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const packagesIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/binary-([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Packages$/;
+const byHashIndexPattern = /^[A-Za-z0-9][A-Za-z0-9._+~-]*\/binary-[A-Za-z0-9][A-Za-z0-9._+~-]*\/by-hash\/[A-Za-z0-9]+\/[0-9a-f]+$/;
+
+/** The `Release` checksum sections that also get a `by-hash` directory. */
+const BY_HASH_ALGORITHMS = [
+  { section: "SHA256", algorithm: "SHA-256" },
+  { section: "SHA512", algorithm: "SHA-512" },
+] as const;
 
 export function distsPrefix(repositoryName: string, codename: string): string {
   return `repositories/${repositoryName}/dists/${codename}/`;
@@ -130,10 +140,17 @@ export async function writeAptRepositoryIndexes(input: {
   ];
   const objects = [...poolObjects, ...indexObjects];
   const previous = await capturePreviousObjectMetadata(input.objectStore, objects.map((object) => object.key));
+  const byHash = acquireByHashEnabled(input.metadata.config)
+    ? await planByHashObjects({ objectStore: input.objectStore, prefix, releasePath, packageIndexes })
+    : { objects: [], retainedKeys: new Set<string>() };
   const removedObjectKeys = await removeStaleIndexObjects({
     objectStore: input.objectStore,
     prefix,
-    keptKeys: new Set(indexObjects.map((object) => object.key)),
+    keptKeys: new Set([
+      ...indexObjects.map((object) => object.key),
+      ...byHash.objects.map((object) => object.key),
+      ...byHash.retainedKeys,
+    ]),
   });
 
   for (const copy of poolCopies) {
@@ -143,6 +160,9 @@ export async function writeAptRepositoryIndexes(input: {
     await input.objectStore.putText(packageIndex.packagesPath, packageIndex.packages, TEXT_CONTENT_TYPE);
     await input.objectStore.putBytes(packageIndex.packagesGzPath, packageIndex.packagesGz, GZIP_CONTENT_TYPE);
   }
+  for (const object of byHash.objects) {
+    await input.objectStore.putBytes(object.key, object.bytes, object.contentType);
+  }
   await input.objectStore.putText(releasePath, release, TEXT_CONTENT_TYPE);
   await input.objectStore.putText(inReleasePath, inRelease, TEXT_CONTENT_TYPE);
   await input.objectStore.putText(releaseGpgPath, releaseGpg, PGP_SIGNATURE_CONTENT_TYPE);
@@ -151,6 +171,82 @@ export async function writeAptRepositoryIndexes(input: {
     objects: objects.map((object) => withPreviousMetadata(object, previous.get(object.key) ?? null)),
     removedObjectKeys,
   };
+}
+
+interface ByHashObject {
+  key: string;
+  bytes: Uint8Array;
+  contentType: string;
+}
+
+/**
+ * Works out the `by-hash` copies of each index and which older ones to keep.
+ *
+ * A client that reads `Release` and then fetches `Packages` can otherwise land
+ * on a newer index than the one its `Release` describes, and reject the
+ * mismatch. Fetching by content hash removes that race, but only if the index
+ * a client just read about is still there — so the previous generation, named
+ * by the `Release` being replaced, is kept alongside the current one. Anything
+ * older is dropped, which bounds what this costs in storage.
+ */
+async function planByHashObjects(input: {
+  objectStore: RepositoryObjectStore;
+  prefix: string;
+  releasePath: string;
+  packageIndexes: AptPackageIndex[];
+}): Promise<{ objects: ByHashObject[]; retainedKeys: Set<string> }> {
+  const objects: ByHashObject[] = [];
+
+  for (const packageIndex of input.packageIndexes) {
+    for (const variant of [
+      { relativePath: packageIndex.relativePath, bytes: textEncoder.encode(packageIndex.packages), contentType: TEXT_CONTENT_TYPE },
+      { relativePath: packageIndex.relativeGzPath, bytes: packageIndex.packagesGz, contentType: GZIP_CONTENT_TYPE },
+    ]) {
+      for (const { section, algorithm } of BY_HASH_ALGORITHMS) {
+        objects.push({
+          key: byHashKey(input.prefix, variant.relativePath, section, await digestHex(algorithm, variant.bytes)),
+          bytes: variant.bytes,
+          contentType: variant.contentType,
+        });
+      }
+    }
+  }
+
+  return { objects, retainedKeys: await previousByHashKeys(input) };
+}
+
+async function previousByHashKeys(input: {
+  objectStore: RepositoryObjectStore;
+  prefix: string;
+  releasePath: string;
+}): Promise<Set<string>> {
+  const storedRelease = await input.objectStore.getObject(input.releasePath);
+  if (!storedRelease) {
+    return new Set();
+  }
+
+  const retained = new Set<string>();
+  let section: string | undefined;
+  for (const line of textDecoder.decode(await objectBytes(storedRelease)).split("\n")) {
+    const sectionMatch = /^([A-Za-z0-9]+):$/.exec(line);
+    if (sectionMatch) {
+      section = BY_HASH_ALGORITHMS.some((candidate) => candidate.section === sectionMatch[1])
+        ? sectionMatch[1]
+        : undefined;
+      continue;
+    }
+    const entry = /^ ([0-9a-f]+) +\d+ +(\S+)$/.exec(line);
+    if (section && entry?.[1] && entry[2]) {
+      retained.add(byHashKey(input.prefix, entry[2], section, entry[1]));
+    }
+  }
+
+  return retained;
+}
+
+function byHashKey(prefix: string, relativePath: string, section: string, digest: string): string {
+  const directory = relativePath.slice(0, relativePath.lastIndexOf("/"));
+  return `${prefix}${directory}/by-hash/${section}/${digest}`;
 }
 
 export async function capturePreviousObjectMetadata(
@@ -195,8 +291,10 @@ async function removeStaleIndexObjects(input: {
   const removed: string[] = [];
 
   for (const object of existing) {
-    const relativePath = object.key.slice(input.prefix.length).replace(/\.gz$/, "");
-    if (!packagesIndexPattern.test(relativePath) || input.keptKeys.has(object.key)) {
+    const relativePath = object.key.slice(input.prefix.length);
+    const isIndexObject = packagesIndexPattern.test(relativePath.replace(/\.gz$/, ""))
+      || byHashIndexPattern.test(relativePath);
+    if (!isIndexObject || input.keptKeys.has(object.key)) {
       continue;
     }
     if (await input.objectStore.deleteObject(object.key)) {

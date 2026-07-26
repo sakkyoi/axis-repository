@@ -170,6 +170,48 @@ repositories/<repository-name>/publishes/<session-id>.json
 Format-specific repository indexes and repository heads for apt, PyPI, and npm
 are future publishers.
 
+## APT Repository Configuration
+
+An apt repository is configured under `config.apt`. Creating one through the
+admin UI asks for the codename and the signing key; the rest are optional and
+are set through `PATCH /admin/repositories/<name>` with a `config` object.
+
+| Field | Type | Effect |
+| --- | --- | --- |
+| `codename` | string | Required. The directory under `dists/`. |
+| `signingKeyId` | string | Required. Set when the repository is created. |
+| `components` | string[] | Allowed components; defaults to `["main"]`. A publish naming any other component is rejected. |
+| `architectures` | string[] | Pins the architectures in `Release`. Left unset, they are discovered from what has been published. |
+| `origin`, `label` | string | `Origin:` and `Label:`; both default to the repository name. |
+| `suite` | string | `Suite:` when it differs from the codename, as in `stable` vs `bookworm`. |
+| `description` | string | `Description:` in `Release`. |
+| `validityDays` | number | Emits `Valid-Until:` that many days after each publish. |
+| `notAutomatic` | boolean | `NotAutomatic: yes`, so apt will not upgrade into this suite unless asked. |
+| `butAutomaticUpgrades` | boolean | `ButAutomaticUpgrades: yes`. Rejected without `notAutomatic`, which apt would silently ignore. |
+| `acquireByHash` | boolean | Defaults to true. See below. |
+
+Set `validityDays` if the repository is reachable from outside your network.
+Without `Valid-Until`, a signed `Release` is trusted forever, so anyone able to
+serve stale bytes can hold a client on a package set whose vulnerabilities are
+already fixed. The trade-off is that publishing has to happen at least that
+often, or clients start refusing the repository.
+
+Free-text fields reject control characters. A newline in `Origin` would
+otherwise start a new `Release` field.
+
+### Acquire-By-Hash
+
+Indexes are published a second time under their own content hash, at
+`dists/<codename>/<component>/binary-<arch>/by-hash/SHA256/<digest>` (and
+`SHA512`). A client that reads `Release` and then fetches `Packages` can
+otherwise be handed a newer index than the one its `Release` describes and
+reject the mismatch; fetching by hash removes that race.
+
+Each publish keeps the current generation and the one named by the `Release` it
+replaced, so a client that read the old `Release` can still complete. Older
+generations are deleted, which bounds the storage this costs. Set
+`acquireByHash` to `false` to publish only the plain index paths.
+
 ## Serving Artifacts From A Separate Origin
 
 By default one origin serves everything: the admin UI at `/ui/`, the API under

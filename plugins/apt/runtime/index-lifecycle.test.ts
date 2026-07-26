@@ -158,6 +158,19 @@ function storedKeys(objectStore: MemoryRepositoryObjectStore): string[] {
   return [...live].filter((key) => key.startsWith("repositories/")).sort();
 }
 
+/** Reads an object regardless of whether it was stored as text or bytes. */
+function storedContent(objectStore: MemoryRepositoryObjectStore, key: string): string | undefined {
+  const value = [...objectStore.objects].reverse().find((candidate) => candidate.key === key)?.value;
+  if (typeof value === "string") {
+    return value;
+  }
+  return value instanceof Uint8Array ? new TextDecoder().decode(value) : undefined;
+}
+
+function byHashKeys(objectStore: MemoryRepositoryObjectStore): string[] {
+  return storedKeys(objectStore).filter((key) => key.includes("/by-hash/"));
+}
+
 const PACKAGES_KEY = "repositories/debian-internal/dists/noble/main/binary-amd64/Packages";
 
 async function createHarness() {
@@ -329,6 +342,50 @@ describe("APT index lifecycle", () => {
 
     expect(storedText(harness.objectStore, PACKAGES_KEY)).toContain("Package: gamma\n");
     expect(artifacts.map((artifact) => artifact.name).sort()).toEqual(["alpha", "gamma"]);
+  });
+
+  it("publishes each index under by-hash and keeps one older generation", async () => {
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }]);
+    const firstGeneration = byHashKeys(harness.objectStore);
+    expect(firstGeneration).toHaveLength(4); // Packages and Packages.gz, SHA256 and SHA512
+
+    await harness.publish("pub_2", [{ name: "beta", version: "2.0.0" }]);
+    const secondGeneration = byHashKeys(harness.objectStore);
+
+    // The Release a client just read still names the first generation, so it
+    // has to survive one more publish.
+    for (const key of firstGeneration) {
+      expect(secondGeneration).toContain(key);
+    }
+    expect(secondGeneration).toHaveLength(8);
+    const firstPackagesByHash = firstGeneration
+      .map((key) => storedContent(harness.objectStore, key))
+      .filter((content) => content?.startsWith("Package: "));
+    expect(firstPackagesByHash.length).toBeGreaterThan(0);
+    for (const content of firstPackagesByHash) {
+      expect(content).toContain("Package: alpha\n");
+    }
+
+    await harness.publish("pub_3", [{ name: "gamma", version: "3.0.0" }]);
+    const thirdGeneration = byHashKeys(harness.objectStore);
+
+    // Anything older than that is dropped, so by-hash cannot grow without end.
+    expect(thirdGeneration).toHaveLength(8);
+    for (const key of firstGeneration) {
+      expect(thirdGeneration).not.toContain(key);
+    }
+  });
+
+  it("stops writing by-hash copies when the repository turns it off", async () => {
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }], { acquireByHash: false });
+
+    expect(byHashKeys(harness.objectStore)).toEqual([]);
+    expect(storedText(harness.objectStore, "repositories/debian-internal/dists/noble/Release"))
+      .toContain("Acquire-By-Hash: no\n");
   });
 
   it("does not require a signing key to reconcile a repository that has published nothing", async () => {

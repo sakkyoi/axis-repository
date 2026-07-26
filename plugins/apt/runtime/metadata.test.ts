@@ -252,7 +252,9 @@ describe("APT metadata", () => {
     expect(metadata.release).toContain("Date: Sat, 18 Jul 2026 00:10:00 GMT\n");
     expect(metadata.release).toContain("Architectures: amd64\n");
     expect(metadata.release).toContain("Components: main\n");
-    expect(metadata.release).toContain("Acquire-By-Hash: no\n");
+    expect(metadata.release).toContain("Acquire-By-Hash: yes\n");
+    expect(metadata.release).not.toContain("Valid-Until:");
+    expect(metadata.release).not.toContain("NotAutomatic:");
     expect(metadata.release).toContain("SHA256:\n");
     expect(metadata.release).toContain("SHA512:\n");
 
@@ -486,6 +488,57 @@ describe("APT metadata", () => {
 
       await expect(buildAptRepositoryMetadata(unsafe)).rejects.toThrow(
         `artifact metadata ${field} must not contain control characters`,
+      );
+    }
+  });
+
+  it("writes the optional Release identity, expiry and pinning fields", async () => {
+    const configured = input();
+    Object.assign(configured.repository.config.apt as Record<string, unknown>, {
+      origin: "Example Ltd",
+      label: "Example internal packages",
+      suite: "stable",
+      description: "Internal builds for Example Ltd",
+      validityDays: 7,
+      notAutomatic: true,
+      butAutomaticUpgrades: true,
+      acquireByHash: false,
+    });
+
+    const metadata = await buildAptRepositoryMetadata(configured);
+
+    expect(metadata.release).toContain("Origin: Example Ltd\n");
+    expect(metadata.release).toContain("Label: Example internal packages\n");
+    expect(metadata.release).toContain("Suite: stable\n");
+    expect(metadata.release).toContain("Codename: noble\n");
+    expect(metadata.release).toContain("Description: Internal builds for Example Ltd\n");
+    expect(metadata.release).toContain("Date: Sat, 18 Jul 2026 00:10:00 GMT\n");
+    expect(metadata.release).toContain("Valid-Until: Sat, 25 Jul 2026 00:10:00 GMT\n");
+    expect(metadata.release).toContain("NotAutomatic: yes\n");
+    expect(metadata.release).toContain("ButAutomaticUpgrades: yes\n");
+    expect(metadata.release).toContain("Acquire-By-Hash: no\n");
+  });
+
+  it("rejects Release settings that apt would silently ignore or that could inject a field", () => {
+    const orphanPin = input();
+    (orphanPin.repository.config.apt as Record<string, unknown>).butAutomaticUpgrades = true;
+    expect(() => parseAptRepositoryConfig(orphanPin.repository)).toThrow(
+      "config.apt.butAutomaticUpgrades requires config.apt.notAutomatic",
+    );
+
+    for (const field of ["origin", "label", "suite", "description"] as const) {
+      const injected = input();
+      (injected.repository.config.apt as Record<string, unknown>)[field] = "Example\nValid-Until: never";
+      expect(() => parseAptRepositoryConfig(injected.repository)).toThrow(
+        `config.apt.${field} must not contain control characters`,
+      );
+    }
+
+    for (const validityDays of [0, -1, 1.5, "7"]) {
+      const invalid = input();
+      (invalid.repository.config.apt as Record<string, unknown>).validityDays = validityDays;
+      expect(() => parseAptRepositoryConfig(invalid.repository)).toThrow(
+        "config.apt.validityDays must be a positive whole number when provided",
       );
     }
   });

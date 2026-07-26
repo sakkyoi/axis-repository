@@ -3,6 +3,12 @@ import { digestHex } from "./digest";
 import type { AptPackageIndex } from "./packages";
 
 const textEncoder = new TextEncoder();
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** by-hash is on unless the repository turns it off. */
+export function acquireByHashEnabled(config: AptResolvedRepositoryConfig): boolean {
+  return config.acquireByHash ?? true;
+}
 
 export async function buildRelease(input: {
   repositoryName: string;
@@ -30,15 +36,25 @@ export async function buildRelease(input: {
     );
   }
 
+  const publishedAt = new Date(input.publishDate);
+
   return [
-    `Origin: ${input.repositoryName}`,
-    `Label: ${input.repositoryName}`,
-    `Suite: ${input.config.codename}`,
+    `Origin: ${input.config.origin ?? input.repositoryName}`,
+    `Label: ${input.config.label ?? input.repositoryName}`,
+    `Suite: ${input.config.suite ?? input.config.codename}`,
     `Codename: ${input.config.codename}`,
-    `Date: ${new Date(input.publishDate).toUTCString()}`,
+    `Date: ${publishedAt.toUTCString()}`,
+    // Without this apt trusts a signed Release forever, so an attacker who can
+    // serve stale bytes can hold a client on a known-vulnerable package set.
+    ...(input.config.validityDays === undefined
+      ? []
+      : [`Valid-Until: ${new Date(publishedAt.getTime() + input.config.validityDays * MILLISECONDS_PER_DAY).toUTCString()}`]),
     `Architectures: ${input.config.architectures.join(" ")}`,
     `Components: ${input.config.components.join(" ")}`,
-    "Acquire-By-Hash: no",
+    ...(input.config.notAutomatic ? ["NotAutomatic: yes"] : []),
+    ...(input.config.butAutomaticUpgrades ? ["ButAutomaticUpgrades: yes"] : []),
+    ...(input.config.description === undefined ? [] : [`Description: ${input.config.description}`]),
+    `Acquire-By-Hash: ${acquireByHashEnabled(input.config) ? "yes" : "no"}`,
     "SHA256:",
     ...sha256Lines,
     "SHA512:",
