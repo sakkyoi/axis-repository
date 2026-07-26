@@ -88,4 +88,11 @@ describe("admin UI plugin layout", () => {
       expect(content).not.toContain("repositoryUiPlugins");
     }
   });
+
+  it("keeps deployment diagnostics out of the primary app header", () => {
+    const appLayout = readFileSync(join(srcDir, "components", "AppLayout.tsx"), "utf8");
+
+    expect(appLayout).not.toContain("API target:");
+    expect(appLayout).not.toContain("getRuntimeConfig");
+  });
 });

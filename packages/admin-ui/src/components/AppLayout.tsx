@@ -3,7 +3,6 @@ import { Monitor, Moon, Package, Settings, ShieldCheck, Sun, Users } from "lucid
 import { cn } from "../lib/utils";
 import { ADMIN_UI_NAV_ITEMS } from "../navigation";
 import { ProfileMenu } from "../profile/profile-menu";
-import { getRuntimeConfig } from "../runtime-config";
 import { useTheme, type ThemePreference } from "../theme";
 
 const navIcons = {
@@ -21,7 +20,6 @@ const themeOptions: Array<{ value: ThemePreference; label: string; icon: typeof 
 
 export function AppLayout() {
   const theme = useTheme();
-  const apiBaseUrl = getRuntimeConfig().apiBaseUrl || "same-origin";
 
   return (
     <div className="grid h-screen overflow-hidden grid-cols-[240px_minmax(0,1fr)] bg-background text-foreground">
@@ -54,8 +52,7 @@ export function AppLayout() {
         </nav>
       </aside>
       <div className="grid min-h-0 min-w-0 grid-rows-[56px_minmax(0,1fr)]">
-        <header className="flex min-w-0 items-center justify-between border-b border-border bg-panel/95 px-5">
-          <div className="text-sm text-muted-foreground">API target: {apiBaseUrl}</div>
+        <header className="flex min-w-0 items-center justify-end border-b border-border bg-panel/95 px-5">
           <div className="flex items-center gap-2">
             <div className="flex h-9 items-center rounded-md border border-border bg-background p-0.5">
               {themeOptions.map((option) => {
