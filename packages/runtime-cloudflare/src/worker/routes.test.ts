@@ -3186,6 +3186,92 @@ describe("Cloudflare runtime routes", () => {
     );
   });
 
+  it("bounds same-origin uploads by declared size and session state", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const debBytes = aptDebFixture();
+    const debSha256 = await sha256Hex(debBytes);
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: validAptConfig(signingKey.id),
+    });
+
+    const createSession = async () => {
+      const response = await app.fetch(new Request("https://axis.example/admin/publish-sessions", {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token", "content-type": "application/json" },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [{
+            filename: "myapp_1.2.3_amd64.deb",
+            size: debBytes.byteLength,
+            sha256: debSha256,
+            contentType: "application/vnd.debian.binary-package",
+            metadata: {
+              package: "myapp",
+              version: "1.2.3",
+              architecture: "amd64",
+              component: "main",
+              description: "Example package",
+              maintainer: "Release Team <release@example.com>",
+            },
+          }],
+        }),
+      }));
+      expect(response.status).toBe(201);
+      return (await response.json()) as { id: string; uploads: Array<{ uploadId: string; url: string }> };
+    };
+
+    const oversized = await createSession();
+    const oversizedUpload = oversized.uploads[0]!;
+    const oversizedResponse = await app.fetch(new Request(`https://axis.example${oversizedUpload.url}`, {
+      method: "PUT",
+      headers: { "content-type": "application/vnd.debian.binary-package" },
+      body: new Uint8Array(debBytes.byteLength + 1),
+    }));
+
+    expect(oversizedResponse.status).toBe(400);
+    await expect(oversizedResponse.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "Uploaded object is larger than the declared artifact size",
+      },
+    });
+    expect(harness.repositoryObjectStore.objects).toHaveLength(0);
+
+    // Once a session leaves the open states its upload URLs must stop working.
+    const finalized = await createSession();
+    const finalizedUpload = finalized.uploads[0]!;
+    await app.fetch(new Request(`https://axis.example${finalizedUpload.url}`, {
+      method: "PUT",
+      headers: { "content-type": "application/vnd.debian.binary-package" },
+      body: debBytes,
+    }));
+    await app.fetch(new Request(
+      `https://axis.example/admin/publish-sessions/${finalized.id}/uploads/${finalizedUpload.uploadId}/verify`,
+      { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const finalizeResponse = await app.fetch(new Request(
+      `https://axis.example/admin/publish-sessions/${finalized.id}/finalize`,
+      { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(finalizeResponse.status).toBe(200);
+
+    const replayResponse = await app.fetch(new Request(`https://axis.example${finalizedUpload.url}`, {
+      method: "PUT",
+      headers: { "content-type": "application/vnd.debian.binary-package" },
+      body: debBytes,
+    }));
+
+    expect(replayResponse.status).toBe(400);
+    await expect(replayResponse.json()).resolves.toEqual({
+      error: { code: "validation_error", message: "Publish session is not open: finalized" },
+    });
+  });
+
   it("accepts local memory uploads through same-origin upload targets", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

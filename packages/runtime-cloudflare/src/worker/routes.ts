@@ -7,6 +7,7 @@ import {
   principalRefFromAdminPrincipal,
   type PublishArtifactRequest,
   type PublishSession,
+  type UploadTarget,
   type PublishTokenRecord,
   type AdminUserRecord,
   type Repository,
@@ -952,6 +953,47 @@ function requireBasicPassword(encodedCredentials: string): string {
   return password;
 }
 
+// Unlike a presigned storage URL, a same-origin upload target carries no
+// embedded expiry, so the session state is the only thing bounding it. Without
+// these checks the URL stays a usable write capability forever, and the body is
+// read into memory before anything compares it to the declared artifact size.
+function ensureUploadTargetIsWritable(session: PublishSession, target: UploadTarget): void {
+  // Legacy sessions persisted "created" for what is now "pending_uploads";
+  // PublishSessionService normalizes the same way.
+  const persistedStatus = session.status as PublishSession["status"] | "created";
+  const status = persistedStatus === "created" ? "pending_uploads" : persistedStatus;
+  if (status !== "pending_uploads" && status !== "ready") {
+    throw new ValidationError(`Publish session is not open: ${session.status}`);
+  }
+  const now = Date.now();
+  const sessionExpiresAt = Date.parse(session.expiresAt);
+  const targetExpiresAt = Date.parse(target.expiresAt);
+  if (Number.isFinite(sessionExpiresAt) && sessionExpiresAt <= now) {
+    throw new ValidationError("Publish session has expired");
+  }
+  if (Number.isFinite(targetExpiresAt) && targetExpiresAt <= now) {
+    throw new ValidationError("Upload target has expired");
+  }
+}
+
+async function readUploadBody(request: Request, expectedSize: number): Promise<Uint8Array> {
+  const declaredLength = request.headers.get("content-length");
+  if (declaredLength !== null) {
+    const length = Number(declaredLength);
+    if (!Number.isSafeInteger(length) || length < 0) {
+      throw new ValidationError("content-length must be a non-negative integer");
+    }
+    if (length > expectedSize) {
+      throw new ValidationError("Uploaded object is larger than the declared artifact size");
+    }
+  }
+  const body = new Uint8Array(await request.arrayBuffer());
+  if (body.byteLength > expectedSize) {
+    throw new ValidationError("Uploaded object is larger than the declared artifact size");
+  }
+  return body;
+}
+
 export async function dispatch(request: Request, dependencies: AppDependencies): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
@@ -1390,14 +1432,20 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       throw new NotFoundError();
     }
     const session = await dependencies.publishSessionService.getAsAdmin({ sessionId });
-    const target = session.uploads.find((upload) => upload.uploadId === uploadId);
-    if (!target) {
+    const uploadIndex = session.uploads.findIndex((upload) => upload.uploadId === uploadId);
+    if (uploadIndex === -1) {
       throw new NotFoundError(`Upload not found: ${uploadId}`);
     }
+    const target = session.uploads[uploadIndex]!;
+    const expected = session.artifacts[uploadIndex];
+    if (!expected) {
+      throw new ValidationError(`Upload is not paired with an artifact: ${uploadId}`);
+    }
+    ensureUploadTargetIsWritable(session, target);
     const contentType = request.headers.get("content-type");
     await localUploadBroker.putUpload({
       target,
-      body: new Uint8Array(await request.arrayBuffer()),
+      body: await readUploadBody(request, expected.size),
       ...(contentType ? { contentType } : {}),
     });
     return new Response(null, { status: 204 });
