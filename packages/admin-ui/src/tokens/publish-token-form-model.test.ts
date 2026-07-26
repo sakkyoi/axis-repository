@@ -15,6 +15,7 @@ import {
   publishTokenSecretInputClass,
   publishTokenSecretRevealDescription,
   publishTokenSecretRevealItems,
+  publishTokenSecretUnsavedDialogClasses,
   publishTokenSecretUnsavedPromptContent,
   publishTokenSummaryItemClass,
   publishTokenSummaryItems,
@@ -206,6 +207,8 @@ describe("publish token form model", () => {
       confirmLabel: "Close anyway",
     });
     expect(publishTokenSecretUnsavedPromptContent().description).toContain("saved this token secret");
+    expect(publishTokenSecretUnsavedDialogClasses().overlay).toContain("z-[60]");
+    expect(publishTokenSecretUnsavedDialogClasses().content).toContain("z-[70]");
   });
 
   it("omits publish token expiration when set to never", () => {

@@ -21,6 +21,7 @@ import {
   publishTokenRowStateClass,
   publishTokenSecretInputClass,
   publishTokenSecretRevealDescription,
+  publishTokenSecretUnsavedDialogClasses,
   publishTokenSecretRevealItems,
   publishTokenSecretUnsavedPromptContent,
   publishTokenSummaryGridClass,
@@ -405,6 +406,7 @@ function TokenCreatedDialog({
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const items = result ? publishTokenSecretRevealItems(result.token) : [];
   const unsavedPrompt = publishTokenSecretUnsavedPromptContent();
+  const unsavedDialogClasses = publishTokenSecretUnsavedDialogClasses();
   const shouldBlockClose = shouldBlockTokenSecretRevealClose({
     hasSecret: Boolean(result?.secret),
     copied: secretCopied,
@@ -483,7 +485,7 @@ function TokenCreatedDialog({
         </DialogContent>
       </Dialog>
       <Dialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
-        <DialogContent className="w-[min(92vw,440px)]">
+        <DialogContent className={unsavedDialogClasses.content} overlayClassName={unsavedDialogClasses.overlay}>
           <DialogHeader>
             <DialogTitle>{unsavedPrompt.title}</DialogTitle>
             <DialogDescription>{unsavedPrompt.description}</DialogDescription>

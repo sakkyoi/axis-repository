@@ -6,14 +6,19 @@ export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 
+export interface DialogContentProps extends DialogPrimitive.DialogContentProps {
+  overlayClassName?: string;
+}
+
 export function DialogContent({
   className,
+  overlayClassName,
   children,
   ...props
-}: DialogPrimitive.DialogContentProps) {
+}: DialogContentProps) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-foreground/30" />
+      <DialogPrimitive.Overlay className={cn("fixed inset-0 z-40 bg-foreground/30", overlayClassName)} />
       <DialogPrimitive.Content
         className={cn(
           "fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-panel p-5 text-panel-foreground shadow-xl",

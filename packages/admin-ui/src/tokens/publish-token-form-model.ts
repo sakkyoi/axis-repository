@@ -202,6 +202,13 @@ export function publishTokenSecretUnsavedPromptContent(): {
   };
 }
 
+export function publishTokenSecretUnsavedDialogClasses(): { overlay: string; content: string } {
+  return {
+    overlay: "z-[60] bg-foreground/40",
+    content: "z-[70] w-[min(92vw,440px)]",
+  };
+}
+
 export function revokePublishTokenDialogContent(tokenName: string): DestructiveActionDialogContent {
   return {
     title: "Revoke publish token",
