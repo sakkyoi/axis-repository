@@ -9,6 +9,7 @@ import {
   publishTokenDetailBodyClass,
   publishTokenDetailActionRowClass,
   publishTokenListEmptyClass,
+  publishTokenListEmptyPanelClass,
   publishTokenRawMetadataClass,
   publishTokenRowStateClass,
   publishTokenSummaryItemClass,
@@ -164,7 +165,10 @@ describe("publish token form model", () => {
 
   it("keeps the empty publish token list filling its panel", () => {
     expect(publishTokenListEmptyClass()).toContain("h-full");
-    expect(publishTokenListEmptyClass()).toContain("place-items-center");
+    expect(publishTokenListEmptyClass()).toContain("p-3");
+    expect(publishTokenListEmptyPanelClass()).toContain("h-full");
+    expect(publishTokenListEmptyPanelClass()).toContain("place-items-center");
+    expect(publishTokenListEmptyPanelClass()).toContain("border-dashed");
   });
 
   it("formats readonly publish token summary items", () => {

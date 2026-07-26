@@ -14,6 +14,7 @@ import {
   publishTokenDetailActionRowClass,
   publishTokenDetailBodyClass,
   publishTokenListEmptyClass,
+  publishTokenListEmptyPanelClass,
   publishTokenRawMetadataClass,
   publishTokenRawMetadataContainerClass,
   publishTokenRowStateClass,
@@ -68,7 +69,9 @@ export function TokensPage() {
             <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
               {tokens.data.length === 0 ? (
                 <div className={publishTokenListEmptyClass()}>
-                  <EmptyState message="No publish tokens have been created." />
+                  <div className={publishTokenListEmptyPanelClass()}>
+                    No publish tokens have been created.
+                  </div>
                 </div>
               ) : (
                 <table className="w-full border-collapse text-sm">

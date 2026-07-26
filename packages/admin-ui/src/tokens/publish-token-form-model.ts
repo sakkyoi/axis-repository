@@ -108,7 +108,11 @@ export function publishTokenRowStateClass(tokenName: string, selectedName: strin
 }
 
 export function publishTokenListEmptyClass(): string {
-  return "grid h-full min-h-0 place-items-center p-4";
+  return "grid h-full min-h-0 p-3";
+}
+
+export function publishTokenListEmptyPanelClass(): string {
+  return "grid h-full min-h-0 place-items-center rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground";
 }
 
 export function publishTokenDetailBodyClass(): string {
