@@ -1,6 +1,7 @@
 import { formatStanza, stanzaField, type DebianStanza } from "../shared/stanza";
 import type { AptResolvedRepositoryConfig } from "./config";
-import { descriptionDigest, gzip, type AptPackageIndex } from "./packages";
+import { formatContentsIndex, type AptContentsIndexes } from "./contents";
+import { descriptionDigest, gzip, indexKey, type AptPackageIndex } from "./packages";
 
 export const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";
 export const GZIP_CONTENT_TYPE = "application/gzip";
@@ -26,11 +27,23 @@ const textEncoder = new TextEncoder();
 export async function buildAptIndexFiles(input: {
   config: AptResolvedRepositoryConfig;
   packageIndexes: AptPackageIndex[];
+  contentsByIndex?: AptContentsIndexes;
 }): Promise<AptIndexFile[]> {
   const files: AptIndexFile[] = [];
 
   for (const packageIndex of input.packageIndexes) {
     files.push(...await compressedVariants(packageIndex.relativePath, packageIndex.packages));
+
+    const contents = formatContentsIndex(
+      input.contentsByIndex?.get(indexKey(packageIndex.component, packageIndex.architecture))
+        ?? new Map<string, string[]>(),
+    );
+    if (contents !== undefined) {
+      files.push(await gzipOnlyVariant(
+        `${packageIndex.component}/Contents-${packageIndex.architecture}`,
+        contents,
+      ));
+    }
   }
 
   for (const component of input.config.components) {
@@ -52,6 +65,21 @@ export async function compressedVariants(relativePath: string, text: string): Pr
     { relativePath, bytes, contentType: TEXT_CONTENT_TYPE, text },
     { relativePath: `${relativePath}.gz`, bytes: await gzip(bytes), contentType: GZIP_CONTENT_TYPE },
   ];
+}
+
+/**
+ * Emits only the gzip form, which is how `Contents` is published.
+ *
+ * It lists every path of every package, so it is the one index that can dwarf
+ * the packages it describes; storing the plain form alongside would roughly
+ * double a repository's index storage for a file no client asks for.
+ */
+export async function gzipOnlyVariant(relativePath: string, text: string): Promise<AptIndexFile> {
+  return {
+    relativePath: `${relativePath}.gz`,
+    bytes: await gzip(textEncoder.encode(text)),
+    contentType: GZIP_CONTENT_TYPE,
+  };
 }
 
 /**

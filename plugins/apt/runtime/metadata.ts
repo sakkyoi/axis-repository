@@ -4,6 +4,12 @@ import {
 } from "@axis-repository/core";
 import type { DebianStanza } from "../shared/stanza";
 import { parseAptRepositoryConfig, validatePathSegment, type AptResolvedRepositoryConfig } from "./config";
+import {
+  contentsNameForStanza,
+  mergeContentsIndex,
+  type AptContentsIndex,
+  type AptContentsIndexes,
+} from "./contents";
 import { buildAptIndexFiles, type AptIndexFile } from "./index-files";
 import {
   buildPackageIndexes,
@@ -22,6 +28,7 @@ import {
 import { buildRelease } from "./release";
 
 export type { AptRepositoryConfig } from "./config";
+export type { AptContentsIndex, AptContentsIndexes } from "./contents";
 export type { AptIndexFile } from "./index-files";
 export type { AptIndexStanzas, AptPackageIndex, AptPoolCopy, AptSuiteIndexes } from "./packages";
 export { parseAptRepositoryConfig, validateAptPublishArtifacts, gzip };
@@ -31,6 +38,7 @@ export interface AptIndexMetadata {
   config: AptResolvedRepositoryConfig;
   suite: string;
   stanzasByIndex: AptSuiteIndexes;
+  contentsByIndex: AptContentsIndexes;
   packageIndexes: AptPackageIndex[];
   /** Everything written under `dists/<suite>/` and listed in `Release`. */
   indexFiles: AptIndexFile[];
@@ -55,12 +63,17 @@ export interface AptRepositoryMetadata {
  * in the pool while disappearing from `Packages`.
  */
 export async function buildAptRepositoryMetadata(
-  input: PublishArtifactsInput & { existingIndexes?: Map<string, AptSuiteIndexes> },
+  input: PublishArtifactsInput & {
+    existingIndexes?: Map<string, AptSuiteIndexes>;
+    existingContents?: Map<string, AptContentsIndexes>;
+  },
 ): Promise<AptRepositoryMetadata> {
   const parsedConfig = parseAptRepositoryConfig(input.repository);
   const repositoryName = validatePathSegment(input.repository.name, "repository name");
   const existingIndexes = input.existingIndexes ?? new Map<string, AptSuiteIndexes>();
+  const existingContents = input.existingContents ?? new Map<string, AptContentsIndexes>();
   const incomingBySuite = new Map<string, AptSuiteIndexes>();
+  const incomingContents = new Map<string, AptContentsIndexes>();
   const poolCopies: AptPoolCopy[] = [];
   const validatedArtifacts = validateAptArtifacts({
     repository: input.repository,
@@ -101,9 +114,18 @@ export async function buildAptRepositoryMetadata(
 
     const incoming = incomingBySuite.get(validated.suite) ?? new Map<string, AptIndexStanzas>();
     incomingBySuite.set(validated.suite, incoming);
+    const contents = incomingContents.get(validated.suite) ?? new Map<string, AptContentsIndex>();
+    incomingContents.set(validated.suite, contents);
+    const contentsName = contentsNameForStanza(packageStanza, validated.component);
     const targetArchitectures = validated.architecture === "all" ? config.architectures : [validated.architecture];
     for (const targetArchitecture of targetArchitectures) {
       addStanza(incoming, validated.component, targetArchitecture, packageStanza);
+      if (contentsName !== undefined && validated.filePaths.length > 0) {
+        const key = indexKey(validated.component, targetArchitecture);
+        const index = contents.get(key) ?? new Map<string, string[]>();
+        index.set(contentsName, [...validated.filePaths]);
+        contents.set(key, index);
+      }
     }
   }
 
@@ -116,6 +138,8 @@ export async function buildAptRepositoryMetadata(
       existingIndexes.get(suite) ?? new Map<string, AptIndexStanzas>(),
       incomingBySuite.get(suite) ?? new Map<string, AptIndexStanzas>(),
     ),
+    existingContents: existingContents.get(suite),
+    incomingContents: incomingContents.get(suite),
     publishDate,
   })));
 
@@ -128,18 +152,26 @@ export async function buildAptIndexMetadata(input: {
   config: AptResolvedRepositoryConfig;
   suite: string;
   stanzasByIndex: AptSuiteIndexes;
+  existingContents?: AptContentsIndexes | undefined;
+  incomingContents?: AptContentsIndexes | undefined;
   publishDate: string;
 }): Promise<AptIndexMetadata> {
   const packageIndexes = buildPackageIndexes({
     config: input.config,
     stanzasByIndex: input.stanzasByIndex,
   });
-  const indexFiles = await buildAptIndexFiles({ config: input.config, packageIndexes });
+  const contentsByIndex = resolveContents({
+    packageIndexes,
+    existing: input.existingContents,
+    incoming: input.incomingContents,
+  });
+  const indexFiles = await buildAptIndexFiles({ config: input.config, packageIndexes, contentsByIndex });
 
   return {
     config: input.config,
     suite: input.suite,
     stanzasByIndex: input.stanzasByIndex,
+    contentsByIndex,
     packageIndexes,
     indexFiles,
     releasePath: `repositories/${input.repositoryName}/dists/${input.suite}/Release`,
@@ -151,6 +183,43 @@ export async function buildAptIndexMetadata(input: {
       indexFiles,
     }),
   };
+}
+
+/**
+ * Settles the `Contents` of each index against the packages it publishes.
+ *
+ * Entries survive for packages this publish did not touch, so their `.deb`
+ * files never have to be re-read, and disappear for packages the index no
+ * longer lists.
+ */
+function resolveContents(input: {
+  packageIndexes: AptPackageIndex[];
+  existing?: AptContentsIndexes | undefined;
+  incoming?: AptContentsIndexes | undefined;
+}): AptContentsIndexes {
+  const contentsByIndex: AptContentsIndexes = new Map();
+
+  for (const packageIndex of input.packageIndexes) {
+    const key = indexKey(packageIndex.component, packageIndex.architecture);
+    const keepNames = new Set<string>();
+    for (const stanza of packageIndex.stanzas) {
+      const name = contentsNameForStanza(stanza, packageIndex.component);
+      if (name !== undefined) {
+        keepNames.add(name);
+      }
+    }
+
+    const merged = mergeContentsIndex({
+      existing: input.existing?.get(key),
+      incoming: input.incoming?.get(key) ?? new Map<string, string[]>(),
+      keepNames,
+    });
+    if (merged.size > 0) {
+      contentsByIndex.set(key, merged);
+    }
+  }
+
+  return contentsByIndex;
 }
 
 /** Drops every stanza whose `Filename` matches, across all indexes. */

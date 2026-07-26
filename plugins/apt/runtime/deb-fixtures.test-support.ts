@@ -1,4 +1,4 @@
-import { gzipSync } from "node:zlib";
+import { gzipSync, zstdCompressSync } from "node:zlib";
 
 const textEncoder = new TextEncoder();
 const controlTarXzFixture = "/Td6WFoAAAD/EtlBAgAhARAAAACocI6G4Af/AMJdABcLyOfZ5dHD1ZV9QtvcDlxsYucUrl4il7Em4XY0Mmd4zWXKEX3pitNZrbsmPuAzpPUTPlKd1qZVDG1Acr4sFRHL4NJBXzydVA0vPWjnh1EiddFNfqoRi2rrxPowSYh9MVzmNBmBU+1RIR7MAcn7ctJ7BrY8agbeeed+zaXN7OXvRN+9m+1W9shuvrCZbgmNVOk64sgLWiqFgQe6e5Hd80LEr10DRDEhkUJmlSaDhfDYxDgz2DaHGHuMv1isUN1SNQwAAAAAAAHWAYAQAAAUFy3LqAAK/AIAAAAAAFla";
@@ -23,12 +23,35 @@ export async function debArchiveWithControlXz(input: { control: string }): Promi
   ]);
 }
 
-export function debArchive(input: { control: string }): Uint8Array {
+export interface DebArchiveInput {
+  control: string;
+  /** Paths the package installs, as `Contents` would list them. */
+  files?: string[];
+  /** How the data archive is compressed; dpkg now defaults to zstd. */
+  dataCompression?: "gzip" | "zstd" | "none";
+}
+
+export function debArchive(input: DebArchiveInput): Uint8Array {
+  const data = tarArchive((input.files ?? []).map((path) => ({
+    name: `./${path}`,
+    bytes: textEncoder.encode(`contents of ${path}\n`),
+  })));
+
   return arArchive([
     { name: "debian-binary", bytes: textEncoder.encode("2.0\n") },
     { name: "control.tar.gz", bytes: new Uint8Array(gzipSync(tarArchive([{ name: "./control", bytes: textEncoder.encode(input.control) }]))) },
-    { name: "data.tar.gz", bytes: new Uint8Array(gzipSync(tarArchive([]))) },
+    dataMember(data, input.dataCompression ?? "gzip"),
   ]);
+}
+
+function dataMember(data: Uint8Array, compression: "gzip" | "zstd" | "none"): { name: string; bytes: Uint8Array } {
+  if (compression === "zstd") {
+    return { name: "data.tar.zst", bytes: new Uint8Array(zstdCompressSync(data)) };
+  }
+  if (compression === "none") {
+    return { name: "data.tar", bytes: data };
+  }
+  return { name: "data.tar.gz", bytes: new Uint8Array(gzipSync(data)) };
 }
 
 function arArchive(entries: Array<{ name: string; bytes: Uint8Array }>): Uint8Array {

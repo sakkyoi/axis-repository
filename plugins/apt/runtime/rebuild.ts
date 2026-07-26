@@ -12,7 +12,13 @@ import {
 import { stanzaField, type DebianStanza } from "../shared/stanza";
 import { readDebControlMetadata } from "./deb-control";
 import { digestHex } from "./digest";
-import { readAptSuiteIndexes, writeAptRepositoryIndexes, type AptReleaseSigner } from "./index-store";
+import {
+  readAptSuiteStates,
+  suiteContentsIndexes,
+  suitePackageIndexes,
+  writeAptRepositoryIndexes,
+  type AptReleaseSigner,
+} from "./index-store";
 import { buildAptIndexMetadata, parseAptRepositoryConfig } from "./metadata";
 import {
   buildPackageStanza,
@@ -58,11 +64,13 @@ export async function reconcileAptRepository(input: {
   const parsedConfig = parseAptRepositoryConfig(input.repository);
   const suiteNames = parsedConfig.suites ?? [parsedConfig.codename];
   const repositoryPrefix = `repositories/${input.repository.name}/`;
-  const existingIndexes = await readAptSuiteIndexes({
+  const published = await readAptSuiteStates({
     objectStore: input.objectStore,
     repositoryName: input.repository.name,
     suites: suiteNames,
   });
+  const existingIndexes = suitePackageIndexes(published);
+  const existingContents = suiteContentsIndexes(published);
   const indexedStanzas = stanzasByFilename(existingIndexes);
   const poolObjects = (await listAllObjects(input.objectStore, `${repositoryPrefix}pool/`))
     .filter((object) => object.key.endsWith(".deb") || object.key.endsWith(".udeb"));
@@ -109,6 +117,7 @@ export async function reconcileAptRepository(input: {
     config,
     suite,
     stanzasByIndex: suiteStanzas(entries.filter((entry) => entry.suites.includes(suite)), config.architectures),
+    existingContents: existingContents.get(suite),
     publishDate: publishedAt,
   })));
 

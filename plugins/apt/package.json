@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@axis-repository/core": "workspace:*",
+    "fzstd": "^0.1.1",
     "openpgp": "^6.3.1",
     "react": "^19.2.8",
     "xz-decompress": "^0.2.3",

@@ -5,6 +5,8 @@ import type {
 } from "@axis-repository/core";
 import { listAllObjects, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { parseStanzas } from "../shared/stanza";
+import { streamFromBytes } from "../shared/tar";
+import { parseContentsIndex, type AptContentsIndexes } from "./contents";
 import type { AptIndexFile } from "./index-files";
 import type { AptIndexMetadata } from "./metadata";
 import { indexKey, type AptPoolCopy, type AptSuiteIndexes } from "./packages";
@@ -37,23 +39,38 @@ export interface AptReleaseSigner {
 
 const textDecoder = new TextDecoder();
 const packagesIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/binary-([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Packages$/;
+const contentsIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Contents-([A-Za-z0-9][A-Za-z0-9._+~-]*)\.gz$/;
 
 export function distsPrefix(repositoryName: string, suite: string): string {
   return `repositories/${repositoryName}/dists/${suite}/`;
 }
 
-/** Reads back the published indexes of every suite the repository declares. */
-export async function readAptSuiteIndexes(input: {
+/** What one suite currently publishes: its package indexes and its file lists. */
+export interface AptSuiteState {
+  packages: AptSuiteIndexes;
+  contents: AptContentsIndexes;
+}
+
+/** Reads back the published state of every suite the repository declares. */
+export async function readAptSuiteStates(input: {
   objectStore: RepositoryObjectStore;
   repositoryName: string;
   suites: string[];
-}): Promise<Map<string, AptSuiteIndexes>> {
+}): Promise<Map<string, AptSuiteState>> {
   return new Map(
     await Promise.all(input.suites.map(async (suite) => [
       suite,
-      await readAptPackageIndexes({ objectStore: input.objectStore, repositoryName: input.repositoryName, suite }),
+      await readAptSuiteState({ objectStore: input.objectStore, repositoryName: input.repositoryName, suite }),
     ] as const)),
   );
+}
+
+export function suitePackageIndexes(states: Map<string, AptSuiteState>): Map<string, AptSuiteIndexes> {
+  return new Map([...states].map(([suite, state]) => [suite, state.packages]));
+}
+
+export function suiteContentsIndexes(states: Map<string, AptSuiteState>): Map<string, AptContentsIndexes> {
+  return new Map([...states].map(([suite, state]) => [suite, state.contents]));
 }
 
 /**
@@ -65,19 +82,22 @@ export async function readAptSuiteIndexes(input: {
  * `SHA256`, which is everything needed to re-emit it without re-reading the
  * `.deb` it describes.
  */
-export async function readAptPackageIndexes(input: {
+export async function readAptSuiteState(input: {
   objectStore: RepositoryObjectStore;
   repositoryName: string;
   suite: string;
-}): Promise<AptSuiteIndexes> {
+}): Promise<AptSuiteState> {
   const prefix = distsPrefix(input.repositoryName, input.suite);
   const objects = await listAllObjects(input.objectStore, prefix);
-  const indexes: AptSuiteIndexes = new Map();
+  const packages: AptSuiteIndexes = new Map();
+  const contents: AptContentsIndexes = new Map();
 
   for (const object of objects) {
-    const match = packagesIndexPattern.exec(object.key.slice(prefix.length));
-    const component = match?.[1];
-    const architecture = match?.[2];
+    const relativePath = object.key.slice(prefix.length);
+    const packagesMatch = packagesIndexPattern.exec(relativePath);
+    const contentsMatch = contentsIndexPattern.exec(relativePath);
+    const component = packagesMatch?.[1] ?? contentsMatch?.[1];
+    const architecture = packagesMatch?.[2] ?? contentsMatch?.[2];
     if (!component || !architecture) {
       continue;
     }
@@ -86,14 +106,25 @@ export async function readAptPackageIndexes(input: {
     if (!stored) {
       continue;
     }
-    indexes.set(indexKey(component, architecture), {
-      component,
-      architecture,
-      stanzas: parseStanzas(textDecoder.decode(await objectBytes(stored))),
-    });
+    const bytes = await objectBytes(stored);
+    if (packagesMatch) {
+      packages.set(indexKey(component, architecture), {
+        component,
+        architecture,
+        stanzas: parseStanzas(textDecoder.decode(bytes)),
+      });
+    } else {
+      contents.set(indexKey(component, architecture), parseContentsIndex(textDecoder.decode(await gunzip(bytes))));
+    }
   }
 
-  return indexes;
+  return { packages, contents };
+}
+
+/** `Contents` is published gzipped only, so reading it back has to undo that. */
+async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = streamFromBytes(bytes).pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 export interface WrittenAptIndexes {

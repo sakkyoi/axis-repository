@@ -200,6 +200,26 @@ often, or clients start refusing the repository.
 Free-text fields reject control characters. A newline in `Origin` would
 otherwise start a new `Release` field.
 
+### Contents Indexes
+
+Each component publishes `dists/<suite>/<component>/Contents-<arch>.gz`, which
+maps every installed path to the packages that own it. That is what backs
+`apt-file search`.
+
+The file list is read out of a package's data archive while the upload is
+already in memory for control parsing, so publishing does not download anything
+twice. `gzip`, `xz`, `zstd` and uncompressed data archives are all read; zstd
+matters because dpkg now defaults to it.
+
+Only the gzip form is published. `Contents` names every path of every package,
+so it is the one index that can dwarf what it describes, and no client asks for
+the plain form.
+
+Entries survive for packages a publish does not touch, and are replaced
+wholesale for a package published again — a new version installs a different
+set of files. Rebuilding drops the entries of packages that are no longer in
+the pool.
+
 ### Several Suites In One Repository
 
 List them in `suites` to serve, say, `noble` and `jammy` from one repository:

@@ -10,7 +10,14 @@ import {
 import { objectBytes, type RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { debControlMetadataFields } from "./packages";
 import { readDebControlMetadata, type DebControlMetadata } from "./deb-control";
-import { readAptSuiteIndexes, writeAptRepositoryIndexes, type AptReleaseSigner } from "./index-store";
+import { readDebFilePaths } from "../shared/deb-files";
+import {
+  readAptSuiteStates,
+  suiteContentsIndexes,
+  suitePackageIndexes,
+  writeAptRepositoryIndexes,
+  type AptReleaseSigner,
+} from "./index-store";
 import { buildAptRepositoryMetadata, parseAptRepositoryConfig } from "./metadata";
 import type { AptRepositoryConfig } from "./config";
 
@@ -31,13 +38,15 @@ export class AptPublisher implements ArtifactPublisher {
       throw new ValidationError("Publish token is not scoped to the repository signing key");
     }
     const enrichedInput = await this.enrichArtifactsWithDebControlMetadata(input, config, objectStore);
+    const published = await readAptSuiteStates({
+      objectStore,
+      repositoryName: input.repository.name,
+      suites: config.suites ?? [config.codename],
+    });
     const metadata = await buildAptRepositoryMetadata({
       ...enrichedInput,
-      existingIndexes: await readAptSuiteIndexes({
-        objectStore,
-        repositoryName: input.repository.name,
-        suites: config.suites ?? [config.codename],
-      }),
+      existingIndexes: suitePackageIndexes(published),
+      existingContents: suiteContentsIndexes(published),
     });
     const key = await this.options.signingKeys.getActivePrivateKey(
       metadata.config.signingKeyId,
@@ -80,16 +89,22 @@ export class AptPublisher implements ArtifactPublisher {
       throw new ValidationError("APT artifact upload object could not be read for metadata parsing");
     }
 
-    const control = await readDebControlMetadata(await objectBytes(object));
+    const bytes = await objectBytes(object);
+    const control = await readDebControlMetadata(bytes);
     return {
       ...artifact,
       artifact: {
         ...artifact.artifact,
-        metadata: aptArtifactMetadataFromDebControl({
-          config,
-          artifact: artifact.artifact,
-          control,
-        }),
+        metadata: {
+          ...aptArtifactMetadataFromDebControl({
+            config,
+            artifact: artifact.artifact,
+            control,
+          }),
+          // Read while the archive is already in hand; Contents would
+          // otherwise have to download every .deb again.
+          filePaths: await readDebFilePaths(bytes),
+        },
       },
     };
   }

@@ -63,6 +63,7 @@ interface FixturePackage {
   version: string;
   architecture?: string;
   suite?: string;
+  files?: string[];
 }
 
 function publishInput(sessionId: string, packages: FixturePackage[], repositoryOverrides = {}): PublishArtifactsInput {
@@ -137,9 +138,11 @@ async function seedUploads(
           `Version: ${fixture.version}`,
           `Architecture: ${architecture}`,
           "Maintainer: Release Team <release@example.com>",
+          "Section: utils",
           `Description: ${fixture.name} package`,
           "",
         ].join("\n"),
+        ...(fixture.files ? { files: fixture.files } : {}),
       }),
       "application/vnd.debian.binary-package",
     );
@@ -173,6 +176,18 @@ function byHashKeys(objectStore: MemoryRepositoryObjectStore): string[] {
 }
 
 const PACKAGES_KEY = "repositories/debian-internal/dists/noble/main/binary-amd64/Packages";
+const CONTENTS_KEY = "repositories/debian-internal/dists/noble/main/Contents-amd64.gz";
+
+async function gunzipStored(objectStore: MemoryRepositoryObjectStore, key: string): Promise<string> {
+  const value = [...objectStore.objects].reverse().find((candidate) => candidate.key === key)?.value;
+  if (!(value instanceof Uint8Array)) {
+    throw new Error(`expected gzipped bytes at ${key}`);
+  }
+  const stream = new Blob([value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+  return new Response(stream).text();
+}
 
 function packagesKey(suite: string, architecture = "amd64"): string {
   return `repositories/debian-internal/dists/${suite}/main/binary-${architecture}/Packages`;
@@ -473,6 +488,60 @@ describe("APT index lifecycle", () => {
     await expect(harness.publish("pub_1", [{ name: "alpha", version: "1.0.0", suite: "jammy" }], {
       suites: ["noble"],
     })).rejects.toThrow("artifact metadata suite is not configured for this repository");
+  });
+
+  it("publishes a Contents index naming the files each package installs", async () => {
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [
+      { name: "alpha", version: "1.0.0", files: ["usr/bin/alpha", "etc/alpha.conf"] },
+      { name: "beta", version: "2.0.0", files: ["usr/bin/beta"] },
+    ]);
+
+    const contents = await gunzipStored(harness.objectStore, CONTENTS_KEY);
+    expect(contents).toContain("usr/bin/alpha utils/alpha\n");
+    expect(contents).toContain("etc/alpha.conf utils/alpha\n");
+    expect(contents).toContain("usr/bin/beta utils/beta\n");
+    expect(storedText(harness.objectStore, "repositories/debian-internal/dists/noble/Release"))
+      .toContain("main/Contents-amd64.gz\n");
+  });
+
+  it("keeps the Contents of packages a later publish does not touch", async () => {
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0", files: ["usr/bin/alpha"] }]);
+    await harness.publish("pub_2", [{ name: "beta", version: "2.0.0", files: ["usr/bin/beta"] }]);
+
+    const contents = await gunzipStored(harness.objectStore, CONTENTS_KEY);
+    expect(contents).toContain("usr/bin/alpha utils/alpha\n");
+    expect(contents).toContain("usr/bin/beta utils/beta\n");
+  });
+
+  it("replaces the Contents of a package republished with different files", async () => {
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0", files: ["usr/bin/alpha-old"] }]);
+    await harness.publish("pub_2", [{ name: "alpha", version: "1.0.0", files: ["usr/bin/alpha-new"] }]);
+
+    const contents = await gunzipStored(harness.objectStore, CONTENTS_KEY);
+    expect(contents).toContain("usr/bin/alpha-new utils/alpha\n");
+    expect(contents).not.toContain("usr/bin/alpha-old");
+  });
+
+  it("drops a package from Contents once its pool object is gone", async () => {
+    const harness = await createHarness();
+
+    await harness.publish("pub_1", [
+      { name: "alpha", version: "1.0.0", files: ["usr/bin/alpha"] },
+      { name: "beta", version: "2.0.0", files: ["usr/bin/beta"] },
+    ]);
+    await harness.objectStore.deleteObject("repositories/debian-internal/pool/main/alpha/alpha_1.0.0_amd64.deb");
+
+    await harness.reconcile();
+
+    const contents = await gunzipStored(harness.objectStore, CONTENTS_KEY);
+    expect(contents).not.toContain("usr/bin/alpha");
+    expect(contents).toContain("usr/bin/beta utils/beta\n");
   });
 
   it("does not require a signing key to reconcile a repository that has published nothing", async () => {

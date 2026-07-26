@@ -38,6 +38,8 @@ export interface ValidatedAptArtifact {
   description: string;
   maintainer: string;
   filename: string;
+  /** Paths the package installs, read out of its data archive at publish. */
+  filePaths: string[];
 }
 
 /** Groups the stanzas that belong in one `<component>/binary-<architecture>/Packages`. */
@@ -172,6 +174,7 @@ export function validateAptArtifacts(input: {
       description,
       maintainer,
       filename,
+      filePaths: artifactFilePaths(metadata),
     };
   });
 }
@@ -402,6 +405,20 @@ function requiredArtifactString(metadata: Record<string, unknown>, field: string
     throw new ValidationError(`artifact metadata ${field} is required`);
   }
   return value;
+}
+
+/**
+ * Reads the installed file list the publisher attached.
+ *
+ * It rides on the artifact metadata rather than the stanza because `Contents`
+ * is a separate index: no `Packages` field carries it.
+ */
+function artifactFilePaths(metadata: Record<string, unknown>): string[] {
+  const value = metadata.filePaths;
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((path): path is string => typeof path === "string" && path.length > 0);
 }
 
 function optionalArtifactString(metadata: Record<string, unknown>, field: string): string | undefined {
