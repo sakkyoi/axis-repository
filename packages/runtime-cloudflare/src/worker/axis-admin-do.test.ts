@@ -188,8 +188,8 @@ type TestAxisEnv = {
   UPLOAD_BACKEND?: string | undefined;
 };
 
-function createObject(env: TestAxisEnv = {}) {
-  return new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, {
+function createObject(env: TestAxisEnv = {}, storage: FakeDurableStorage = new FakeDurableStorage()) {
+  return new AxisAdminDO({ storage } as unknown as DurableObjectState, {
     AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
     AXIS_ADMIN_USERNAME: "admin",
     AXIS_ADMIN_PASSWORD: "admin-password",
@@ -218,16 +218,45 @@ async function adminAuthorizationHeader(object: AxisAdminDO): Promise<string> {
 }
 
 describe("AxisAdminDO", () => {
-  it("requires admin bootstrap credentials", () => {
-    expect(() => createObject({ AXIS_ADMIN_USERNAME: undefined })).toThrow(
-      "AXIS_ADMIN_USERNAME is required for AxisAdminDO",
+  it("allows bootstrap credentials to be removed after the owner user is seeded", async () => {
+    const storage = new FakeDurableStorage();
+    const object = createObject({}, storage);
+    const adminAuthorization = await adminAuthorizationHeader(object);
+
+    const reseededObject = createObject({
+      AXIS_ADMIN_USERNAME: undefined,
+      AXIS_ADMIN_PASSWORD: undefined,
+      AXIS_ADMIN_PASSWORD_HASH: undefined,
+    }, storage);
+    const response = await reseededObject.fetch(
+      new Request("https://axis.example/admin/users", {
+        headers: { authorization: adminAuthorization },
+      }),
     );
-    expect(() => createObject({ AXIS_ADMIN_USERNAME: "" })).toThrow(
-      "AXIS_ADMIN_USERNAME is required for AxisAdminDO",
-    );
-    expect(() => createObject({ AXIS_ADMIN_PASSWORD: undefined })).toThrow(
-      "AXIS_ADMIN_PASSWORD_HASH is required for AxisAdminDO",
-    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      users: [expect.objectContaining({ username: "admin", role: "owner" })],
+      canCreateUsers: false,
+    });
+  });
+
+  it("rejects bootstrap login when no owner user or bootstrap credentials are available", async () => {
+    const object = createObject({
+      AXIS_ADMIN_USERNAME: undefined,
+      AXIS_ADMIN_PASSWORD: undefined,
+      AXIS_ADMIN_PASSWORD_HASH: undefined,
+    });
+    const response = await object.fetch(new Request("https://axis.example/admin/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "admin-password" }),
+    }));
+
+    expect(response.status).toBe(401);
+  });
+
+  it("requires an admin session secret", () => {
     expect(() => createObject({ AXIS_SESSION_SECRET: undefined })).toThrow(
       "AXIS_SESSION_SECRET is required for AxisAdminDO",
     );
@@ -714,13 +743,13 @@ describe("AxisAdminDO", () => {
     });
   });
 
-  it("still requires admin credentials for memory backend", () => {
-    expect(() => createObject({ UPLOAD_BACKEND: "memory", AXIS_ADMIN_USERNAME: undefined })).toThrow(
-      "AXIS_ADMIN_USERNAME is required for AxisAdminDO",
-    );
-    expect(() => createObject({ UPLOAD_BACKEND: "memory", AXIS_ADMIN_PASSWORD: undefined })).toThrow(
-      "AXIS_ADMIN_PASSWORD_HASH is required for AxisAdminDO",
-    );
+  it("still allows removed bootstrap credentials for memory backend", () => {
+    expect(() => createObject({
+      UPLOAD_BACKEND: "memory",
+      AXIS_ADMIN_USERNAME: undefined,
+      AXIS_ADMIN_PASSWORD: undefined,
+      AXIS_ADMIN_PASSWORD_HASH: undefined,
+    })).not.toThrow();
     expect(() => createObject({ UPLOAD_BACKEND: "memory", AXIS_SESSION_SECRET: undefined })).toThrow(
       "AXIS_SESSION_SECRET is required for AxisAdminDO",
     );

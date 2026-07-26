@@ -31,6 +31,8 @@ export const repositoriesResponseSchema = z.object({
 export const adminPrincipalSchema = z.object({
   type: z.literal("admin"),
   subject: z.string(),
+  username: z.string(),
+  role: z.literal("owner"),
   scopes: z.array(z.string()),
   sessionId: z.string(),
 });
@@ -39,6 +41,21 @@ export const adminAuthResponseSchema = z.object({
   accessToken: z.string(),
   accessTokenExpiresAt: z.string(),
   principal: adminPrincipalSchema,
+});
+
+export const adminUserSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  displayName: z.string(),
+  role: z.literal("owner"),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  disabledAt: z.string().optional(),
+});
+
+export const adminUsersResponseSchema = z.object({
+  users: z.array(adminUserSchema),
+  canCreateUsers: z.boolean(),
 });
 
 export const repositoryObjectDirectorySchema = z.object({
@@ -322,6 +339,7 @@ export const adminSessionSchema = z.object({
 export type Repository = z.infer<typeof repositorySchema>;
 export type AdminPrincipal = z.infer<typeof adminPrincipalSchema>;
 export type AdminAuthResponse = z.infer<typeof adminAuthResponseSchema>;
+export type AdminUser = z.infer<typeof adminUserSchema>;
 export type RepositoryObjectDirectory = z.infer<typeof repositoryObjectDirectorySchema>;
 export type RepositoryObject = z.infer<typeof repositoryObjectSchema>;
 export type RepositoryObjectDetail = z.infer<typeof repositoryObjectDetailSchema>;

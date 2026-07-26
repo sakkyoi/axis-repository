@@ -35,6 +35,14 @@ export function useRepositoryPlugins() {
   });
 }
 
+export function useAdminUsers() {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["admin-users"],
+    queryFn: () => client.listAdminUsers(),
+  });
+}
+
 export function useUpdateRepositoryPluginPolicy() {
   const client = useAxisClient();
   const queryClient = useQueryClient();

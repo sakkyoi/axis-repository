@@ -256,7 +256,9 @@ describe("createAxisClient", () => {
           ok: true,
           principal: {
             type: "admin",
-            subject: "admin",
+            subject: "admin_user_1",
+            username: "admin",
+            role: "owner",
             scopes: ["admin:*"],
             sessionId: "admin_session_1",
           },
@@ -290,7 +292,9 @@ describe("createAxisClient", () => {
           accessTokenExpiresAt: "2026-07-26T00:15:00.000Z",
           principal: {
             type: "admin",
-            subject: "admin",
+            subject: "admin_user_1",
+            username: "admin",
+            role: "owner",
             scopes: ["admin:*"],
             sessionId: "admin_session_1",
           },
@@ -315,6 +319,42 @@ describe("createAxisClient", () => {
       { method: "POST", url: "/admin/auth/refresh", data: undefined },
       { method: "POST", url: "/admin/auth/logout", data: undefined },
     ]);
+  });
+
+  it("lists admin users through the admin endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      accessToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          canCreateUsers: false,
+          users: [
+            {
+              id: "admin_user_1",
+              username: "admin",
+              displayName: "admin",
+              role: "owner",
+              createdAt: "2026-07-26T00:00:00.000Z",
+              updatedAt: "2026-07-26T00:00:00.000Z",
+            },
+          ],
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.listAdminUsers()).resolves.toMatchObject({
+      canCreateUsers: false,
+      users: [{ username: "admin", role: "owner" }],
+    });
+    expect(requests).toEqual(["GET /admin/users"]);
   });
 
   it("creates repositories through the admin endpoint", async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   PublishSession,
   PublishTokenRecord,
+  AdminUserRecord,
   Repository,
   RepositoryArtifactRecord,
   RepositoryActivityRecord,
@@ -10,6 +11,17 @@ import type {
   SigningKeyRecord,
 } from "@axis-repository/core";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
+
+const adminUser = (overrides: Partial<AdminUserRecord>): AdminUserRecord => ({
+  id: "admin_user_1",
+  username: "admin",
+  displayName: "admin",
+  passwordHash: "hash",
+  role: "owner",
+  createdAt: "2026-07-26T00:00:00.000Z",
+  updatedAt: "2026-07-26T00:00:00.000Z",
+  ...overrides,
+});
 
 class FakeDurableStorage implements DurableStorage {
   readonly values = new Map<string, unknown>();
@@ -345,6 +357,22 @@ describe("DurableStateStore", () => {
     await expect(state.publishTokens.getByName("github-actions")).resolves.toBeNull();
     await expect(state.publishTokens.list()).resolves.toEqual([]);
     await expect(state.publishTokens.deleteByName("github-actions")).resolves.toBe(false);
+  });
+
+  it("keeps admin user username and id indexes consistent", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+
+    await state.adminUsers.save(adminUser({ id: "admin_user_1", username: "old-admin" }));
+    await state.adminUsers.save(adminUser({ id: "admin_user_1", username: "admin" }));
+
+    await expect(state.adminUsers.getByUsername("old-admin")).resolves.toBeNull();
+    await expect(state.adminUsers.getByUsername("admin")).resolves.toMatchObject({
+      id: "admin_user_1",
+      username: "admin",
+    });
+    await expect(state.adminUsers.list()).resolves.toMatchObject([
+      { id: "admin_user_1", username: "admin" },
+    ]);
   });
 
   it("persists repository secrets by id and scoped name and lists them sorted", async () => {

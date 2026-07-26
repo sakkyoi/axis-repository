@@ -9,7 +9,7 @@ import {
 } from "@axis-repository/core";
 import { createApp } from "./app";
 import { WebCryptoRandomId, Sha256SecretHasher } from "../crypto";
-import { BootstrapAdminPasswordVerifier, HmacAdminAccessTokenCodec } from "../auth/admin-auth";
+import { HmacAdminAccessTokenCodec } from "../auth/admin-auth";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import { DurableStateStore, type DurableStorage } from "../storage/durable-state";
 import type { AppDependencies } from "./dev-dependencies";
@@ -76,6 +76,26 @@ function requiredR2Bucket(value: R2Bucket | undefined): R2Bucket {
   return value;
 }
 
+function bootstrapOwnerFromEnv(env: AxisEnv): { username: string; password?: string; passwordHash?: string } | undefined {
+  if (!env.AXIS_ADMIN_USERNAME) {
+    return undefined;
+  }
+  const username = env.AXIS_ADMIN_USERNAME;
+  if (env.AXIS_ADMIN_PASSWORD_HASH !== undefined && env.AXIS_ADMIN_PASSWORD_HASH !== "") {
+    if (!env.AXIS_ADMIN_PASSWORD_HASH.startsWith("sha256:")) {
+      throw new Error("AXIS_ADMIN_PASSWORD_HASH must use sha256 format");
+    }
+    return { username, passwordHash: env.AXIS_ADMIN_PASSWORD_HASH };
+  }
+  if (!env.AXIS_ADMIN_PASSWORD) {
+    return undefined;
+  }
+  return {
+    username,
+    password: env.AXIS_ADMIN_PASSWORD,
+  };
+}
+
 export function createDurableObjectDependencies(
   storage: DurableStorage,
   env: AxisEnv,
@@ -91,17 +111,13 @@ export function createDurableObjectDependencies(
   const clock: Clock = { now: () => new Date() };
   const randomId = new WebCryptoRandomId();
   const hasher = new Sha256SecretHasher(env.TOKEN_HASH_PEPPER);
+  const bootstrapOwner = bootstrapOwnerFromEnv(env);
   const adminAuthService = new AdminAuthService({
     state,
     clock,
     randomId,
     hasher,
-    passwordVerifier: new BootstrapAdminPasswordVerifier({
-      username: requiredEnv(env.AXIS_ADMIN_USERNAME, "AXIS_ADMIN_USERNAME"),
-      ...(env.AXIS_ADMIN_PASSWORD_HASH === undefined ? {} : { passwordHash: env.AXIS_ADMIN_PASSWORD_HASH }),
-      ...(env.AXIS_ADMIN_PASSWORD === undefined ? {} : { devPassword: env.AXIS_ADMIN_PASSWORD }),
-      hasher,
-    }),
+    ...(bootstrapOwner === undefined ? {} : { bootstrapOwner }),
     accessTokens: new HmacAdminAccessTokenCodec(requiredEnv(env.AXIS_SESSION_SECRET, "AXIS_SESSION_SECRET")),
   });
   const encryption = new SecretEncryption(env.SIGNING_KEY_ENCRYPTION_SECRET);

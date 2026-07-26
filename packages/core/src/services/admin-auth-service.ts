@@ -1,13 +1,20 @@
-import type { AdminPrincipal, AdminRefreshSessionRecord } from "../domain/domain";
+import type { AdminPrincipal, AdminRefreshSessionRecord, AdminUserRecord } from "../domain/domain";
 import { UnauthorizedError } from "../domain/errors";
-import type { AdminAccessTokenCodec, AdminPasswordVerifier, Clock, RandomId, SecretHasher, StateStore } from "../ports/ports";
+import type { AdminAccessTokenCodec, Clock, RandomId, SecretHasher, StateStore } from "../ports/ports";
+
+export interface BootstrapOwnerCredentials {
+  username: string;
+  displayName?: string;
+  password?: string;
+  passwordHash?: string;
+}
 
 export interface AdminAuthServiceOptions {
   state: StateStore;
   clock: Clock;
   randomId: RandomId;
   hasher: SecretHasher;
-  passwordVerifier: AdminPasswordVerifier;
+  bootstrapOwner?: BootstrapOwnerCredentials;
   accessTokens: AdminAccessTokenCodec;
   accessTokenTtlSeconds?: number;
   refreshTokenTtlSeconds?: number;
@@ -25,24 +32,28 @@ export class AdminAuthService {
   constructor(private readonly options: AdminAuthServiceOptions) {}
 
   async login(input: { username: string; password: string }): Promise<AdminAuthTokenSet> {
-    if (!(await this.options.passwordVerifier.verify(input.username, input.password))) {
+    await this.ensureBootstrapOwner();
+    const user = await this.options.state.adminUsers.getByUsername(input.username);
+    if (!user || user.disabledAt || !(await this.options.hasher.verify(input.password, user.passwordHash))) {
       throw new UnauthorizedError();
     }
     const sessionId = this.options.randomId.create("admin_session");
-    return this.createTokenSet({
+    return this.createTokenSetForUser({
       sessionId,
-      subject: input.username,
-      scopes: ["admin:*"],
+      user,
       createdAt: this.options.clock.now(),
     });
   }
 
   async refresh(refreshToken: string): Promise<AdminAuthTokenSet> {
     const session = await this.findValidRefreshSession(refreshToken);
-    return this.createTokenSet({
+    const user = await this.options.state.adminUsers.getById(session.subject);
+    if (!user || user.disabledAt) {
+      throw new UnauthorizedError();
+    }
+    return this.createTokenSetForUser({
       sessionId: session.id,
-      subject: session.subject,
-      scopes: session.scopes,
+      user,
       createdAt: new Date(session.createdAt),
       rotatedAt: this.options.clock.now(),
     });
@@ -60,10 +71,38 @@ export class AdminAuthService {
     return this.options.accessTokens.verify(token);
   }
 
-  private async createTokenSet(input: {
+  async listUsers(): Promise<AdminUserRecord[]> {
+    await this.ensureBootstrapOwner();
+    return this.options.state.adminUsers.list();
+  }
+
+  private async ensureBootstrapOwner(): Promise<void> {
+    if ((await this.options.state.adminUsers.list()).length > 0) {
+      return;
+    }
+    const bootstrap = this.options.bootstrapOwner;
+    const username = bootstrap?.username.trim() ?? "";
+    if (!username) {
+      throw new UnauthorizedError();
+    }
+    if (!bootstrap?.passwordHash && !bootstrap?.password) {
+      throw new UnauthorizedError();
+    }
+    const now = this.options.clock.now().toISOString();
+    await this.options.state.adminUsers.save({
+      id: this.options.randomId.create("admin_user"),
+      username,
+      displayName: bootstrap.displayName?.trim() || username,
+      passwordHash: bootstrap.passwordHash ?? await this.options.hasher.hash(bootstrap.password ?? ""),
+      role: "owner",
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  private async createTokenSetForUser(input: {
     sessionId: string;
-    subject: string;
-    scopes: string[];
+    user: AdminUserRecord;
     createdAt: Date;
     rotatedAt?: Date;
   }): Promise<AdminAuthTokenSet> {
@@ -71,17 +110,22 @@ export class AdminAuthService {
     const accessTokenExpiresAt = new Date(now.getTime() + this.accessTokenTtlMs());
     const refreshTokenExpiresAt = new Date(now.getTime() + this.refreshTokenTtlMs());
     const refreshToken = `axis_refresh_${this.options.randomId.create("refresh")}`;
+    const scopes = scopesForRole(input.user.role);
     const principal: AdminPrincipal = {
       type: "admin",
-      subject: input.subject,
-      scopes: [...input.scopes],
+      subject: input.user.id,
+      username: input.user.username,
+      role: input.user.role,
+      scopes,
       sessionId: input.sessionId,
     };
     const session: AdminRefreshSessionRecord = {
       id: input.sessionId,
-      subject: input.subject,
+      subject: input.user.id,
+      username: input.user.username,
+      role: input.user.role,
       tokenHash: await this.options.hasher.hash(refreshToken),
-      scopes: [...input.scopes],
+      scopes,
       createdAt: input.createdAt.toISOString(),
       expiresAt: refreshTokenExpiresAt.toISOString(),
       ...(input.rotatedAt ? { rotatedAt: input.rotatedAt.toISOString() } : {}),
@@ -114,4 +158,11 @@ export class AdminAuthService {
   private refreshTokenTtlMs(): number {
     return (this.options.refreshTokenTtlSeconds ?? 30 * 24 * 60 * 60) * 1000;
   }
+}
+
+function scopesForRole(role: AdminUserRecord["role"]): string[] {
+  if (role === "owner") {
+    return ["admin:*"];
+  }
+  return [];
 }

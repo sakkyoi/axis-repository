@@ -59,13 +59,28 @@ export interface TokenPrincipal {
 export interface AdminPrincipal {
   type: "admin";
   subject: string;
+  username: string;
+  role: "owner";
   scopes: string[];
   sessionId: string;
+}
+
+export interface AdminUserRecord {
+  id: string;
+  username: string;
+  displayName: string;
+  passwordHash: string;
+  role: "owner";
+  createdAt: string;
+  updatedAt: string;
+  disabledAt?: string;
 }
 
 export interface AdminRefreshSessionRecord {
   id: string;
   subject: string;
+  username: string;
+  role: "owner";
   tokenHash: string;
   scopes: string[];
   createdAt: string;

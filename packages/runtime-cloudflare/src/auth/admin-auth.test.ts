@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { UnauthorizedError } from "@axis-repository/core";
-import { Sha256SecretHasher } from "../crypto";
 import {
-  BootstrapAdminPasswordVerifier,
   HmacAdminAccessTokenCodec,
   adminRefreshCookie,
   clearAdminRefreshCookie,
@@ -14,14 +12,18 @@ describe("HmacAdminAccessTokenCodec", () => {
     const codec = new HmacAdminAccessTokenCodec("session-secret", () => new Date("2026-07-26T00:00:00.000Z"));
     const token = await codec.create({
       type: "admin",
-      subject: "admin",
+      subject: "admin_user_1",
+      username: "admin",
+      role: "owner",
       scopes: ["admin:*"],
       sessionId: "admin_session_1",
     }, new Date("2026-07-26T00:15:00.000Z"));
 
     await expect(codec.verify(token)).resolves.toEqual({
       type: "admin",
-      subject: "admin",
+      subject: "admin_user_1",
+      username: "admin",
+      role: "owner",
       scopes: ["admin:*"],
       sessionId: "admin_session_1",
     });
@@ -31,28 +33,15 @@ describe("HmacAdminAccessTokenCodec", () => {
     const codec = new HmacAdminAccessTokenCodec("session-secret", () => new Date("2026-07-26T00:20:00.000Z"));
     const token = await new HmacAdminAccessTokenCodec("session-secret").create({
       type: "admin",
-      subject: "admin",
+      subject: "admin_user_1",
+      username: "admin",
+      role: "owner",
       scopes: ["admin:*"],
       sessionId: "admin_session_1",
     }, new Date("2026-07-26T00:15:00.000Z"));
 
     await expect(codec.verify(token)).rejects.toBeInstanceOf(UnauthorizedError);
     await expect(new HmacAdminAccessTokenCodec("other-secret").verify(token)).rejects.toBeInstanceOf(UnauthorizedError);
-  });
-});
-
-describe("BootstrapAdminPasswordVerifier", () => {
-  it("verifies configured admin password hashes", async () => {
-    const hasher = new Sha256SecretHasher("pepper");
-    const verifier = new BootstrapAdminPasswordVerifier({
-      username: "admin",
-      passwordHash: await hasher.hash("correct-password"),
-      hasher,
-    });
-
-    await expect(verifier.verify("admin", "correct-password")).resolves.toBe(true);
-    await expect(verifier.verify("admin", "wrong-password")).resolves.toBe(false);
-    await expect(verifier.verify("other", "correct-password")).resolves.toBe(false);
   });
 });
 

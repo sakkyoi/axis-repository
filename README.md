@@ -39,6 +39,12 @@ SIGNING_KEY_ENCRYPTION_SECRET=local-dev-signing-secret
 UPLOAD_BACKEND=local-r2
 ```
 
+`AXIS_ADMIN_USERNAME` and `AXIS_ADMIN_PASSWORD` or
+`AXIS_ADMIN_PASSWORD_HASH` are bootstrap inputs for the first owner user. After
+the owner user has been seeded into state, the bootstrap password secret can be
+removed. Keep `AXIS_SESSION_SECRET`; it is still required to sign and verify
+admin sessions.
+
 `UPLOAD_BACKEND=local-r2` creates same-origin `PUT` upload URLs and stores
 uploaded artifacts through the Worker `AXIS_OBJECTS` R2 binding. Under
 `wrangler dev --local`, Wrangler keeps this R2 state in local development state

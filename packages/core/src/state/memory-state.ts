@@ -1,6 +1,7 @@
 import type {
   PublishSession,
   PublishTokenRecord,
+  AdminUserRecord,
   AdminRefreshSessionRecord,
   Repository,
   RepositoryArtifactRecord,
@@ -19,6 +20,8 @@ export class MemoryStateStore implements StateStore {
   private readonly repositoryByName = new Map<string, Repository>();
   private readonly publishSessionById = new Map<string, PublishSession>();
   private readonly publishTokenById = new Map<string, PublishTokenRecord>();
+  private readonly adminUserById = new Map<string, AdminUserRecord>();
+  private readonly adminUserIdByUsername = new Map<string, string>();
   private readonly adminRefreshSessionById = new Map<string, AdminRefreshSessionRecord>();
   private readonly publishTokenIdByName = new Map<string, string>();
   private readonly repositorySecretById = new Map<string, RepositorySecretRecord | SigningKeyRecord>();
@@ -129,6 +132,35 @@ export class MemoryStateStore implements StateStore {
       this.publishTokenIdByName.delete(name);
       this.publishTokenById.delete(id);
       return true;
+    },
+  };
+
+  readonly adminUsers = {
+    getById: async (id: string): Promise<AdminUserRecord | null> => {
+      return this.adminUserById.get(id) ?? null;
+    },
+    getByUsername: async (username: string): Promise<AdminUserRecord | null> => {
+      const id = this.adminUserIdByUsername.get(username);
+      return id ? this.adminUserById.get(id) ?? null : null;
+    },
+    list: async (): Promise<AdminUserRecord[]> => {
+      return [...this.adminUserById.values()].sort((left, right) =>
+        left.username.localeCompare(right.username),
+      );
+    },
+    save: async (user: AdminUserRecord): Promise<void> => {
+      const existingUser = this.adminUserById.get(user.id);
+      if (existingUser && existingUser.username !== user.username) {
+        this.adminUserIdByUsername.delete(existingUser.username);
+      }
+
+      const existingUserIdForUsername = this.adminUserIdByUsername.get(user.username);
+      if (existingUserIdForUsername && existingUserIdForUsername !== user.id) {
+        this.adminUserById.delete(existingUserIdForUsername);
+      }
+
+      this.adminUserById.set(user.id, user);
+      this.adminUserIdByUsername.set(user.username, user.id);
     },
   };
 

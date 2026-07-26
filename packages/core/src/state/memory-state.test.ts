@@ -9,7 +9,19 @@ import {
   type RepositorySecretRecord,
   type RepositoryPluginPolicyRecord,
   type SigningKeyRecord,
+  type AdminUserRecord,
 } from "../index";
+
+const adminUser = (overrides: Partial<AdminUserRecord>): AdminUserRecord => ({
+  id: "admin_user_1",
+  username: "admin",
+  displayName: "admin",
+  passwordHash: "hash",
+  role: "owner",
+  createdAt: "2026-07-26T00:00:00.000Z",
+  updatedAt: "2026-07-26T00:00:00.000Z",
+  ...overrides,
+});
 
 const token = (overrides: Partial<PublishTokenRecord>): PublishTokenRecord => ({
   id: "tok_1",
@@ -389,6 +401,17 @@ describe("MemoryStateStore", () => {
     expect(await state.publishTokens.getByName("github-actions")).toBeNull();
     expect(await state.publishTokens.list()).toEqual([]);
     await expect(state.publishTokens.deleteByName("github-actions")).resolves.toBe(false);
+  });
+
+  it("keeps admin user username indexes consistent", async () => {
+    const state = new MemoryStateStore();
+
+    await state.adminUsers.save(adminUser({ id: "admin_user_1", username: "old-admin" }));
+    await state.adminUsers.save(adminUser({ id: "admin_user_1", username: "admin" }));
+
+    expect(await state.adminUsers.getByUsername("old-admin")).toBeNull();
+    expect(await state.adminUsers.getByUsername("admin")).toEqual(adminUser({ id: "admin_user_1", username: "admin" }));
+    expect(await state.adminUsers.list()).toEqual([adminUser({ id: "admin_user_1", username: "admin" })]);
   });
 
   it("compare-and-sets publish session status only when the expected status matches", async () => {

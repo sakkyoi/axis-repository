@@ -1,11 +1,8 @@
 import {
   UnauthorizedError,
-  ValidationError,
   timingSafeEqualText,
   type AdminAccessTokenCodec,
-  type AdminPasswordVerifier,
   type AdminPrincipal,
-  type SecretHasher,
 } from "@axis-repository/core";
 
 const textEncoder = new TextEncoder();
@@ -50,6 +47,8 @@ export class HmacAdminAccessTokenCodec implements AdminAccessTokenCodec {
     const payload = bytesToBase64Url(textEncoder.encode(JSON.stringify({
       type: principal.type,
       sub: principal.subject,
+      username: principal.username,
+      role: principal.role,
       scopes: principal.scopes,
       sid: principal.sessionId,
       exp: Math.floor(expiresAt.getTime() / 1000),
@@ -78,6 +77,8 @@ export class HmacAdminAccessTokenCodec implements AdminAccessTokenCodec {
     if (
       record.type !== "admin"
       || typeof record.sub !== "string"
+      || typeof record.username !== "string"
+      || record.role !== "owner"
       || typeof record.sid !== "string"
       || !Array.isArray(record.scopes)
       || record.scopes.some((scope) => typeof scope !== "string")
@@ -89,40 +90,11 @@ export class HmacAdminAccessTokenCodec implements AdminAccessTokenCodec {
     return {
       type: "admin",
       subject: record.sub,
+      username: record.username,
+      role: record.role,
       scopes: [...record.scopes] as string[],
       sessionId: record.sid,
     };
-  }
-}
-
-export class BootstrapAdminPasswordVerifier implements AdminPasswordVerifier {
-  constructor(
-    private readonly options: {
-      username: string;
-      passwordHash?: string;
-      devPassword?: string;
-      hasher: SecretHasher;
-    },
-  ) {
-    if (!options.username) {
-      throw new Error("AXIS_ADMIN_USERNAME is required for AxisAdminDO");
-    }
-    if (!options.passwordHash && !options.devPassword) {
-      throw new Error("AXIS_ADMIN_PASSWORD_HASH is required for AxisAdminDO");
-    }
-  }
-
-  async verify(username: string, password: string): Promise<boolean> {
-    if (!timingSafeEqualText(username, this.options.username)) {
-      return false;
-    }
-    if (this.options.passwordHash) {
-      if (!this.options.passwordHash.startsWith("sha256:")) {
-        throw new ValidationError("AXIS_ADMIN_PASSWORD_HASH must use sha256 format");
-      }
-      return this.options.hasher.verify(password, this.options.passwordHash);
-    }
-    return timingSafeEqualText(password, this.options.devPassword ?? "");
   }
 }
 

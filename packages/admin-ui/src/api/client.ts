@@ -3,6 +3,7 @@ import { createHttpClient, type HttpOptions } from "./http";
 import {
   adminSessionSchema,
   adminAuthResponseSchema,
+  adminUsersResponseSchema,
   publishSessionsResponseSchema,
   publishSessionSchema,
   publishTokenCreateResponseSchema,
@@ -27,6 +28,7 @@ import {
   type PublishSession,
   type PublishArtifact,
   type AdminAuthResponse,
+  type AdminUser,
   type UploadTarget,
 } from "./schemas";
 
@@ -73,6 +75,7 @@ export interface AxisClient {
   refreshAdminSession(): Promise<AdminAuthResponse>;
   logoutAdmin(): Promise<void>;
   verifyAdminSession(): Promise<void>;
+  listAdminUsers(): Promise<{ users: AdminUser[]; canCreateUsers: boolean }>;
   listRepositoryPlugins(): Promise<RepositoryPlugin[]>;
   updateRepositoryPluginPolicy(ecosystem: string, input: UpdateRepositoryPluginPolicyInput): Promise<RepositoryPlugin>;
   listRepositories(): Promise<Repository[]>;
@@ -143,6 +146,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async verifyAdminSession() {
       const response = await http.get("/admin/session");
       adminSessionSchema.parse(response.data);
+    },
+    async listAdminUsers() {
+      const response = await http.get("/admin/users");
+      return adminUsersResponseSchema.parse(response.data);
     },
     async listRepositories() {
       const response = await http.get("/admin/repositories");

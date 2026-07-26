@@ -7,6 +7,7 @@ import {
   type PublishArtifactRequest,
   type PublishSession,
   type PublishTokenRecord,
+  type AdminUserRecord,
   type Repository,
   type RepositoryVisibility,
   type RepositoryObject,
@@ -64,6 +65,11 @@ function optionalRepositoryVisibility(body: Record<string, unknown>): Repository
 
 function publicPublishToken(record: PublishTokenRecord): Omit<PublishTokenRecord, "tokenHash"> {
   const { tokenHash, ...publicRecord } = record;
+  return publicRecord;
+}
+
+function publicAdminUser(record: AdminUserRecord): Omit<AdminUserRecord, "passwordHash"> {
+  const { passwordHash, ...publicRecord } = record;
   return publicRecord;
 }
 
@@ -946,6 +952,22 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         ok: true,
         principal: await dependencies.adminAuthService.verifyAccessToken(token),
       });
+    }
+    throw new NotFoundError();
+  }
+  if (url.pathname === "/admin/users") {
+    await requireAdmin(request, dependencies.adminAuthService);
+    if (request.method === "GET") {
+      return jsonResponse({
+        users: (await dependencies.adminAuthService.listUsers()).map(publicAdminUser),
+        canCreateUsers: false,
+      });
+    }
+    if (request.method === "POST") {
+      return jsonResponse(
+        { error: { code: "not_implemented", message: "Admin user creation is coming soon" } },
+        { status: 501 },
+      );
     }
     throw new NotFoundError();
   }

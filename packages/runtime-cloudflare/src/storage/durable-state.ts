@@ -1,6 +1,7 @@
 import type {
   PublishSession,
   PublishTokenRecord,
+  AdminUserRecord,
   AdminRefreshSessionRecord,
   Repository,
   RepositoryArtifactRecord,
@@ -22,6 +23,8 @@ const repositoryKey = (name: string) => `repository:${name}`;
 const sessionKey = (id: string) => `publish-session:${id}`;
 const tokenKey = (id: string) => `publish-token:${id}`;
 const tokenNameKey = (name: string) => `publish-token-name:${name}`;
+const adminUserKey = (id: string) => `admin-user:${id}`;
+const adminUserUsernameKey = (username: string) => `admin-user-username:${username}`;
 const adminRefreshSessionKey = (id: string) => `admin-refresh-session:${id}`;
 const signingKeyKey = (id: string) => `signing-key:${id}`;
 const signingKeyNameKey = (repositoryName: string, name: string) => `signing-key-name:${repositoryName}:${name}`;
@@ -171,6 +174,38 @@ export class DurableStateStore implements StateStore {
       await this.storage.delete(tokenNameKey(name));
       await this.storage.delete(tokenKey(id));
       return true;
+    },
+  };
+
+  readonly adminUsers = {
+    getById: async (id: string): Promise<AdminUserRecord | null> => {
+      return (await this.storage.get<AdminUserRecord>(adminUserKey(id))) ?? null;
+    },
+    getByUsername: async (username: string): Promise<AdminUserRecord | null> => {
+      const id = await this.storage.get<string>(adminUserUsernameKey(username));
+      return id ? ((await this.storage.get<AdminUserRecord>(adminUserKey(id))) ?? null) : null;
+    },
+    list: async (): Promise<AdminUserRecord[]> => {
+      const values = await this.storage.list<AdminUserRecord>({
+        prefix: "admin-user:",
+      });
+      return [...values.values()].sort((left, right) =>
+        left.username.localeCompare(right.username),
+      );
+    },
+    save: async (user: AdminUserRecord): Promise<void> => {
+      const existing = await this.storage.get<AdminUserRecord>(adminUserKey(user.id));
+      if (existing && existing.username !== user.username) {
+        await this.storage.delete(adminUserUsernameKey(existing.username));
+      }
+
+      const existingIdForUsername = await this.storage.get<string>(adminUserUsernameKey(user.username));
+      if (existingIdForUsername && existingIdForUsername !== user.id) {
+        await this.storage.delete(adminUserKey(existingIdForUsername));
+      }
+
+      await this.storage.put(adminUserKey(user.id), user);
+      await this.storage.put(adminUserUsernameKey(user.username), user.id);
     },
   };
 

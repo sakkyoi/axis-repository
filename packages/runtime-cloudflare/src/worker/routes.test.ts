@@ -486,7 +486,9 @@ describe("Cloudflare runtime routes", () => {
       ok: true,
       principal: {
         type: "admin",
-        subject: "admin",
+        subject: "admin_user_dev",
+        username: "admin",
+        role: "owner",
         scopes: ["admin:*"],
         sessionId: "admin_session_dev",
       },
@@ -503,8 +505,15 @@ describe("Cloudflare runtime routes", () => {
     expect(loginResponse.status).toBe(200);
     expect(loginResponse.headers.get("set-cookie")).toContain("axis_admin_refresh=");
     const loginCookie = loginResponse.headers.get("set-cookie") ?? "";
-    const loginBody = await loginResponse.json() as { accessToken: string; principal: { subject: string } };
-    expect(loginBody.principal.subject).toBe("admin");
+    const loginBody = await loginResponse.json() as {
+      accessToken: string;
+      principal: { subject: string; username: string; role: string };
+    };
+    expect(loginBody.principal).toMatchObject({
+      subject: "admin_user_dev",
+      username: "admin",
+      role: "owner",
+    });
 
     const refreshResponse = await app.fetch(new Request("https://axis.example/admin/auth/refresh", {
       method: "POST",
@@ -527,6 +536,44 @@ describe("Cloudflare runtime routes", () => {
     }));
     expect(logoutResponse.status).toBe(204);
     expect(logoutResponse.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("lists seeded admin users and keeps user creation coming soon", async () => {
+    const app = createApp();
+    await app.fetch(new Request("https://axis.example/admin/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "admin" }),
+    }));
+
+    const listResponse = await app.fetch(new Request("https://axis.example/admin/users", {
+      headers: { authorization: "Bearer dev-admin-token" },
+    }));
+    expect(listResponse.status).toBe(200);
+    await expect(listResponse.json()).resolves.toEqual({
+      canCreateUsers: false,
+      users: [
+        expect.objectContaining({
+          id: "admin_user_dev",
+          username: "admin",
+          displayName: "admin",
+          role: "owner",
+        }),
+      ],
+    });
+
+    const createResponse = await app.fetch(new Request("https://axis.example/admin/users", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ username: "other" }),
+    }));
+    expect(createResponse.status).toBe(501);
+    await expect(createResponse.json()).resolves.toEqual({
+      error: { code: "not_implemented", message: "Admin user creation is coming soon" },
+    });
   });
 
   it("rejects invalid admin access tokens through the admin session route", async () => {

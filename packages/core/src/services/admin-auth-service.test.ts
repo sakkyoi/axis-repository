@@ -4,7 +4,6 @@ import {
   MemoryStateStore,
   UnauthorizedError,
   type AdminAccessTokenCodec,
-  type AdminPasswordVerifier,
   type Clock,
   type RandomId,
   type SecretHasher,
@@ -23,22 +22,20 @@ const hasher: SecretHasher = {
   verify: async (secret, hash) => hash === `hash:${secret}`,
 };
 
-const passwordVerifier: AdminPasswordVerifier = {
-  verify: async (username, password) => username === "admin" && password === "correct-password",
-};
-
 const accessTokens: AdminAccessTokenCodec = {
-  create: async (principal, expiresAt) => `access:${principal.sessionId}:${principal.subject}:${expiresAt.toISOString()}`,
+  create: async (principal, expiresAt) =>
+    `access:${principal.sessionId}:${principal.subject}:${principal.username}:${principal.role}:${expiresAt.toISOString()}`,
   verify: async (token) => {
-    const [, sessionId, subject] = token.split(":");
-    if (!sessionId || !subject) throw new UnauthorizedError();
-    return { type: "admin", subject, scopes: ["admin:*"], sessionId };
+    const [, sessionId, subject, username, role] = token.split(":");
+    if (!sessionId || !subject || !username || role !== "owner") throw new UnauthorizedError();
+    return { type: "admin", subject, username, role, scopes: ["admin:*"], sessionId };
   },
 };
 
 describe("AdminAuthService", () => {
-  it("logs in with bootstrap credentials and creates access and refresh tokens", async () => {
-    const service = createService();
+  it("seeds the owner user from bootstrap credentials and creates access and refresh tokens", async () => {
+    const state = new MemoryStateStore();
+    const service = createService({ state });
 
     const result = await service.login({
       username: "admin",
@@ -46,16 +43,24 @@ describe("AdminAuthService", () => {
     });
 
     expect(result).toEqual({
-      accessToken: "access:admin_session_fixed:admin:2026-07-26T00:15:00.000Z",
+      accessToken: "access:admin_session_fixed:admin_user_fixed:admin:owner:2026-07-26T00:15:00.000Z",
       accessTokenExpiresAt: "2026-07-26T00:15:00.000Z",
       refreshToken: "axis_refresh_refresh_fixed",
       refreshTokenExpiresAt: "2026-08-25T00:00:00.000Z",
       principal: {
         type: "admin",
-        subject: "admin",
+        subject: "admin_user_fixed",
+        username: "admin",
+        role: "owner",
         scopes: ["admin:*"],
         sessionId: "admin_session_fixed",
       },
+    });
+    await expect(state.adminUsers.getByUsername("admin")).resolves.toMatchObject({
+      id: "admin_user_fixed",
+      username: "admin",
+      displayName: "admin",
+      role: "owner",
     });
   });
 
@@ -64,6 +69,34 @@ describe("AdminAuthService", () => {
       username: "admin",
       password: "wrong-password",
     })).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("does not use bootstrap credentials after an owner user already exists", async () => {
+    const state = new MemoryStateStore();
+    const firstService = createService({ state });
+    await firstService.login({ username: "admin", password: "correct-password" });
+    const secondService = createService({
+      state,
+      bootstrapOwner: {
+        username: "admin",
+        password: "changed-password",
+      },
+    });
+
+    await expect(secondService.login({
+      username: "admin",
+      password: "changed-password",
+    })).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(secondService.login({
+      username: "admin",
+      password: "correct-password",
+    })).resolves.toMatchObject({
+      principal: {
+        subject: "admin_user_fixed",
+        username: "admin",
+        role: "owner",
+      },
+    });
   });
 
   it("refreshes sessions by rotating the refresh token", async () => {
@@ -77,12 +110,28 @@ describe("AdminAuthService", () => {
 
     const refreshed = await service.refresh(login.refreshToken);
 
-    expect(refreshed.refreshToken).toBe("axis_refresh_refresh_3");
+    expect(refreshed.refreshToken).toBe("axis_refresh_refresh_4");
     await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(UnauthorizedError);
     await expect(service.verifyAccessToken(refreshed.accessToken)).resolves.toMatchObject({
-      subject: "admin",
+      subject: "admin_user_1",
+      username: "admin",
+      role: "owner",
       scopes: ["admin:*"],
     });
+  });
+
+  it("rejects refresh sessions for disabled admin users", async () => {
+    const state = new MemoryStateStore();
+    const service = createService({ state });
+    const login = await service.login({ username: "admin", password: "correct-password" });
+    const user = await state.adminUsers.getByUsername("admin");
+    if (!user) throw new Error("Expected bootstrap user");
+    await state.adminUsers.save({
+      ...user,
+      disabledAt: "2026-07-26T00:01:00.000Z",
+    });
+
+    await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it("logs out refresh sessions", async () => {
@@ -101,7 +150,10 @@ function createService(overrides: Partial<ConstructorParameters<typeof AdminAuth
     clock,
     randomId,
     hasher,
-    passwordVerifier,
+    bootstrapOwner: {
+      username: "admin",
+      password: "correct-password",
+    },
     accessTokens,
     ...overrides,
   });

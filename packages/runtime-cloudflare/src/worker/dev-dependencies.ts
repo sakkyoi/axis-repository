@@ -82,14 +82,16 @@ export function createDevDependencyHarness(
     clock,
     randomId: {
       create(prefix: string): string {
+        if (prefix === "admin_user") return "admin_user_dev";
         if (prefix === "admin_session") return "admin_session_dev";
         if (prefix === "refresh") return `refresh_dev_${++refreshSequence}`;
         return randomId.create(prefix);
       },
     },
     hasher,
-    passwordVerifier: {
-      verify: async (username, password) => username === adminUsername && password === adminPassword,
+    bootstrapOwner: {
+      username: adminUsername,
+      password: adminPassword,
     },
     accessTokens: {
       create: async () => "dev-admin-token",
@@ -99,7 +101,9 @@ export function createDevDependencyHarness(
         }
         return {
           type: "admin",
-          subject: adminUsername,
+          subject: "admin_user_dev",
+          username: adminUsername,
+          role: "owner",
           scopes: ["admin:*"],
           sessionId: "admin_session_dev",
         };

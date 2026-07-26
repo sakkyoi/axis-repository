@@ -6,12 +6,14 @@ export const ADMIN_UI_PATHS = {
   repositoryWorkspace: "/ui/repositories/:name",
   repositorySettings: "/ui/repositories/:name/settings",
   tokens: "/ui/tokens",
+  users: "/ui/users",
   settings: "/ui/settings",
 } as const;
 
 export const ADMIN_UI_NAV_ITEMS = [
   { id: "repositories", to: ADMIN_UI_PATHS.repositories, label: "Repositories" },
   { id: "tokens", to: ADMIN_UI_PATHS.tokens, label: "Tokens" },
+  { id: "users", to: ADMIN_UI_PATHS.users, label: "Users" },
   { id: "settings", to: ADMIN_UI_PATHS.settings, label: "Settings" },
 ] as const;
 
