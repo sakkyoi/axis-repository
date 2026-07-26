@@ -98,6 +98,30 @@ repository-scoped admin-only APIs, such as signing key management. The host owns
 the outer route shell; the plugin owns the namespace, action names, methods,
 relative paths, response kinds, and handlers.
 
+### `public: true` bypasses repository read authorization
+
+A client helper action marked `public: true` is served **without any
+authentication, even for a private repository**. The host checks the flag and
+skips `authorizeRepositoryRead` entirely, so this is a trust-boundary decision
+delegated to the plugin author with no host-side ceiling.
+
+Only mark an action public when everything it can return is safe to hand to an
+anonymous caller, and remember that responding at all confirms the repository
+exists and reveals whatever the response embeds. APT marks `key.gpg`, `source`,
+and `install` public because a signing **public** key, a codename, and a
+component list are the values a client needs before it can authenticate. Never
+mark an action public if it reads repository contents, secrets, or anything
+derived from a token.
+
+### Plugin capabilities are scoped by the host
+
+Each plugin's secret capability is bound to the namespaces its ecosystem owns —
+`apt` and anything under `apt.` — so a plugin cannot read another plugin's
+secrets even by guessing an id. The object store passed to artifact index
+operations is likewise confined to `repositories/<name>/` for writes, plus the
+staging area for reads. Do not try to reach around these; ask for a host API
+instead.
+
 ## Runtime Plugin
 
 Runtime behavior belongs under `plugins/<ecosystem>/runtime/`. Export a factory

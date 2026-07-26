@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIN_UI_PATHS,
   ADMIN_UI_NAV_ITEMS,
+  safeAdminRedirectPath,
   adminLoginPathFor,
   repositorySettingsPath,
   repositoryWorkspacePath,
@@ -39,3 +40,33 @@ describe("admin UI navigation namespace", () => {
     expect(repositorySettingsPath("debian/prod")).toBe("/ui/repositories/debian%2Fprod/settings");
   });
 });
+
+describe("safeAdminRedirectPath", () => {
+  it("keeps admin UI paths", () => {
+    expect(safeAdminRedirectPath("/ui/tokens")).toBe("/ui/tokens");
+    expect(safeAdminRedirectPath("/ui/repositories/debian%20internal")).toBe(
+      "/ui/repositories/debian%20internal",
+    );
+  });
+
+  it("falls back to the repositories page for anything that leaves the app", () => {
+    for (const target of [
+      "https://evil.example/phish",
+      "//evil.example/phish",
+      "/admin/auth/login",
+      "/ui",
+      "javascript:alert(1)",
+      "/ui/\\evil.example",
+      "",
+      "   ",
+      undefined,
+      null,
+      42,
+      { pathname: "/ui/tokens" },
+    ]) {
+      expect(safeAdminRedirectPath(target), `expected ${JSON.stringify(target)} to be rejected`)
+        .toBe(ADMIN_UI_PATHS.repositories);
+    }
+  });
+});
+

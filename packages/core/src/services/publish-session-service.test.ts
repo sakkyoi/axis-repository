@@ -169,7 +169,7 @@ describe("PublishSessionService", () => {
     ]);
   });
 
-  it("gets a publish session only when the token is scoped to its repository", async () => {
+  it("reports an out-of-scope session as not found rather than forbidden", async () => {
     const state = await createStateWithRepository();
     await state.publishSessions.save({
       id: "pub_1",
@@ -188,12 +188,17 @@ describe("PublishSessionService", () => {
     await expect(service.get({ sessionId: "pub_1", principal })).resolves.toMatchObject({
       id: "pub_1",
     });
+    // An existing out-of-scope session and an unknown id must be
+    // indistinguishable, so a session id cannot be probed for existence.
     await expect(
       service.get({
         sessionId: "pub_1",
         principal: { ...principal, repositories: ["python-internal"] },
       }),
-    ).rejects.toBeInstanceOf(ForbiddenError);
+    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(
+      service.get({ sessionId: "pub_missing", principal }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("throws not found when getting an unknown publish session", async () => {

@@ -124,10 +124,11 @@ export class PublishSessionService {
   async get(input: GetPublishSessionInput): Promise<PublishSession> {
     this.requirePublishPermission(input.principal);
     const session = await this.options.state.publishSessions.get(input.sessionId);
-    if (!session) {
+    // A lookup by opaque id reports "not found" for a session the caller is not
+    // scoped to, so the response cannot be used to probe which ids exist.
+    if (!session || !input.principal.repositories.includes(session.repositoryName)) {
       throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
     }
-    this.requireRepositoryScope(input.principal, session.repositoryName);
     return session;
   }
 

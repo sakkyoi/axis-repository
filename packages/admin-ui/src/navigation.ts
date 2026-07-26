@@ -32,3 +32,24 @@ export function repositoryWorkspacePath(name: string): string {
 export function repositorySettingsPath(name: string): string {
   return `${repositoryWorkspacePath(name)}/settings`;
 }
+
+/**
+ * Constrains a post-login redirect to a path inside the admin UI.
+ *
+ * The target arrives as router state, so a value that escaped the app — an
+ * absolute URL, a protocol-relative `//host` path, or anything outside the
+ * admin namespace — must not be navigated to.
+ */
+export function safeAdminRedirectPath(from: unknown): string {
+  if (typeof from !== "string") {
+    return ADMIN_UI_PATHS.repositories;
+  }
+  const target = from.trim();
+  if (!target.startsWith(ADMIN_UI_PATHS.root) || target.startsWith("//")) {
+    return ADMIN_UI_PATHS.repositories;
+  }
+  if (target.includes("\\") || target.includes("://")) {
+    return ADMIN_UI_PATHS.repositories;
+  }
+  return target;
+}

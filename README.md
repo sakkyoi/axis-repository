@@ -170,6 +170,21 @@ repositories/<repository-name>/publishes/<session-id>.json
 Format-specific repository indexes and repository heads for apt, PyPI, and npm
 are future publishers.
 
+## Upload URLs Are Capabilities
+
+An upload target returned when a publish session is created is a bearer
+capability: anyone holding the URL can write those bytes. Revoking the publish
+token does not invalidate an already-issued presigned URL, because the signature
+is verified by the storage provider, not by Axis.
+
+Two things bound the exposure. The URL is only ever returned once, from the
+create response — reading the session back afterwards omits it — and its expiry
+is capped to the remaining lifetime of the publish session
+(`UPLOAD_URL_TTL_SECONDS` can shorten it further, never extend it). A stale URL
+also only reaches the staging area, never the repository: finalizing still
+requires a live token, and every upload is checked against the size and SHA-256
+the session declared.
+
 ## Admin UI API Base URL
 
 `ADMIN_UI_API_BASE_URL` is injected into the admin UI shell and used as the API

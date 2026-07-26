@@ -3342,7 +3342,7 @@ describe("Cloudflare runtime routes", () => {
     expect(verifyResponse.status).toBe(200);
   });
 
-  it("gets a publish session by id and rejects tokens outside the repository scope", async () => {
+  it("gets a publish session by id and hides sessions outside the repository scope", async () => {
     const app = createApp(createDevDependencies());
     await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
     const internalToken = await createToken(app, {
@@ -3388,8 +3388,13 @@ describe("Cloudflare runtime routes", () => {
         headers: { authorization: `Bearer ${internalToken}` },
       }),
     );
-    const forbiddenResponse = await app.fetch(
+    const outOfScopeResponse = await app.fetch(
       new Request(`https://axis.example/api/publish-sessions/${session.id}`, {
+        headers: { authorization: `Bearer ${externalToken}` },
+      }),
+    );
+    const unknownResponse = await app.fetch(
+      new Request("https://axis.example/api/publish-sessions/pub_does_not_exist", {
         headers: { authorization: `Bearer ${externalToken}` },
       }),
     );
@@ -3398,7 +3403,9 @@ describe("Cloudflare runtime routes", () => {
     await expect(getResponse.json()).resolves.toMatchObject({
       session: { id: session.id, repositoryName: "debian-internal" },
     });
-    expect(forbiddenResponse.status).toBe(403);
+    // Identical responses, so the id cannot be probed for existence.
+    expect(outOfScopeResponse.status).toBe(404);
+    expect(unknownResponse.status).toBe(404);
   });
 
   it("verifies an uploaded artifact for a publish session", async () => {

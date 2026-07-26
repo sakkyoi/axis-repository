@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { authenticateAdminLogin } from "../login";
-import { ADMIN_UI_PATHS } from "../navigation";
+import { ADMIN_UI_PATHS, safeAdminRedirectPath } from "../navigation";
 import { getRuntimeConfig } from "../runtime-config";
 
 interface LoginLocationState {
@@ -23,7 +23,7 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
 
-  const from = (location.state as LoginLocationState | null)?.from ?? ADMIN_UI_PATHS.repositories;
+  const from = safeAdminRedirectPath((location.state as LoginLocationState | null)?.from);
 
   if (auth.isInitializing) {
     return (
