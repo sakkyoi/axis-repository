@@ -44,7 +44,7 @@ export interface ValidateRepositoryCreateProvisioningInput {
   provisioning: Record<string, unknown>;
 }
 
-export interface ProvisionRepositoryCreateInput extends ValidateRepositoryCreateProvisioningInput {}
+export type ProvisionRepositoryCreateInput = ValidateRepositoryCreateProvisioningInput;
 
 export interface RepositoryCreateProvisioningResult {
   configPatch?: Record<string, unknown>;

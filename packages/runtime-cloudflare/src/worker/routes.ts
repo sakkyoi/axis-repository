@@ -565,12 +565,6 @@ function repositoryClientHelperAction(
   return helpers.actions.find((helperAction) => helperAction.name === action);
 }
 
-function repositoryClientHelperContext(_dependencies: AppDependencies, origin: string) {
-  return {
-    origin,
-  };
-}
-
 async function deleteRepositoryObjectPrefix(dependencies: AppDependencies, repositoryName: string): Promise<number> {
   const prefix = `repositories/${repositoryName}/`;
   let deleted = 0;
@@ -1219,7 +1213,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     return dispatchRepositoryClientHelper(helpers, {
       repository,
       action: adminClientHelperPath.action,
-      ...repositoryClientHelperContext(dependencies, url.origin),
+      origin: url.origin,
     });
   }
   const adminRepositoryActivityName = parseAdminRepositoryActivityPath(url.pathname);
@@ -1539,7 +1533,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       return dispatchRepositoryClientHelper(helpers, {
         repository,
         action: clientHelperPath.action,
-        ...repositoryClientHelperContext(dependencies, url.origin),
+        origin: url.origin,
       });
     }
   }

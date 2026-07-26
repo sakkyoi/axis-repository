@@ -1,33 +1,35 @@
 import { describe, expect, it } from "vitest";
 import {
-  getRepositoryCreatePlugin,
   repositoryCreateAvailabilityError,
   repositoryCreateFieldErrors,
-  repositoryCreatePluginOptions,
   repositoryCreatePlugins,
   repositoryCreateStepForServerError,
 } from "./repository-create-plugins";
+import {
+  getRepositoryCreatePlugin,
+  repositoryCreatePluginOptionsFromUiRegistry,
+} from "./repository-ui-plugins";
 
 describe("repository create plugins", () => {
   it("exposes APT as a wizard plugin with config and setup steps", () => {
     expect(repositoryCreatePlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
-    expect(getRepositoryCreatePlugin("apt")).toMatchObject({
+    expect(getRepositoryCreatePlugin("apt")!).toMatchObject({
       ecosystem: "apt",
       steps: ["plugin", "basics", "config", "setup", "review"],
     });
-    expect(getRepositoryCreatePlugin("pypi")).toMatchObject({
+    expect(getRepositoryCreatePlugin("pypi")!).toMatchObject({
       ecosystem: "pypi",
       steps: ["plugin", "basics", "review"],
     });
   });
 
   it("derives create steps from repository config field steps", () => {
-    expect(getRepositoryCreatePlugin("apt").steps).toEqual(["plugin", "basics", "config", "setup", "review"]);
-    expect(getRepositoryCreatePlugin("pypi").steps).toEqual(["plugin", "basics", "review"]);
+    expect(getRepositoryCreatePlugin("apt")!.steps).toEqual(["plugin", "basics", "config", "setup", "review"]);
+    expect(getRepositoryCreatePlugin("pypi")!.steps).toEqual(["plugin", "basics", "review"]);
   });
 
   it("exposes repository config fields to the wizard renderer", () => {
-    const plugin = getRepositoryCreatePlugin("apt");
+    const plugin = getRepositoryCreatePlugin("apt")!;
 
     expect(plugin.repositoryConfig.namespace).toBe("apt");
     expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step])).toEqual([
@@ -37,7 +39,7 @@ describe("repository create plugins", () => {
   });
 
   it("builds an APT repository create payload from wizard state", () => {
-    const plugin = getRepositoryCreatePlugin("apt");
+    const plugin = getRepositoryCreatePlugin("apt")!;
 
     expect(plugin.buildCreateInput({
       name: "debian-internal",
@@ -74,7 +76,7 @@ describe("repository create plugins", () => {
   });
 
   it("builds a PyPI repository create payload from wizard state", () => {
-    const plugin = getRepositoryCreatePlugin("pypi");
+    const plugin = getRepositoryCreatePlugin("pypi")!;
 
     expect(plugin.buildCreateInput({
       name: "python-internal",
@@ -91,114 +93,8 @@ describe("repository create plugins", () => {
     });
   });
 
-  it("uses server plugin metadata to expose only create plugins supported by both sides", () => {
-    const options = repositoryCreatePluginOptions([
-      {
-        ecosystem: "apt",
-        name: "apt-signed",
-        version: "0.1.0",
-        capabilities: ["signed-release", "client-helpers"],
-      },
-      {
-        ecosystem: "pypi",
-        name: "pypi-simple",
-        version: "0.1.0",
-        capabilities: ["simple-api", "client-helpers"],
-      },
-      {
-        ecosystem: "npm",
-        name: "npm-registry",
-        version: "0.1.0",
-        enabled: false,
-        catalogEnabled: true,
-        enabledOverride: false,
-        runtime: true,
-        capabilities: ["package-index"],
-      },
-    ]);
-
-    expect(options).toMatchObject([
-      {
-        ecosystem: "apt",
-        displayName: "APT",
-        description: "Debian package repositories with signed Release metadata.",
-        capabilities: ["signed-release", "client-helpers"],
-        supported: true,
-        plugin: getRepositoryCreatePlugin("apt"),
-      },
-      {
-        ecosystem: "pypi",
-        displayName: "PyPI",
-        description: "Python package repositories using the Simple Repository API.",
-        capabilities: ["simple-api", "client-helpers"],
-        supported: true,
-        plugin: getRepositoryCreatePlugin("pypi"),
-      },
-      {
-        ecosystem: "npm",
-        displayName: "npm",
-        description: "Disabled by admin policy.",
-        capabilities: ["package-index"],
-        disabledReason: "Effective policy is disabled by an admin override.",
-        supported: false,
-      },
-    ]);
-  });
-
-  it("explains create options disabled by catalog defaults", () => {
-    const options = repositoryCreatePluginOptions([
-      {
-        ecosystem: "npm",
-        name: "npm-registry",
-        version: "0.1.0",
-        enabled: false,
-        catalogEnabled: false,
-        enabledOverride: null,
-        runtime: true,
-        capabilities: ["package-index"],
-      },
-    ]);
-
-    expect(options).toMatchObject([
-      {
-        ecosystem: "npm",
-        displayName: "npm",
-        description: "Disabled by catalog default.",
-        disabledReason: "Effective policy follows the catalog default.",
-        supported: false,
-      },
-    ]);
-  });
-
-  it("does not offer server plugins without runtime support", () => {
-    const options = repositoryCreatePluginOptions([
-      {
-        ecosystem: "apt",
-        name: "apt-signed",
-        version: "0.1.0",
-        enabled: true,
-        runtime: false,
-        capabilities: ["signed-release"],
-      },
-    ]);
-
-    expect(options).toMatchObject([
-      {
-        ecosystem: "apt",
-        displayName: "APT",
-        description: "Server plugin has no runtime support.",
-        capabilities: ["signed-release"],
-        supported: false,
-      },
-    ]);
-  });
-
-  it("does not offer local create plugins that are not enabled by the server", () => {
-    expect(repositoryCreatePluginOptions([])).toEqual([]);
-  });
-
   it("maps duplicate repository errors back to the basics step and name field", () => {
-    const plugin = getRepositoryCreatePlugin("apt");
+    const plugin = getRepositoryCreatePlugin("apt")!;
     const message = "Repository already exists: debian-internal";
 
     expect(repositoryCreateStepForServerError(message, plugin)).toBe("basics");
