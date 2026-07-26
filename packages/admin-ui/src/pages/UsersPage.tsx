@@ -2,26 +2,24 @@ import { UserPlus, Users } from "lucide-react";
 import { useAdminUsers } from "../api/hooks";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { adminUsersPanelClass, usersPageShellClass } from "../users/users-page-model";
-import { ErrorState, PageHeader, formatDate } from "./shared";
+import { adminUsersPanelClass } from "../users/users-page-model";
+import { ErrorState, PageShell, formatDate } from "./shared";
 
 export function UsersPage() {
   const adminUsers = useAdminUsers();
   const users = adminUsers.data?.users ?? [];
 
   return (
-    <section className={usersPageShellClass()}>
-      <PageHeader
-        title="Users"
-        description="Admin identities for this Axis Repository deployment."
-        action={(
-          <Button type="button" variant="outline" disabled>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add user
-          </Button>
-        )}
-      />
-
+    <PageShell
+      title="Users"
+      description="Admin identities for this Axis Repository deployment."
+      action={(
+        <Button type="button" variant="outline" disabled>
+          <UserPlus className="mr-2 h-4 w-4" />
+          Add user
+        </Button>
+      )}
+    >
       <section className={adminUsersPanelClass()}>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -84,6 +82,6 @@ export function UsersPage() {
           </div>
         )}
       </section>
-    </section>
+    </PageShell>
   );
 }

@@ -3,19 +3,17 @@ import { useAdminSession } from "../api/hooks";
 import { Badge } from "../components/ui/badge";
 import { ChangePasswordDialog } from "../users/change-password-dialog";
 import { profileSummaryItems } from "../profile/profile-page-model";
-import { ErrorState, PageHeader } from "./shared";
+import { ErrorState, PageShell } from "./shared";
 
 export function ProfilePage() {
   const session = useAdminSession();
   const principal = session.data?.principal;
 
   return (
-    <section className="grid h-full min-h-0 content-start gap-5 overflow-y-auto pr-1">
-      <PageHeader
-        title="Profile"
-        description="Your admin identity and account security settings."
-      />
-
+    <PageShell
+      title="Profile"
+      description="Your admin identity and account security settings."
+    >
       {session.isLoading && <div className="text-sm text-muted-foreground">Loading profile...</div>}
       {session.error && <ErrorState title="Profile unavailable" error={session.error} />}
       {principal && (
@@ -58,6 +56,6 @@ export function ProfilePage() {
           </aside>
         </div>
       )}
-    </section>
+    </PageShell>
   );
 }

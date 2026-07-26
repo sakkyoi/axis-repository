@@ -17,7 +17,7 @@ import { repositorySettingsSectionsFor, repositoryWorkspaceSectionsFor } from ".
 import { PublishSessionsSection, RepositoryDetailSections } from "../repositories/detail/repository-detail-shared";
 import type { RepositoryDetailSection } from "../repositories/plugins/repository-ui-plugin-types";
 import { repositoryDeleteDialogContent, repositoryDetailBodyClass } from "../repositories/detail/repository-page-model";
-import { EmptyState, ErrorState, PageHeader } from "./shared";
+import { EmptyState, ErrorState, PageShell } from "./shared";
 import { getRepositoryPublishPlugin } from "../repositories/plugins/repository-ui-plugins";
 import {
   filesFromFileList,
@@ -343,9 +343,12 @@ function RepositoryPageShell({
   afterSections?: React.ReactNode;
 }) {
   return (
-    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <PageHeader title={title} description={description} action={action} />
-      <div className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel">
+    <PageShell
+      title={title}
+      description={description}
+      action={action}
+      bodyClassName="min-h-0 overflow-hidden rounded-lg border border-border bg-panel p-0"
+    >
         {error ? <div className="p-4"><ErrorState error={error} /></div> : null}
         {isLoading && <div className="p-4 text-sm text-muted-foreground">Loading repository...</div>}
         {!isLoading && !error && !repository && (
@@ -368,7 +371,6 @@ function RepositoryPageShell({
             {afterSections}
           </div>
         )}
-      </div>
-    </section>
+    </PageShell>
   );
 }

@@ -46,7 +46,7 @@ import {
   type PublishTokenPermissionState,
 } from "../tokens/publish-token-form-model";
 import { getPublishTokenScopeExtension } from "../repositories/plugins/repository-ui-plugins";
-import { asJson, EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
+import { asJson, ErrorState, PageShell, formatDate } from "./shared";
 
 export function TokensPage() {
   const tokens = usePublishTokens();
@@ -117,60 +117,58 @@ export function TokensPage() {
   }
 
   return (
-    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <PageHeader
-        title="Publish Tokens"
-        description="Create scoped automation tokens and revoke them when they are no longer needed."
-        action={<CreateTokenDialog repositories={repositories.data ?? []} repositoriesLoading={repositories.isLoading} />}
-      />
-      <div className="min-h-0">
-        {repositories.isError && <ErrorState title="Repositories unavailable" error={repositories.error} />}
-        {tokens.isError && <ErrorState error={tokens.error} />}
-        {tokens.isLoading && <div className="text-sm text-muted-foreground">Loading publish tokens...</div>}
-        {tokens.data && (
-          <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
-            <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
-              {tokens.data.length === 0 ? (
-                <div className={publishTokenListEmptyClass()}>
-                  <div className={publishTokenListEmptyPanelClass()}>
-                    No publish tokens have been created.
-                  </div>
+    <PageShell
+      title="Publish Tokens"
+      description="Create scoped automation tokens and revoke them when they are no longer needed."
+      bodyClassName="min-h-0 overflow-hidden"
+      action={<CreateTokenDialog repositories={repositories.data ?? []} repositoriesLoading={repositories.isLoading} />}
+    >
+      {repositories.isError && <ErrorState title="Repositories unavailable" error={repositories.error} />}
+      {tokens.isError && <ErrorState error={tokens.error} />}
+      {tokens.isLoading && <div className="text-sm text-muted-foreground">Loading publish tokens...</div>}
+      {tokens.data && (
+        <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+          <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
+            {tokens.data.length === 0 ? (
+              <div className={publishTokenListEmptyClass()}>
+                <div className={publishTokenListEmptyPanelClass()}>
+                  No publish tokens have been created.
                 </div>
-              ) : (
-                <table className="w-full border-collapse text-sm">
-                  <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2">Name</th>
-                      <th className="px-3 py-2">Permissions</th>
-                      <th className="px-3 py-2">Repositories</th>
-                      <th className="px-3 py-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tokens.data.map((token) => (
-                      <PublishTokenRow
-                        key={token.id}
-                        token={token}
-                        selectedName={selectedName}
-                        onSelect={() => setSelectedName(token.name)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            {selected ? (
-              <PublishTokenDetail
-                token={selected}
-                actionPending={revoke.isPending || rotate.isPending || deleteToken.isPending}
-                onRevoke={() => setPendingRevokeName(selected.name)}
-                onRotate={() => setPendingRotateName(selected.name)}
-                onDelete={() => setPendingDeleteName(selected.name)}
-              />
-            ) : <PublishTokenDetailEmptyState />}
+              </div>
+            ) : (
+              <table className="w-full border-collapse text-sm">
+                <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2">Name</th>
+                    <th className="px-3 py-2">Permissions</th>
+                    <th className="px-3 py-2">Repositories</th>
+                    <th className="px-3 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tokens.data.map((token) => (
+                    <PublishTokenRow
+                      key={token.id}
+                      token={token}
+                      selectedName={selectedName}
+                      onSelect={() => setSelectedName(token.name)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
-        )}
-      </div>
+          {selected ? (
+            <PublishTokenDetail
+              token={selected}
+              actionPending={revoke.isPending || rotate.isPending || deleteToken.isPending}
+              onRevoke={() => setPendingRevokeName(selected.name)}
+              onRotate={() => setPendingRotateName(selected.name)}
+              onDelete={() => setPendingDeleteName(selected.name)}
+            />
+          ) : <PublishTokenDetailEmptyState />}
+        </div>
+      )}
       {revokeDialogContent && (
         <DestructiveActionDialog
           open={Boolean(pendingRevokeName)}
@@ -229,7 +227,7 @@ export function TokensPage() {
         result={revealedToken}
         onClose={() => setRevealedToken(undefined)}
       />
-    </section>
+    </PageShell>
   );
 }
 

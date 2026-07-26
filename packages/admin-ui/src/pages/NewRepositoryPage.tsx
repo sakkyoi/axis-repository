@@ -17,7 +17,6 @@ import { RepositoryDependencyFields } from "../repositories/create/repository-cr
 import {
   repositoryCreateBodyClass,
   repositoryCreateFooterClass,
-  repositoryCreatePageClass,
   repositoryCreateStepPanelClass,
   repositoryCreateSummaryPanelClass,
 } from "../repositories/create/repository-create-layout-model";
@@ -43,7 +42,7 @@ import {
 } from "../repositories/plugins/repository-ui-plugins";
 import { repositoryConfigFieldsForStep } from "../repositories/create/repository-create-field-model";
 import { RepositoryConfigFields } from "../repositories/create/repository-create-field-renderer";
-import { asJson, ErrorState, PageHeader } from "./shared";
+import { asJson, ErrorState, PageShell } from "./shared";
 
 const stepLabels: Record<RepositoryCreateStep, string> = {
   plugin: "Plugin",
@@ -147,17 +146,17 @@ export function NewRepositoryPage() {
   }
 
   return (
-    <section className={repositoryCreatePageClass()}>
-      <PageHeader
-        title="Create repository"
-        description="Choose a repository plugin, provide its config, then choose plugin setup actions."
-        action={(
-          <Button type="button" variant="outline" onClick={() => navigate(ADMIN_UI_PATHS.repositories)}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Repositories
-          </Button>
-        )}
-      />
+    <PageShell
+      title="Create repository"
+      description="Choose a repository plugin, provide its config, then choose plugin setup actions."
+      bodyClassName="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-5 overflow-hidden pr-0"
+      action={(
+        <Button type="button" variant="outline" onClick={() => navigate(ADMIN_UI_PATHS.repositories)}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Repositories
+        </Button>
+      )}
+    >
       <StepIndicator steps={plugin.steps} currentStep={currentStep} />
       <div className={repositoryCreateBodyClass()}>
         <div className={repositoryCreateStepPanelClass()}>
@@ -261,7 +260,7 @@ export function NewRepositoryPage() {
           </Button>
         )}
       </div>
-    </section>
+    </PageShell>
   );
 }
 

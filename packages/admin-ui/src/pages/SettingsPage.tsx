@@ -5,7 +5,7 @@ import { useRepositoryPlugins, useUpdateRepositoryPluginPolicy } from "../api/ho
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { repositoryPluginStatusRows } from "../repositories/plugins/plugin-lifecycle";
-import { ErrorState, PageHeader } from "./shared";
+import { ErrorState, PageShell } from "./shared";
 
 export function SettingsPage() {
   const runtimeConfig = getRuntimeConfig();
@@ -16,11 +16,10 @@ export function SettingsPage() {
   const [confirmDisableEcosystem, setConfirmDisableEcosystem] = useState<string | null>(null);
 
   return (
-    <section className="grid h-full min-h-0 gap-5 overflow-y-auto pr-1">
-      <PageHeader
-        title="Settings"
-        description="Runtime details and repository plugin lifecycle for this admin console."
-      />
+    <PageShell
+      title="Settings"
+      description="Runtime details and repository plugin lifecycle for this admin console."
+    >
       <div className="grid gap-3 rounded-lg border border-border bg-panel p-5 text-sm">
         <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
           <span className="font-medium">API target</span>
@@ -177,6 +176,6 @@ export function SettingsPage() {
         Repository plugin availability is resolved from the deployment catalog plus admin policy overrides stored by this
         Axis runtime.
       </section>
-    </section>
+    </PageShell>
   );
 }

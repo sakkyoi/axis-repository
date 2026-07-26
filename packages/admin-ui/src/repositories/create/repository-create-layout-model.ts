@@ -1,7 +1,3 @@
-export function repositoryCreatePageClass(): string {
-  return "grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-5 overflow-hidden";
-}
-
 export function repositoryCreateBodyClass(): string {
   return "grid min-h-0 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]";
 }

@@ -1,4 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
+import { cn } from "../lib/utils";
 
 export function PageHeader({
   title,
@@ -10,7 +11,7 @@ export function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-5 flex items-start justify-between gap-4">
+    <div className="flex items-start justify-between gap-4">
       <div>
         <h1 className="text-xl font-semibold">{title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
@@ -34,6 +35,31 @@ export function ErrorState({ title = "Request failed", error }: { title?: string
         {message}
       </AlertDescription>
     </Alert>
+  );
+}
+
+export function PageShell({
+  title,
+  description,
+  action,
+  className,
+  bodyClassName,
+  children,
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+  className?: string;
+  bodyClassName?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <section className={cn("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5", className)}>
+      <PageHeader title={title} description={description} action={action} />
+      <div className={cn("min-h-0 overflow-y-auto pr-1", bodyClassName)}>
+        {children}
+      </div>
+    </section>
   );
 }
 

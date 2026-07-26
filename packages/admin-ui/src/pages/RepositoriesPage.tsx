@@ -16,7 +16,7 @@ import {
   repositoryRowStateClass,
   repositorySummaryItems,
 } from "../repositories/detail/repository-page-model";
-import { ErrorState, PageHeader, formatDate } from "./shared";
+import { ErrorState, PageShell, formatDate } from "./shared";
 
 export function RepositoriesPage() {
   const navigate = useNavigate();
@@ -29,32 +29,31 @@ export function RepositoriesPage() {
   );
 
   return (
-    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <PageHeader
-        title="Repositories"
-        description="Manage repository visibility, config, and client setup hints."
-        action={(
-          <div className="flex items-center gap-2">
-            <Button type="button" onClick={() => navigate(ADMIN_UI_PATHS.newRepository)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create repository
-            </Button>
-          </div>
-        )}
-      />
-      <div className="min-h-0">
-        {repositories.isError && <ErrorState error={repositories.error} />}
-        {repositories.isLoading && <div className="text-sm text-muted-foreground">Loading repositories...</div>}
-        {repositories.data && (
-          <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
-            <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
-              {repositories.data.length === 0 ? (
-                <div className={repositoryListEmptyClass()}>
-                  <div className={repositoryListEmptyPanelClass()}>
-                    No repositories have been created.
-                  </div>
+    <PageShell
+      title="Repositories"
+      description="Manage repository visibility, config, and client setup hints."
+      bodyClassName="min-h-0 overflow-hidden"
+      action={(
+        <div className="flex items-center gap-2">
+          <Button type="button" onClick={() => navigate(ADMIN_UI_PATHS.newRepository)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create repository
+          </Button>
+        </div>
+      )}
+    >
+      {repositories.isError && <ErrorState error={repositories.error} />}
+      {repositories.isLoading && <div className="text-sm text-muted-foreground">Loading repositories...</div>}
+      {repositories.data && (
+        <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+          <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
+            {repositories.data.length === 0 ? (
+              <div className={repositoryListEmptyClass()}>
+                <div className={repositoryListEmptyPanelClass()}>
+                  No repositories have been created.
                 </div>
-              ) : (
+              </div>
+            ) : (
               <table className="w-full border-collapse text-sm">
                 <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
                   <tr>
@@ -83,18 +82,17 @@ export function RepositoriesPage() {
                   ))}
                 </tbody>
               </table>
-              )}
-            </div>
-            {selected ? (
-              <RepositoryDetail
-                repository={selected}
-                pluginMetadata={repositoryPlugins.data?.find((plugin) => plugin.ecosystem === selected.ecosystem)}
-              />
-            ) : <RepositoryDetailEmptyState />}
+            )}
           </div>
-        )}
-      </div>
-    </section>
+          {selected ? (
+            <RepositoryDetail
+              repository={selected}
+              pluginMetadata={repositoryPlugins.data?.find((plugin) => plugin.ecosystem === selected.ecosystem)}
+            />
+          ) : <RepositoryDetailEmptyState />}
+        </div>
+      )}
+    </PageShell>
   );
 }
 
