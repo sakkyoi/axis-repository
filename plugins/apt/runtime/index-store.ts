@@ -40,7 +40,7 @@ export interface AptReleaseSigner {
 const textDecoder = new TextDecoder();
 const packagesIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/(debian-installer\/)?binary-([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Packages$/;
 const sourcesIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/source\/Sources$/;
-const contentsIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Contents-([A-Za-z0-9][A-Za-z0-9._+~-]*)\.gz$/;
+const contentsIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Contents-(udeb-)?([A-Za-z0-9][A-Za-z0-9._+~-]*)\.gz$/;
 
 export function distsPrefix(repositoryName: string, suite: string): string {
   return `repositories/${repositoryName}/dists/${suite}/`;
@@ -119,12 +119,12 @@ export async function readAptSuiteState(input: {
       continue;
     }
     const component = packagesMatch?.[1] ?? contentsMatch?.[1];
-    const architecture = packagesMatch?.[3] ?? contentsMatch?.[2];
+    const architecture = packagesMatch?.[3] ?? contentsMatch?.[3];
+    const installer = (packagesMatch?.[2] ?? contentsMatch?.[2]) !== undefined;
     if (!component || !architecture) {
       continue;
     }
     if (packagesMatch) {
-      const installer = packagesMatch[2] !== undefined;
       packages.set(indexKey(component, architecture, installer), {
         component,
         architecture,
@@ -132,7 +132,10 @@ export async function readAptSuiteState(input: {
         stanzas: parseStanzas(textDecoder.decode(bytes)),
       });
     } else {
-      contents.set(indexKey(component, architecture), parseContentsIndex(textDecoder.decode(await gunzip(bytes))));
+      contents.set(
+        indexKey(component, architecture, installer),
+        parseContentsIndex(textDecoder.decode(await gunzip(bytes))),
+      );
     }
   }
 

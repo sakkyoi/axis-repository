@@ -189,8 +189,12 @@ const CONTENTS_KEY = "repositories/debian-internal/dists/noble/main/Contents-amd
 const INSTALLER_PACKAGES_KEY = "repositories/debian-internal/dists/noble/main/debian-installer/binary-amd64/Packages";
 const SOURCES_KEY = "repositories/debian-internal/dists/noble/main/source/Sources";
 
-function dsc(input: { version: string }): string {
+const ORIG_TARBALL = "orig tarball";
+const DEBIAN_TARBALL = "debian tarball";
+
+function dsc(input: { version: string; debianTarballSize?: number }): string {
   const revision = input.version.split("-")[1] ?? "1";
+  const debianSize = input.debianTarballSize ?? DEBIAN_TARBALL.length;
   return [
     "Format: 3.0 (quilt)",
     "Source: myapp",
@@ -199,11 +203,11 @@ function dsc(input: { version: string }): string {
     `Version: ${input.version}`,
     "Maintainer: Release Team <release@example.com>",
     "Checksums-Sha256:",
-    ` ${"a".repeat(64)} 12 myapp_1.2.3.orig.tar.xz`,
-    ` ${"b".repeat(64)} 14 myapp_1.2.3-${revision}.debian.tar.xz`,
+    ` ${"a".repeat(64)} ${ORIG_TARBALL.length} myapp_1.2.3.orig.tar.xz`,
+    ` ${"b".repeat(64)} ${debianSize} myapp_1.2.3-${revision}.debian.tar.xz`,
     "Files:",
-    ` ${"c".repeat(32)} 12 myapp_1.2.3.orig.tar.xz`,
-    ` ${"d".repeat(32)} 14 myapp_1.2.3-${revision}.debian.tar.xz`,
+    ` ${"c".repeat(32)} ${ORIG_TARBALL.length} myapp_1.2.3.orig.tar.xz`,
+    ` ${"d".repeat(32)} ${debianSize} myapp_1.2.3-${revision}.debian.tar.xz`,
     "",
   ].join("\n");
 }
@@ -626,8 +630,8 @@ describe("APT index lifecycle", () => {
     const harness = await createHarness();
 
     await harness.publishFiles("pub_1", [
-      { filename: "myapp_1.2.3.orig.tar.xz", body: "orig tarball" },
-      { filename: "myapp_1.2.3-1.debian.tar.xz", body: "debian tarball" },
+      { filename: "myapp_1.2.3.orig.tar.xz", body: ORIG_TARBALL },
+      { filename: "myapp_1.2.3-1.debian.tar.xz", body: DEBIAN_TARBALL },
       { filename: "myapp_1.2.3-1.dsc", body: dsc({ version: "1.2.3-1" }) },
     ]);
 
@@ -656,14 +660,14 @@ describe("APT index lifecycle", () => {
     const harness = await createHarness();
 
     await harness.publishFiles("pub_1", [
-      { filename: "myapp_1.2.3.orig.tar.xz", body: "orig tarball" },
-      { filename: "myapp_1.2.3-1.debian.tar.xz", body: "debian tarball" },
+      { filename: "myapp_1.2.3.orig.tar.xz", body: ORIG_TARBALL },
+      { filename: "myapp_1.2.3-1.debian.tar.xz", body: DEBIAN_TARBALL },
       { filename: "myapp_1.2.3-1.dsc", body: dsc({ version: "1.2.3-1" }) },
     ]);
     // The second revision ships only a new debian.tar, as dpkg-buildpackage
     // does when the upstream tarball has not changed.
     await harness.publishFiles("pub_2", [
-      { filename: "myapp_1.2.3-2.debian.tar.xz", body: "debian tarball two" },
+      { filename: "myapp_1.2.3-2.debian.tar.xz", body: DEBIAN_TARBALL },
       { filename: "myapp_1.2.3-2.dsc", body: dsc({ version: "1.2.3-2" }) },
     ]);
 
@@ -672,12 +676,22 @@ describe("APT index lifecycle", () => {
     expect(sources).toContain("Version: 1.2.3-2\n");
   });
 
+  it("refuses a tarball whose size disagrees with the .dsc that names it", async () => {
+    const harness = await createHarness();
+
+    await expect(harness.publishFiles("pub_1", [
+      { filename: "myapp_1.2.3.orig.tar.xz", body: ORIG_TARBALL },
+      { filename: "myapp_1.2.3-1.debian.tar.xz", body: DEBIAN_TARBALL },
+      { filename: "myapp_1.2.3-1.dsc", body: dsc({ version: "1.2.3-1", debianTarballSize: 999 }) },
+    ])).rejects.toThrow("APT source file does not match the size its .dsc declares");
+  });
+
   it("drops a source package from Sources once its .dsc is gone", async () => {
     const harness = await createHarness();
 
     await harness.publishFiles("pub_1", [
-      { filename: "myapp_1.2.3.orig.tar.xz", body: "orig tarball" },
-      { filename: "myapp_1.2.3-1.debian.tar.xz", body: "debian tarball" },
+      { filename: "myapp_1.2.3.orig.tar.xz", body: ORIG_TARBALL },
+      { filename: "myapp_1.2.3-1.debian.tar.xz", body: DEBIAN_TARBALL },
       { filename: "myapp_1.2.3-1.dsc", body: dsc({ version: "1.2.3-1" }) },
     ]);
     await harness.objectStore.deleteObject("repositories/debian-internal/pool/main/myapp/myapp_1.2.3-1.dsc");

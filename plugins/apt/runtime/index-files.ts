@@ -41,10 +41,13 @@ export async function buildAptIndexFiles(input: {
         ?? new Map<string, string[]>(),
     );
     if (contents !== undefined) {
-      files.push(await gzipOnlyVariant(
-        `${packageIndex.component}/Contents-${packageIndex.architecture}`,
-        contents,
-      ));
+      // Installer packages get their own Contents, as Debian publishes it;
+      // sharing one path with the binary index would have them overwrite
+      // each other.
+      const name = packageIndex.installer
+        ? `Contents-udeb-${packageIndex.architecture}`
+        : `Contents-${packageIndex.architecture}`;
+      files.push(await gzipOnlyVariant(`${packageIndex.component}/${name}`, contents));
     }
   }
 

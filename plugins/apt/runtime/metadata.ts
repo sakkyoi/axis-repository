@@ -370,6 +370,11 @@ async function buildPublishedSourceStanza(input: {
       if (uploaded.validated.component !== validated.component || uploaded.validated.suite !== validated.suite) {
         throw new ValidationError(`APT source file is published to a different component or suite: ${file.name}`);
       }
+      // A size that disagrees with the .dsc means the uploaded tarball is not
+      // the one it describes, and apt would reject the mismatch anyway.
+      if (Number.isFinite(file.size) && uploaded.verifiedSize !== file.size) {
+        throw new ValidationError(`APT source file does not match the size its .dsc declares: ${file.name}`);
+      }
       continue;
     }
     if (!input.poolFilenames.has(`${directory}/${file.name}`)) {
