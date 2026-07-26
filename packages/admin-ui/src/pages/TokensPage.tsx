@@ -120,7 +120,7 @@ export function TokensPage() {
     <PageShell
       title="Publish Tokens"
       description="Create scoped automation tokens and revoke them when they are no longer needed."
-      bodyClassName="min-h-0 overflow-hidden"
+      bodyClassName="min-h-0 content-stretch overflow-hidden"
       action={<CreateTokenDialog repositories={repositories.data ?? []} repositoriesLoading={repositories.isLoading} />}
     >
       {repositories.isError && <ErrorState title="Repositories unavailable" error={repositories.error} />}

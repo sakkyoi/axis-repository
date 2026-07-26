@@ -95,4 +95,16 @@ describe("admin UI plugin layout", () => {
     expect(appLayout).not.toContain("API target:");
     expect(appLayout).not.toContain("getRuntimeConfig");
   });
+
+  it("keeps split-view pages stretched inside the shared page shell", () => {
+    const splitViewPages = [
+      join(srcDir, "pages", "RepositoriesPage.tsx"),
+      join(srcDir, "pages", "TokensPage.tsx"),
+    ];
+
+    for (const file of splitViewPages) {
+      const content = readFileSync(file, "utf8");
+      expect(content).toContain('bodyClassName="min-h-0 content-stretch overflow-hidden"');
+    }
+  });
 });

@@ -32,7 +32,7 @@ export function RepositoriesPage() {
     <PageShell
       title="Repositories"
       description="Manage repository visibility, config, and client setup hints."
-      bodyClassName="min-h-0 overflow-hidden"
+      bodyClassName="min-h-0 content-stretch overflow-hidden"
       action={(
         <div className="flex items-center gap-2">
           <Button type="button" onClick={() => navigate(ADMIN_UI_PATHS.newRepository)}>

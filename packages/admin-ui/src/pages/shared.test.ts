@@ -35,13 +35,15 @@ describe("PageShell", () => {
         {
           title: "Repositories",
           description: "Manage repository visibility.",
-          bodyClassName: "min-h-0 overflow-hidden",
+          bodyClassName: "min-h-0 content-stretch overflow-hidden",
         },
         createElement("div", null, "Repository grid"),
       ),
     );
 
     expect(html).toContain("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5");
-    expect(html).toContain("min-h-0 overflow-hidden");
+    expect(html).toContain("content-stretch");
+    expect(html).toContain("overflow-hidden");
+    expect(html).not.toContain("content-start");
   });
 });
