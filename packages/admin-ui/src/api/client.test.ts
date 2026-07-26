@@ -1168,6 +1168,55 @@ describe("unauthorized handling", () => {
     expect(attempts[1]?.authorization).toBe("Bearer fresh-token");
   });
 
+  it("preserves a request body across the retry", async () => {
+    const bodies: unknown[] = [];
+    const client = createAxisClient({
+      baseUrl: "https://axis.example",
+      accessToken: "stale-token",
+      onUnauthorized: async () => "fresh-token",
+    });
+    client.http.defaults.adapter = async (config) => {
+      bodies.push(config.data);
+      if (bodies.length === 1) {
+        throw new AxiosError("Unauthorized", "401", config as never, null, {
+          data: { error: { code: "unauthorized", message: "Unauthorized" } },
+          status: 401,
+          statusText: "Unauthorized",
+          headers: {},
+          config: config as never,
+        });
+      }
+      return {
+        data: {
+          id: "repo_1",
+          name: "debian-internal",
+          ecosystem: "apt",
+          visibility: "private",
+          config: {},
+          createdAt: "2026-07-23T00:00:00.000Z",
+          updatedAt: "2026-07-23T00:00:00.000Z",
+        },
+        status: 201,
+        statusText: "Created",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.createRepository({
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: {},
+    })).resolves.toMatchObject({ name: "debian-internal" });
+
+    // Re-issuing a config that already went through the request transformers
+    // is the classic way to double-encode a retried body.
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toEqual(bodies[0]);
+    expect(JSON.parse(bodies[1] as string)).toMatchObject({ name: "debian-internal" });
+  });
+
   it("surfaces the error without retrying when the session cannot be refreshed", async () => {
     let attempts = 0;
     const client = createAxisClient({
