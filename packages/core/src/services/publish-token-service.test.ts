@@ -152,41 +152,56 @@ describe("PublishTokenService", () => {
     });
   });
 
-  it("does not let returned owner principals mutate stored publish tokens", async () => {
-    const service = new PublishTokenService({
-      state: new MemoryStateStore(),
-      clock,
-      randomId,
-      hasher,
-    });
-    const result = await service.create({
+
+  it("never hands out a reference into stored token state", async () => {
+    const state = new MemoryStateStore();
+    const service = new PublishTokenService({ state, clock, randomId, hasher });
+    const signingKeyIds = ["signing_key_prod"];
+    const created = await service.create({
       name: "github-actions",
       repositories: ["debian-internal"],
       permissions: ["publish"],
-      ecosystemScopes: {},
-      owner: {
-        type: "admin-user",
-        subject: "admin_user_1",
-        displayName: "admin",
-      },
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds,
+      owner: { type: "admin-user", subject: "admin_user_1", displayName: "admin" },
     });
 
-    result.record.owner!.displayName = "changed";
-    const principal = await service.verify(result.secret);
-    principal.owner!.displayName = "changed-again";
+    // Every path out of the service, plus the caller's own input array.
+    const mutations: Array<[string, () => Promise<void> | void]> = [
+      ["create input", () => { signingKeyIds.push("signing_key_other"); }],
+      ["create result", () => {
+        created.record.signingKeyIds.push("signing_key_other");
+        created.record.repositories.push("debian-staging");
+        created.record.owner!.displayName = "changed";
+      }],
+      ["verify", async () => {
+        const principal = await service.verify(created.secret);
+        principal.signingKeyIds.push("signing_key_other");
+        principal.repositories.push("debian-staging");
+        principal.owner!.displayName = "changed";
+      }],
+      ["getByName", async () => {
+        const record = await service.getByName("github-actions");
+        record.signingKeyIds.push("signing_key_other");
+        record.permissions.push("read");
+      }],
+      ["list", async () => {
+        const [record] = await service.list();
+        record!.signingKeyIds.push("signing_key_other");
+        (record!.ecosystemScopes.apt as Record<string, unknown>).allowedPackages = ["hijacked"];
+      }],
+    ];
 
-    await expect(service.getByName("github-actions")).resolves.toMatchObject({
-      owner: {
-        type: "admin-user",
-        subject: "admin_user_1",
-        displayName: "admin",
-      },
-    });
-    await expect(service.verify(result.secret)).resolves.toMatchObject({
-      owner: {
-        displayName: "admin",
-      },
-    });
+    for (const [label, mutate] of mutations) {
+      await mutate();
+      await expect(service.getByName("github-actions"), `mutated via ${label}`).resolves.toMatchObject({
+        repositories: ["debian-internal"],
+        permissions: ["publish"],
+        signingKeyIds: ["signing_key_prod"],
+        ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+        owner: { displayName: "admin" },
+      });
+    }
   });
 
   it("rejects invalid tokens", async () => {
@@ -268,31 +283,6 @@ describe("PublishTokenService", () => {
     });
   });
 
-  it("does not let verified principals mutate stored token scope", async () => {
-    const service = new PublishTokenService({
-      state: new MemoryStateStore(),
-      clock,
-      randomId,
-      hasher,
-    });
-    const result = await service.create({
-      name: "github-actions",
-      repositories: ["debian-internal"],
-      permissions: ["publish"],
-      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
-    });
-
-    const principal = await service.verify(result.secret);
-    principal.permissions.push("admin");
-    principal.repositories.push("production");
-    (principal.ecosystemScopes.apt as { allowedPackages: string[] }).allowedPackages.push("other");
-
-    await expect(service.verify(result.secret)).resolves.toMatchObject({
-      permissions: ["publish"],
-      repositories: ["debian-internal"],
-      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
-    });
-  });
 
   it("creates and verifies publish tokens with signing key scopes", async () => {
     const service = new PublishTokenService({
@@ -337,96 +327,9 @@ describe("PublishTokenService", () => {
     });
   });
 
-  it("does not let verified principals mutate stored signing key scope", async () => {
-    const service = new PublishTokenService({
-      state: new MemoryStateStore(),
-      clock,
-      randomId,
-      hasher,
-    });
-    const result = await service.create({
-      name: "github-actions",
-      repositories: ["debian-internal"],
-      permissions: ["publish"],
-      ecosystemScopes: {},
-      signingKeyIds: ["signing_key_prod"],
-    });
 
-    const principal = await service.verify(result.secret);
-    principal.signingKeyIds.push("signing_key_other");
 
-    await expect(service.verify(result.secret)).resolves.toMatchObject({
-      signingKeyIds: ["signing_key_prod"],
-    });
-  });
 
-  it("does not let create inputs mutate stored signing key scope", async () => {
-    const service = new PublishTokenService({
-      state: new MemoryStateStore(),
-      clock,
-      randomId,
-      hasher,
-    });
-    const signingKeyIds = ["signing_key_prod"];
-    const result = await service.create({
-      name: "github-actions",
-      repositories: ["debian-internal"],
-      permissions: ["publish"],
-      ecosystemScopes: {},
-      signingKeyIds,
-    });
-
-    signingKeyIds.push("signing_key_other");
-
-    await expect(service.verify(result.secret)).resolves.toMatchObject({
-      signingKeyIds: ["signing_key_prod"],
-    });
-  });
-
-  it("does not let returned publish token records mutate stored signing key scope", async () => {
-    const service = new PublishTokenService({
-      state: new MemoryStateStore(),
-      clock,
-      randomId,
-      hasher,
-    });
-    const result = await service.create({
-      name: "github-actions",
-      repositories: ["debian-internal"],
-      permissions: ["publish"],
-      ecosystemScopes: {},
-      signingKeyIds: ["signing_key_prod"],
-    });
-
-    result.record.signingKeyIds.push("signing_key_other");
-
-    await expect(service.verify(result.secret)).resolves.toMatchObject({
-      signingKeyIds: ["signing_key_prod"],
-    });
-  });
-
-  it("does not let listed publish token records mutate stored signing key scope", async () => {
-    const service = new PublishTokenService({
-      state: new MemoryStateStore(),
-      clock,
-      randomId,
-      hasher,
-    });
-    const result = await service.create({
-      name: "github-actions",
-      repositories: ["debian-internal"],
-      permissions: ["publish"],
-      ecosystemScopes: {},
-      signingKeyIds: ["signing_key_prod"],
-    });
-
-    const records = await service.list();
-    records[0]?.signingKeyIds.push("signing_key_other");
-
-    await expect(service.verify(result.secret)).resolves.toMatchObject({
-      signingKeyIds: ["signing_key_prod"],
-    });
-  });
 
   it("creates and verifies read-only tokens with repository scope", async () => {
     const service = new PublishTokenService({

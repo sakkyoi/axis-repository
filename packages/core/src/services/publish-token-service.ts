@@ -3,20 +3,16 @@ import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } fro
 import { tokenLookupId } from "../domain/tokens";
 import type { Clock, RandomId, SecretHasher, StateStore } from "../ports/ports";
 
-function cloneRecord(input: Record<string, unknown>): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(input)) as Record<string, unknown>;
-}
+// Records are snapshotted by the state store on write and on read, so callers
+// can never reach stored state through what they are handed back. Copying again
+// here would be a second, divergent implementation of the same invariant.
 
-function copyRecord(record: PublishTokenRecord): PublishTokenRecord {
-  const signingKeyIds = record.signingKeyIds ?? [];
-  return {
-    ...record,
-    permissions: [...record.permissions],
-    repositories: [...record.repositories],
-    ecosystemScopes: cloneRecord(record.ecosystemScopes),
-    signingKeyIds: [...signingKeyIds],
-    ...(record.owner ? { owner: { ...record.owner } } : {}),
-  };
+/**
+ * Fills in fields added after some records were written. Records stored before
+ * signing key scopes existed have no signingKeyIds.
+ */
+function withScopeDefaults(record: PublishTokenRecord): PublishTokenRecord {
+  return record.signingKeyIds ? record : { ...record, signingKeyIds: [] };
 }
 
 export function principalRefFromAdminPrincipal(principal: AdminPrincipal): PrincipalRef {
@@ -87,21 +83,20 @@ export class PublishTokenService {
       id: tokenId,
       name,
       tokenHash: await this.options.hasher.hash(secret),
-      permissions: [...input.permissions],
-      repositories: [...input.repositories],
-      ecosystemScopes: cloneRecord(input.ecosystemScopes),
-      signingKeyIds: [...(input.signingKeyIds ?? [])],
-      ...(input.owner ? { owner: { ...input.owner } } : {}),
+      permissions: input.permissions,
+      repositories: input.repositories,
+      ecosystemScopes: input.ecosystemScopes,
+      signingKeyIds: input.signingKeyIds ?? [],
+      ...(input.owner ? { owner: input.owner } : {}),
       createdAt: this.options.clock.now().toISOString(),
       ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt }),
     };
     await this.options.state.publishTokens.save(record);
-    return { record: copyRecord(record), secret };
+    return { record: record, secret };
   }
 
   async list(): Promise<PublishTokenRecord[]> {
-    const records = await this.options.state.publishTokens.list();
-    return records.map(copyRecord);
+    return (await this.options.state.publishTokens.list()).map(withScopeDefaults);
   }
 
   async getByName(name: string): Promise<PublishTokenRecord> {
@@ -109,7 +104,7 @@ export class PublishTokenService {
     if (!record) {
       throw new NotFoundError(`Publish token not found: ${name}`);
     }
-    return copyRecord(record);
+    return record;
   }
 
   async revoke(name: string): Promise<PublishTokenRecord> {
@@ -118,14 +113,14 @@ export class PublishTokenService {
       throw new NotFoundError(`Publish token not found: ${name}`);
     }
     if (record.revokedAt) {
-      return copyRecord(record);
+      return record;
     }
     const revoked: PublishTokenRecord = {
       ...record,
       revokedAt: this.options.clock.now().toISOString(),
     };
     await this.options.state.publishTokens.save(revoked);
-    return copyRecord(revoked);
+    return revoked;
   }
 
   async rotate(name: string): Promise<RotatePublishTokenResult> {
@@ -143,7 +138,7 @@ export class PublishTokenService {
       rotatedAt: this.options.clock.now().toISOString(),
     };
     await this.options.state.publishTokens.save(rotated);
-    return { record: copyRecord(rotated), secret };
+    return { record: rotated, secret };
   }
 
   async delete(name: string): Promise<void> {
@@ -171,11 +166,11 @@ export class PublishTokenService {
       return {
         tokenId: record.id,
         name: record.name,
-        permissions: [...record.permissions],
-        repositories: [...record.repositories],
-        ecosystemScopes: cloneRecord(record.ecosystemScopes),
-        signingKeyIds: [...(record.signingKeyIds ?? [])],
-        ...(record.owner ? { owner: { ...record.owner } } : {}),
+        permissions: record.permissions,
+        repositories: record.repositories,
+        ecosystemScopes: record.ecosystemScopes,
+        signingKeyIds: record.signingKeyIds ?? [],
+        ...(record.owner ? { owner: record.owner } : {}),
       };
     }
     throw new UnauthorizedError();

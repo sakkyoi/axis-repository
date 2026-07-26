@@ -228,6 +228,20 @@ describe("publish token form model", () => {
     expect(publishTokenSecretUnsavedPromptContent().description).toContain("saved this token secret");
   });
 
+  it("rejects a custom expiration that is not a date", () => {
+    expect(() => buildPublishTokenExpiresAt({
+      expiration: { mode: "custom", customDateTime: "not-a-date" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
+    })).toThrow("Custom expiration is invalid");
+  });
+
+  it("rejects an unknown expiration mode", () => {
+    expect(() => buildPublishTokenExpiresAt({
+      expiration: { mode: "fortnight" as "never", customDateTime: "" },
+      now: new Date("2026-07-23T00:00:00.000Z"),
+    })).toThrow("Publish token expiration is invalid");
+  });
+
   it("omits publish token expiration when set to never", () => {
     expect(buildPublishTokenExpiresAt({
       expiration: { mode: "never", customDateTime: "" },
