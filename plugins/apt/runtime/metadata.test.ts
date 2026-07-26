@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError, type PublishArtifactsInput } from "@axis-repository/core";
 import { buildAptRepositoryMetadata, parseAptRepositoryConfig, validateAptPublishArtifacts, type AptRepositoryMetadata } from "./metadata";
+import { md5Hex } from "../shared/md5";
+import type { AptIndexFile } from "./index-files";
 import type { AptPackageIndex } from "./packages";
 
 const textDecoder = new TextDecoder();
@@ -11,6 +13,14 @@ function firstIndex(metadata: AptRepositoryMetadata): AptPackageIndex {
     throw new Error("expected at least one package index");
   }
   return index;
+}
+
+function indexFile(metadata: AptRepositoryMetadata, relativePath: string): AptIndexFile {
+  const file = metadata.indexFiles.find((candidate) => candidate.relativePath === relativePath);
+  if (!file) {
+    throw new Error(`expected an index file at ${relativePath}`);
+  }
+  return file;
 }
 
 const input = (overrides: Partial<PublishArtifactsInput> = {}): PublishArtifactsInput => ({
@@ -142,7 +152,7 @@ describe("APT metadata", () => {
 
     expect(metadata.config.components).toEqual(["main"]);
     expect(metadata.poolCopies[0]!.destinationKey).toBe("repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb");
-    expect(firstIndex(metadata).packagesPath).toBe("repositories/debian-internal/dists/noble/main/binary-amd64/Packages");
+    expect(firstIndex(metadata).relativePath).toBe("main/binary-amd64/Packages");
     expect(metadata.release).toContain("Components: main\n");
   });
 
@@ -237,13 +247,15 @@ describe("APT metadata", () => {
       },
     ]);
     const index = firstIndex(metadata);
-    expect(index.packagesPath).toBe("repositories/debian-internal/dists/noble/main/binary-amd64/Packages");
-    expect(index.packagesGzPath).toBe("repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz");
+    const packagesFile = indexFile(metadata, "main/binary-amd64/Packages");
+    const packagesGz = indexFile(metadata, "main/binary-amd64/Packages.gz");
+    expect(index.relativePath).toBe("main/binary-amd64/Packages");
     expect(index.packages).toContain("Package: myapp\n");
     expect(index.packages).toContain("Filename: pool/main/myapp/myapp_1.2.3_amd64.deb\n");
     expect(index.packages).toContain(`SHA256: ${"a".repeat(64)}\n`);
-    expect(index.packagesGz.byteLength).toBeGreaterThan(0);
-    await expect(gunzip(index.packagesGz)).resolves.toBe(index.packages);
+    expect(packagesFile.text).toBe(index.packages);
+    expect(packagesGz.bytes.byteLength).toBeGreaterThan(0);
+    await expect(gunzip(packagesGz.bytes)).resolves.toBe(index.packages);
     expect(metadata.releasePath).toBe("repositories/debian-internal/dists/noble/Release");
     expect(metadata.release).toContain("Origin: debian-internal\n");
     expect(metadata.release).toContain("Label: debian-internal\n");
@@ -255,29 +267,34 @@ describe("APT metadata", () => {
     expect(metadata.release).toContain("Acquire-By-Hash: yes\n");
     expect(metadata.release).not.toContain("Valid-Until:");
     expect(metadata.release).not.toContain("NotAutomatic:");
+    expect(metadata.release).toContain("MD5Sum:\n");
     expect(metadata.release).toContain("SHA256:\n");
     expect(metadata.release).toContain("SHA512:\n");
+    expect(metadata.release).toContain(
+      ` ${md5Hex(packagesFile.bytes)} ${packagesFile.bytes.byteLength} main/binary-amd64/Packages\n`,
+    );
 
-    const packagesBytes = new TextEncoder().encode(index.packages);
+    const packagesBytes = packagesFile.bytes;
     expect(metadata.release).toContain(
       ` ${await digestHex("SHA-256", packagesBytes)} ${packagesBytes.byteLength} main/binary-amd64/Packages\n`,
     );
     expect(metadata.release).toContain(
-      ` ${await digestHex("SHA-256", index.packagesGz)} ${index.packagesGz.byteLength} main/binary-amd64/Packages.gz\n`,
+      ` ${await digestHex("SHA-256", packagesGz.bytes)} ${packagesGz.bytes.byteLength} main/binary-amd64/Packages.gz\n`,
     );
     expect(metadata.release).toContain(
       ` ${await digestHex("SHA-512", packagesBytes)} ${packagesBytes.byteLength} main/binary-amd64/Packages\n`,
     );
     expect(metadata.release).toContain(
-      ` ${await digestHex("SHA-512", index.packagesGz)} ${index.packagesGz.byteLength} main/binary-amd64/Packages.gz\n`,
+      ` ${await digestHex("SHA-512", packagesGz.bytes)} ${packagesGz.bytes.byteLength} main/binary-amd64/Packages.gz\n`,
     );
     expect(metadata.packageIndexes).toHaveLength(1);
-    expect(index).toMatchObject({
-      component: "main",
-      architecture: "amd64",
-      relativePath: "main/binary-amd64/Packages",
-      relativeGzPath: "main/binary-amd64/Packages.gz",
-    });
+    expect(index).toMatchObject({ component: "main", architecture: "amd64" });
+    expect(metadata.indexFiles.map((file) => file.relativePath)).toEqual([
+      "main/binary-amd64/Packages",
+      "main/binary-amd64/Packages.gz",
+      "main/i18n/Translation-en",
+      "main/i18n/Translation-en.gz",
+    ]);
   });
 
   it("discovers repository architectures from uploaded package metadata when no allowlist is configured", async () => {
@@ -397,9 +414,8 @@ describe("APT metadata", () => {
     expect(indexesByPath.get("main/binary-arm64/Packages")!.packages).toContain("Package: worker\n");
     expect(indexesByPath.get("contrib/binary-amd64/Packages")!.packages).toContain("Package: addon\n");
 
-    for (const index of metadata.packageIndexes) {
-      expect(metadata.release).toContain(`${index.relativePath}\n`);
-      expect(metadata.release).toContain(`${index.relativeGzPath}\n`);
+    for (const file of metadata.indexFiles) {
+      expect(metadata.release).toContain(` ${file.relativePath}\n`);
     }
   });
 

@@ -349,7 +349,9 @@ describe("APT index lifecycle", () => {
 
     await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }]);
     const firstGeneration = byHashKeys(harness.objectStore);
-    expect(firstGeneration).toHaveLength(4); // Packages and Packages.gz, SHA256 and SHA512
+    // Packages, Packages.gz, Translation-en and Translation-en.gz, each under
+    // its SHA256 and its SHA512.
+    expect(firstGeneration).toHaveLength(8);
 
     await harness.publish("pub_2", [{ name: "beta", version: "2.0.0" }]);
     const secondGeneration = byHashKeys(harness.objectStore);
@@ -359,7 +361,7 @@ describe("APT index lifecycle", () => {
     for (const key of firstGeneration) {
       expect(secondGeneration).toContain(key);
     }
-    expect(secondGeneration).toHaveLength(8);
+    expect(secondGeneration).toHaveLength(16);
     const firstPackagesByHash = firstGeneration
       .map((key) => storedContent(harness.objectStore, key))
       .filter((content) => content?.startsWith("Package: "));
@@ -372,7 +374,7 @@ describe("APT index lifecycle", () => {
     const thirdGeneration = byHashKeys(harness.objectStore);
 
     // Anything older than that is dropped, so by-hash cannot grow without end.
-    expect(thirdGeneration).toHaveLength(8);
+    expect(thirdGeneration).toHaveLength(16);
     for (const key of firstGeneration) {
       expect(thirdGeneration).not.toContain(key);
     }

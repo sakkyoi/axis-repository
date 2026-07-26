@@ -4,6 +4,7 @@ import {
 } from "@axis-repository/core";
 import type { DebianStanza } from "../shared/stanza";
 import { parseAptRepositoryConfig, validatePathSegment, type AptResolvedRepositoryConfig } from "./config";
+import { buildAptIndexFiles, type AptIndexFile } from "./index-files";
 import {
   buildPackageIndexes,
   buildPackageStanza,
@@ -20,6 +21,7 @@ import {
 import { buildRelease } from "./release";
 
 export type { AptRepositoryConfig } from "./config";
+export type { AptIndexFile } from "./index-files";
 export type { AptIndexStanzas, AptPackageIndex, AptPoolCopy } from "./packages";
 export { parseAptRepositoryConfig, validateAptPublishArtifacts, gzip };
 
@@ -28,6 +30,8 @@ export interface AptIndexMetadata {
   config: AptResolvedRepositoryConfig;
   stanzasByIndex: Map<string, AptIndexStanzas>;
   packageIndexes: AptPackageIndex[];
+  /** Everything written under `dists/<codename>/` and listed in `Release`. */
+  indexFiles: AptIndexFile[];
   releasePath: string;
   release: string;
 }
@@ -112,23 +116,23 @@ export async function buildAptIndexMetadata(input: {
   stanzasByIndex: Map<string, AptIndexStanzas>;
   publishDate: string;
 }): Promise<AptIndexMetadata> {
-  const packageIndexes = await buildPackageIndexes({
-    repositoryName: input.repositoryName,
-    codename: input.config.codename,
+  const packageIndexes = buildPackageIndexes({
     config: input.config,
     stanzasByIndex: input.stanzasByIndex,
   });
+  const indexFiles = await buildAptIndexFiles({ config: input.config, packageIndexes });
 
   return {
     config: input.config,
     stanzasByIndex: input.stanzasByIndex,
     packageIndexes,
+    indexFiles,
     releasePath: `repositories/${input.repositoryName}/dists/${input.config.codename}/Release`,
     release: await buildRelease({
       repositoryName: input.repositoryName,
       config: input.config,
       publishDate: input.publishDate,
-      packageIndexes,
+      indexFiles,
     }),
   };
 }

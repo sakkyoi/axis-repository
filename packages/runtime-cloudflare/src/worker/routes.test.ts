@@ -4139,6 +4139,8 @@ describe("Cloudflare runtime routes", () => {
             { key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" },
             { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages" },
             { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz" },
+            { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en" },
+            { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en.gz" },
             { key: "repositories/debian-internal/dists/noble/Release" },
             { key: "repositories/debian-internal/dists/noble/InRelease" },
             { key: "repositories/debian-internal/dists/noble/Release.gpg" },

@@ -5,10 +5,15 @@ import type {
 } from "@axis-repository/core";
 import { listAllObjects, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { parseStanzas } from "../shared/stanza";
-import { digestHex } from "./digest";
+import type { AptIndexFile } from "./index-files";
 import type { AptIndexMetadata } from "./metadata";
-import { indexKey, type AptIndexStanzas, type AptPackageIndex, type AptPoolCopy } from "./packages";
-import { acquireByHashEnabled } from "./release";
+import { indexKey, type AptIndexStanzas, type AptPoolCopy } from "./packages";
+import {
+  BY_HASH_SECTIONS,
+  acquireByHashEnabled,
+  checksumForSection,
+  type ReleaseChecksumSection,
+} from "./release";
 
 export const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";
 export const GZIP_CONTENT_TYPE = "application/gzip";
@@ -30,16 +35,8 @@ export interface AptReleaseSigner {
   }): Promise<string>;
 }
 
-const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const packagesIndexPattern = /^([A-Za-z0-9][A-Za-z0-9._+~-]*)\/binary-([A-Za-z0-9][A-Za-z0-9._+~-]*)\/Packages$/;
-const byHashIndexPattern = /^[A-Za-z0-9][A-Za-z0-9._+~-]*\/binary-[A-Za-z0-9][A-Za-z0-9._+~-]*\/by-hash\/[A-Za-z0-9]+\/[0-9a-f]+$/;
-
-/** The `Release` checksum sections that also get a `by-hash` directory. */
-const BY_HASH_ALGORITHMS = [
-  { section: "SHA256", algorithm: "SHA-256" },
-  { section: "SHA512", algorithm: "SHA-512" },
-] as const;
 
 export function distsPrefix(repositoryName: string, codename: string): string {
   return `repositories/${repositoryName}/dists/${codename}/`;
@@ -95,9 +92,11 @@ export interface WrittenAptIndexes {
  * signs `Release` over them.
  *
  * Publishing and reconciling both end here so that the signed `Release` can
- * never disagree with the indexes on disk: whatever stanzas are handed in
- * become the complete published state, and index files that no longer have
- * stanzas are removed rather than left behind for `Release` to omit.
+ * never disagree with the indexes on disk: whatever is handed in becomes the
+ * complete published state, and anything else under `dists/<codename>/` is
+ * removed. That directory is entirely generated, and apt refuses a repository
+ * whose `Release` omits an index its sources.list asks for, so an orphaned
+ * index file is worse than a deleted one.
  *
  * Signing happens before the first write, so a signing failure leaves the
  * repository exactly as it was rather than half-updated.
@@ -112,7 +111,7 @@ export async function writeAptRepositoryIndexes(input: {
   poolCopies?: AptPoolCopy[];
 }): Promise<WrittenAptIndexes> {
   const prefix = distsPrefix(input.repositoryName, input.metadata.config.codename);
-  const { packageIndexes, release, releasePath } = input.metadata;
+  const { indexFiles, release, releasePath } = input.metadata;
   const poolCopies = input.poolCopies ?? [];
   const inReleasePath = `${prefix}InRelease`;
   const releaseGpgPath = `${prefix}Release.gpg`;
@@ -130,10 +129,7 @@ export async function writeAptRepositoryIndexes(input: {
     contentType: copy.contentType || DEB_CONTENT_TYPE,
   }));
   const indexObjects: PublishedObject[] = [
-    ...packageIndexes.flatMap((packageIndex) => [
-      { key: packageIndex.packagesPath, contentType: TEXT_CONTENT_TYPE },
-      { key: packageIndex.packagesGzPath, contentType: GZIP_CONTENT_TYPE },
-    ]),
+    ...indexFiles.map((file) => ({ key: `${prefix}${file.relativePath}`, contentType: file.contentType })),
     { key: releasePath, contentType: TEXT_CONTENT_TYPE },
     { key: inReleasePath, contentType: TEXT_CONTENT_TYPE },
     { key: releaseGpgPath, contentType: PGP_SIGNATURE_CONTENT_TYPE },
@@ -141,7 +137,7 @@ export async function writeAptRepositoryIndexes(input: {
   const objects = [...poolObjects, ...indexObjects];
   const previous = await capturePreviousObjectMetadata(input.objectStore, objects.map((object) => object.key));
   const byHash = acquireByHashEnabled(input.metadata.config)
-    ? await planByHashObjects({ objectStore: input.objectStore, prefix, releasePath, packageIndexes })
+    ? await planByHashObjects({ objectStore: input.objectStore, prefix, releasePath, indexFiles })
     : { objects: [], retainedKeys: new Set<string>() };
   const removedObjectKeys = await removeStaleIndexObjects({
     objectStore: input.objectStore,
@@ -156,9 +152,13 @@ export async function writeAptRepositoryIndexes(input: {
   for (const copy of poolCopies) {
     await input.objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
   }
-  for (const packageIndex of packageIndexes) {
-    await input.objectStore.putText(packageIndex.packagesPath, packageIndex.packages, TEXT_CONTENT_TYPE);
-    await input.objectStore.putBytes(packageIndex.packagesGzPath, packageIndex.packagesGz, GZIP_CONTENT_TYPE);
+  for (const file of indexFiles) {
+    const key = `${prefix}${file.relativePath}`;
+    if (file.text === undefined) {
+      await input.objectStore.putBytes(key, file.bytes, file.contentType);
+    } else {
+      await input.objectStore.putText(key, file.text, file.contentType);
+    }
   }
   for (const object of byHash.objects) {
     await input.objectStore.putBytes(object.key, object.bytes, object.contentType);
@@ -182,33 +182,28 @@ interface ByHashObject {
 /**
  * Works out the `by-hash` copies of each index and which older ones to keep.
  *
- * A client that reads `Release` and then fetches `Packages` can otherwise land
- * on a newer index than the one its `Release` describes, and reject the
- * mismatch. Fetching by content hash removes that race, but only if the index
- * a client just read about is still there — so the previous generation, named
- * by the `Release` being replaced, is kept alongside the current one. Anything
- * older is dropped, which bounds what this costs in storage.
+ * A client that reads `Release` and then fetches an index can otherwise land
+ * on a newer one than its `Release` describes, and reject the mismatch.
+ * Fetching by content hash removes that race, but only if the index a client
+ * just read about is still there — so the previous generation, named by the
+ * `Release` being replaced, is kept alongside the current one. Anything older
+ * is dropped, which bounds what this costs in storage.
  */
 async function planByHashObjects(input: {
   objectStore: RepositoryObjectStore;
   prefix: string;
   releasePath: string;
-  packageIndexes: AptPackageIndex[];
+  indexFiles: AptIndexFile[];
 }): Promise<{ objects: ByHashObject[]; retainedKeys: Set<string> }> {
   const objects: ByHashObject[] = [];
 
-  for (const packageIndex of input.packageIndexes) {
-    for (const variant of [
-      { relativePath: packageIndex.relativePath, bytes: textEncoder.encode(packageIndex.packages), contentType: TEXT_CONTENT_TYPE },
-      { relativePath: packageIndex.relativeGzPath, bytes: packageIndex.packagesGz, contentType: GZIP_CONTENT_TYPE },
-    ]) {
-      for (const { section, algorithm } of BY_HASH_ALGORITHMS) {
-        objects.push({
-          key: byHashKey(input.prefix, variant.relativePath, section, await digestHex(algorithm, variant.bytes)),
-          bytes: variant.bytes,
-          contentType: variant.contentType,
-        });
-      }
+  for (const file of input.indexFiles) {
+    for (const section of BY_HASH_SECTIONS) {
+      objects.push({
+        key: byHashKey(input.prefix, file.relativePath, section, await checksumForSection(section, file.bytes)),
+        bytes: file.bytes,
+        contentType: file.contentType,
+      });
     }
   }
 
@@ -226,13 +221,11 @@ async function previousByHashKeys(input: {
   }
 
   const retained = new Set<string>();
-  let section: string | undefined;
+  let section: ReleaseChecksumSection | undefined;
   for (const line of textDecoder.decode(await objectBytes(storedRelease)).split("\n")) {
     const sectionMatch = /^([A-Za-z0-9]+):$/.exec(line);
     if (sectionMatch) {
-      section = BY_HASH_ALGORITHMS.some((candidate) => candidate.section === sectionMatch[1])
-        ? sectionMatch[1]
-        : undefined;
+      section = BY_HASH_SECTIONS.find((candidate) => candidate === sectionMatch[1]);
       continue;
     }
     const entry = /^ ([0-9a-f]+) +\d+ +(\S+)$/.exec(line);
@@ -276,11 +269,13 @@ export function withPreviousMetadata(
 }
 
 /**
- * Drops index files that this write no longer covers.
+ * Drops everything under the suite that this write did not produce.
  *
- * `Release` only lists the indexes written here, and apt refuses a repository
- * whose `Release` omits an index its sources.list asks for. Leaving an
- * orphaned `Packages` behind would therefore be worse than deleting it.
+ * `dists/<codename>/` is generated in full on every write, so anything left
+ * over is an index from a previous shape of the repository. `Release` lists
+ * only what was written here, and apt refuses a repository whose `Release`
+ * omits an index its sources.list asks for — an orphaned index file is worse
+ * than a deleted one.
  */
 async function removeStaleIndexObjects(input: {
   objectStore: RepositoryObjectStore;
@@ -291,10 +286,7 @@ async function removeStaleIndexObjects(input: {
   const removed: string[] = [];
 
   for (const object of existing) {
-    const relativePath = object.key.slice(input.prefix.length);
-    const isIndexObject = packagesIndexPattern.test(relativePath.replace(/\.gz$/, ""))
-      || byHashIndexPattern.test(relativePath);
-    if (!isIndexObject || input.keptKeys.has(object.key)) {
+    if (input.keptKeys.has(object.key)) {
       continue;
     }
     if (await input.objectStore.deleteObject(object.key)) {

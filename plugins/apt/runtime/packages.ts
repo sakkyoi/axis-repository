@@ -3,6 +3,7 @@ import {
   type PublishArtifactRequest,
   type Repository,
 } from "@axis-repository/core";
+import { md5Hex } from "../shared/md5";
 import { formatStanza, stanzaField, type DebianStanza } from "../shared/stanza";
 import {
   parseAptRepositoryConfig,
@@ -20,12 +21,11 @@ export interface AptPoolCopy {
 export interface AptPackageIndex {
   component: string;
   architecture: string;
+  /** Path under `dists/<codename>/`, as `Release` lists it. */
   relativePath: string;
-  relativeGzPath: string;
-  packagesPath: string;
-  packagesGzPath: string;
   packages: string;
-  packagesGz: Uint8Array;
+  /** The stanzas as published, sorted, so translations can reuse them. */
+  stanzas: DebianStanza[];
 }
 
 export interface ValidatedAptArtifact {
@@ -45,8 +45,6 @@ export interface AptIndexStanzas {
   architecture: string;
   stanzas: DebianStanza[];
 }
-
-const textEncoder = new TextEncoder();
 
 /**
  * Control fields copied into a `Packages` stanza when the artifact carries
@@ -312,12 +310,10 @@ export function mergePackageStanzas(
   return merged;
 }
 
-export async function buildPackageIndexes(input: {
-  repositoryName: string;
-  codename: string;
+export function buildPackageIndexes(input: {
   config: AptResolvedRepositoryConfig;
   stanzasByIndex: Map<string, AptIndexStanzas>;
-}): Promise<AptPackageIndex[]> {
+}): AptPackageIndex[] {
   const packageIndexes: AptPackageIndex[] = [];
 
   for (const component of input.config.components) {
@@ -327,28 +323,42 @@ export async function buildPackageIndexes(input: {
         continue;
       }
 
-      const relativePath = `${component}/binary-${architecture}/Packages`;
-      const packagesPath = `repositories/${input.repositoryName}/dists/${input.codename}/${relativePath}`;
-      const packages = [...index.stanzas]
-        .sort((left, right) => comparePackageStanzas(left, right))
-        .map((stanza) => formatStanza(stanza))
-        .join("\n");
-      const packagesGz = await gzip(textEncoder.encode(packages));
+      const stanzas = index.stanzas
+        .map((stanza) => withDescriptionDigest(stanza))
+        .sort((left, right) => comparePackageStanzas(left, right));
 
       packageIndexes.push({
         component,
         architecture,
-        relativePath,
-        relativeGzPath: `${relativePath}.gz`,
-        packagesPath,
-        packagesGzPath: `${packagesPath}.gz`,
-        packages,
-        packagesGz,
+        relativePath: `${component}/binary-${architecture}/Packages`,
+        packages: stanzas.map((stanza) => formatStanza(stanza)).join("\n"),
+        stanzas,
       });
     }
   }
 
   return packageIndexes;
+}
+
+/**
+ * Adds `Description-md5` when a stanza lacks it.
+ *
+ * apt matches a package to its entry in a `Translation-*` index by this
+ * digest. Deriving it here rather than only when a stanza is first built means
+ * indexes published before translations existed pick it up on their next
+ * write, without having to re-read every `.deb`.
+ */
+export function withDescriptionDigest(stanza: DebianStanza): DebianStanza {
+  const description = stanzaField(stanza, "Description");
+  if (description === undefined || stanzaField(stanza, "Description-md5") !== undefined) {
+    return stanza;
+  }
+  return [...stanza, { name: "Description-md5", value: descriptionDigest(description) }];
+}
+
+/** Debian hashes the description with the newline that terminates the field. */
+export function descriptionDigest(description: string): string {
+  return md5Hex(`${description}\n`);
 }
 
 export async function gzip(bytes: Uint8Array): Promise<Uint8Array> {
