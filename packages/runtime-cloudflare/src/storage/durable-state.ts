@@ -207,6 +207,9 @@ export class DurableStateStore implements StateStore {
     save: async (session: AdminRefreshSessionRecord): Promise<void> => {
       await this.storage.put(adminRefreshSessionKey(session.id), session);
     },
+    delete: async (id: string): Promise<boolean> => {
+      return this.storage.delete(adminRefreshSessionKey(id));
+    },
   };
 
   readonly repositorySecrets = {

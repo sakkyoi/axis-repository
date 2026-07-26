@@ -47,6 +47,7 @@ export class AdminAuthService {
     if (!user || user.disabledAt || !(await this.options.passwordHasher.verify(input.password, user.passwordHash))) {
       throw new UnauthorizedError();
     }
+    await this.pruneDeadRefreshSessions();
     const sessionId = this.options.randomId.create("admin_session");
     return this.createTokenSetForUser({
       sessionId,
@@ -101,10 +102,7 @@ export class AdminAuthService {
 
   async logout(refreshToken: string): Promise<void> {
     const session = await this.findValidRefreshSession(refreshToken);
-    await this.options.state.adminRefreshSessions.save({
-      ...session,
-      revokedAt: this.options.clock.now().toISOString(),
-    });
+    await this.options.state.adminRefreshSessions.delete(session.id);
   }
 
   /**
@@ -149,7 +147,7 @@ export class AdminAuthService {
       passwordHash: await this.options.passwordHasher.hash(newPassword),
       updatedAt: now,
     });
-    await this.revokeRefreshSessionsForSubject(user.id, now);
+    await this.revokeRefreshSessionsForSubject(user.id);
   }
 
   async listUsers(): Promise<AdminUserRecord[]> {
@@ -259,13 +257,30 @@ export class AdminAuthService {
     return null;
   }
 
-  private async revokeRefreshSessionsForSubject(subject: string, revokedAt: string): Promise<void> {
+  private async revokeRefreshSessionsForSubject(subject: string): Promise<void> {
+    // Deleted rather than tombstoned: a revoked record has no further use, and
+    // keeping them makes the legacy lookup scan grow without bound.
     for (const session of await this.options.state.adminRefreshSessions.list()) {
-      if (session.subject !== subject || session.revokedAt) continue;
-      await this.options.state.adminRefreshSessions.save({
-        ...session,
-        revokedAt,
-      });
+      if (session.subject !== subject) continue;
+      await this.options.state.adminRefreshSessions.delete(session.id);
+    }
+  }
+
+  /**
+   * Drops sessions that can never authenticate again.
+   *
+   * A refresh token issued before the session id was embedded has no lookup
+   * key, so verifying one scans every stored session. Pruning on each sign-in
+   * keeps that scan bounded by the number of live sessions rather than by
+   * every session ever created.
+   */
+  private async pruneDeadRefreshSessions(): Promise<void> {
+    const now = this.options.clock.now().getTime();
+    for (const session of await this.options.state.adminRefreshSessions.list()) {
+      const expiresAt = Date.parse(session.expiresAt);
+      if (session.revokedAt || !Number.isFinite(expiresAt) || expiresAt <= now) {
+        await this.options.state.adminRefreshSessions.delete(session.id);
+      }
     }
   }
 

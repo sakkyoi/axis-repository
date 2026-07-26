@@ -15,6 +15,7 @@ import {
   type RepositoryArtifactStore,
   type RepositoryObjectStore,
   RepositoryService,
+  assertValidRepositoryName,
   type TokenPrincipal,
   type UpdateRepositoryInput,
   ValidationError,
@@ -41,6 +42,9 @@ export class PluginRepositoryService {
   ) {}
 
   async create(input: CreatePluginRepositoryInput): Promise<Repository> {
+    // Before provisioning, which can generate a signing key: a name the
+    // RepositoryService will reject should not cost that work first.
+    assertValidRepositoryName(input.name.trim());
     await this.ensurePluginEnabled(input.ecosystem);
     const plugin = this.options.plugins.requirePlugin(input.ecosystem);
     let config = input.config ?? {};

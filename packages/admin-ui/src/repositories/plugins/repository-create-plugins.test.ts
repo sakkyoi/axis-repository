@@ -92,6 +92,20 @@ describe("repository create plugins", () => {
     });
   });
 
+  it("maps every server-side repository name rejection back to the basics step", () => {
+    const plugin = getRepositoryCreatePlugin("apt")!;
+
+    for (const message of [
+      "Repository already exists: debian-internal",
+      "Repository name is required",
+      "Repository name must be at most 100 characters",
+      "Repository name must start with a letter or digit and use only letters, digits, dot, underscore, or hyphen",
+    ]) {
+      expect(repositoryCreateStepForServerError(message, plugin), message).toBe("basics");
+      expect(repositoryCreateFieldErrors(message), message).toEqual({ name: message });
+    }
+  });
+
   it("maps duplicate repository errors back to the basics step and name field", () => {
     const plugin = getRepositoryCreatePlugin("apt")!;
     const message = "Repository already exists: debian-internal";

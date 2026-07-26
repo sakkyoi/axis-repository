@@ -76,14 +76,16 @@ export default tseslint.config(
     },
   },
   {
-    // The publish CLI writes its result to stdout by design.
-    files: ["**/cli.ts"],
+    // The publish CLI writes its result to stdout by design, and build scripts
+    // report progress.
+    files: ["**/cli.ts", "scripts/**/*.ts", "**/*.config.ts"],
     rules: { "no-console": "off" },
   },
   {
-    // Build and tooling configs are outside the lint type project. Last so it
-    // wins over the type-aware settings above.
-    files: ["**/*.mjs", "**/*.js", "**/*.config.ts", "scripts/**/*.ts"],
+    // Plain JS build tooling is outside the lint type project. Last so it wins
+    // over the type-aware settings above. TypeScript configs and scripts are in
+    // the project, so they keep type-aware rules.
+    files: ["**/*.mjs", "**/*.js"],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       ...tseslint.configs.disableTypeChecked.languageOptions,

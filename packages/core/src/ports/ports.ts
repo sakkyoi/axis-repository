@@ -157,6 +157,8 @@ export interface AdminRefreshSessionStore {
   get(id: string): Promise<AdminRefreshSessionRecord | null>;
   list(): Promise<AdminRefreshSessionRecord[]>;
   save(session: AdminRefreshSessionRecord): Promise<void>;
+  /** Removes a session outright; revoked and expired records are not kept. */
+  delete(id: string): Promise<boolean>;
 }
 
 export interface AdminUserStore {

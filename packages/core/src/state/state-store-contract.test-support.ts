@@ -329,7 +329,7 @@ export function describeStateStoreContract(
         await expect(state.adminUsers.getById("admin_user_1")).resolves.toMatchObject({ username: "owner" });
       });
 
-      it("persists refresh sessions by id", async () => {
+      it("persists and deletes refresh sessions by id", async () => {
         const state = await store();
         await state.adminRefreshSessions.save(adminRefreshSession());
 
@@ -338,6 +338,10 @@ export function describeStateStoreContract(
         });
         await expect(state.adminRefreshSessions.get("missing")).resolves.toBeNull();
         await expect(state.adminRefreshSessions.list()).resolves.toHaveLength(1);
+
+        await expect(state.adminRefreshSessions.delete("admin_session_1")).resolves.toBe(true);
+        await expect(state.adminRefreshSessions.delete("admin_session_1")).resolves.toBe(false);
+        await expect(state.adminRefreshSessions.get("admin_session_1")).resolves.toBeNull();
       });
     });
 

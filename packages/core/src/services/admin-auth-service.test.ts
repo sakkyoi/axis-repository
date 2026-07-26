@@ -201,6 +201,29 @@ describe("AdminAuthService", () => {
       .resolves.toMatchObject({ principal: { username: "admin" } });
   });
 
+  it("prunes revoked and expired sessions so the legacy lookup scan stays bounded", async () => {
+    let currentTime = new Date("2026-07-26T00:00:00.000Z");
+    let sequence = 0;
+    const state = new MemoryStateStore();
+    const service = createService({
+      state,
+      clock: { now: () => currentTime },
+      refreshTokenTtlSeconds: 60,
+      randomId: { create: (prefix) => `${prefix}_${++sequence}` },
+    });
+
+    await service.login({ username: "admin", password: "correct-password" });
+    const loggedOut = await service.login({ username: "admin", password: "correct-password" });
+    await service.logout(loggedOut.refreshToken);
+    currentTime = new Date("2026-07-26T00:05:00.000Z");
+
+    // A refresh token issued before the session id was embedded has no lookup
+    // key, so verifying one scans this table.
+    await expect(state.adminRefreshSessions.list()).resolves.toHaveLength(1);
+    await service.login({ username: "admin", password: "correct-password" });
+    await expect(state.adminRefreshSessions.list()).resolves.toHaveLength(1);
+  });
+
   it("stops honouring access tokens once the user is disabled", async () => {
     const state = new MemoryStateStore();
     const service = createService({ state });

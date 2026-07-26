@@ -19,11 +19,22 @@ export type {
 export const repositoryCreatePlugins = repositoryCreatePluginsFromUiRegistry();
 export { repositoryCreateStepsForConfig } from "../create/repository-create-steps";
 
+/**
+ * Server-side rejections of the repository name. These must route back to the
+ * basics step and attach to the name field, or the wizard shows an unattached
+ * banner on whichever step the user was on.
+ */
+function isRepositoryNameError(message: string): boolean {
+  return /^Repository already exists: /i.test(message)
+    || message === "Repository name is required"
+    || message.startsWith("Repository name must ");
+}
+
 export function repositoryCreateStepForServerError(
   message: string,
   plugin: RepositoryCreatePlugin,
 ): RepositoryCreateStep | undefined {
-  if (/^Repository already exists: /i.test(message) || message === "Repository name is required") {
+  if (isRepositoryNameError(message)) {
     return plugin.steps.includes("basics") ? "basics" : undefined;
   }
   const pluginStep = getRepositoryCreateServerErrorMapper(plugin.ecosystem)?.(message);
@@ -31,7 +42,7 @@ export function repositoryCreateStepForServerError(
 }
 
 export function repositoryCreateFieldErrors(message: string): RepositoryCreateFieldErrors {
-  if (/^Repository already exists: /i.test(message) || message === "Repository name is required") {
+  if (isRepositoryNameError(message)) {
     return { name: message };
   }
   return {};

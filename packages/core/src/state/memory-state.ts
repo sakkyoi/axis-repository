@@ -185,6 +185,9 @@ export class MemoryStateStore implements StateStore {
     save: async (session: AdminRefreshSessionRecord): Promise<void> => {
       this.adminRefreshSessionById.set(session.id, snapshot(session));
     },
+    delete: async (id: string): Promise<boolean> => {
+      return this.adminRefreshSessionById.delete(id);
+    },
   };
 
   readonly repositorySecrets = {
