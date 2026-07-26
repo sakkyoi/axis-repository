@@ -1,8 +1,11 @@
 export interface AuthenticateAdminLoginInput {
   username: string;
   password: string;
-  authenticate: (input: { username: string; password: string }) => Promise<{ accessToken: string }>;
-  login: (accessToken: string) => void;
+  authenticate: (input: { username: string; password: string }) => Promise<{
+    accessToken: string;
+    accessTokenExpiresAt: string;
+  }>;
+  login: (accessToken: string, accessTokenExpiresAt: string) => void;
 }
 
 export type AuthenticateAdminLoginResult =
@@ -22,7 +25,7 @@ export async function authenticateAdminLogin(
 
   try {
     const result = await input.authenticate({ username, password: input.password });
-    input.login(result.accessToken);
+    input.login(result.accessToken, result.accessTokenExpiresAt);
   } catch {
     return { authenticated: false, error: "Username or password is invalid." };
   }

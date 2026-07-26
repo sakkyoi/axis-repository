@@ -50,7 +50,10 @@ describe("authenticateAdminLogin", () => {
   });
 
   it("stores access tokens after authentication succeeds", async () => {
-    const authenticate = vi.fn().mockResolvedValue({ accessToken: "access-token" });
+    const authenticate = vi.fn().mockResolvedValue({
+      accessToken: "access-token",
+      accessTokenExpiresAt: "2026-07-26T00:15:00.000Z",
+    });
     const login = vi.fn();
 
     const result = await authenticateAdminLogin({
@@ -62,6 +65,6 @@ describe("authenticateAdminLogin", () => {
 
     expect(result).toEqual({ authenticated: true });
     expect(authenticate).toHaveBeenCalledWith({ username: "admin", password: "correct-password" });
-    expect(login).toHaveBeenCalledWith("access-token");
+    expect(login).toHaveBeenCalledWith("access-token", "2026-07-26T00:15:00.000Z");
   });
 });

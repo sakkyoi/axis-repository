@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, expect, it } from "vitest";
 import { createAxisClient } from "./client";
 import { serverErrorMessage } from "./http";
@@ -1125,3 +1126,95 @@ describe("createAxisClient", () => {
     ]);
   });
 });
+
+describe("unauthorized handling", () => {
+  it("refreshes once and retries the original request with the new token", async () => {
+    const attempts: Array<{ url: string | undefined; authorization: unknown }> = [];
+    let refreshCalls = 0;
+    const client = createAxisClient({
+      baseUrl: "https://axis.example",
+      accessToken: "stale-token",
+      onUnauthorized: async () => {
+        refreshCalls += 1;
+        return "fresh-token";
+      },
+    });
+    client.http.defaults.adapter = async (config) => {
+      attempts.push({ url: config.url, authorization: config.headers?.Authorization });
+      if (attempts.length === 1) {
+        const error = new AxiosError("Unauthorized", "401", config as never, null, {
+          data: { error: { code: "unauthorized", message: "Unauthorized" } },
+          status: 401,
+          statusText: "Unauthorized",
+          headers: {},
+          config: config as never,
+        });
+        throw error;
+      }
+      return {
+        data: { repositories: [] },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.listRepositories()).resolves.toEqual([]);
+
+    expect(refreshCalls).toBe(1);
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0]?.authorization).toBe("Bearer stale-token");
+    expect(attempts[1]?.authorization).toBe("Bearer fresh-token");
+  });
+
+  it("surfaces the error without retrying when the session cannot be refreshed", async () => {
+    let attempts = 0;
+    const client = createAxisClient({
+      baseUrl: "https://axis.example",
+      accessToken: "stale-token",
+      onUnauthorized: async () => null,
+    });
+    client.http.defaults.adapter = async (config) => {
+      attempts += 1;
+      throw new AxiosError("Unauthorized", "401", config as never, null, {
+        data: { error: { code: "unauthorized", message: "Unauthorized" } },
+        status: 401,
+        statusText: "Unauthorized",
+        headers: {},
+        config: config as never,
+      });
+    };
+
+    await expect(client.listRepositories()).rejects.toThrow("Unauthorized");
+    expect(attempts).toBe(1);
+  });
+
+  it("does not retry the refresh endpoint itself", async () => {
+    let attempts = 0;
+    let refreshCalls = 0;
+    const client = createAxisClient({
+      baseUrl: "https://axis.example",
+      onUnauthorized: async () => {
+        refreshCalls += 1;
+        return "fresh-token";
+      },
+    });
+    client.http.defaults.adapter = async (config) => {
+      attempts += 1;
+      throw new AxiosError("Unauthorized", "401", config as never, null, {
+        data: { error: { code: "unauthorized", message: "Unauthorized" } },
+        status: 401,
+        statusText: "Unauthorized",
+        headers: {},
+        config: config as never,
+      });
+    };
+
+    // Retrying a failed refresh through the refresh handler would recurse.
+    await expect(client.refreshAdminSession()).rejects.toThrow("Unauthorized");
+    expect(attempts).toBe(1);
+    expect(refreshCalls).toBe(0);
+  });
+});
+

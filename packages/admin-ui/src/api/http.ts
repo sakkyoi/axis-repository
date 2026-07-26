@@ -1,8 +1,13 @@
-import axios, { type AxiosInstance } from "axios";
+import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
 
 export interface HttpOptions {
   baseUrl: string;
   accessToken?: string;
+  /**
+   * Called when a request comes back 401. Returns a fresh access token, or null
+   * when the session cannot be recovered.
+   */
+  onUnauthorized?: () => Promise<string | null>;
 }
 
 export function normalizeBaseUrl(baseUrl: string): string {
@@ -24,6 +29,27 @@ export function serverErrorMessage(data: unknown): string | undefined {
  */
 export const withSessionCookie = { withCredentials: true } as const;
 
+const AUTH_PATH_PREFIX = "/admin/auth/";
+
+interface RetriedRequestConfig extends InternalAxiosRequestConfig {
+  axisRetriedAfterRefresh?: boolean;
+}
+
+/**
+ * A 401 is worth retrying once, after refreshing the session. The auth
+ * endpoints are excluded: retrying a failed refresh would recurse.
+ */
+export function shouldRetryAfterRefresh(input: {
+  status: number | undefined;
+  url: string | undefined;
+  alreadyRetried: boolean;
+}): boolean {
+  if (input.status !== 401 || input.alreadyRetried) {
+    return false;
+  }
+  return !(input.url ?? "").startsWith(AUTH_PATH_PREFIX);
+}
+
 export function createHttpClient(options: HttpOptions): AxiosInstance {
   const http = axios.create({
     baseURL: normalizeBaseUrl(options.baseUrl),
@@ -34,12 +60,31 @@ export function createHttpClient(options: HttpOptions): AxiosInstance {
   if (token) {
     http.defaults.headers.common.Authorization = `Bearer ${token}`;
   }
-  http.interceptors.response.use(undefined, (error: unknown) => {
-    if (axios.isAxiosError(error)) {
-      const message = serverErrorMessage(error.response?.data);
-      if (message) {
-        return Promise.reject(new Error(message));
+  http.interceptors.response.use(undefined, async (error: unknown) => {
+    if (!axios.isAxiosError(error)) {
+      return Promise.reject(error);
+    }
+    const config = error.config as RetriedRequestConfig | undefined;
+    const onUnauthorized = options.onUnauthorized;
+    if (
+      config
+      && onUnauthorized
+      && shouldRetryAfterRefresh({
+        status: error.response?.status,
+        url: config.url,
+        alreadyRetried: Boolean(config.axisRetriedAfterRefresh),
+      })
+    ) {
+      const refreshedToken = await onUnauthorized();
+      if (refreshedToken) {
+        config.axisRetriedAfterRefresh = true;
+        config.headers.Authorization = `Bearer ${refreshedToken}`;
+        return http.request(config);
       }
+    }
+    const message = serverErrorMessage(error.response?.data);
+    if (message) {
+      return Promise.reject(new Error(message));
     }
     return Promise.reject(error);
   });

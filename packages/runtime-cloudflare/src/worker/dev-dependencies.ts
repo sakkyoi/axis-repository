@@ -48,7 +48,7 @@ export function createDevDependencies(
   signingKeyEncryptionSecret = "dev-signing-key-encryption-secret",
   adminUiRuntimeConfig: AdminUiRuntimeConfig = {},
   adminUsername = "admin",
-  adminPassword = "admin",
+  adminPassword = "admin-local-password",
 ): AppDependencies {
   return createDevDependencyHarness(signingKeyEncryptionSecret, adminUiRuntimeConfig, {}, adminUsername, adminPassword).dependencies;
 }
@@ -58,7 +58,7 @@ export function createDevDependencyHarness(
   adminUiRuntimeConfigOrSigningKeySecret: AdminUiRuntimeConfig | string = {},
   legacyAdminUiRuntimeConfig: AdminUiRuntimeConfig = {},
   adminUsername = "admin",
-  adminPassword = "admin",
+  adminPassword = "admin-local-password",
 ): DevDependencyHarness {
   const signingKeyEncryptionSecret = typeof adminUiRuntimeConfigOrSigningKeySecret === "string"
     ? adminUiRuntimeConfigOrSigningKeySecret

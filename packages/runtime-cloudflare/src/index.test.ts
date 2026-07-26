@@ -152,7 +152,7 @@ describe("worker entrypoint", () => {
         new Request("https://axis.example/admin/auth/login", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ username: "admin", password: "admin" }),
+          body: JSON.stringify({ username: "admin", password: "admin-local-password" }),
         }),
       ]) {
         const response = await worker.fetch(request, { ADMIN_UI_API_BASE_URL: "" } as unknown as AxisEnv);

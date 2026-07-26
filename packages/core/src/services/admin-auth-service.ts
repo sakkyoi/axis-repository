@@ -31,6 +31,8 @@ export interface AdminAuthTokenSet {
   principal: AdminPrincipal;
 }
 
+export const ADMIN_PASSWORD_MIN_LENGTH = 8;
+
 export class AdminAuthService {
   constructor(private readonly options: AdminAuthServiceOptions) {}
 
@@ -100,8 +102,8 @@ export class AdminAuthService {
     input: { currentPassword: string; newPassword: string },
   ): Promise<void> {
     const newPassword = input.newPassword.trim();
-    if (newPassword.length < 8) {
-      throw new ValidationError("newPassword must be at least 8 characters");
+    if (newPassword.length < ADMIN_PASSWORD_MIN_LENGTH) {
+      throw new ValidationError(`newPassword must be at least ${ADMIN_PASSWORD_MIN_LENGTH} characters`);
     }
     const user = await this.options.state.adminUsers.getById(principal.subject);
     if (!user || user.disabledAt || !(await this.options.passwordHasher.verify(input.currentPassword, user.passwordHash))) {
@@ -117,7 +119,8 @@ export class AdminAuthService {
   }
 
   async listUsers(): Promise<AdminUserRecord[]> {
-    await this.ensureBootstrapOwner();
+    // Deliberately does not seed: this is a read, and seeding here made an
+    // empty store surface as UnauthorizedError from a list query.
     return this.options.state.adminUsers.list();
   }
 
@@ -132,6 +135,14 @@ export class AdminAuthService {
     }
     if (!bootstrap?.passwordHash && !bootstrap?.password) {
       throw new UnauthorizedError();
+    }
+    // A bootstrap password becomes the owner's real password, so hold it to the
+    // same minimum as a password change. A precomputed hash is exempt: its
+    // strength was decided wherever it was generated.
+    if (!bootstrap.passwordHash && (bootstrap.password ?? "").length < ADMIN_PASSWORD_MIN_LENGTH) {
+      throw new ValidationError(
+        `Bootstrap admin password must be at least ${ADMIN_PASSWORD_MIN_LENGTH} characters`,
+      );
     }
     const now = this.options.clock.now().toISOString();
     await this.options.state.adminUsers.save({

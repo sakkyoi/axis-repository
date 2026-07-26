@@ -14,9 +14,12 @@ import { getRuntimeConfig } from "../runtime-config";
 const REPOSITORY_ACTIVITY_PAGE_LIMIT = 10;
 
 export function useAxisClient() {
-  const { accessToken } = useAuth();
+  const { accessToken, refreshAccessToken } = useAuth();
   const { apiBaseUrl } = getRuntimeConfig();
-  return useMemo(() => createAxisClient({ accessToken, baseUrl: apiBaseUrl }), [accessToken, apiBaseUrl]);
+  return useMemo(
+    () => createAxisClient({ accessToken, baseUrl: apiBaseUrl, onUnauthorized: refreshAccessToken }),
+    [accessToken, apiBaseUrl, refreshAccessToken],
+  );
 }
 
 export function useRepositories() {

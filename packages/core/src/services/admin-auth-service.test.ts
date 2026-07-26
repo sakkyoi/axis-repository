@@ -182,6 +182,25 @@ describe("AdminAuthService", () => {
     })).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
+  it("holds the bootstrap password to the same minimum as a password change", async () => {
+    const service = createService({
+      bootstrapOwner: { username: "admin", password: "short" },
+    });
+
+    await expect(service.login({ username: "admin", password: "short" }))
+      .rejects.toThrow("Bootstrap admin password must be at least 8 characters");
+  });
+
+  it("accepts a precomputed bootstrap hash regardless of length", async () => {
+    // The strength of a precomputed hash was decided where it was generated.
+    const service = createService({
+      bootstrapOwner: { username: "admin", passwordHash: "pw:x" },
+    });
+
+    await expect(service.login({ username: "admin", password: "x" }))
+      .resolves.toMatchObject({ principal: { username: "admin" } });
+  });
+
   it("rejects a refresh token whose session has expired", async () => {
     let currentTime = new Date("2026-07-26T00:00:00.000Z");
     const movingClock: Clock = { now: () => currentTime };
@@ -230,7 +249,9 @@ describe("AdminAuthService", () => {
 
     await expect(service.login({ username: "admin", password: "correct-password" }))
       .rejects.toBeInstanceOf(UnauthorizedError);
-    await expect(service.listUsers()).rejects.toBeInstanceOf(UnauthorizedError);
+    // listUsers is a read and no longer seeds, so an unconfigured store is
+    // simply empty rather than reported as an auth failure.
+    await expect(service.listUsers()).resolves.toEqual([]);
   });
 
   it("rewrites password hashes stored under weaker parameters on successful login", async () => {

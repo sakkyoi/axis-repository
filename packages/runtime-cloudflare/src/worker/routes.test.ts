@@ -486,7 +486,7 @@ describe("Cloudflare runtime routes", () => {
     const loginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "admin", password: "admin" }),
+      body: JSON.stringify({ username: "admin", password: "admin-local-password" }),
     }));
     expect(loginResponse.status).toBe(200);
     expect(loginResponse.headers.get("set-cookie")).toContain("axis_admin_refresh=");
@@ -529,7 +529,7 @@ describe("Cloudflare runtime routes", () => {
     const loginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "admin", password: "admin" }),
+      body: JSON.stringify({ username: "admin", password: "admin-local-password" }),
     }));
     const loginCookie = loginResponse.headers.get("set-cookie") ?? "";
     const loginBody = await loginResponse.json() as { accessToken: string };
@@ -541,7 +541,7 @@ describe("Cloudflare runtime routes", () => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        currentPassword: "admin",
+        currentPassword: "admin-local-password",
         newPassword: "changed-password",
       }),
     }));
@@ -557,7 +557,7 @@ describe("Cloudflare runtime routes", () => {
     const oldLoginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "admin", password: "admin" }),
+      body: JSON.stringify({ username: "admin", password: "admin-local-password" }),
     }));
     expect(oldLoginResponse.status).toBe(401);
 
@@ -571,10 +571,17 @@ describe("Cloudflare runtime routes", () => {
 
   it("lists seeded admin users and keeps user creation coming soon", async () => {
     const app = createApp(createDevDependencies());
+    // The owner is seeded on sign-in, which is the only way an access
+    // token can exist in production.
     await app.fetch(new Request("https://axis.example/admin/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "admin", password: "admin" }),
+      body: JSON.stringify({ username: "admin", password: "admin-local-password" }),
+    }));
+    await app.fetch(new Request("https://axis.example/admin/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "admin-local-password" }),
     }));
 
     const listResponse = await app.fetch(new Request("https://axis.example/admin/users", {
