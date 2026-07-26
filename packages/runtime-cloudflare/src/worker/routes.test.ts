@@ -3700,6 +3700,56 @@ describe("Cloudflare runtime routes", () => {
     expect(listBody.publishTokens[0]).not.toHaveProperty("tokenHash");
   });
 
+  it("records the admin user principal as the publish token owner", async () => {
+    const app = createApp();
+
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "github-actions",
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+          ecosystemScopes: {},
+        }),
+      }),
+    );
+
+    expect(createResponse.status).toBe(201);
+    await expect(createResponse.json()).resolves.toMatchObject({
+      token: {
+        owner: {
+          type: "admin-user",
+          subject: "admin_user_dev",
+          displayName: "admin",
+        },
+      },
+    });
+
+    const listResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    await expect(listResponse.json()).resolves.toMatchObject({
+      publishTokens: [
+        {
+          name: "github-actions",
+          owner: {
+            type: "admin-user",
+            subject: "admin_user_dev",
+            displayName: "admin",
+          },
+        },
+      ],
+    });
+  });
+
   it("gets publish tokens by name without exposing secrets or hashes", async () => {
     const app = createApp();
     const secret = await createToken(app, {

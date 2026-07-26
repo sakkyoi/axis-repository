@@ -171,6 +171,7 @@ export function tokenScopeSummary(token: Pick<PublishToken, "repositories" | "pe
 export function publishTokenSummaryItems(token: PublishToken): Array<[string, string]> {
   const summary = tokenScopeSummary(token);
   return [
+    ["Owner", token.owner?.displayName ?? "legacy token"],
     ["Permissions", summary.permissions],
     ["Repositories", summary.repositories],
     ["Signing key scopes", summary.signingKeys],

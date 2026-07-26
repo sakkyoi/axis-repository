@@ -4,6 +4,7 @@ import {
   NotFoundError,
   UnauthorizedError,
   ValidationError,
+  principalRefFromAdminPrincipal,
   type PublishArtifactRequest,
   type PublishSession,
   type PublishTokenRecord,
@@ -1048,7 +1049,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     throw new NotFoundError();
   }
   if (url.pathname === "/admin/publish-tokens") {
-    await requireAdmin(request, dependencies.adminAuthService);
+    const adminPrincipal = await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "GET") {
       const publishTokens = await dependencies.publishTokenService.list();
       return jsonResponse({ publishTokens: publishTokens.map(publicPublishToken) });
@@ -1064,6 +1065,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         ecosystemScopes: optionalObjectField(body, "ecosystemScopes") ?? {},
         ...(expiresAt === undefined ? {} : { expiresAt }),
         ...(signingKeyIds === undefined ? {} : { signingKeyIds }),
+        owner: principalRefFromAdminPrincipal(adminPrincipal),
       });
       return jsonResponse(
         {

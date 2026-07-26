@@ -53,6 +53,12 @@ export const adminUserSchema = z.object({
   disabledAt: z.string().optional(),
 });
 
+export const principalRefSchema = z.object({
+  type: z.literal("admin-user"),
+  subject: z.string(),
+  displayName: z.string(),
+});
+
 export const adminUsersResponseSchema = z.object({
   users: z.array(adminUserSchema),
   canCreateUsers: z.boolean(),
@@ -138,6 +144,7 @@ export const publishTokenSchema = z.object({
   repositories: z.array(z.string()),
   ecosystemScopes: z.record(z.string(), z.unknown()),
   signingKeyIds: z.array(z.string()),
+  owner: principalRefSchema.optional(),
   createdAt: z.string(),
   expiresAt: z.string().optional(),
   rotatedAt: z.string().optional(),
@@ -170,6 +177,7 @@ export const tokenPrincipalSchema = z.object({
   repositories: z.array(z.string()),
   ecosystemScopes: z.record(z.string(), z.unknown()),
   signingKeyIds: z.array(z.string()),
+  owner: principalRefSchema.optional(),
 });
 
 export const publishArtifactSchema = z.object({
@@ -338,6 +346,7 @@ export const adminSessionSchema = z.object({
 
 export type Repository = z.infer<typeof repositorySchema>;
 export type AdminPrincipal = z.infer<typeof adminPrincipalSchema>;
+export type PrincipalRef = z.infer<typeof principalRefSchema>;
 export type AdminAuthResponse = z.infer<typeof adminAuthResponseSchema>;
 export type AdminUser = z.infer<typeof adminUserSchema>;
 export type RepositoryObjectDirectory = z.infer<typeof repositoryObjectDirectorySchema>;

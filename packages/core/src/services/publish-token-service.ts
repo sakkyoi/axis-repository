@@ -1,4 +1,4 @@
-import type { PublishTokenRecord, TokenPrincipal } from "../domain/domain";
+import type { AdminPrincipal, PrincipalRef, PublishTokenRecord, TokenPrincipal } from "../domain/domain";
 import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "../domain/errors";
 import type { Clock, RandomId, SecretHasher, StateStore } from "../ports/ports";
 
@@ -14,6 +14,15 @@ function copyRecord(record: PublishTokenRecord): PublishTokenRecord {
     repositories: [...record.repositories],
     ecosystemScopes: cloneRecord(record.ecosystemScopes),
     signingKeyIds: [...signingKeyIds],
+    ...(record.owner ? { owner: { ...record.owner } } : {}),
+  };
+}
+
+export function principalRefFromAdminPrincipal(principal: AdminPrincipal): PrincipalRef {
+  return {
+    type: "admin-user",
+    subject: principal.subject,
+    displayName: principal.username,
   };
 }
 
@@ -23,6 +32,7 @@ export interface CreatePublishTokenInput {
   repositories: string[];
   ecosystemScopes: Record<string, unknown>;
   signingKeyIds?: string[];
+  owner?: PrincipalRef;
   expiresAt?: string;
 }
 
@@ -74,6 +84,7 @@ export class PublishTokenService {
       repositories: [...input.repositories],
       ecosystemScopes: cloneRecord(input.ecosystemScopes),
       signingKeyIds: [...(input.signingKeyIds ?? [])],
+      ...(input.owner ? { owner: { ...input.owner } } : {}),
       createdAt: this.options.clock.now().toISOString(),
       ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt }),
     };
@@ -158,6 +169,7 @@ export class PublishTokenService {
         repositories: [...record.repositories],
         ecosystemScopes: cloneRecord(record.ecosystemScopes),
         signingKeyIds: [...(record.signingKeyIds ?? [])],
+        ...(record.owner ? { owner: { ...record.owner } } : {}),
       };
     }
     throw new UnauthorizedError();

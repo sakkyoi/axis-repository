@@ -54,6 +54,7 @@ export interface TokenPrincipal {
   repositories: string[];
   ecosystemScopes: Record<string, unknown>;
   signingKeyIds: string[];
+  owner?: PrincipalRef;
 }
 
 export interface AdminPrincipal {
@@ -63,6 +64,12 @@ export interface AdminPrincipal {
   role: "owner";
   scopes: string[];
   sessionId: string;
+}
+
+export interface PrincipalRef {
+  type: "admin-user";
+  subject: string;
+  displayName: string;
 }
 
 export interface AdminUserRecord {
@@ -97,6 +104,7 @@ export interface PublishTokenRecord {
   repositories: string[];
   ecosystemScopes: Record<string, unknown>;
   signingKeyIds: string[];
+  owner?: PrincipalRef;
   createdAt: string;
   expiresAt?: string;
   rotatedAt?: string;

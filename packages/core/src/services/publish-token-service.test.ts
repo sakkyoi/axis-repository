@@ -58,6 +58,77 @@ describe("PublishTokenService", () => {
     });
   });
 
+  it("creates tokens with IAM-ready owner principals", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+
+    const result = await service.create({
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+      owner: {
+        type: "admin-user",
+        subject: "admin_user_1",
+        displayName: "admin",
+      },
+    });
+
+    expect(result.record.owner).toEqual({
+      type: "admin-user",
+      subject: "admin_user_1",
+      displayName: "admin",
+    });
+    await expect(service.verify(result.secret)).resolves.toMatchObject({
+      owner: {
+        type: "admin-user",
+        subject: "admin_user_1",
+        displayName: "admin",
+      },
+    });
+  });
+
+  it("does not let returned owner principals mutate stored publish tokens", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+    const result = await service.create({
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+      owner: {
+        type: "admin-user",
+        subject: "admin_user_1",
+        displayName: "admin",
+      },
+    });
+
+    result.record.owner!.displayName = "changed";
+    const principal = await service.verify(result.secret);
+    principal.owner!.displayName = "changed-again";
+
+    await expect(service.getByName("github-actions")).resolves.toMatchObject({
+      owner: {
+        type: "admin-user",
+        subject: "admin_user_1",
+        displayName: "admin",
+      },
+    });
+    await expect(service.verify(result.secret)).resolves.toMatchObject({
+      owner: {
+        displayName: "admin",
+      },
+    });
+  });
+
   it("rejects invalid tokens", async () => {
     const service = new PublishTokenService({
       state: new MemoryStateStore(),

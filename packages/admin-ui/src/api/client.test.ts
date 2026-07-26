@@ -51,6 +51,11 @@ describe("admin API schemas", () => {
         repositories: ["debian-internal"],
         ecosystemScopes: {},
         signingKeyIds: [],
+        owner: {
+          type: "admin-user",
+          subject: "admin_user_1",
+          displayName: "admin",
+        },
         createdAt: "2026-07-22T00:00:00.000Z",
         rotatedAt: "2026-07-23T00:00:00.000Z",
       },
@@ -59,6 +64,7 @@ describe("admin API schemas", () => {
 
     expect(response.secret).toBe("axis_publish_secret");
     expect(response.token.rotatedAt).toBe("2026-07-23T00:00:00.000Z");
+    expect(response.token.owner?.displayName).toBe("admin");
     expect(response.token).not.toHaveProperty("tokenHash");
   });
 

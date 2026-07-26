@@ -198,6 +198,7 @@ describe("publish token form model", () => {
 
   it("formats readonly publish token summary items", () => {
     expect(publishTokenSummaryItems(publishToken("github-actions"))).toEqual([
+      ["Owner", "legacy token"],
       ["Permissions", "publish"],
       ["Repositories", "debian-internal"],
       ["Signing key scopes", "signing_key_prod"],
@@ -205,6 +206,17 @@ describe("publish token form model", () => {
       ["Last rotated", "never"],
       ["Expires", "never"],
     ]);
+  });
+
+  it("formats publish token owner principals", () => {
+    expect(publishTokenSummaryItems({
+      ...publishToken("github-actions"),
+      owner: {
+        type: "admin-user",
+        subject: "admin_user_1",
+        displayName: "admin",
+      },
+    })).toContainEqual(["Owner", "admin"]);
   });
 
   it("derives publish token lifecycle states", () => {
