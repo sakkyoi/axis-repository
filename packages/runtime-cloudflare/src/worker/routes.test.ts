@@ -1708,6 +1708,76 @@ describe("Cloudflare runtime routes", () => {
     await expect(response.text()).resolves.toBe("signed release");
   });
 
+  it("neutralizes publisher-controlled content types on repository objects", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/pool/main/a/evil.html",
+      "<script>alert(document.cookie)</script>",
+      "text/html",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/pool/main/a/evil.html"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("content-disposition")).toBe("attachment");
+    expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; sandbox");
+  });
+
+  it("serves the admin UI shell with a nonce-scoped content security policy", async () => {
+    const app = createApp(createDevDependencies());
+
+    const response = await app.fetch(new Request("https://axis.example/ui/"));
+    const body = await response.text();
+    const policy = response.headers.get("content-security-policy") ?? "";
+    const nonce = policy.match(/'nonce-([a-f0-9]+)'/)?.[1];
+
+    expect(response.status).toBe(200);
+    expect(nonce).toMatch(/^[a-f0-9]{32}$/);
+    expect(body).toContain(`<script nonce="${nonce}">window.__AXIS_ADMIN_CONFIG__`);
+    expect(policy).toContain("object-src 'none'");
+    expect(policy).toContain("frame-ancestors 'none'");
+    expect(policy).toContain("base-uri 'none'");
+    expect(policy).not.toContain("'unsafe-inline'; script-src");
+  });
+
+  it("issues a fresh admin UI script nonce per response", async () => {
+    const app = createApp(createDevDependencies());
+
+    const first = await app.fetch(new Request("https://axis.example/ui/"));
+    const second = await app.fetch(new Request("https://axis.example/ui/"));
+
+    expect(first.headers.get("content-security-policy")).not.toBe(
+      second.headers.get("content-security-policy"),
+    );
+  });
+
+  it("applies baseline security headers to every response", async () => {
+    const app = createApp(createDevDependencies());
+
+    const health = await app.fetch(new Request("https://axis.example/health"));
+    const notFound = await app.fetch(new Request("https://axis.example/api/unknown"));
+    const insecure = await app.fetch(new Request("http://localhost:8787/health"));
+
+    for (const response of [health, notFound]) {
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(response.headers.get("x-frame-options")).toBe("DENY");
+      expect(response.headers.get("strict-transport-security")).toBe(
+        "max-age=31536000; includeSubDomains",
+      );
+    }
+    expect(insecure.headers.get("strict-transport-security")).toBeNull();
+  });
+
   it("serves HEAD requests for public repository objects without a body", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

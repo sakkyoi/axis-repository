@@ -37,8 +37,13 @@ function bytesToText(value: BodyInit): string {
   throw new Error("Admin UI HTML asset must be text-compatible");
 }
 
-export function injectAdminUiRuntimeConfig(html: BodyInit, config: AdminUiRuntimeConfig): string {
-  const configScript = `<script>window.__AXIS_ADMIN_CONFIG__=${jsonForInlineScript({
+export function injectAdminUiRuntimeConfig(
+  html: BodyInit,
+  config: AdminUiRuntimeConfig,
+  nonce?: string,
+): string {
+  const nonceAttribute = nonce ? ` nonce="${nonce}"` : "";
+  const configScript = `<script${nonceAttribute}>window.__AXIS_ADMIN_CONFIG__=${jsonForInlineScript({
     apiBaseUrl: config.apiBaseUrl ?? "",
   })};</script>`;
   const htmlText = bytesToText(html);

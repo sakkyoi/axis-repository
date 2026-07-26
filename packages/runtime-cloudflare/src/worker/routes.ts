@@ -253,13 +253,23 @@ function parseRangeHeader(rangeHeader: string | null, contentLength: number | un
   return { range: { offset: start, length: end - start + 1 }, end };
 }
 
+// Repository objects carry publisher-controlled bytes and a publisher-controlled
+// content-type, and they are served from the same origin as the admin UI. Stop
+// the browser from ever treating them as active content.
+function applyRepositoryObjectHardening(headers: Headers): Headers {
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("content-disposition", "attachment");
+  headers.set("content-security-policy", "default-src 'none'; sandbox");
+  return headers;
+}
+
 function objectHeaders(input: {
   metadata: RepositoryObjectMetadata;
   contentLength?: number;
   cacheControl: string;
   range?: ParsedRange;
 }): Headers {
-  const headers = new Headers();
+  const headers = applyRepositoryObjectHardening(new Headers());
   if (input.metadata.contentType) {
     headers.set("content-type", input.metadata.contentType);
   }
@@ -283,7 +293,7 @@ function objectHeaders(input: {
 }
 
 function rangeNotSatisfiableResponse(metadata: RepositoryObjectMetadata, cacheControl: string): Response {
-  const headers = new Headers();
+  const headers = applyRepositoryObjectHardening(new Headers());
   if (metadata.contentLength !== undefined) {
     headers.set("content-range", `bytes */${metadata.contentLength}`);
     headers.set("accept-ranges", "bytes");
@@ -314,14 +324,42 @@ function objectResponse(input: {
   });
 }
 
+// The admin UI ships one inline script (the injected runtime config); everything
+// else is same-origin. Uploads go straight to presigned storage hosts, so
+// connect-src has to allow outbound https.
+function adminUiContentSecurityPolicy(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}'`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self' data:",
+    "connect-src 'self' https:",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'none'",
+  ].join("; ");
+}
+
 function adminUiAssetResponse(asset: AdminUiAsset, dependencies: AppDependencies): Response {
   const isHtml = asset.contentType.startsWith("text/html");
+  if (!isHtml) {
+    return new Response(asset.body, {
+      headers: {
+        "content-type": asset.contentType,
+        "cache-control": "public, max-age=31536000, immutable",
+      },
+    });
+  }
+  const nonce = crypto.randomUUID().replaceAll("-", "");
   return new Response(
-    isHtml ? injectAdminUiRuntimeConfig(asset.body, dependencies.adminUiRuntimeConfig) : asset.body,
+    injectAdminUiRuntimeConfig(asset.body, dependencies.adminUiRuntimeConfig, nonce),
     {
       headers: {
         "content-type": asset.contentType,
-        "cache-control": isHtml ? "no-store" : "public, max-age=31536000, immutable",
+        "cache-control": "no-store",
+        "content-security-policy": adminUiContentSecurityPolicy(nonce),
       },
     },
   );
