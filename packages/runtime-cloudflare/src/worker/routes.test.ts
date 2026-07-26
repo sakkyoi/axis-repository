@@ -393,6 +393,76 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("deletes repositories, repository objects, and affected publish token scopes", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
+    });
+    await createRepository(app, {
+      name: "python-shared",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-internal/simple/demo/index.html",
+      "demo",
+      "text/html",
+    );
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-shared/simple/other/index.html",
+      "other",
+      "text/html",
+    );
+    await createToken(app, {
+      name: "multi-token",
+      repositories: ["python-internal", "python-shared"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+    await createToken(app, {
+      name: "single-token",
+      repositories: ["python-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    const deleteResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-internal", {
+        method: "DELETE",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(deleteResponse.status).toBe(204);
+    await expect(harness.repositoryObjectStore.headObject("repositories/python-internal/simple/demo/index.html")).resolves.toBeNull();
+    await expect(harness.repositoryObjectStore.headObject("repositories/python-shared/simple/other/index.html")).resolves.not.toBeNull();
+    const repositoriesResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    await expect(repositoriesResponse.json()).resolves.toMatchObject({
+      repositories: [{ name: "python-shared" }],
+    });
+    const tokensResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const tokensBody = await tokensResponse.json() as {
+      publishTokens: Array<{ name: string; repositories: string[]; revokedAt?: string }>;
+    };
+    expect(tokensBody.publishTokens).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "multi-token", repositories: ["python-shared"] }),
+      expect.objectContaining({ name: "single-token", repositories: [], revokedAt: expect.any(String) }),
+    ]));
+  });
+
   it("rejects admin repository routes without admin token", async () => {
     const app = createApp();
     const response = await app.fetch(new Request("https://axis.example/admin/repositories"));

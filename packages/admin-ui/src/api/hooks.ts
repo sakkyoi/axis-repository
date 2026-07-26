@@ -64,6 +64,19 @@ export function useUpdateRepository() {
   });
 }
 
+export function useDeleteRepository() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => client.deleteRepository(name),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["repositories"] });
+      void queryClient.invalidateQueries({ queryKey: ["publish-tokens"] });
+      void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
+    },
+  });
+}
+
 export function useRepositoryObjects(repositoryName: string | undefined, prefix: string) {
   const client = useAxisClient();
   return useQuery({

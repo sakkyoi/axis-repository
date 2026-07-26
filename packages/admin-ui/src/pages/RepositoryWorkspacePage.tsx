@@ -1,10 +1,11 @@
-import { ArrowLeft, History, PackagePlus, Settings } from "lucide-react";
+import { ArrowLeft, History, PackagePlus, Settings, Trash2 } from "lucide-react";
 import type { DragEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useRepositories, useRepositoryPlugins } from "../api/hooks";
+import { useDeleteRepository, useRepositories, useRepositoryPlugins } from "../api/hooks";
 import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { Button } from "../components/ui/button";
+import { DestructiveActionDialog } from "../components/ui/destructive-action-dialog";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,7 @@ import { ADMIN_UI_PATHS, repositorySettingsPath, repositoryWorkspacePath } from 
 import { repositorySettingsSectionsFor, repositoryWorkspaceSectionsFor } from "../repositories/plugins/repository-detail-plugins";
 import { PublishSessionsSection, RepositoryDetailSections } from "../repositories/detail/repository-detail-shared";
 import type { RepositoryDetailSection } from "../repositories/plugins/repository-ui-plugin-types";
-import { repositoryDetailBodyClass } from "../repositories/detail/repository-page-model";
+import { repositoryDeleteDialogContent, repositoryDetailBodyClass } from "../repositories/detail/repository-page-model";
 import { EmptyState, ErrorState, PageHeader } from "./shared";
 import { getRepositoryPublishPlugin } from "../repositories/plugins/repository-ui-plugins";
 import {
@@ -227,24 +228,85 @@ export function RepositorySettingsPage() {
   const repositoryPlugins = useRepositoryPlugins();
   const repository = useRepositoryByName(repositories.data, name);
   const pluginMetadata = repositoryPlugins.data?.find((plugin) => plugin.ecosystem === repository?.ecosystem);
+  const deleteRepository = useDeleteRepository();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const deleteDialogContent = repository ? repositoryDeleteDialogContent(repository.name) : undefined;
+
+  function closeDeleteDialog() {
+    if (deleteRepository.isPending) return;
+    setDeleteDialogOpen(false);
+    deleteRepository.reset();
+  }
+
+  function confirmDeleteRepository() {
+    if (!repository) return;
+    deleteRepository.mutate(repository.name, {
+      onSuccess: () => {
+        setDeleteDialogOpen(false);
+        navigate(ADMIN_UI_PATHS.repositories);
+      },
+    });
+  }
 
   return (
-    <RepositoryPageShell
-      repositoryName={name}
-      repository={repository}
-      pluginMetadata={pluginMetadata}
-      isLoading={repositories.isLoading}
-      error={repositories.isError ? repositories.error : undefined}
-      title={repository ? `${repository.name} settings` : "Repository settings"}
-      description="Manage repository visibility, config, and plugin-owned resources."
-      action={repository ? (
-        <Button type="button" variant="outline" onClick={() => navigate(repositoryWorkspacePath(repository.name))}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Repository
-        </Button>
-      ) : undefined}
-      sections={repository ? repositorySettingsSectionsFor(repository.ecosystem) : []}
-    />
+    <>
+      <RepositoryPageShell
+        repositoryName={name}
+        repository={repository}
+        pluginMetadata={pluginMetadata}
+        isLoading={repositories.isLoading}
+        error={repositories.isError ? repositories.error : undefined}
+        title={repository ? `${repository.name} settings` : "Repository settings"}
+        description="Manage repository visibility, config, and plugin-owned resources."
+        action={repository ? (
+          <Button type="button" variant="outline" onClick={() => navigate(repositoryWorkspacePath(repository.name))}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Repository
+          </Button>
+        ) : undefined}
+        sections={repository ? repositorySettingsSectionsFor(repository.ecosystem) : []}
+        afterSections={repository ? (
+          <section className="grid gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
+            <div>
+              <h2 className="text-sm font-semibold text-destructive">Danger zone</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Delete this repository and all repository-owned content.
+              </p>
+            </div>
+            <div>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={deleteRepository.isPending}
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete repository
+              </Button>
+            </div>
+          </section>
+        ) : undefined}
+      />
+      {deleteDialogContent && (
+        <DestructiveActionDialog
+          open={deleteDialogOpen}
+          title={deleteDialogContent.title}
+          description={deleteDialogContent.description}
+          confirmLabel={deleteDialogContent.confirmLabel}
+          pendingLabel={deleteDialogContent.pendingLabel}
+          confirmationText={deleteDialogContent.confirmationText}
+          pending={deleteRepository.isPending}
+          error={deleteRepository.isError ? deleteRepository.error : undefined}
+          onOpenChange={(open) => {
+            if (!open) {
+              closeDeleteDialog();
+            }
+          }}
+          onConfirm={confirmDeleteRepository}
+        />
+      )}
+    </>
   );
 }
 
@@ -266,6 +328,7 @@ function RepositoryPageShell({
   action,
   sections,
   onPublishFiles,
+  afterSections,
 }: {
   repositoryName: string | undefined;
   repository: Repository | undefined;
@@ -277,6 +340,7 @@ function RepositoryPageShell({
   action: React.ReactNode;
   sections: RepositoryDetailSection[];
   onPublishFiles?: (files: File[]) => void;
+  afterSections?: React.ReactNode;
 }) {
   return (
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
@@ -301,6 +365,7 @@ function RepositoryPageShell({
                 {...(onPublishFiles ? { onPublishFiles } : {})}
               />
             )}
+            {afterSections}
           </div>
         )}
       </div>

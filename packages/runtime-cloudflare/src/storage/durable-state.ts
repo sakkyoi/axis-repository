@@ -22,6 +22,7 @@ const sessionKey = (id: string) => `publish-session:${id}`;
 const tokenKey = (id: string) => `publish-token:${id}`;
 const tokenNameKey = (name: string) => `publish-token-name:${name}`;
 const signingKeyKey = (id: string) => `signing-key:${id}`;
+const signingKeyNameKey = (repositoryName: string, name: string) => `signing-key-name:${repositoryName}:${name}`;
 const repositorySecretKey = (id: string) => `repository-secret:${id}`;
 const repositorySecretNameKey = (namespace: string, repositoryName: string, name: string) =>
   `repository-secret-name:${namespace}:${repositoryName}:${name}`;
@@ -62,6 +63,9 @@ export class DurableStateStore implements StateStore {
     save: async (repository: Repository): Promise<void> => {
       await this.storage.put(repositoryKey(repository.name), repository);
     },
+    deleteByName: async (name: string): Promise<boolean> => {
+      return this.storage.delete(repositoryKey(name));
+    },
   };
 
   readonly publishSessions = {
@@ -76,6 +80,19 @@ export class DurableStateStore implements StateStore {
     },
     save: async (session: PublishSession): Promise<void> => {
       await this.storage.put(sessionKey(session.id), session);
+    },
+    deleteByRepository: async (repositoryName: string): Promise<number> => {
+      const values = await this.storage.list<PublishSession>({
+        prefix: "publish-session:",
+      });
+      let deleted = 0;
+      for (const session of values.values()) {
+        if (session.repositoryName !== repositoryName) continue;
+        if (await this.storage.delete(sessionKey(session.id))) {
+          deleted++;
+        }
+      }
+      return deleted;
     },
     update: async (
       id: string,
@@ -207,6 +224,31 @@ export class DurableStateStore implements StateStore {
       await this.storage.put(repositorySecretKey(record.id), record);
       await this.storage.put(repositorySecretNameKey(record.namespace, record.repositoryName, record.name), record.id);
     },
+    deleteByRepository: async (repositoryName: string): Promise<number> => {
+      let deleted = 0;
+      const values = await this.storage.list<RepositorySecretRecord>({
+        prefix: "repository-secret:",
+      });
+      for (const record of values.values()) {
+        if (record.repositoryName !== repositoryName) continue;
+        await this.storage.delete(repositorySecretNameKey(record.namespace, record.repositoryName, record.name));
+        if (await this.storage.delete(repositorySecretKey(record.id))) {
+          deleted++;
+        }
+      }
+
+      const legacyValues = await this.storage.list<SigningKeyRecord>({
+        prefix: "signing-key:",
+      });
+      for (const record of legacyValues.values()) {
+        if (record.repositoryName !== repositoryName) continue;
+        await this.storage.delete(signingKeyNameKey(record.repositoryName, record.name));
+        if (await this.storage.delete(signingKeyKey(record.id))) {
+          deleted++;
+        }
+      }
+      return deleted;
+    },
   };
 
   readonly repositoryPluginPolicies = {
@@ -237,6 +279,19 @@ export class DurableStateStore implements StateStore {
     },
     save: async (record: RepositoryActivityRecord): Promise<void> => {
       await this.storage.put(repositoryActivityKey(record.id), record);
+    },
+    deleteByRepository: async (repositoryName: string): Promise<number> => {
+      const values = await this.storage.list<RepositoryActivityRecord>({
+        prefix: "repository-activity:",
+      });
+      let deleted = 0;
+      for (const activity of values.values()) {
+        if (activity.repositoryName !== repositoryName) continue;
+        if (await this.storage.delete(repositoryActivityKey(activity.id))) {
+          deleted++;
+        }
+      }
+      return deleted;
     },
   };
 

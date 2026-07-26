@@ -160,6 +160,16 @@ describe("DurableStateStore", () => {
     ]);
   });
 
+  it("deletes repositories by name", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    await state.repositories.save(repository);
+
+    await expect(state.repositories.deleteByName("debian-internal")).resolves.toBe(true);
+
+    await expect(state.repositories.getByName("debian-internal")).resolves.toBeNull();
+    await expect(state.repositories.deleteByName("debian-internal")).resolves.toBe(false);
+  });
+
   it("persists publish sessions by id", async () => {
     const state = new DurableStateStore(new FakeDurableStorage());
     const session = publishSession({ status: "pending_uploads" });
@@ -226,6 +236,17 @@ describe("DurableStateStore", () => {
     ]);
   });
 
+  it("deletes publish sessions by repository", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    await state.publishSessions.save(publishSession({ id: "pub_1", repositoryName: "debian-internal" }));
+    await state.publishSessions.save(publishSession({ id: "pub_2", repositoryName: "debian-internal" }));
+    await state.publishSessions.save(publishSession({ id: "pub_other", repositoryName: "python-internal" }));
+
+    await expect(state.publishSessions.deleteByRepository("debian-internal")).resolves.toBe(2);
+
+    await expect(state.publishSessions.list()).resolves.toMatchObject([{ id: "pub_other" }]);
+  });
+
   it("persists repository activities and lists newest first by repository", async () => {
     const state = new DurableStateStore(new FakeDurableStorage());
     const oldActivity = repositoryActivity({ id: "activity_old", createdAt: "2026-07-14T00:00:00.000Z" });
@@ -239,6 +260,17 @@ describe("DurableStateStore", () => {
       newActivity,
       oldActivity,
     ]);
+  });
+
+  it("deletes repository activities by repository", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    await state.repositoryActivities.save(repositoryActivity({ id: "activity_1", repositoryName: "debian-internal" }));
+    await state.repositoryActivities.save(repositoryActivity({ id: "activity_other", repositoryName: "python-internal" }));
+
+    await expect(state.repositoryActivities.deleteByRepository("debian-internal")).resolves.toBe(1);
+
+    await expect(state.repositoryActivities.listByRepository("debian-internal")).resolves.toEqual([]);
+    await expect(state.repositoryActivities.listByRepository("python-internal")).resolves.toMatchObject([{ id: "activity_other" }]);
   });
 
   it("updates publish sessions from the latest value and does not save when the updater throws", async () => {
@@ -357,6 +389,20 @@ describe("DurableStateStore", () => {
     });
     await expect(state.repositorySecrets.getByName("release", "debian-prod", "npm.token")).resolves.toMatchObject({
       id: "repository_secret_3",
+    });
+  });
+
+  it("deletes repository secrets by repository and clears name indexes", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_1", repositoryName: "debian-internal", name: "release" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_2", repositoryName: "debian-internal", name: "staging" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_other", repositoryName: "python-internal", name: "release" }));
+
+    await expect(state.repositorySecrets.deleteByRepository("debian-internal")).resolves.toBe(2);
+
+    await expect(state.repositorySecrets.getByName("release", "debian-internal", "apt.signing-key")).resolves.toBeNull();
+    await expect(state.repositorySecrets.getByName("release", "python-internal", "apt.signing-key")).resolves.toMatchObject({
+      id: "repository_secret_other",
     });
   });
 

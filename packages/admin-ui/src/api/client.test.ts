@@ -336,6 +336,28 @@ describe("createAxisClient", () => {
     ]);
   });
 
+  it("deletes repositories through the admin endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: null,
+        status: 204,
+        statusText: "No Content",
+        headers: {},
+        config,
+      };
+    };
+
+    await client.deleteRepository("debian internal");
+
+    expect(requests).toEqual(["DELETE /admin/repositories/debian%20internal"]);
+  });
+
   it("lists repository plugin metadata through the admin endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",

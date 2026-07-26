@@ -4,6 +4,7 @@ import {
   repositoryDetailBodyClass,
   repositoryListEmptyClass,
   repositoryListEmptyPanelClass,
+  repositoryDeleteDialogContent,
   repositorySummaryItems,
   repositoryRowStateClass,
 } from "./repository-page-model";
@@ -41,6 +42,19 @@ describe("repository page model", () => {
       ["Created", "2026-07-22T00:00:00.000Z"],
       ["Updated", "2026-07-22T00:00:00.000Z"],
     ]);
+  });
+
+  it("builds destructive dialog copy for deleting a repository", () => {
+    expect(repositoryDeleteDialogContent("debian-internal")).toEqual({
+      title: "Delete repository",
+      description: [
+        "Delete repository debian-internal?",
+        "This removes repository metadata, repository contents, artifacts, activity, and plugin-owned resources. Publish tokens scoped to this repository will be updated; tokens with no remaining repository scope will be revoked.",
+      ].join("\n\n"),
+      confirmLabel: "Delete repository",
+      pendingLabel: "Deleting...",
+      confirmationText: "debian-internal",
+    });
   });
 });
 

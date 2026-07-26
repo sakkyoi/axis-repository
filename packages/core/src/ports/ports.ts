@@ -106,12 +106,14 @@ export interface RepositoryStore {
   getByName(name: string): Promise<Repository | null>;
   list(): Promise<Repository[]>;
   save(repository: Repository): Promise<void>;
+  deleteByName(name: string): Promise<boolean>;
 }
 
 export interface PublishSessionStore {
   get(id: string): Promise<PublishSession | null>;
   list(): Promise<PublishSession[]>;
   save(session: PublishSession): Promise<void>;
+  deleteByRepository(repositoryName: string): Promise<number>;
   update(
     id: string,
     updater: (current: PublishSession) => PublishSession,
@@ -136,6 +138,7 @@ export interface RepositorySecretStore {
   getByName(name: string, repositoryName: string, namespace: string): Promise<RepositorySecretRecord | null>;
   list(): Promise<Array<RepositorySecretRecord | SigningKeyRecord>>;
   save(record: RepositorySecretRecord): Promise<void>;
+  deleteByRepository(repositoryName: string): Promise<number>;
 }
 
 export interface RepositoryPluginPolicyStore {
@@ -147,6 +150,7 @@ export interface RepositoryPluginPolicyStore {
 export interface RepositoryActivityStore {
   listByRepository(repositoryName: string): Promise<RepositoryActivityRecord[]>;
   save(record: RepositoryActivityRecord): Promise<void>;
+  deleteByRepository(repositoryName: string): Promise<number>;
 }
 
 export interface RepositoryArtifactStore {

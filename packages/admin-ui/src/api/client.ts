@@ -74,6 +74,7 @@ export interface AxisClient {
   createRepository(input: CreateRepositoryInput): Promise<Repository>;
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
+  deleteRepository(name: string): Promise<void>;
   listRepositoryObjects(name: string, prefix: string): Promise<ReturnType<typeof repositoryObjectsResponseSchema.parse>>;
   listRepositoryArtifacts(name: string): Promise<ReturnType<typeof repositoryArtifactsResponseSchema.parse>>;
   rebuildRepositoryArtifactIndex(name: string): Promise<ReturnType<typeof repositoryArtifactsResponseSchema.parse>>;
@@ -150,6 +151,9 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async updateRepository(name: string, input: UpdateRepositoryInput) {
       const response = await http.patch(`/admin/repositories/${encodePathSegment(name)}`, input);
       return repositorySchema.parse(response.data);
+    },
+    async deleteRepository(name: string) {
+      await http.delete(`/admin/repositories/${encodePathSegment(name)}`);
     },
     async listRepositoryObjects(name: string, prefix: string) {
       const response = await http.get(

@@ -336,6 +336,23 @@ const repositorySecret = (overrides: Partial<RepositorySecretRecord> = {}): Repo
 });
 
 describe("MemoryStateStore", () => {
+  it("deletes repositories by name", async () => {
+    const state = new MemoryStateStore();
+    await state.repositories.save({
+      id: "repo_1",
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+      config: {},
+      createdAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:00:00.000Z",
+    });
+
+    await expect(state.repositories.deleteByName("debian-internal")).resolves.toBe(true);
+    await expect(state.repositories.getByName("debian-internal")).resolves.toBeNull();
+    await expect(state.repositories.deleteByName("debian-internal")).resolves.toBe(false);
+  });
+
   it("keeps publish token name indexes consistent when tokens are renamed", async () => {
     const state = new MemoryStateStore();
 
@@ -431,6 +448,17 @@ describe("MemoryStateStore", () => {
     ]);
   });
 
+  it("deletes publish sessions by repository", async () => {
+    const state = new MemoryStateStore();
+    await state.publishSessions.save(session({ id: "pub_1", repositoryName: "debian-internal" }));
+    await state.publishSessions.save(session({ id: "pub_2", repositoryName: "debian-internal" }));
+    await state.publishSessions.save(session({ id: "pub_other", repositoryName: "python-internal" }));
+
+    await expect(state.publishSessions.deleteByRepository("debian-internal")).resolves.toBe(2);
+
+    await expect(state.publishSessions.list()).resolves.toMatchObject([{ id: "pub_other" }]);
+  });
+
   it("updates publish sessions from the latest value and does not save when the updater throws", async () => {
     const state = new MemoryStateStore();
     await state.publishSessions.save(session({ status: "pending_uploads" }));
@@ -508,6 +536,49 @@ describe("MemoryStateStore repository secrets", () => {
     });
   });
 
+  it("deletes repository secrets by repository and clears name indexes", async () => {
+    const state = new MemoryStateStore();
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_1", repositoryName: "debian-internal", name: "release" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_2", repositoryName: "debian-internal", name: "staging" }));
+    await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_other", repositoryName: "python-internal", name: "release" }));
+
+    await expect(state.repositorySecrets.deleteByRepository("debian-internal")).resolves.toBe(2);
+
+    await expect(state.repositorySecrets.getByName("release", "debian-internal", "apt.signing-key")).resolves.toBeNull();
+    await expect(state.repositorySecrets.getByName("release", "python-internal", "apt.signing-key")).resolves.toMatchObject({
+      id: "repository_secret_other",
+    });
+  });
+
+});
+
+describe("MemoryStateStore repository activity deletion", () => {
+  it("deletes repository activities by repository", async () => {
+    const state = new MemoryStateStore();
+    await state.repositoryActivities.save({
+      id: "activity_1",
+      repositoryName: "debian-internal",
+      type: "object.delete",
+      actor: "admin",
+      summary: "Deleted object",
+      metadata: {},
+      createdAt: "2026-07-12T00:00:00.000Z",
+    });
+    await state.repositoryActivities.save({
+      id: "activity_other",
+      repositoryName: "python-internal",
+      type: "object.delete",
+      actor: "admin",
+      summary: "Deleted object",
+      metadata: {},
+      createdAt: "2026-07-12T00:00:00.000Z",
+    });
+
+    await expect(state.repositoryActivities.deleteByRepository("debian-internal")).resolves.toBe(1);
+
+    await expect(state.repositoryActivities.listByRepository("debian-internal")).resolves.toEqual([]);
+    await expect(state.repositoryActivities.listByRepository("python-internal")).resolves.toMatchObject([{ id: "activity_other" }]);
+  });
 });
 
 describe("MemoryStateStore repository plugin policies", () => {

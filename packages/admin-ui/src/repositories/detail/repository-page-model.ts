@@ -1,4 +1,5 @@
 import type { Repository } from "../../api/schemas";
+import type { DestructiveActionDialogContent } from "../../components/ui/destructive-action-dialog-model";
 
 export function initialRepositorySelection(_repositories: Repository[]): string | undefined {
   return undefined;
@@ -29,4 +30,17 @@ export function repositorySummaryItems(repository: Repository): Array<[string, s
     ["Created", repository.createdAt],
     ["Updated", repository.updatedAt],
   ];
+}
+
+export function repositoryDeleteDialogContent(repositoryName: string): DestructiveActionDialogContent {
+  return {
+    title: "Delete repository",
+    description: [
+      `Delete repository ${repositoryName}?`,
+      "This removes repository metadata, repository contents, artifacts, activity, and plugin-owned resources. Publish tokens scoped to this repository will be updated; tokens with no remaining repository scope will be revoked.",
+    ].join("\n\n"),
+    confirmLabel: "Delete repository",
+    pendingLabel: "Deleting...",
+    confirmationText: repositoryName,
+  };
 }

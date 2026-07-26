@@ -505,6 +505,29 @@ function repositoryClientHelperContext(_dependencies: AppDependencies, origin: s
   };
 }
 
+async function deleteRepositoryObjectPrefix(dependencies: AppDependencies, repositoryName: string): Promise<number> {
+  const prefix = `repositories/${repositoryName}/`;
+  let deleted = 0;
+  for (;;) {
+    const listing = await dependencies.repositoryObjectStore.listObjects({
+      prefix,
+    });
+    if (listing.objects.length === 0) {
+      return deleted;
+    }
+    let deletedThisPage = 0;
+    for (const object of listing.objects) {
+      if (await dependencies.repositoryObjectStore.deleteObject(object.key)) {
+        deleted++;
+        deletedThisPage++;
+      }
+    }
+    if (!listing.truncated || deletedThisPage === 0) {
+      return deleted;
+    }
+  }
+}
+
 async function ensureRepositoryPluginEnabled(
   dependencies: AppDependencies,
   ecosystem: string,
@@ -931,6 +954,12 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       return jsonResponse(
         await dependencies.repositoryService.update(adminRepositoryName, parseRepositoryUpdate(body)),
       );
+    }
+    if (request.method === "DELETE") {
+      await dependencies.repositoryService.getByName(adminRepositoryName);
+      await deleteRepositoryObjectPrefix(dependencies, adminRepositoryName);
+      await dependencies.repositoryService.delete(adminRepositoryName);
+      return new Response(null, { status: 204 });
     }
     throw new NotFoundError();
   }

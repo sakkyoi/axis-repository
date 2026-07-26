@@ -38,6 +38,9 @@ export class MemoryStateStore implements StateStore {
     save: async (repository: Repository): Promise<void> => {
       this.repositoryByName.set(repository.name, repository);
     },
+    deleteByName: async (name: string): Promise<boolean> => {
+      return this.repositoryByName.delete(name);
+    },
   };
 
   readonly publishSessions = {
@@ -49,6 +52,16 @@ export class MemoryStateStore implements StateStore {
     },
     save: async (session: PublishSession): Promise<void> => {
       this.publishSessionById.set(session.id, session);
+    },
+    deleteByRepository: async (repositoryName: string): Promise<number> => {
+      let deleted = 0;
+      for (const session of [...this.publishSessionById.values()]) {
+        if (session.repositoryName !== repositoryName) continue;
+        if (this.publishSessionById.delete(session.id)) {
+          deleted++;
+        }
+      }
+      return deleted;
     },
     update: async (
       id: string,
@@ -154,6 +167,21 @@ export class MemoryStateStore implements StateStore {
       this.repositorySecretById.set(record.id, record);
       this.repositorySecretIdByName.set(nameIndex, record.id);
     },
+    deleteByRepository: async (repositoryName: string): Promise<number> => {
+      let deleted = 0;
+      for (const record of [...this.repositorySecretById.values()]) {
+        if (record.repositoryName !== repositoryName) continue;
+        if (isRepositorySecretRecord(record)) {
+          this.repositorySecretIdByName.delete(
+            repositorySecretNameIndex(record.namespace, record.repositoryName, record.name),
+          );
+        }
+        if (this.repositorySecretById.delete(record.id)) {
+          deleted++;
+        }
+      }
+      return deleted;
+    },
   };
 
   readonly repositoryPluginPolicies = {
@@ -178,6 +206,16 @@ export class MemoryStateStore implements StateStore {
     },
     save: async (record: RepositoryActivityRecord): Promise<void> => {
       this.repositoryActivityById.set(record.id, record);
+    },
+    deleteByRepository: async (repositoryName: string): Promise<number> => {
+      let deleted = 0;
+      for (const activity of [...this.repositoryActivityById.values()]) {
+        if (activity.repositoryName !== repositoryName) continue;
+        if (this.repositoryActivityById.delete(activity.id)) {
+          deleted++;
+        }
+      }
+      return deleted;
     },
   };
 

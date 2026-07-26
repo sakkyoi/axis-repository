@@ -94,6 +94,10 @@ export class PluginRepositoryService {
     return this.options.repositoryService.update(name, input);
   }
 
+  async delete(name: string): Promise<void> {
+    await this.options.repositoryService.delete(name);
+  }
+
   private async ensurePluginEnabled(ecosystem: string): Promise<void> {
     await ensureRepositoryPluginEnabled({
       pluginPolicyService: this.options.pluginPolicyService,

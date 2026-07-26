@@ -72,4 +72,36 @@ export class RepositoryService {
     await this.options.state.repositories.save(updated);
     return updated;
   }
+
+  async delete(name: string): Promise<void> {
+    const repository = await this.getByName(name);
+    const now = this.options.clock.now().toISOString();
+    const repositorySecrets = await this.options.state.repositorySecrets.list();
+    const repositorySecretIds = new Set(
+      repositorySecrets
+        .filter((secret) => secret.repositoryName === repository.name)
+        .map((secret) => secret.id),
+    );
+
+    await this.options.state.repositoryArtifacts.replaceByRepository(repository.name, []);
+    await this.options.state.repositoryActivities.deleteByRepository(repository.name);
+    await this.options.state.repositorySecrets.deleteByRepository(repository.name);
+    await this.options.state.publishSessions.deleteByRepository(repository.name);
+
+    for (const token of await this.options.state.publishTokens.list()) {
+      if (!token.repositories.includes(repository.name) && !token.signingKeyIds.some((id) => repositorySecretIds.has(id))) {
+        continue;
+      }
+      const repositories = token.repositories.filter((candidate) => candidate !== repository.name);
+      const signingKeyIds = token.signingKeyIds.filter((id) => !repositorySecretIds.has(id));
+      await this.options.state.publishTokens.save({
+        ...token,
+        repositories,
+        signingKeyIds,
+        ...(repositories.length === 0 && !token.revokedAt ? { revokedAt: now } : {}),
+      });
+    }
+
+    await this.options.state.repositories.deleteByName(repository.name);
+  }
 }
