@@ -702,7 +702,7 @@ function publishSessionActivity(session: PublishSession) {
     summary: `Published ${session.artifacts.length} ${artifactLabel}`,
     metadata: {},
     createdAt: session.createdAt,
-    session,
+    session: readablePublishSession(session),
   };
 }
 
@@ -1334,7 +1334,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       sessionId,
       uploadId,
     });
-    return jsonResponse(result);
+    return jsonResponse({ ...result, session: readablePublishSession(result.session) });
   }
   const localUploadMatch = url.pathname.match(/^\/api\/uploads\/([^/]+)\/([^/]+)$/);
   if (localUploadMatch && request.method === "PUT") {
@@ -1375,7 +1375,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const result = await dependencies.publishSessionService.finalizeAsAdmin({
       sessionId,
     });
-    return jsonResponse(result);
+    return jsonResponse({ ...result, session: readablePublishSession(result.session) });
   }
   if (url.pathname === "/api/publish-sessions" && request.method === "GET") {
     const secret = requireBearer(request);
@@ -1422,7 +1422,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       uploadId,
       principal,
     });
-    return jsonResponse(result);
+    return jsonResponse({ ...result, session: readablePublishSession(result.session) });
   }
   const finalizeMatch = url.pathname.match(/^\/api\/publish-sessions\/([^/]+)\/finalize$/);
   if (finalizeMatch && request.method === "POST") {
@@ -1436,7 +1436,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       sessionId,
       principal,
     });
-    return jsonResponse(result);
+    return jsonResponse({ ...result, session: readablePublishSession(result.session) });
   }
   const clientHelperPath = parseRepositoryClientHelperPath(request.url);
   if (clientHelperPath && request.method === "GET") {

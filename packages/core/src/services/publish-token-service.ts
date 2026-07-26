@@ -104,7 +104,7 @@ export class PublishTokenService {
     if (!record) {
       throw new NotFoundError(`Publish token not found: ${name}`);
     }
-    return record;
+    return withScopeDefaults(record);
   }
 
   async revoke(name: string): Promise<PublishTokenRecord> {
@@ -113,14 +113,14 @@ export class PublishTokenService {
       throw new NotFoundError(`Publish token not found: ${name}`);
     }
     if (record.revokedAt) {
-      return record;
+      return withScopeDefaults(record);
     }
     const revoked: PublishTokenRecord = {
       ...record,
       revokedAt: this.options.clock.now().toISOString(),
     };
     await this.options.state.publishTokens.save(revoked);
-    return revoked;
+    return withScopeDefaults(revoked);
   }
 
   async rotate(name: string): Promise<RotatePublishTokenResult> {
@@ -138,7 +138,7 @@ export class PublishTokenService {
       rotatedAt: this.options.clock.now().toISOString(),
     };
     await this.options.state.publishTokens.save(rotated);
-    return { record: rotated, secret };
+    return { record: withScopeDefaults(rotated), secret };
   }
 
   async delete(name: string): Promise<void> {

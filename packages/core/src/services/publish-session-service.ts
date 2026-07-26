@@ -195,7 +195,7 @@ export class PublishSessionService {
       throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
     }
     this.requirePublishPermission(input.principal);
-    this.requireRepositoryScope(input.principal, session.repositoryName);
+    this.requireSessionVisibility(input.principal, session, input.sessionId);
     const openStatus = normalizeOpenStatus(session.status);
     if (openStatus !== "pending_uploads" && openStatus !== "ready") {
       throw new ValidationError(`Publish session is not open: ${session.status}`);
@@ -254,7 +254,7 @@ export class PublishSessionService {
       throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
     }
     this.requirePublishPermission(input.principal);
-    this.requireRepositoryScope(input.principal, session.repositoryName);
+    this.requireSessionVisibility(input.principal, session, input.sessionId);
     if (session.status !== "ready" && session.status !== "finalizing") {
       throw new ValidationError(`Publish session is not ready: ${session.status}`);
     }
@@ -368,6 +368,21 @@ export class PublishSessionService {
   private requirePublishPermission(principal: TokenPrincipal): void {
     if (!principal.permissions.includes("publish")) {
       throw new ForbiddenError("Publish permission is required");
+    }
+  }
+
+  /**
+   * Sessions are addressed by opaque id, so a session outside the caller's
+   * scope must be reported exactly like one that does not exist. Otherwise the
+   * error distinguishes real ids and names the repository they belong to.
+   */
+  private requireSessionVisibility(
+    principal: TokenPrincipal,
+    session: PublishSession,
+    sessionId: string,
+  ): void {
+    if (!principal.repositories.includes(session.repositoryName)) {
+      throw new NotFoundError(`Publish session not found: ${sessionId}`);
     }
   }
 

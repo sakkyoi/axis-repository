@@ -178,8 +178,9 @@ token does not invalidate an already-issued presigned URL, because the signature
 is verified by the storage provider, not by Axis.
 
 Two things bound the exposure. The URL is only ever returned once, from the
-create response — reading the session back afterwards omits it — and its expiry
-is capped to the remaining lifetime of the publish session
+create response — every later response that echoes the session, including
+verify, finalize, and the activity timeline, omits it — and its expiry is
+capped to the remaining lifetime of the publish session
 (`UPLOAD_URL_TTL_SECONDS` can shorten it further, never extend it). A stale URL
 also only reaches the staging area, never the repository: finalizing still
 requires a live token, and every upload is checked against the size and SHA-256

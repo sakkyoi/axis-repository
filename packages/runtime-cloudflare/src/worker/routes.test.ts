@@ -3035,6 +3035,164 @@ describe("Cloudflare runtime routes", () => {
     expect(adminBody.sessions[0]!.uploads[0]).not.toHaveProperty("url");
   });
 
+  it("redacts upload capabilities from verify and finalize responses too", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const debBytes = aptDebFixture();
+    const debSha256 = await sha256Hex(debBytes);
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: validAptConfig(signingKey.id),
+    });
+    const token = await createToken(app, {
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: [signingKey.id],
+    });
+
+    const createResponse = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "myapp_1.2.3_amd64.deb",
+          size: debBytes.byteLength,
+          sha256: debSha256,
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "myapp",
+            version: "1.2.3",
+            architecture: "amd64",
+            component: "main",
+            description: "Example package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    const created = (await createResponse.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string; url: string }>;
+    };
+    const upload = created.uploads[0]!;
+
+    await app.fetch(new Request(`https://axis.example${upload.url}`, {
+      method: "PUT",
+      headers: { "content-type": "application/vnd.debian.binary-package" },
+      body: debBytes,
+    }));
+
+    const verifyResponse = await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${created.id}/uploads/${upload.uploadId}/verify`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    const verified = (await verifyResponse.json()) as {
+      session: { uploads: Array<Record<string, unknown>>; requestedBy: Record<string, unknown> };
+    };
+
+    expect(verifyResponse.status).toBe(200);
+    // The capability is issued once, at create. Every later response that
+    // echoes the session must drop it, not just the GETs.
+    expect(verified.session.uploads[0]).not.toHaveProperty("url");
+    expect(verified.session.uploads[0]).not.toHaveProperty("headers");
+    expect(Object.keys(verified.session.requestedBy).sort()).toEqual(["name", "owner", "tokenId"]);
+
+    const finalizeResponse = await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${created.id}/finalize`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    const finalized = (await finalizeResponse.json()) as {
+      session: { uploads: Array<Record<string, unknown>> };
+    };
+
+    expect(finalizeResponse.status).toBe(200);
+    expect(finalized.session.uploads[0]).not.toHaveProperty("url");
+  });
+
+  it("answers identically for unknown and out-of-scope sessions on every session route", async () => {
+    const app = createApp(createDevDependencies());
+    await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
+    await createRepository(app, { name: "debian-staging", ecosystem: "apt" });
+    const owner = await createToken(app, {
+      name: "owner-ci",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+    const outsider = await createToken(app, {
+      name: "outsider-ci",
+      repositories: ["debian-staging"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+
+    const createResponse = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${owner}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "myapp_1.2.3_amd64.deb",
+          size: 1,
+          sha256: "a".repeat(64),
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "myapp",
+            version: "1.2.3",
+            architecture: "amd64",
+            component: "main",
+            description: "Example package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    const created = (await createResponse.json()) as { id: string; uploads: Array<{ uploadId: string }> };
+    const uploadId = created.uploads[0]!.uploadId;
+
+    const probes: Array<[string, Request]> = [
+      ["get", new Request(`https://axis.example/api/publish-sessions/${created.id}`)],
+      ["get-missing", new Request("https://axis.example/api/publish-sessions/pub_missing")],
+      ["verify", new Request(
+        `https://axis.example/api/publish-sessions/${created.id}/uploads/${uploadId}/verify`,
+        { method: "POST" },
+      )],
+      ["verify-missing", new Request(
+        `https://axis.example/api/publish-sessions/pub_missing/uploads/${uploadId}/verify`,
+        { method: "POST" },
+      )],
+      ["finalize", new Request(
+        `https://axis.example/api/publish-sessions/${created.id}/finalize`,
+        { method: "POST" },
+      )],
+      ["finalize-missing", new Request(
+        "https://axis.example/api/publish-sessions/pub_missing/finalize",
+        { method: "POST" },
+      )],
+    ];
+
+    for (const [label, request] of probes) {
+      const response = await app.fetch(new Request(request, {
+        headers: { authorization: `Bearer ${outsider}` },
+      }));
+      const body = (await response.json()) as { error: { code: string; message: string } };
+
+      expect(response.status, label).toBe(404);
+      expect(body.error.code, label).toBe("not_found");
+      // The message must not name the repository the session belongs to.
+      expect(body.error.message, label).not.toContain("debian-internal");
+    }
+  });
+
   it("lists all publish sessions through the admin endpoint", async () => {
     const app = createApp(createDevDependencies());
     await createRepository(app, { name: "debian-internal", ecosystem: "apt" });

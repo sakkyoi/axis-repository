@@ -512,7 +512,7 @@ describe("PublishSessionService", () => {
     expect(stored?.verifiedUploads[0]?.uploadId).toBe("upl_fixed");
   });
 
-  it("rejects upload verification when the token is not scoped to the repository", async () => {
+  it("hides upload verification for a session outside the token scope", async () => {
     const state = await createStateWithRepository();
     const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
     await service.create({
@@ -528,7 +528,7 @@ describe("PublishSessionService", () => {
         uploadId: "upl_fixed",
         principal: { ...principal, repositories: ["other"] },
       }),
-    ).rejects.toBeInstanceOf(ForbiddenError);
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("rejects upload verification for expired sessions", async () => {
@@ -1189,7 +1189,7 @@ describe("PublishSessionService", () => {
     });
   });
 
-  it("rejects finalize when the token is not scoped to the repository", async () => {
+  it("hides finalize for a session outside the token scope", async () => {
     const state = await createStateWithRepository();
     const { publisher } = createPublisher();
     const service = new PublishSessionService({ state, uploadBroker, artifactPublisher: publisher, clock, randomId });
@@ -1210,7 +1210,7 @@ describe("PublishSessionService", () => {
         sessionId: "pub_fixed",
         principal: { ...principal, repositories: ["other"] },
       }),
-    ).rejects.toBeInstanceOf(ForbiddenError);
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("rejects publish when token is not scoped to repository", async () => {
