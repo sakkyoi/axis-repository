@@ -16,6 +16,7 @@ describe("MemoryUploadBroker", () => {
 
     await expect(
       broker.createUploadTarget({
+        repositoryName: "debian-internal",
         sessionId: "session_123",
         uploadId: "upload_456",
         artifact,
@@ -24,7 +25,7 @@ describe("MemoryUploadBroker", () => {
     ).resolves.toEqual({
       uploadId: "upload_456",
       filename: "pkg_1.0.0_amd64.deb",
-      objectKey: "_staging/uploads/session_123/upload_456/pkg_1.0.0_amd64.deb",
+      objectKey: "_staging/uploads/debian-internal/session_123/upload_456/pkg_1.0.0_amd64.deb",
       method: "PUT",
       url: "/api/uploads/session_123/upload_456",
       headers: {
@@ -40,6 +41,7 @@ describe("MemoryUploadBroker", () => {
     const objectStore = new MemoryRepositoryObjectStore();
     const broker = new MemoryUploadBroker(objectStore);
     const target = await broker.createUploadTarget({
+      repositoryName: "debian-internal",
       sessionId: "session_123",
       uploadId: "upload_456",
       artifact,
@@ -56,6 +58,7 @@ describe("MemoryUploadBroker", () => {
     const broker = new MemoryUploadBroker(objectStore);
     const body = new Uint8Array([1, 2, 3]);
     const target = await broker.createUploadTarget({
+      repositoryName: "debian-internal",
       sessionId: "session_123",
       uploadId: "upload_456",
       artifact: {
@@ -77,7 +80,7 @@ describe("MemoryUploadBroker", () => {
       },
     })).resolves.toEqual({
       uploadId: "upload_456",
-      objectKey: "_staging/uploads/session_123/upload_456/pkg_1.0.0_amd64.deb",
+      objectKey: "_staging/uploads/debian-internal/session_123/upload_456/pkg_1.0.0_amd64.deb",
       size: 3,
       sha256: "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
     });

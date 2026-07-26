@@ -42,6 +42,7 @@ describe("R2PresignedUploadBroker", () => {
     const { broker } = createBroker();
 
     const target = await broker.createUploadTarget({
+      repositoryName: "debian-internal",
       sessionId: "pub_1",
       uploadId: "upl_1",
       artifact,
@@ -51,7 +52,7 @@ describe("R2PresignedUploadBroker", () => {
     expect(target).toMatchObject({
       uploadId: "upl_1",
       filename: "myapp_1.2.3_amd64.deb",
-      objectKey: "_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+      objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
       method: "PUT",
       headers: {
         "content-type": "application/vnd.debian.binary-package",
@@ -62,7 +63,7 @@ describe("R2PresignedUploadBroker", () => {
     });
     const url = new URL(target.url);
     expect(url.origin).toBe("https://account123.r2.cloudflarestorage.com");
-    expect(url.pathname).toBe("/axis-repository/_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb");
+    expect(url.pathname).toBe("/axis-repository/_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb");
     expect(url.searchParams.get("X-Amz-Algorithm")).toBe("AWS4-HMAC-SHA256");
     expect(url.searchParams.get("X-Amz-Expires")).toBe("900");
     const signedHeaders = url.searchParams.get("X-Amz-SignedHeaders")?.split(";") ?? [];
@@ -79,19 +80,20 @@ describe("R2PresignedUploadBroker", () => {
     };
 
     const target = await broker.createUploadTarget({
+      repositoryName: "debian-internal",
       sessionId: "pub_1",
       uploadId: "upl_1",
       artifact: unsafeArtifact,
       expiresAt: new Date("2026-07-14T00:15:00.000Z"),
     });
 
-    expect(target.objectKey).toBe("_staging/uploads/pub_1/upl_1/my app?bad#frag/../pkg.deb");
+    expect(target.objectKey).toBe("_staging/uploads/debian-internal/pub_1/upl_1/my app?bad#frag/../pkg.deb");
 
     const url = new URL(target.url);
     expect(url.searchParams.has("bad")).toBe(false);
     expect(url.hash).toBe("");
     expect(url.pathname).toContain("my%20app%3Fbad%23frag%2F..%2Fpkg.deb");
-    expect(url.pathname).toMatch(/^\/axis-repository\/_staging\/uploads\/pub_1\/upl_1\//);
+    expect(url.pathname).toMatch(/^\/axis-repository\/_staging\/uploads\/debian-internal\/pub_1\/upl_1\//);
   });
 
   it("caps signed URL expiry with configured ttl", async () => {
@@ -107,6 +109,7 @@ describe("R2PresignedUploadBroker", () => {
     });
 
     const target = await broker.createUploadTarget({
+      repositoryName: "debian-internal",
       sessionId: "pub_1",
       uploadId: "upl_1",
       artifact,
@@ -122,6 +125,7 @@ describe("R2PresignedUploadBroker", () => {
 
     await expect(
       broker.createUploadTarget({
+        repositoryName: "debian-internal",
         sessionId: "pub_1",
         uploadId: "upl_1",
         artifact,
@@ -135,6 +139,7 @@ describe("R2PresignedUploadBroker", () => {
 
     await expect(
       broker.createUploadTarget({
+        repositoryName: "debian-internal",
         sessionId: "pub_1",
         uploadId: "upl_1",
         artifact,
@@ -148,6 +153,7 @@ describe("R2PresignedUploadBroker", () => {
 
     await expect(
       broker.createUploadTarget({
+        repositoryName: "debian-internal",
         sessionId: "pub_1",
         uploadId: "upl_1",
         artifact,
@@ -158,7 +164,7 @@ describe("R2PresignedUploadBroker", () => {
 
   it("verifies an uploaded R2 object", async () => {
     const { bucket, broker } = createBroker();
-    bucket.objects.set("_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb", {
+    bucket.objects.set("_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb", {
       size: 1234,
       customMetadata: {
         "axis-sha256": "a".repeat(64),
@@ -171,7 +177,7 @@ describe("R2PresignedUploadBroker", () => {
         target: {
           uploadId: "upl_1",
           filename: artifact.filename,
-          objectKey: "_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+          objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
           method: "PUT",
           url: "https://example",
           headers: {},
@@ -181,7 +187,7 @@ describe("R2PresignedUploadBroker", () => {
       }),
     ).resolves.toEqual({
       uploadId: "upl_1",
-      objectKey: "_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+      objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
       size: 1234,
       sha256: "a".repeat(64),
     });
@@ -195,7 +201,7 @@ describe("R2PresignedUploadBroker", () => {
         target: {
           uploadId: "upl_1",
           filename: artifact.filename,
-          objectKey: "_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+          objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
           method: "PUT",
           url: "https://example",
           headers: {},
@@ -211,7 +217,7 @@ describe("R2PresignedUploadBroker", () => {
     const target = {
       uploadId: "upl_1",
       filename: artifact.filename,
-      objectKey: "_staging/uploads/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+      objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
       method: "PUT" as const,
       url: "https://example",
       headers: {},

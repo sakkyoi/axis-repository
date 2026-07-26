@@ -13,7 +13,6 @@ import type {
   RepositorySecretRecord,
 } from "./repository-plugin-capabilities";
 
-const STAGING_PREFIX = "_staging/";
 
 /**
  * A plugin owns the secret namespaces named after its ecosystem: `apt` itself,
@@ -67,14 +66,17 @@ export function scopeSecretsToEcosystem(
 /**
  * Restricts an object store to one repository's key space.
  *
- * Writes must land under `repositories/<name>/`. Reads additionally allow the
- * staging area, because publishers copy verified uploads out of it.
+ * Writes must land under `repositories/<name>/`. Reads additionally allow that
+ * repository's own staging area, because publishers copy verified uploads out
+ * of it — but not anyone else's, which would expose every in-flight upload in
+ * the deployment.
  */
 export function scopeObjectStoreToRepository(
   objectStore: RepositoryObjectStore,
   repositoryName: string,
 ): RepositoryObjectStore {
   const repositoryPrefix = `repositories/${repositoryName}/`;
+  const stagingPrefix = `_staging/uploads/${repositoryName}/`;
   const isWithinRepository = (key: string): boolean => key.startsWith(repositoryPrefix);
 
   const requireWritable = (key: string): string => {
@@ -84,7 +86,7 @@ export function scopeObjectStoreToRepository(
     return key;
   };
   const requireReadable = (key: string): string => {
-    if (!isWithinRepository(key) && !key.startsWith(STAGING_PREFIX)) {
+    if (!isWithinRepository(key) && !key.startsWith(stagingPrefix)) {
       throw new ValidationError(`Object key is outside repository ${repositoryName}: ${key}`);
     }
     return key;

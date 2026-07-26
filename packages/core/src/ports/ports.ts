@@ -49,6 +49,8 @@ export interface PasswordHasher {
 
 export interface UploadBroker {
   createUploadTarget(input: {
+    /** Staging keys are partitioned by repository so they can be scoped. */
+    repositoryName: string;
     sessionId: string;
     uploadId: string;
     artifact: PublishArtifactRequest;

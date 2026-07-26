@@ -164,6 +164,7 @@ export class PublishSessionService {
       const uploadId = this.options.randomId.create("upl");
       uploads.push(
         await this.options.uploadBroker.createUploadTarget({
+          repositoryName: repository.name,
           sessionId,
           uploadId,
           artifact,

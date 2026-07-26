@@ -97,7 +97,7 @@ describe("scopeObjectStoreToRepository", () => {
     for (const key of [
       "repositories/debian-other/dists/noble/Release",
       "repositories/debian-internal-suffix/x",
-      "_staging/uploads/s/u/evil",
+      "_staging/uploads/debian-internal/s/u/evil",
       "repository-secret:anything",
       "",
     ]) {
@@ -106,7 +106,7 @@ describe("scopeObjectStoreToRepository", () => {
     }
 
     await expect(
-      scoped.copyObject("_staging/uploads/s/u/a.deb", "repositories/debian-other/pool/a.deb"),
+      scoped.copyObject("_staging/uploads/debian-internal/s/u/a.deb", "repositories/debian-other/pool/a.deb"),
     ).rejects.toBeInstanceOf(ValidationError);
     expect(store.objects.map((object) => object.key)).toEqual([
       "repositories/debian-internal/dists/noble/Release",
@@ -117,17 +117,25 @@ describe("scopeObjectStoreToRepository", () => {
     const store = new MemoryRepositoryObjectStore();
     await store.putText("repositories/debian-internal/pool/a.deb", "mine", "text/plain");
     await store.putText("repositories/debian-other/pool/b.deb", "theirs", "text/plain");
-    await store.putText("_staging/uploads/s/u/a.deb", "staged", "text/plain");
+    await store.putText("_staging/uploads/debian-internal/s/u/a.deb", "staged", "text/plain");
+    await store.putText("_staging/uploads/debian-other/s/u/b.deb", "not mine", "text/plain");
     const scoped = scopeObjectStoreToRepository(store, "debian-internal");
 
     await expect(scoped.headObject("repositories/debian-internal/pool/a.deb")).resolves.not.toBeNull();
-    await expect(scoped.getObject("_staging/uploads/s/u/a.deb")).resolves.not.toBeNull();
+    await expect(scoped.getObject("_staging/uploads/debian-internal/s/u/a.deb")).resolves.not.toBeNull();
+    // Another repository's in-flight uploads stay out of reach.
+    await expect(scoped.getObject("_staging/uploads/debian-other/s/u/b.deb"))
+      .rejects.toBeInstanceOf(ValidationError);
+    await expect(scoped.listObjects({ prefix: "_staging/" })).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      scoped.copyObject("_staging/uploads/debian-other/s/u/b.deb", "repositories/debian-internal/pool/b.deb"),
+    ).rejects.toBeInstanceOf(ValidationError);
     await expect(scoped.getObject("repositories/debian-other/pool/b.deb")).rejects.toBeInstanceOf(ValidationError);
     await expect(scoped.listObjects({ prefix: "repositories/debian-other/" })).rejects.toBeInstanceOf(ValidationError);
 
     // Copying a verified upload into the repository stays allowed.
     await expect(
-      scoped.copyObject("_staging/uploads/s/u/a.deb", "repositories/debian-internal/pool/a.deb"),
+      scoped.copyObject("_staging/uploads/debian-internal/s/u/a.deb", "repositories/debian-internal/pool/a.deb"),
     ).resolves.toBeUndefined();
   });
 });

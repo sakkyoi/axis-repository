@@ -7,10 +7,24 @@ import {
   type UploadTarget,
 } from "@axis-repository/core";
 
+/**
+ * Staging keys include the repository so a repository-scoped object store can
+ * allow reads of its own in-flight uploads without exposing everyone else's.
+ */
+export function stagingObjectKey(input: {
+  repositoryName: string;
+  sessionId: string;
+  uploadId: string;
+  artifact: { filename: string };
+}): string {
+  return `_staging/uploads/${input.repositoryName}/${input.sessionId}/${input.uploadId}/${input.artifact.filename}`;
+}
+
 export class SameOriginUploadBroker implements UploadBroker {
   constructor(private readonly objectStore: RepositoryObjectStore) {}
 
   async createUploadTarget(input: {
+    repositoryName: string;
     sessionId: string;
     uploadId: string;
     artifact: PublishArtifactRequest;
@@ -19,7 +33,7 @@ export class SameOriginUploadBroker implements UploadBroker {
     return {
       uploadId: input.uploadId,
       filename: input.artifact.filename,
-      objectKey: `_staging/uploads/${input.sessionId}/${input.uploadId}/${input.artifact.filename}`,
+      objectKey: stagingObjectKey(input),
       method: "PUT",
       url: `/api/uploads/${input.sessionId}/${input.uploadId}`,
       headers: {

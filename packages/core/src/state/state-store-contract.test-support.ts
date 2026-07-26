@@ -187,6 +187,66 @@ export function describeStateStoreContract(
       });
     });
 
+    describe("aliasing", () => {
+      // Services no longer copy defensively, so this has to hold for every
+      // collection, on the way in and on the way out — not just repositories.
+      it("does not alias what a caller saved", async () => {
+        const state = await store();
+
+        const savedToken = publishToken();
+        await state.publishTokens.save(savedToken);
+        savedToken.repositories.push("debian-staging");
+        savedToken.permissions.push("read");
+
+        const savedSecret = repositorySecret();
+        await state.repositorySecrets.save(savedSecret);
+        savedSecret.repositoryName = "attacker-repo";
+
+        const savedSession = adminRefreshSession();
+        await state.adminRefreshSessions.save(savedSession);
+        savedSession.revokedAt = "2026-07-12T00:00:00.000Z";
+
+        const savedArtifact = repositoryArtifact();
+        await state.repositoryArtifacts.upsert(savedArtifact);
+        savedArtifact.objectKeys.push("_staging/evil");
+
+        await expect(state.publishTokens.getByName("github-actions")).resolves.toMatchObject({
+          repositories: ["debian-internal"],
+          permissions: ["publish"],
+        });
+        await expect(state.repositorySecrets.getById("repository_secret_1")).resolves.toMatchObject({
+          repositoryName: "debian-internal",
+        });
+        await expect(state.adminRefreshSessions.get("admin_session_1"))
+          .resolves.not.toHaveProperty("revokedAt");
+        await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toMatchObject([
+          { objectKeys: ["repositories/debian-internal/pool/main/m/myapp/myapp_1.2.3_amd64.deb"] },
+        ]);
+      });
+
+      it("does not alias what a caller read back", async () => {
+        const state = await store();
+        await state.publishTokens.save(publishToken());
+        await state.repositorySecrets.save(repositorySecret());
+        await state.adminRefreshSessions.save(adminRefreshSession());
+        await state.publishSessions.save(publishSession());
+
+        (await state.publishTokens.getById("ptok_1"))!.repositories.push("debian-staging");
+        (await state.repositorySecrets.getById("repository_secret_1"))!.repositoryName = "attacker-repo";
+        (await state.adminRefreshSessions.list())[0]!.role = "owner";
+        const updated = await state.publishSessions.update("pub_1", (current) => ({ ...current, status: "ready" }));
+        updated!.status = "finalized";
+
+        await expect(state.publishTokens.getById("ptok_1")).resolves.toMatchObject({
+          repositories: ["debian-internal"],
+        });
+        await expect(state.repositorySecrets.getById("repository_secret_1")).resolves.toMatchObject({
+          repositoryName: "debian-internal",
+        });
+        await expect(state.publishSessions.get("pub_1")).resolves.toMatchObject({ status: "ready" });
+      });
+    });
+
     describe("publish sessions", () => {
       it("persists by id and lists newest first", async () => {
         const state = await store();

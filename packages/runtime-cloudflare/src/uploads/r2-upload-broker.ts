@@ -1,5 +1,6 @@
 import { ValidationError, type PublishArtifactRequest, type UploadedObject, type UploadBroker, type UploadTarget } from "@axis-repository/core";
 import { AwsClient } from "aws4fetch";
+import { stagingObjectKey } from "./same-origin-upload-broker";
 
 export interface R2ObjectLike {
   size: number;
@@ -43,6 +44,7 @@ export class R2PresignedUploadBroker implements UploadBroker {
   }
 
   async createUploadTarget(input: {
+    repositoryName: string;
     sessionId: string;
     uploadId: string;
     artifact: PublishArtifactRequest;
@@ -54,11 +56,12 @@ export class R2PresignedUploadBroker implements UploadBroker {
     }
     const ttlSeconds = this.getUploadTtlSeconds(now, input.expiresAt);
     const effectiveExpiresAt = new Date(now.getTime() + ttlSeconds * 1000);
-    const objectKey = `_staging/uploads/${input.sessionId}/${input.uploadId}/${input.artifact.filename}`;
+    const objectKey = stagingObjectKey(input);
     const signedPath = [
       this.bucketName,
       "_staging",
       "uploads",
+      input.repositoryName,
       input.sessionId,
       input.uploadId,
       input.artifact.filename,

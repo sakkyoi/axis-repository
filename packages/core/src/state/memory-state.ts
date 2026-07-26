@@ -95,9 +95,9 @@ export class MemoryStateStore implements StateStore {
       if (!current) {
         return null;
       }
-      const updated = updater(clonePublishSession(current));
+      const updated = snapshot(updater(clonePublishSession(current)));
       this.publishSessionById.set(id, updated);
-      return updated;
+      return snapshot(updated);
     },
   };
 
@@ -178,26 +178,28 @@ export class MemoryStateStore implements StateStore {
       return session ? snapshot(session) : null;
     },
     list: async (): Promise<AdminRefreshSessionRecord[]> => {
-      return [...this.adminRefreshSessionById.values()].sort((left, right) =>
+      return snapshotAll([...this.adminRefreshSessionById.values()]).sort((left, right) =>
         right.createdAt.localeCompare(left.createdAt),
       );
     },
     save: async (session: AdminRefreshSessionRecord): Promise<void> => {
-      this.adminRefreshSessionById.set(session.id, session);
+      this.adminRefreshSessionById.set(session.id, snapshot(session));
     },
   };
 
   readonly repositorySecrets = {
     getById: async (id: string): Promise<RepositorySecretRecord | SigningKeyRecord | null> => {
-      return this.repositorySecretById.get(id) ?? null;
+      const record = this.repositorySecretById.get(id);
+      return record ? snapshot(record) : null;
     },
     getByName: async (name: string, repositoryName: string, namespace: string): Promise<RepositorySecretRecord | null> => {
       const id = this.repositorySecretIdByName.get(repositorySecretNameIndex(namespace, repositoryName, name));
-      const record = id ? this.repositorySecretById.get(id) ?? null : null;
+      const stored = id ? this.repositorySecretById.get(id) : undefined;
+      const record = stored ? snapshot(stored) : null;
       return record && isRepositorySecretRecord(record) ? record : null;
     },
     list: async (): Promise<Array<RepositorySecretRecord | SigningKeyRecord>> => {
-      return [...this.repositorySecretById.values()].sort((left, right) =>
+      return snapshotAll([...this.repositorySecretById.values()]).sort((left, right) =>
         left.name.localeCompare(right.name),
       );
     },
@@ -221,7 +223,7 @@ export class MemoryStateStore implements StateStore {
         this.repositorySecretById.delete(existingIdForName);
       }
 
-      this.repositorySecretById.set(record.id, record);
+      this.repositorySecretById.set(record.id, snapshot(record));
       this.repositorySecretIdByName.set(nameIndex, record.id);
     },
     deleteByRepository: async (repositoryName: string): Promise<number> => {
@@ -243,26 +245,27 @@ export class MemoryStateStore implements StateStore {
 
   readonly repositoryPluginPolicies = {
     getByEcosystem: async (ecosystem: string): Promise<RepositoryPluginPolicyRecord | null> => {
-      return this.repositoryPluginPolicyByEcosystem.get(ecosystem) ?? null;
+      const record = this.repositoryPluginPolicyByEcosystem.get(ecosystem);
+      return record ? snapshot(record) : null;
     },
     list: async (): Promise<RepositoryPluginPolicyRecord[]> => {
-      return [...this.repositoryPluginPolicyByEcosystem.values()].sort((left, right) =>
+      return snapshotAll([...this.repositoryPluginPolicyByEcosystem.values()]).sort((left, right) =>
         left.ecosystem.localeCompare(right.ecosystem),
       );
     },
     save: async (record: RepositoryPluginPolicyRecord): Promise<void> => {
-      this.repositoryPluginPolicyByEcosystem.set(record.ecosystem, record);
+      this.repositoryPluginPolicyByEcosystem.set(record.ecosystem, snapshot(record));
     },
   };
 
   readonly repositoryActivities = {
     listByRepository: async (repositoryName: string): Promise<RepositoryActivityRecord[]> => {
-      return [...this.repositoryActivityById.values()]
+      return snapshotAll([...this.repositoryActivityById.values()])
         .filter((activity) => activity.repositoryName === repositoryName)
         .sort(compareRepositoryActivities);
     },
     save: async (record: RepositoryActivityRecord): Promise<void> => {
-      this.repositoryActivityById.set(record.id, record);
+      this.repositoryActivityById.set(record.id, snapshot(record));
     },
     deleteByRepository: async (repositoryName: string): Promise<number> => {
       let deleted = 0;
@@ -278,7 +281,7 @@ export class MemoryStateStore implements StateStore {
 
   readonly repositoryArtifacts = {
     listByRepository: async (repositoryName: string): Promise<RepositoryArtifactRecord[]> => {
-      return [...this.repositoryArtifactById.values()]
+      return snapshotAll([...this.repositoryArtifactById.values()])
         .filter((artifact) => artifact.repositoryName === repositoryName)
         .sort(compareRepositoryArtifacts);
     },
@@ -294,7 +297,7 @@ export class MemoryStateStore implements StateStore {
           repositoryArtifactIdentityIndex(existing.repositoryName, existing.identity),
         );
       }
-      this.repositoryArtifactById.set(record.id, record);
+      this.repositoryArtifactById.set(record.id, snapshot(record));
       this.repositoryArtifactIdByIdentity.set(identityIndex, record.id);
     },
     replaceByRepository: async (repositoryName: string, records: RepositoryArtifactRecord[]): Promise<void> => {
