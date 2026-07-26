@@ -1,5 +1,4 @@
 import { ExternalLink, File, Folder, Trash2, UploadCloud } from "lucide-react";
-import type { DragEvent } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useDeleteRepositoryObject, useRepositoryArtifacts, useRepositoryObjectDetail, useRepositoryObjects } from "../../api/hooks";
@@ -26,20 +25,17 @@ import {
   type RepositoryBrowserRow,
 } from "./repository-browser-model";
 import {
-  filesFromFileList,
-  repositoryBrowserUploadOverlay,
+  type RepositoryBrowserUploadOverlay as RepositoryBrowserUploadOverlayModel,
   repositoryBrowserUploadOverlayClasses,
 } from "./repository-browser-upload-model";
 
 export function RepositoryBrowserSection({
   repository,
-  onPublishFiles,
 }: RepositoryDetailSectionProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [prefix, setPrefix] = useState("");
   const [selectedObjectPath, setSelectedObjectPath] = useState<string>();
   const [pendingDeletePath, setPendingDeletePath] = useState<string>();
-  const [dragDepth, setDragDepth] = useState(0);
   const objects = useRepositoryObjects(repository.name, prefix);
   const objectDetail = useRepositoryObjectDetail(repository.name, selectedObjectPath);
   const artifacts = useRepositoryArtifacts(repository.name);
@@ -53,11 +49,6 @@ export function RepositoryBrowserSection({
   const deleteDialogContent = pendingDeletePath
     ? repositoryBrowserObjectDeleteDialogContent(pendingDeletePath)
     : undefined;
-  const overlay = repositoryBrowserUploadOverlay({
-    repositoryName: repository.name,
-    canPublish: Boolean(PreviewComponent),
-    isDraggingFiles: dragDepth > 0,
-  });
   const requestedObjectPath = searchParams.get("object");
 
   useEffect(() => {
@@ -65,11 +56,6 @@ export function RepositoryBrowserSection({
     setPrefix(repositoryBrowserParentPrefix(requestedObjectPath));
     setSelectedObjectPath(requestedObjectPath);
   }, [requestedObjectPath]);
-
-  function handleFiles(files: File[]) {
-    if (files.length === 0 || !PreviewComponent) return;
-    onPublishFiles?.(files);
-  }
 
   function closeDeleteDialog() {
     if (deleteObject.isPending) return;
@@ -123,37 +109,8 @@ export function RepositoryBrowserSection({
     });
   }
 
-  function onDragEnter(event: DragEvent<HTMLDivElement>) {
-    if (!event.dataTransfer.types.includes("Files")) return;
-    event.preventDefault();
-    setDragDepth((current) => current + 1);
-  }
-
-  function onDragLeave(event: DragEvent<HTMLDivElement>) {
-    if (!event.dataTransfer.types.includes("Files")) return;
-    event.preventDefault();
-    setDragDepth((current) => Math.max(0, current - 1));
-  }
-
-  function onDragOver(event: DragEvent<HTMLDivElement>) {
-    if (!event.dataTransfer.types.includes("Files")) return;
-    event.preventDefault();
-  }
-
-  function onDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setDragDepth(0);
-    handleFiles(filesFromFileList(event.dataTransfer.files));
-  }
-
   return (
-    <div
-      className="relative grid min-h-0 gap-3"
-      onDragEnter={onDragEnter}
-      onDragLeave={onDragLeave}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
+    <div className="relative grid min-h-0 gap-3">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <RepositoryBrowserBreadcrumbs
           repositoryName={repository.name}
@@ -226,16 +183,14 @@ export function RepositoryBrowserSection({
         )}
       </div>
 
-      {overlay && <RepositoryBrowserUploadOverlay overlay={overlay} />}
-
     </div>
   );
 }
 
-function RepositoryBrowserUploadOverlay({
+export function RepositoryBrowserUploadOverlay({
   overlay,
 }: {
-  overlay: NonNullable<ReturnType<typeof repositoryBrowserUploadOverlay>>;
+  overlay: RepositoryBrowserUploadOverlayModel;
 }) {
   const classes = repositoryBrowserUploadOverlayClasses(overlay.tone);
   return (

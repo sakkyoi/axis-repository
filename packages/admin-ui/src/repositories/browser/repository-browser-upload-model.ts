@@ -46,6 +46,10 @@ export function repositoryBrowserUploadOverlayClasses(tone: RepositoryBrowserUpl
   };
 }
 
+export function repositoryWorkspaceDropTargetClass(): string {
+  return "relative grid h-full min-h-0";
+}
+
 export function filesFromFileList(files: FileList | null): File[] {
   return files ? Array.from(files) : [];
 }

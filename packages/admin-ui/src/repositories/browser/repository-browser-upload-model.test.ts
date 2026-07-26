@@ -4,6 +4,7 @@ import {
   repositoryBrowserAcceptedPublishFiles,
   repositoryBrowserUploadOverlayClasses,
   repositoryBrowserUploadOverlay,
+  repositoryWorkspaceDropTargetClass,
 } from "./repository-browser-upload-model";
 
 describe("repository browser upload model", () => {
@@ -86,5 +87,11 @@ describe("repository browser upload model", () => {
       accepted: [file],
       rejected: [],
     });
+  });
+
+  it("keeps the repository workspace shell as the drop target", () => {
+    expect(repositoryWorkspaceDropTargetClass()).toContain("relative");
+    expect(repositoryWorkspaceDropTargetClass()).toContain("h-full");
+    expect(repositoryWorkspaceDropTargetClass()).toContain("min-h-0");
   });
 });

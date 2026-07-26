@@ -1,4 +1,5 @@
 import { ArrowLeft, History, PackagePlus, Settings } from "lucide-react";
+import type { DragEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useRepositories, useRepositoryPlugins } from "../api/hooks";
@@ -20,12 +21,15 @@ import { getRepositoryPublishPlugin } from "../repositories/plugins/repository-u
 import {
   filesFromFileList,
   repositoryBrowserAcceptedPublishFiles,
+  repositoryBrowserUploadOverlay,
+  repositoryWorkspaceDropTargetClass,
 } from "../repositories/browser/repository-browser-upload-model";
 import {
   repositoryBrowserActivityDrawerContentClass,
   repositoryBrowserDrawerBodyClass,
   repositoryBrowserPublishDrawerContentClass,
 } from "../repositories/browser/repository-browser-model";
+import { RepositoryBrowserUploadOverlay } from "../repositories/browser/repository-browser-section";
 import { repositoryWorkspaceActions } from "../repositories/workspace/repository-workspace-actions-model";
 
 export function RepositoryWorkspacePage() {
@@ -36,12 +40,20 @@ export function RepositoryWorkspacePage() {
   const [activityOpen, setActivityOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [publishFileError, setPublishFileError] = useState("");
+  const [dragDepth, setDragDepth] = useState(0);
   const repositories = useRepositories();
   const repositoryPlugins = useRepositoryPlugins();
   const repository = useRepositoryByName(repositories.data, name);
   const pluginMetadata = repositoryPlugins.data?.find((plugin) => plugin.ecosystem === repository?.ecosystem);
   const publishPlugin = repository ? getRepositoryPublishPlugin(repository.ecosystem) : undefined;
   const PreviewComponent = publishPlugin?.PreviewComponent;
+  const overlay = repository
+    ? repositoryBrowserUploadOverlay({
+        repositoryName: repository.name,
+        canPublish: Boolean(PreviewComponent),
+        isDraggingFiles: dragDepth > 0,
+      })
+    : undefined;
 
   function handlePublishFiles(files: File[]) {
     if (!repository || files.length === 0 || !PreviewComponent) return;
@@ -64,8 +76,37 @@ export function RepositoryWorkspacePage() {
     setPublishFileError("");
   }
 
+  function onDragEnter(event: DragEvent<HTMLElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    setDragDepth((current) => current + 1);
+  }
+
+  function onDragLeave(event: DragEvent<HTMLElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    setDragDepth((current) => Math.max(0, current - 1));
+  }
+
+  function onDragOver(event: DragEvent<HTMLElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+  }
+
+  function onDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setDragDepth(0);
+    handlePublishFiles(filesFromFileList(event.dataTransfer.files));
+  }
+
   return (
-    <>
+    <section
+      className={repositoryWorkspaceDropTargetClass()}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       <RepositoryPageShell
         repositoryName={name}
         repository={repository}
@@ -174,7 +215,8 @@ export function RepositoryWorkspacePage() {
           </Dialog>
         </>
       )}
-    </>
+      {overlay && <RepositoryBrowserUploadOverlay overlay={overlay} />}
+    </section>
   );
 }
 
