@@ -11,7 +11,6 @@ import type {
   Repository,
   RepositoryArtifactRecord,
   RepositoryActivityRecord,
-  TokenPrincipal,
   PublishArtifactRequest,
   PublishArtifactsInput,
   PublishResult,

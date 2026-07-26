@@ -135,6 +135,9 @@ async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
     return new Uint8Array(await new Response(stream).arrayBuffer());
   }
 
+  // Constant specifier; the indirection only stops bundlers pulling node:zlib
+  // into the Worker build.
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const dynamicImport = new Function("specifier", "return import(specifier)") as (
     specifier: string,
   ) => Promise<{ gunzipSync(input: Uint8Array): Uint8Array }>;

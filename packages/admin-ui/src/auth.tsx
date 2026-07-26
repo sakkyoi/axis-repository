@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    requestSessionRefresh()
+    void requestSessionRefresh()
       .then((result) => {
         if (cancelled) {
           return;

@@ -8,7 +8,6 @@ import {
   type RepositoryActivityRecord,
   type RepositorySecretRecord,
   type RepositoryPluginPolicyRecord,
-  type SigningKeyRecord,
   type AdminUserRecord,
 } from "../index";
 
@@ -56,26 +55,6 @@ const session = (overrides: Partial<PublishSession>): PublishSession => ({
   ...overrides,
 });
 
-const signingKey = (overrides: Partial<SigningKeyRecord> = {}): SigningKeyRecord => ({
-  id: "signing_key_1",
-  repositoryName: "debian-internal",
-  name: "debian-prod",
-  publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----",
-  encryptedPrivateKeyArmored: {
-    algorithm: "AES-GCM",
-    iv: "iv",
-    ciphertext: "private",
-  },
-  encryptedPassphrase: {
-    algorithm: "AES-GCM",
-    iv: "iv2",
-    ciphertext: "passphrase",
-  },
-  fingerprint: "A".repeat(40),
-  keyId: "B".repeat(16),
-  createdAt: "2026-07-18T00:00:00.000Z",
-  ...overrides,
-});
 
 describe("MemoryStateStore repository activities", () => {
   it("persists repository activities and lists them newest first", async () => {

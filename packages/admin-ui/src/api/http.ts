@@ -10,6 +10,10 @@ export interface HttpOptions {
   onUnauthorized?: () => Promise<string | null>;
 }
 
+function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
+}
+
 export function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.trim().replace(/\/+$/, "");
 }
@@ -62,7 +66,7 @@ export function createHttpClient(options: HttpOptions): AxiosInstance {
   }
   http.interceptors.response.use(undefined, async (error: unknown) => {
     if (!axios.isAxiosError(error)) {
-      return Promise.reject(error);
+      return Promise.reject(toError(error));
     }
     const config = error.config as RetriedRequestConfig | undefined;
     const onUnauthorized = options.onUnauthorized;
@@ -83,10 +87,7 @@ export function createHttpClient(options: HttpOptions): AxiosInstance {
       }
     }
     const message = serverErrorMessage(error.response?.data);
-    if (message) {
-      return Promise.reject(new Error(message));
-    }
-    return Promise.reject(error);
+    return Promise.reject(message ? new Error(message) : toError(error));
   });
   return http;
 }

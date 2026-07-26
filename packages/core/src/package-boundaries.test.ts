@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const rootDir = process.cwd();
@@ -55,8 +55,6 @@ const forbiddenWorkspaceDependencies: Record<keyof typeof packageDirs, string[]>
 };
 
 const pluginImplementationImportPattern = /(?:^|[\\/])plugins[\\/][^\\/]+[\\/](?:runtime|admin-ui)(?:[\\/]|$)/;
-const runtimePluginImplementationImportPattern = /(?:^|[\\/])plugins[\\/][^\\/]+[\\/]runtime(?:[\\/]|$)/;
-const adminUiPluginImplementationImportPattern = /(?:^|[\\/])plugins[\\/][^\\/]+[\\/]admin-ui(?:[\\/]|$)/;
 const sourceImportPattern = /(?:import|export)\s+(?:type\s+)?(?:[^"']*\s+from\s+)?["']([^"']+)["']/g;
 
 function readPackageJson(packageDir: string): PackageJson {

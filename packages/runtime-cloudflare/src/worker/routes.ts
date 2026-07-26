@@ -20,7 +20,7 @@ import {
 import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "../../../../plugins/catalog";
 import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "../admin-ui-assets";
 import type { AppDependencies } from "./dev-dependencies";
-import { optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "../http";
+import { isStringArray, optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "../http";
 import {
   ensureRepositoryPluginEnabled as ensureEffectiveRepositoryPluginEnabled,
   repositoryPluginPolicyFields,
@@ -174,7 +174,7 @@ function optionalStringField(body: Record<string, unknown>, key: string): string
 function optionalStringArrayField(body: Record<string, unknown>, key: string): string[] | undefined {
   const value = body[key];
   if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
+  if (!isStringArray(value) || value.some((item) => !item.trim())) {
     throw new ValidationError(`${key} must be an array of strings`);
   }
   return [...value];

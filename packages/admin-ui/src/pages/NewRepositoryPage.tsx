@@ -127,7 +127,7 @@ export function NewRepositoryPage() {
   async function create() {
     try {
       await createRepository.mutateAsync(plugin.buildCreateInput(state));
-      navigate(ADMIN_UI_PATHS.repositories);
+      void navigate(ADMIN_UI_PATHS.repositories);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Repository could not be created";
       const targetStep = repositoryCreateStepForServerError(message, plugin);

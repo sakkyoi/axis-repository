@@ -39,12 +39,13 @@ export function optionalObjectField(body: Record<string, unknown>, key: string):
   return value as Record<string, unknown>;
 }
 
+export function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
 export function stringArrayField(body: Record<string, unknown>, key: string): string[] {
   const value = body[key];
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
-    throw new ValidationError(`${key} must be a non-empty string array`);
-  }
-  if (value.length === 0) {
+  if (!isStringArray(value) || value.some((item) => !item.trim()) || value.length === 0) {
     throw new ValidationError(`${key} must be a non-empty string array`);
   }
   return value;

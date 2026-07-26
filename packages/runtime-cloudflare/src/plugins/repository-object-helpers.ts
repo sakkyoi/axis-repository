@@ -16,7 +16,7 @@ export async function objectBytes(object: RepositoryObject): Promise<Uint8Array>
     return new TextEncoder().encode(object.body);
   }
   const chunks: Uint8Array[] = [];
-  const reader = object.body.getReader();
+  const reader = object.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
   while (true) {
     const next = await reader.read();
     if (next.done) break;

@@ -1,4 +1,4 @@
-import type { RepositoryArtifactRecord, RepositoryObject, RepositoryObjectListItem, RepositoryObjectStore } from "@axis-repository/core";
+import type { RepositoryArtifactRecord, RepositoryObjectStore } from "@axis-repository/core";
 import { ValidationError } from "@axis-repository/core";
 import { pypiPluginManifest } from "../manifest";
 import type { ArtifactRepositoryPlugin, DescribePublishedArtifactsInput, RebuildRepositoryArtifactIndexInput } from "@axis-repository/runtime-cloudflare/plugin-runtime";

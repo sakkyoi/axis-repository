@@ -225,18 +225,23 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.get(repositoryActivityUrl(name, options));
       return repositoryActivitiesResponseSchema.parse(response.data);
     },
-    async getRepositoryClientHelper(name: string, namespace: string, action: string) {
-      const response = await http.get(
+    async getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown> {
+      const response = await http.get<unknown>(
         `/admin/repositories/${encodePathSegment(name)}/${encodePathSegment(namespace)}/client/${encodePathSegment(action)}`,
       );
       return response.data;
     },
-    async getRepositoryPluginResource(name: string, namespace: string, path: readonly string[]) {
-      const response = await http.get(repositoryPluginResourceUrl(name, namespace, path));
+    async getRepositoryPluginResource(name: string, namespace: string, path: readonly string[]): Promise<unknown> {
+      const response = await http.get<unknown>(repositoryPluginResourceUrl(name, namespace, path));
       return response.data;
     },
-    async postRepositoryPluginResource(name: string, namespace: string, path: readonly string[], input?: unknown) {
-      const response = await http.post(repositoryPluginResourceUrl(name, namespace, path), input);
+    async postRepositoryPluginResource(
+      name: string,
+      namespace: string,
+      path: readonly string[],
+      input?: unknown,
+    ): Promise<unknown> {
+      const response = await http.post<unknown>(repositoryPluginResourceUrl(name, namespace, path), input);
       return response.data;
     },
     async listPublishSessions() {
@@ -257,13 +262,15 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       });
     },
     async verifyAdminPublishUpload(sessionId: string, uploadId: string) {
-      const response = await http.post(
+      const response = await http.post<{ session: unknown }>(
         `/admin/publish-sessions/${encodePathSegment(sessionId)}/uploads/${encodePathSegment(uploadId)}/verify`,
       );
       return publishSessionSchema.parse(response.data.session);
     },
     async finalizeAdminPublishSession(sessionId: string) {
-      const response = await http.post(`/admin/publish-sessions/${encodePathSegment(sessionId)}/finalize`);
+      const response = await http.post<{ session: unknown }>(
+        `/admin/publish-sessions/${encodePathSegment(sessionId)}/finalize`,
+      );
       return publishSessionSchema.parse(response.data.session);
     },
     async listPublishTokens() {

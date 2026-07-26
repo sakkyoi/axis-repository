@@ -3,9 +3,6 @@ import {
   type ArtifactPublisher,
   type Repository,
   type RepositoryArtifactRecord,
-  type RepositoryObject,
-  type RepositoryObjectListItem,
-  type RepositoryObjectStore,
 } from "@axis-repository/core";
 import { aptPluginManifest } from "../manifest";
 import type {

@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { authenticateAdminLogin } from "../login";
-import { ADMIN_UI_PATHS, safeAdminRedirectPath } from "../navigation";
+import { safeAdminRedirectPath } from "../navigation";
 import { getRuntimeConfig } from "../runtime-config";
 
 interface LoginLocationState {
@@ -55,7 +55,7 @@ export function LoginPage() {
       return;
     }
     setError("");
-    navigate(from, { replace: true });
+    void navigate(from, { replace: true });
   }
 
   return (

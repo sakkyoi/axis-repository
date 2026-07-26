@@ -122,13 +122,6 @@ function arrayBufferFromBytes(bytes: Uint8Array): ArrayBuffer {
   return copy.buffer;
 }
 
-function streamFromStoredValue(value: string | Uint8Array | ReadableStream): ReadableStream {
-  if (value instanceof ReadableStream) {
-    return value;
-  }
-  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
-  return streamFromBytes(bytes);
-}
 
 function streamFromBytes(bytes: Uint8Array): ReadableStream {
   return new ReadableStream({

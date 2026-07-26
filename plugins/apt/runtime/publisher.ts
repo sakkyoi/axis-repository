@@ -6,7 +6,6 @@ import {
   type PublishArtifactsInput,
   type PublishArtifactRequest,
   type PublishResult,
-  type RepositoryObject,
   type RepositoryObjectMetadata,
   type RepositoryObjectStore,
 } from "@axis-repository/core";

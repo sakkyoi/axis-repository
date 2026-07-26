@@ -1,3 +1,4 @@
+import { isStringArray } from "../http";
 import {
   UnauthorizedError,
   timingSafeEqualText,
@@ -80,8 +81,7 @@ export class HmacAdminAccessTokenCodec implements AdminAccessTokenCodec {
       || typeof record.username !== "string"
       || record.role !== "owner"
       || typeof record.sid !== "string"
-      || !Array.isArray(record.scopes)
-      || record.scopes.some((scope) => typeof scope !== "string")
+      || !isStringArray(record.scopes)
       || typeof record.exp !== "number"
       || record.exp * 1000 <= this.now().getTime()
     ) {
@@ -92,7 +92,7 @@ export class HmacAdminAccessTokenCodec implements AdminAccessTokenCodec {
       subject: record.sub,
       username: record.username,
       role: record.role,
-      scopes: [...record.scopes] as string[],
+      scopes: [...record.scopes],
       sessionId: record.sid,
     };
   }

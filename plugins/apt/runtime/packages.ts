@@ -3,7 +3,7 @@ import {
   type PublishArtifactRequest,
   type Repository,
 } from "@axis-repository/core";
-import { parseAptRepositoryConfig, validatePathSegment, type AptResolvedRepositoryConfig, type AptRepositoryConfig } from "./config";
+import { parseAptRepositoryConfig, validatePathSegment, type AptResolvedRepositoryConfig } from "./config";
 
 export interface AptPoolCopy {
   sourceKey: string;
@@ -46,6 +46,9 @@ const optionalDebianFields = [
   ["provides", "Provides"],
 ] as const;
 const safeDebFilenamePattern = /^[A-Za-z0-9][A-Za-z0-9._+~-]*\.deb$/;
+// Rejecting control characters is the point: they would let a hostile deb
+// control field inject extra stanza lines into a Packages index.
+// eslint-disable-next-line no-control-regex
 const controlCharacterPattern = /[\u0000-\u001F\u007F]/;
 
 export function validateAptPublishArtifacts(input: {
@@ -183,7 +186,10 @@ export async function gzip(bytes: Uint8Array): Promise<Uint8Array> {
     return new Uint8Array(await new Response(stream).arrayBuffer());
   }
 
-  // Test and non-Worker runtimes may not expose CompressionStream.
+  // Test and non-Worker runtimes may not expose CompressionStream. The
+  // specifier is a constant; the indirection only stops bundlers pulling
+  // node:zlib into the Worker build.
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const dynamicImport = new Function("specifier", "return import(specifier)") as (
     specifier: string,
   ) => Promise<{ gzipSync(input: Uint8Array): Uint8Array }>;

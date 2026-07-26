@@ -62,10 +62,14 @@ function optionalConfigStringArray(config: Record<string, unknown>, field: strin
     return undefined;
   }
   const value = config[field];
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+  if (!isConfigStringArray(value) || value.length === 0 || value.some((item) => item.length === 0)) {
     throw new ValidationError(`${configPath(field)} must be a non-empty string array when provided`);
   }
   return [...value];
+}
+
+function isConfigStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 function configPath(field: string): string {

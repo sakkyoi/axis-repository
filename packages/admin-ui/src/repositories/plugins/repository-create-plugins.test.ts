@@ -7,7 +7,6 @@ import {
 } from "./repository-create-plugins";
 import {
   getRepositoryCreatePlugin,
-  repositoryCreatePluginOptionsFromUiRegistry,
 } from "./repository-ui-plugins";
 
 describe("repository create plugins", () => {

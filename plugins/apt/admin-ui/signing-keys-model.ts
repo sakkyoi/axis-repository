@@ -37,6 +37,16 @@ export interface AptSigningKeySettingsState {
   selectableSigningKeyId: string;
 }
 
+/**
+ * FormData entries are `string | File`. Stringifying a File would silently
+ * submit "[object File]" as a signing key name or passphrase, so read only
+ * genuine text values.
+ */
+function formText(formData: FormData, field: string): string {
+  const value = formData.get(field);
+  return typeof value === "string" ? value : "";
+}
+
 export async function submitAptSigningKeyForm(input: SubmitAptSigningKeyFormInput): Promise<void> {
   try {
     let key: SigningKey;
@@ -44,18 +54,18 @@ export async function submitAptSigningKeyForm(input: SubmitAptSigningKeyFormInpu
       key = await input.generateKey({
         repositoryName: input.repositoryName,
         input: {
-          name: String(input.formData.get("name") ?? ""),
-          userIdName: String(input.formData.get("userIdName") ?? ""),
-          userIdEmail: String(input.formData.get("userIdEmail") ?? ""),
+          name: formText(input.formData, "name"),
+          userIdName: formText(input.formData, "userIdName"),
+          userIdEmail: formText(input.formData, "userIdEmail"),
         },
       });
     } else {
       key = await input.importKey({
         repositoryName: input.repositoryName,
         input: {
-          name: String(input.formData.get("name") ?? ""),
-          privateKeyArmored: String(input.formData.get("privateKeyArmored") ?? ""),
-          passphrase: String(input.formData.get("passphrase") ?? ""),
+          name: formText(input.formData, "name"),
+          privateKeyArmored: formText(input.formData, "privateKeyArmored"),
+          passphrase: formText(input.formData, "passphrase"),
         },
       });
     }

@@ -243,7 +243,7 @@ export function RepositorySettingsPage() {
     deleteRepository.mutate(repository.name, {
       onSuccess: () => {
         setDeleteDialogOpen(false);
-        navigate(ADMIN_UI_PATHS.repositories);
+        void navigate(ADMIN_UI_PATHS.repositories);
       },
     });
   }

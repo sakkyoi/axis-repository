@@ -217,12 +217,12 @@ function RepositoryArtifactDeleteActivityDetail({
     ? activity.metadata.skippedObjectKeys.map(String)
     : [];
   const failedObjectKeys = Array.isArray(activity.metadata.failedObjectKeys)
-    ? activity.metadata.failedObjectKeys.map((item) => {
+    ? activity.metadata.failedObjectKeys.map((item: unknown) => {
       if (item && typeof item === "object" && "objectKey" in item) {
-        const message = "message" in item ? String(item.message) : "unknown error";
-        return `${String(item.objectKey)}: ${message}`;
+        const failure = item as { objectKey?: unknown; message?: unknown };
+        return `${metadataText(failure.objectKey)}: ${metadataText(failure.message) || "unknown error"}`;
       }
-      return String(item);
+      return metadataText(item);
     })
     : [];
   return (
@@ -251,11 +251,15 @@ function RepositoryObjectActivityDetail({ activity }: { activity: Extract<Reposi
   ].filter((item): item is string => Boolean(item));
   return (
     <div className="mt-3 grid gap-2 text-xs">
-      <PublishSessionDetailList title={activity.type === "object.update" ? "Updated object" : "Deleted object"} items={[String(activity.metadata.path ?? activity.summary)]} />
-      <PublishSessionDetailList title="Object key" items={[String(activity.metadata.objectKey ?? "")]} />
+      <PublishSessionDetailList title={activity.type === "object.update" ? "Updated object" : "Deleted object"} items={[metadataText(activity.metadata.path) || activity.summary]} />
+      <PublishSessionDetailList title="Object key" items={[metadataText(activity.metadata.objectKey)]} />
       {metadataItems.length > 0 && <PublishSessionDetailList title="Metadata change" items={metadataItems} />}
     </div>
   );
+}
+
+function metadataText(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 export function GenericPublishSessionDetail({

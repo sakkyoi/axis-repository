@@ -1,0 +1,18 @@
+{
+  "//": "Type information for linting only. Covers every source file, including the plugin directories that are compiled through the package projects rather than the root one.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "types": ["node", "@cloudflare/workers-types"]
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/src/**/*.tsx",
+    "plugins/**/*.ts",
+    "plugins/**/*.tsx",
+    "scripts/**/*.ts",
+    "*.config.ts"
+  ]
+}
