@@ -1604,6 +1604,97 @@ describe("Cloudflare runtime routes", () => {
     await expect(accepted.text()).resolves.toBe("private-helper");
   });
 
+  it("keeps one origin serving everything when no artifact origin is configured", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/dists/noble/Release",
+      "release",
+      "text/plain",
+    );
+
+    // The default must be indistinguishable from before the split existed.
+    const object = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/dists/noble/Release"),
+    );
+    const ui = await app.fetch(new Request("https://axis.example/ui/"));
+    const admin = await app.fetch(new Request("https://axis.example/admin/repositories", {
+      headers: { authorization: "Bearer dev-admin-token" },
+    }));
+
+    expect(object.status).toBe(200);
+    expect(ui.status).toBe(200);
+    expect(admin.status).toBe(200);
+  });
+
+  it("splits artifact and admin hosts when an artifact origin is configured", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp({
+      ...harness.dependencies,
+      artifactOrigin: "https://cdn.axis.example",
+    });
+    await createRepository(app, {
+      name: "debian-public",
+      ecosystem: "apt",
+      visibility: "public",
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/debian-public/dists/noble/Release",
+      "release",
+      "text/plain",
+    );
+
+    const objectOnCdn = await app.fetch(
+      new Request("https://cdn.axis.example/repositories/debian-public/dists/noble/Release"),
+    );
+    const objectOnAdmin = await app.fetch(
+      new Request("https://axis.example/repositories/debian-public/dists/noble/Release"),
+    );
+    const uiOnAdmin = await app.fetch(new Request("https://axis.example/ui/"));
+    const uiOnCdn = await app.fetch(new Request("https://cdn.axis.example/ui/"));
+    const adminOnCdn = await app.fetch(new Request("https://cdn.axis.example/admin/repositories", {
+      headers: { authorization: "Bearer dev-admin-token" },
+    }));
+
+    // Publisher-controlled bytes must not be reachable on the origin the admin
+    // UI runs on, which is the entire point of the split.
+    expect(objectOnCdn.status).toBe(200);
+    expect(objectOnAdmin.status).toBe(404);
+    expect(uiOnAdmin.status).toBe(200);
+    expect(uiOnCdn.status).toBe(404);
+    expect(adminOnCdn.status).toBe(404);
+  });
+
+  it("advertises the artifact origin in client-facing URLs", async () => {
+    const app = createApp({
+      ...createDevDependencyHarness().dependencies,
+      artifactOrigin: "https://cdn.axis.example",
+    });
+    const signingKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "public",
+      config: validAptConfig(signingKey.id),
+    });
+
+    // Requested on the admin origin, but a sources.list line pointing at the
+    // admin origin would now 404.
+    const source = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/apt/client/source",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    await expect(source.json()).resolves.toMatchObject({
+      sourceLine: expect.stringContaining("https://cdn.axis.example/repositories/debian-internal"),
+    });
+  });
+
   it("serves public repository objects without a token", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

@@ -969,10 +969,39 @@ async function readUploadBody(request: Request, expectedSize: number): Promise<U
   return bytes;
 }
 
+/**
+ * Which half of the service this hostname answers for.
+ *
+ * With no artifact origin configured a single origin serves everything, which
+ * is the default. Configuring one splits them: publisher-controlled bytes stop
+ * sharing an origin with the admin UI, so a future injection there cannot reach
+ * for them as a same-origin resource.
+ */
+function originRoles(url: URL, dependencies: AppDependencies): {
+  servesArtifacts: boolean;
+  servesAdmin: boolean;
+} {
+  const artifactOrigin = dependencies.artifactOrigin;
+  if (!artifactOrigin) {
+    return { servesArtifacts: true, servesAdmin: true };
+  }
+  const isArtifactOrigin = url.origin === artifactOrigin;
+  return { servesArtifacts: isArtifactOrigin, servesAdmin: !isArtifactOrigin };
+}
+
+/** Origin to advertise in client-facing URLs (apt sources, pip index, links). */
+function publicArtifactOrigin(url: URL, dependencies: AppDependencies): string {
+  return dependencies.artifactOrigin ?? url.origin;
+}
+
 export async function dispatch(request: Request, dependencies: AppDependencies): Promise<Response> {
   const url = new URL(request.url);
+  const { servesArtifacts, servesAdmin } = originRoles(url, dependencies);
   if (url.pathname === "/health") {
     return jsonResponse({ ok: true, service: "axis-repository" });
+  }
+  if (!servesAdmin && !url.pathname.startsWith("/repositories/")) {
+    throw new NotFoundError();
   }
   if (url.pathname === "/admin/auth/login") {
     if (request.method !== "POST") {
@@ -1196,7 +1225,9 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     return dispatchRepositoryClientHelper(helpers, {
       repository,
       action: adminClientHelperPath.action,
-      origin: url.origin,
+      // Served on the admin origin, but the sources.list line and index URL it
+      // produces must point at wherever artifacts are actually served.
+      origin: publicArtifactOrigin(url, dependencies),
     });
   }
   const adminRepositoryActivityName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.activity);
@@ -1287,7 +1318,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       throw new NotFoundError();
     }
     return jsonResponse(repositoryObjectDetailResponse({
-      origin: url.origin,
+      origin: publicArtifactOrigin(url, dependencies),
       repositoryName: repository.name,
       path: relativePath,
       objectKey,
@@ -1503,7 +1534,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     });
     return jsonResponse({ ...result, session: readablePublishSession(result.session) });
   }
-  const clientHelperPath = parseRepositoryClientHelperPath(request.url);
+  const clientHelperPath = servesArtifacts ? parseRepositoryClientHelperPath(request.url) : null;
   if (clientHelperPath && request.method === "GET") {
     const repository = await dependencies.repositoryService.getByName(clientHelperPath.repositoryName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
@@ -1519,11 +1550,11 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       return dispatchRepositoryClientHelper(helpers, {
         repository,
         action: clientHelperPath.action,
-        origin: url.origin,
+        origin: publicArtifactOrigin(url, dependencies),
       });
     }
   }
-  const repositoryObjectPath = parseRepositoryObjectPath(request.url);
+  const repositoryObjectPath = servesArtifacts ? parseRepositoryObjectPath(request.url) : null;
   if (repositoryObjectPath && (request.method === "GET" || request.method === "HEAD")) {
     const { repositoryName, relativePath } = repositoryObjectPath;
     const repository = await dependencies.repositoryService.getByName(repositoryName);

@@ -186,6 +186,7 @@ type TestAxisEnv = {
   R2_SECRET_ACCESS_KEY?: string | undefined;
   UPLOAD_URL_TTL_SECONDS?: string | undefined;
   UPLOAD_BACKEND?: string | undefined;
+  AXIS_ARTIFACT_ORIGIN?: string | undefined;
 };
 
 function createObject(env: TestAxisEnv = {}, storage: FakeDurableStorage = new FakeDurableStorage()) {
@@ -218,6 +219,28 @@ async function adminAuthorizationHeader(object: AxisAdminDO): Promise<string> {
 }
 
 describe("AxisAdminDO", () => {
+  it("rejects an AXIS_ARTIFACT_ORIGIN that is not a bare origin", () => {
+    for (const value of [
+      "cdn.axis.example",
+      "https://cdn.axis.example/artifacts",
+      "https://cdn.axis.example/?x=1",
+      "https://cdn.axis.example/#frag",
+      "ftp://cdn.axis.example",
+      "not a url",
+    ]) {
+      // A path or query here would silently produce broken sources.list lines.
+      expect(
+        () => createObject({ AXIS_ARTIFACT_ORIGIN: value }),
+        value,
+      ).toThrow(/AXIS_ARTIFACT_ORIGIN/);
+    }
+  });
+
+  it("accepts a bare artifact origin and normalizes it", () => {
+    expect(() => createObject({ AXIS_ARTIFACT_ORIGIN: "https://cdn.axis.example/" })).not.toThrow();
+  });
+
+
   it("allows bootstrap credentials to be removed after the owner user is seeded", async () => {
     const storage = new FakeDurableStorage();
     const object = createObject({}, storage);

@@ -170,6 +170,36 @@ repositories/<repository-name>/publishes/<session-id>.json
 Format-specific repository indexes and repository heads for apt, PyPI, and npm
 are future publishers.
 
+## Serving Artifacts From A Separate Origin
+
+By default one origin serves everything: the admin UI at `/ui/`, the API under
+`/admin` and `/api`, and repository objects under `/repositories`. Repository
+objects are publisher-controlled bytes with a publisher-chosen content type, so
+sharing an origin with the admin UI means any future injection there could reach
+them as a same-origin resource. The nonce-only script policy closes the paths
+that are reachable today, but the origin boundary is the durable fix.
+
+Set `AXIS_ARTIFACT_ORIGIN` to a bare origin to split them:
+
+```text
+AXIS_ARTIFACT_ORIGIN=https://cdn.example
+```
+
+Point that hostname at the same Worker. Once set:
+
+- `/repositories/...` is served **only** on that origin; the admin origin
+  answers 404 for it.
+- `/ui/`, `/admin/...`, and `/api/...` are served **only** on the admin origin.
+- `/health` answers on both.
+- Generated client instructions follow it: the apt `sources.list` line, the
+  signing key URL, and the PyPI index URL all name the artifact origin, even
+  when requested through the admin UI.
+
+Leave it unset and nothing changes. Turning it on **is** a breaking change for
+existing consumers: already-published `sources.list` entries and pip index URLs
+name the old hostname and will stop resolving, so plan it alongside updating
+whatever consumes the repository.
+
 ## Upload URLs Are Capabilities
 
 An upload target returned when a publish session is created is a bearer

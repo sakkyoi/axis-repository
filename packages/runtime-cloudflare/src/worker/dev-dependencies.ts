@@ -26,6 +26,11 @@ import { RepositorySecretService } from "../storage/repository-secret-service";
 export interface AppDependencies {
   adminAuthService: AdminAuthService;
   adminUiRuntimeConfig: AdminUiRuntimeConfig;
+  /**
+   * Origin repository objects are served from, when that is not the origin the
+   * admin UI and API answer on. Unset means one origin serves everything.
+   */
+  artifactOrigin?: string;
   repositoryService: PluginRepositoryService;
   publishTokenService: PublishTokenService;
   publishSessionService: PluginPublishSessionService;

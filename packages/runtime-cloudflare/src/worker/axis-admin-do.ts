@@ -36,6 +36,7 @@ export interface AxisEnv {
   UPLOAD_URL_TTL_SECONDS?: string;
   UPLOAD_BACKEND?: string;
   ADMIN_UI_API_BASE_URL?: string;
+  AXIS_ARTIFACT_ORIGIN?: string;
 }
 
 type UploadBackend = "r2" | "local-r2" | "memory";
@@ -67,6 +68,31 @@ function parseUploadBackend(value: string | undefined): UploadBackend {
     return "local-r2";
   }
   throw new Error("UPLOAD_BACKEND must be one of: r2, local-r2, memory");
+}
+
+/**
+ * Origin repository objects are served from, when it differs from the admin
+ * origin. Must be a bare origin: a path or query here would silently produce
+ * broken sources.list lines and index URLs.
+ */
+function parseArtifactOrigin(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("AXIS_ARTIFACT_ORIGIN must be an absolute origin such as https://cdn.example");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("AXIS_ARTIFACT_ORIGIN must use http or https");
+  }
+  if (parsed.pathname !== "/" || parsed.search || parsed.hash) {
+    throw new Error("AXIS_ARTIFACT_ORIGIN must not include a path, query, or fragment");
+  }
+  return parsed.origin;
 }
 
 function requiredR2Bucket(value: R2Bucket | undefined): R2Bucket {
@@ -166,8 +192,11 @@ export function createDurableObjectDependencies(
     clock,
   });
 
+  const artifactOrigin = parseArtifactOrigin(env.AXIS_ARTIFACT_ORIGIN);
+
   return {
     adminAuthService,
+    ...(artifactOrigin === undefined ? {} : { artifactOrigin }),
     adminUiRuntimeConfig: {
       apiBaseUrl: env.ADMIN_UI_API_BASE_URL ?? "",
       // Only the presigned backend uploads cross-origin; the same-origin
