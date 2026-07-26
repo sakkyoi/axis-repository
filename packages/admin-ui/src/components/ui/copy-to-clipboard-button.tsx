@@ -6,6 +6,7 @@ export interface CopyToClipboardButtonProps extends Omit<ButtonProps, "onClick" 
   text: string;
   label?: string;
   copiedLabel?: string;
+  onCopied?: () => void;
 }
 
 export function CopyToClipboardButton({
@@ -13,15 +14,21 @@ export function CopyToClipboardButton({
   label = "Copy",
   copiedLabel = label,
   disabled,
+  onCopied,
   ...props
 }: CopyToClipboardButtonProps) {
   const { copied, copyText } = useClipboardCopyFeedback();
+
+  async function copy() {
+    await copyText(text);
+    onCopied?.();
+  }
 
   return (
     <Button
       {...props}
       disabled={disabled}
-      onClick={() => void copyText(text)}
+      onClick={() => void copy()}
     >
       {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
       {copied ? copiedLabel : label}

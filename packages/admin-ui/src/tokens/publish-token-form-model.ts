@@ -184,6 +184,24 @@ export function publishTokenSecretRevealItems(token: PublishToken): Array<[strin
   ];
 }
 
+export function shouldBlockTokenSecretRevealClose(input: { hasSecret: boolean; copied: boolean }): boolean {
+  return input.hasSecret && !input.copied;
+}
+
+export function publishTokenSecretUnsavedPromptContent(): {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  cancelLabel: string;
+} {
+  return {
+    title: "Token secret not copied",
+    description: "Have you saved this token secret? It is shown only once, and you will not be able to see it again after closing this dialog.",
+    confirmLabel: "Close anyway",
+    cancelLabel: "Back to token",
+  };
+}
+
 export function revokePublishTokenDialogContent(tokenName: string): DestructiveActionDialogContent {
   return {
     title: "Revoke publish token",

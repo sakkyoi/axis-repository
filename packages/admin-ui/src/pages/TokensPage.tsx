@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Plus, RotateCcw } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -22,12 +22,14 @@ import {
   publishTokenSecretInputClass,
   publishTokenSecretRevealDescription,
   publishTokenSecretRevealItems,
+  publishTokenSecretUnsavedPromptContent,
   publishTokenSummaryGridClass,
   publishTokenSummaryItemClass,
   publishTokenSummaryItems,
   publishTokenSummaryValueClass,
   repositoryDisplayLabel,
   revokePublishTokenDialogContent,
+  shouldBlockTokenSecretRevealClose,
   type PublishTokenExpirationMode,
   type PublishTokenExpirationState,
   type PublishTokenPermissionState,
@@ -399,48 +401,103 @@ function TokenCreatedDialog({
   result: PublishTokenCreateResponse | undefined;
   onClose: () => void;
 }) {
+  const [secretCopied, setSecretCopied] = useState(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const items = result ? publishTokenSecretRevealItems(result.token) : [];
+  const unsavedPrompt = publishTokenSecretUnsavedPromptContent();
+  const shouldBlockClose = shouldBlockTokenSecretRevealClose({
+    hasSecret: Boolean(result?.secret),
+    copied: secretCopied,
+  });
+
+  useEffect(() => {
+    setSecretCopied(false);
+    setConfirmCloseOpen(false);
+  }, [result?.secret]);
+
+  useEffect(() => {
+    if (!shouldBlockClose) return;
+    function beforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [shouldBlockClose]);
+
+  function requestClose() {
+    if (shouldBlockClose) {
+      setConfirmCloseOpen(true);
+      return;
+    }
+    onClose();
+  }
+
+  function closeAnyway() {
+    setConfirmCloseOpen(false);
+    onClose();
+  }
+
   return (
-    <Dialog open={Boolean(result)} onOpenChange={(open) => {
-      if (!open) onClose();
-    }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Token created</DialogTitle>
-          <DialogDescription>{publishTokenSecretRevealDescription()}</DialogDescription>
-        </DialogHeader>
-        {result && (
-          <div className="grid gap-4">
-            <label className="grid gap-2">
-              <span className="text-sm font-medium">Token secret</span>
-              <div className="flex min-w-0 gap-2">
-                <Input
-                  className={publishTokenSecretInputClass()}
-                  value={result.secret}
-                  readOnly
-                />
-                <CopyToClipboardButton
-                  text={result.secret}
-                  label="Copy"
-                  copiedLabel="Copied"
-                  variant="outline"
-                  className="shrink-0"
-                />
-              </div>
-            </label>
-            <div className="grid gap-2 rounded-md border border-border bg-background/40 p-3">
-              {items.map(([label, value]) => (
-                <div key={label} className="grid gap-1">
-                  <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
-                  <span className="break-all text-sm">
-                    {label === "Expires" && value !== "never" ? formatDate(value) : value}
-                  </span>
+    <>
+      <Dialog open={Boolean(result)} onOpenChange={(open) => {
+        if (!open) requestClose();
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Token created</DialogTitle>
+            <DialogDescription>{publishTokenSecretRevealDescription()}</DialogDescription>
+          </DialogHeader>
+          {result && (
+            <div className="grid gap-4">
+              <label className="grid gap-2">
+                <span className="text-sm font-medium">Token secret</span>
+                <div className="flex min-w-0 gap-2">
+                  <Input
+                    className={publishTokenSecretInputClass()}
+                    value={result.secret}
+                    readOnly
+                  />
+                  <CopyToClipboardButton
+                    text={result.secret}
+                    label="Copy"
+                    copiedLabel="Copied"
+                    variant="outline"
+                    className="shrink-0"
+                    onCopied={() => setSecretCopied(true)}
+                  />
                 </div>
-              ))}
+              </label>
+              <div className="grid gap-2 rounded-md border border-border bg-background/40 p-3">
+                {items.map(([label, value]) => (
+                  <div key={label} className="grid gap-1">
+                    <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
+                    <span className="break-all text-sm">
+                      {label === "Expires" && value !== "never" ? formatDate(value) : value}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
+        <DialogContent className="w-[min(92vw,440px)]">
+          <DialogHeader>
+            <DialogTitle>{unsavedPrompt.title}</DialogTitle>
+            <DialogDescription>{unsavedPrompt.description}</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setConfirmCloseOpen(false)}>
+              {unsavedPrompt.cancelLabel}
+            </Button>
+            <Button type="button" variant="destructive" onClick={closeAnyway}>
+              {unsavedPrompt.confirmLabel}
+            </Button>
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

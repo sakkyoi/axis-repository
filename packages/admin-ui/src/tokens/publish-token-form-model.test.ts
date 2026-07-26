@@ -15,9 +15,11 @@ import {
   publishTokenSecretInputClass,
   publishTokenSecretRevealDescription,
   publishTokenSecretRevealItems,
+  publishTokenSecretUnsavedPromptContent,
   publishTokenSummaryItemClass,
   publishTokenSummaryItems,
   publishTokenSummaryValueClass,
+  shouldBlockTokenSecretRevealClose,
   tokenScopeSummary,
 } from "./publish-token-form-model";
 
@@ -193,6 +195,17 @@ describe("publish token form model", () => {
       ["Repositories", "debian-internal"],
       ["Expires", "never"],
     ]);
+  });
+
+  it("blocks leaving a one-time token secret until it has been copied", () => {
+    expect(shouldBlockTokenSecretRevealClose({ hasSecret: true, copied: false })).toBe(true);
+    expect(shouldBlockTokenSecretRevealClose({ hasSecret: true, copied: true })).toBe(false);
+    expect(shouldBlockTokenSecretRevealClose({ hasSecret: false, copied: false })).toBe(false);
+    expect(publishTokenSecretUnsavedPromptContent()).toMatchObject({
+      title: "Token secret not copied",
+      confirmLabel: "Close anyway",
+    });
+    expect(publishTokenSecretUnsavedPromptContent().description).toContain("saved this token secret");
   });
 
   it("omits publish token expiration when set to never", () => {
