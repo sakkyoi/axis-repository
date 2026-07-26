@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ForbiddenError,
   MemoryStateStore,
@@ -33,6 +33,66 @@ const hasher: SecretHasher = {
 };
 
 describe("PublishTokenService", () => {
+  it("verifies a secret by embedded id instead of scanning every token", async () => {
+    const state = new MemoryStateStore();
+    let sequence = 0;
+    const service = new PublishTokenService({
+      state,
+      clock,
+      randomId: { create: (prefix) => `${prefix}_${++sequence}` },
+      hasher,
+    });
+    const created = await service.create({
+      name: "github-actions",
+      permissions: ["publish"],
+      repositories: ["debian-internal"],
+      ecosystemScopes: {},
+    });
+    const listSpy = vi.spyOn(state.publishTokens, "list");
+
+    await expect(service.verify(created.secret)).resolves.toMatchObject({ name: "github-actions" });
+
+    expect(listSpy).not.toHaveBeenCalled();
+  });
+
+  it("still verifies secrets issued before the id was embedded", async () => {
+    const state = new MemoryStateStore();
+    const service = new PublishTokenService({ state, clock, randomId, hasher });
+    const legacySecret = "axis_publish_tok_legacy";
+    await state.publishTokens.save({
+      id: "ptok_legacy",
+      name: "legacy-actions",
+      tokenHash: await hasher.hash(legacySecret),
+      permissions: ["publish"],
+      repositories: ["debian-internal"],
+      ecosystemScopes: {},
+      signingKeyIds: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    await expect(service.verify(legacySecret)).resolves.toMatchObject({
+      tokenId: "ptok_legacy",
+      name: "legacy-actions",
+    });
+  });
+
+  it("rejects a secret whose embedded id does not match its digest", async () => {
+    const state = new MemoryStateStore();
+    const service = new PublishTokenService({ state, clock, randomId, hasher });
+    const created = await service.create({
+      name: "github-actions",
+      permissions: ["publish"],
+      repositories: ["debian-internal"],
+      ecosystemScopes: {},
+    });
+
+    // Presenting a real token id with the wrong random part must not pass, and
+    // must not fall through to the scanning path either.
+    await expect(service.verify("axis_publish_ptok_fixed.wrong-random"))
+      .rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.verify(created.secret)).resolves.toMatchObject({ name: "github-actions" });
+  });
+
   it("creates a token and verifies the returned secret", async () => {
     const service = new PublishTokenService({
       state: new MemoryStateStore(),
@@ -48,8 +108,8 @@ describe("PublishTokenService", () => {
       ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
     });
 
-    expect(result.secret).toBe("axis_publish_tok_fixed");
-    expect(result.record.tokenHash).toBe("hash:axis_publish_tok_fixed");
+    expect(result.secret).toBe("axis_publish_ptok_fixed.tok_fixed");
+    expect(result.record.tokenHash).toBe("hash:axis_publish_ptok_fixed.tok_fixed");
     await expect(service.verify(result.secret)).resolves.toMatchObject({
       tokenId: "ptok_fixed",
       name: "github-actions",
@@ -383,7 +443,7 @@ describe("PublishTokenService", () => {
       ecosystemScopes: {},
     });
 
-    expect(result.secret).toBe("axis_publish_tok_fixed");
+    expect(result.secret).toBe("axis_publish_ptok_fixed.tok_fixed");
     expect(result.record.permissions).toEqual(["read"]);
     await expect(service.verify(result.secret)).resolves.toMatchObject({
       tokenId: "ptok_fixed",
@@ -529,7 +589,7 @@ describe("PublishTokenService", () => {
 
     const rotated = await service.rotate("github-actions");
 
-    expect(rotated.secret).toBe("axis_publish_tok_rotated");
+    expect(rotated.secret).toBe("axis_publish_ptok_initial.tok_rotated");
     expect(rotated.record).toMatchObject({
       id: result.record.id,
       name: "github-actions",

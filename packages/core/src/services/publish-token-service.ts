@@ -1,5 +1,6 @@
 import type { AdminPrincipal, PrincipalRef, PublishTokenRecord, TokenPrincipal } from "../domain/domain";
 import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "../domain/errors";
+import { tokenLookupId } from "../domain/tokens";
 import type { Clock, RandomId, SecretHasher, StateStore } from "../ports/ports";
 
 function cloneRecord(input: Record<string, unknown>): Record<string, unknown> {
@@ -53,6 +54,12 @@ export interface PublishTokenServiceOptions {
   hasher: SecretHasher;
 }
 
+const PUBLISH_TOKEN_PREFIX = "axis_publish_";
+
+function publishTokenSecret(tokenId: string, randomPart: string): string {
+  return `${PUBLISH_TOKEN_PREFIX}${tokenId}.${randomPart}`;
+}
+
 export class PublishTokenService {
   constructor(private readonly options: PublishTokenServiceOptions) {}
 
@@ -75,7 +82,7 @@ export class PublishTokenService {
     }
 
     const tokenId = this.options.randomId.create("ptok");
-    const secret = `axis_publish_${this.options.randomId.create("tok")}`;
+    const secret = publishTokenSecret(tokenId, this.options.randomId.create("tok"));
     const record: PublishTokenRecord = {
       id: tokenId,
       name,
@@ -129,7 +136,7 @@ export class PublishTokenService {
     if (record.revokedAt) {
       throw new ValidationError("Publish token has been revoked");
     }
-    const secret = `axis_publish_${this.options.randomId.create("tok")}`;
+    const secret = publishTokenSecret(record.id, this.options.randomId.create("tok"));
     const rotated: PublishTokenRecord = {
       ...record,
       tokenHash: await this.options.hasher.hash(secret),
@@ -147,9 +154,8 @@ export class PublishTokenService {
   }
 
   async verify(secret: string): Promise<TokenPrincipal> {
-    const records = await this.options.state.publishTokens.list();
-    for (const record of records) {
-      if (!(await this.options.hasher.verify(secret, record.tokenHash))) continue;
+    const record = await this.findRecordForSecret(secret);
+    if (record) {
       if (record.revokedAt) {
         throw new ForbiddenError("Publish token has been revoked");
       }
@@ -173,5 +179,23 @@ export class PublishTokenService {
       };
     }
     throw new UnauthorizedError();
+  }
+
+  private async findRecordForSecret(secret: string): Promise<PublishTokenRecord | null> {
+    const tokenId = tokenLookupId(secret, PUBLISH_TOKEN_PREFIX);
+    if (tokenId) {
+      const record = await this.options.state.publishTokens.getById(tokenId);
+      if (record && await this.options.hasher.verify(secret, record.tokenHash)) {
+        return record;
+      }
+      return null;
+    }
+    // Secrets issued before the id was embedded carry no lookup key.
+    for (const record of await this.options.state.publishTokens.list()) {
+      if (await this.options.hasher.verify(secret, record.tokenHash)) {
+        return record;
+      }
+    }
+    return null;
   }
 }

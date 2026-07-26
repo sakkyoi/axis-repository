@@ -119,6 +119,21 @@ export function createDevDependencyHarness(
       },
     },
   });
+  // verifyAccessToken now requires a live session, and the fake codec above
+  // hands out a principal without anyone signing in. Seed the matching session
+  // so the harness models a signed-in owner. MemoryStateStore applies writes
+  // before its promise settles, so this is in place for the first request.
+  void state.adminRefreshSessions.save({
+    id: "admin_session_dev",
+    subject: "admin_user_dev",
+    username: adminUsername,
+    role: "owner",
+    tokenHash: "dev:unused",
+    scopes: ["admin:*"],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    expiresAt: "2099-01-01T00:00:00.000Z",
+  });
+
   const objectStore = new MemoryRepositoryObjectStore();
   const uploadBroker = new SameOriginUploadBroker(objectStore);
   const repositorySecrets = new RepositorySecretService({

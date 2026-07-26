@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   AdminAuthService,
   MemoryStateStore,
@@ -53,7 +53,7 @@ describe("AdminAuthService", () => {
     expect(result).toEqual({
       accessToken: "access:admin_session_fixed:admin_user_fixed:admin:owner:2026-07-26T00:15:00.000Z",
       accessTokenExpiresAt: "2026-07-26T00:15:00.000Z",
-      refreshToken: "axis_refresh_refresh_fixed",
+      refreshToken: "axis_refresh_admin_session_fixed.refresh_fixed",
       refreshTokenExpiresAt: "2026-08-25T00:00:00.000Z",
       principal: {
         type: "admin",
@@ -118,7 +118,7 @@ describe("AdminAuthService", () => {
 
     const refreshed = await service.refresh(login.refreshToken);
 
-    expect(refreshed.refreshToken).toBe("axis_refresh_refresh_4");
+    expect(refreshed.refreshToken).toBe("axis_refresh_admin_session_2.refresh_4");
     await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(UnauthorizedError);
     await expect(service.verifyAccessToken(refreshed.accessToken)).resolves.toMatchObject({
       subject: "admin_user_1",
@@ -199,6 +199,73 @@ describe("AdminAuthService", () => {
 
     await expect(service.login({ username: "admin", password: "x" }))
       .resolves.toMatchObject({ principal: { username: "admin" } });
+  });
+
+  it("stops honouring access tokens once the session is logged out", async () => {
+    const service = createService();
+    const login = await service.login({ username: "admin", password: "correct-password" });
+
+    await expect(service.verifyAccessToken(login.accessToken)).resolves.toMatchObject({
+      username: "admin",
+    });
+
+    await service.logout(login.refreshToken);
+
+    // The access token is still within its own lifetime and still correctly
+    // signed; only the session revocation invalidates it.
+    await expect(service.verifyAccessToken(login.accessToken))
+      .rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("stops honouring access tokens issued before a password change", async () => {
+    const service = createService();
+    const login = await service.login({ username: "admin", password: "correct-password" });
+
+    await service.changeOwnPassword(login.principal, {
+      currentPassword: "correct-password",
+      newPassword: "changed-password",
+    });
+
+    await expect(service.verifyAccessToken(login.accessToken))
+      .rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("caps how long one session can be extended by refreshing", async () => {
+    let currentTime = new Date("2026-07-26T00:00:00.000Z");
+    let sequence = 0;
+    const service = createService({
+      clock: { now: () => currentTime },
+      refreshTokenTtlSeconds: 24 * 60 * 60,
+      sessionAbsoluteTtlSeconds: 2 * 24 * 60 * 60,
+      randomId: { create: (prefix) => `${prefix}_${++sequence}` },
+    });
+    const login = await service.login({ username: "admin", password: "correct-password" });
+
+    currentTime = new Date("2026-07-26T12:00:00.000Z");
+    const stillValid = await service.refresh(login.refreshToken);
+
+    // Each refresh grants a fresh window, so without an absolute cap the
+    // session could slide forever.
+    currentTime = new Date("2026-07-29T00:00:00.000Z");
+    await expect(service.refresh(stillValid.refreshToken)).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("verifies a publish-style secret without scanning every stored session", async () => {
+    const state = new MemoryStateStore();
+    let sequence = 0;
+    const service = createService({
+      state,
+      randomId: { create: (prefix) => `${prefix}_${++sequence}` },
+    });
+    const login = await service.login({ username: "admin", password: "correct-password" });
+    const listSpy = vi.spyOn(state.adminRefreshSessions, "list");
+
+    await expect(service.refresh(login.refreshToken)).resolves.toMatchObject({
+      principal: { username: "admin" },
+    });
+
+    // The session id is embedded in the token, so lookup is direct.
+    expect(listSpy).not.toHaveBeenCalled();
   });
 
   it("rejects a refresh token whose session has expired", async () => {

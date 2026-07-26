@@ -1,5 +1,6 @@
 import type { AdminPrincipal, AdminRefreshSessionRecord, AdminUserRecord } from "../domain/domain";
 import { UnauthorizedError, ValidationError } from "../domain/errors";
+import { tokenLookupId } from "../domain/tokens";
 import type { AdminAccessTokenCodec, Clock, PasswordHasher, RandomId, SecretHasher, StateStore } from "../ports/ports";
 
 export interface BootstrapOwnerCredentials {
@@ -21,6 +22,8 @@ export interface AdminAuthServiceOptions {
   accessTokens: AdminAccessTokenCodec;
   accessTokenTtlSeconds?: number;
   refreshTokenTtlSeconds?: number;
+  /** Hard cap on how long one session can be extended by refreshing. */
+  sessionAbsoluteTtlSeconds?: number;
 }
 
 export interface AdminAuthTokenSet {
@@ -32,6 +35,8 @@ export interface AdminAuthTokenSet {
 }
 
 export const ADMIN_PASSWORD_MIN_LENGTH = 8;
+
+const REFRESH_TOKEN_PREFIX = "axis_refresh_";
 
 export class AdminAuthService {
   constructor(private readonly options: AdminAuthServiceOptions) {}
@@ -73,6 +78,12 @@ export class AdminAuthService {
 
   async refresh(refreshToken: string): Promise<AdminAuthTokenSet> {
     const session = await this.findValidRefreshSession(refreshToken);
+    // A sliding window with no ceiling means one session can be extended
+    // indefinitely, so cap it against the time it was first created.
+    const sessionAgeMs = this.options.clock.now().getTime() - Date.parse(session.createdAt);
+    if (sessionAgeMs >= this.sessionAbsoluteTtlMs()) {
+      throw new UnauthorizedError();
+    }
     const user = await this.options.state.adminUsers.getById(session.subject);
     if (!user || user.disabledAt) {
       throw new UnauthorizedError();
@@ -93,8 +104,23 @@ export class AdminAuthService {
     });
   }
 
-  verifyAccessToken(token: string): Promise<AdminPrincipal> {
-    return this.options.accessTokens.verify(token);
+  /**
+   * Verifies the signed token and then checks that its session is still live.
+   *
+   * Without the session check, logging out or changing a password would leave
+   * previously issued access tokens usable for the rest of their lifetime. The
+   * principal carries sessionId precisely so this is possible.
+   */
+  async verifyAccessToken(token: string): Promise<AdminPrincipal> {
+    const principal = await this.options.accessTokens.verify(token);
+    const session = await this.options.state.adminRefreshSessions.get(principal.sessionId);
+    if (!session || session.revokedAt) {
+      throw new UnauthorizedError();
+    }
+    if (Date.parse(session.expiresAt) <= this.options.clock.now().getTime()) {
+      throw new UnauthorizedError();
+    }
+    return principal;
   }
 
   async changeOwnPassword(
@@ -165,7 +191,7 @@ export class AdminAuthService {
     const now = this.options.clock.now();
     const accessTokenExpiresAt = new Date(now.getTime() + this.accessTokenTtlMs());
     const refreshTokenExpiresAt = new Date(now.getTime() + this.refreshTokenTtlMs());
-    const refreshToken = `axis_refresh_${this.options.randomId.create("refresh")}`;
+    const refreshToken = `${REFRESH_TOKEN_PREFIX}${input.sessionId}.${this.options.randomId.create("refresh")}`;
     const scopes = scopesForRole(input.user.role);
     const principal: AdminPrincipal = {
       type: "admin",
@@ -197,14 +223,32 @@ export class AdminAuthService {
   }
 
   private async findValidRefreshSession(refreshToken: string): Promise<AdminRefreshSessionRecord> {
-    for (const session of await this.options.state.adminRefreshSessions.list()) {
-      if (!(await this.options.hasher.verify(refreshToken, session.tokenHash))) continue;
-      if (session.revokedAt || Date.parse(session.expiresAt) <= this.options.clock.now().getTime()) {
-        throw new UnauthorizedError();
-      }
-      return session;
+    const session = await this.findRefreshSession(refreshToken);
+    if (!session) {
+      throw new UnauthorizedError();
     }
-    throw new UnauthorizedError();
+    if (session.revokedAt || Date.parse(session.expiresAt) <= this.options.clock.now().getTime()) {
+      throw new UnauthorizedError();
+    }
+    return session;
+  }
+
+  private async findRefreshSession(refreshToken: string): Promise<AdminRefreshSessionRecord | null> {
+    const sessionId = tokenLookupId(refreshToken, REFRESH_TOKEN_PREFIX);
+    if (sessionId) {
+      const session = await this.options.state.adminRefreshSessions.get(sessionId);
+      if (session && await this.options.hasher.verify(refreshToken, session.tokenHash)) {
+        return session;
+      }
+      return null;
+    }
+    // Tokens issued before the session id was embedded carry no lookup key.
+    for (const session of await this.options.state.adminRefreshSessions.list()) {
+      if (await this.options.hasher.verify(refreshToken, session.tokenHash)) {
+        return session;
+      }
+    }
+    return null;
   }
 
   private async revokeRefreshSessionsForSubject(subject: string, revokedAt: string): Promise<void> {
@@ -223,6 +267,10 @@ export class AdminAuthService {
 
   private refreshTokenTtlMs(): number {
     return (this.options.refreshTokenTtlSeconds ?? 30 * 24 * 60 * 60) * 1000;
+  }
+
+  private sessionAbsoluteTtlMs(): number {
+    return (this.options.sessionAbsoluteTtlSeconds ?? 90 * 24 * 60 * 60) * 1000;
   }
 }
 
