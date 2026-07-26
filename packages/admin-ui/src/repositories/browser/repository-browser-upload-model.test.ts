@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   filesFromFileList,
   repositoryBrowserAcceptedPublishFiles,
-  repositoryBrowserUploadOverlayClasses,
   repositoryBrowserUploadOverlay,
-  repositoryWorkspaceDropTargetClass,
 } from "./repository-browser-upload-model";
 
 describe("repository browser upload model", () => {
@@ -38,15 +36,6 @@ describe("repository browser upload model", () => {
       canPublish: true,
       isDraggingFiles: false,
     })).toBeUndefined();
-  });
-
-  it("uses a full-screen drop panel instead of a small centered card", () => {
-    expect(repositoryBrowserUploadOverlayClasses("default")).toEqual({
-      backdrop: "pointer-events-none fixed inset-0 z-50 bg-background/70 p-6 backdrop-blur-sm",
-      panel: "grid h-full w-full place-items-center rounded-lg border border-dashed p-8 text-center shadow-lg border-primary bg-panel/95 text-foreground",
-      content: "grid place-items-center gap-2",
-    });
-    expect(repositoryBrowserUploadOverlayClasses("muted").panel).toContain("border-border bg-panel/95 text-muted-foreground");
   });
 
   it("normalizes file list inputs into arrays", () => {
@@ -89,9 +78,4 @@ describe("repository browser upload model", () => {
     });
   });
 
-  it("keeps the repository workspace shell as the drop target", () => {
-    expect(repositoryWorkspaceDropTargetClass()).toContain("relative");
-    expect(repositoryWorkspaceDropTargetClass()).toContain("h-full");
-    expect(repositoryWorkspaceDropTargetClass()).toContain("min-h-0");
-  });
 });

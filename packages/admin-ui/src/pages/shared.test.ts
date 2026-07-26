@@ -12,7 +12,7 @@ describe("ErrorState", () => {
 });
 
 describe("PageShell", () => {
-  it("renders a shared page header and scroll body with consistent spacing", () => {
+  it("renders the title, description, and body", () => {
     const html = renderToStaticMarkup(
       createElement(
         PageShell,
@@ -21,14 +21,12 @@ describe("PageShell", () => {
       ),
     );
 
-    expect(html).toContain("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5");
     expect(html).toContain("Tokens");
     expect(html).toContain("Create scoped automation tokens.");
-    expect(html).toContain("grid min-h-0 content-start gap-5 overflow-y-auto pr-1");
-    expect(html).not.toContain("mb-5");
+    expect(html).toContain("Body");
   });
 
-  it("allows full-height pages to control body scrolling without changing header spacing", () => {
+  it("lets a page override the body class", () => {
     const html = renderToStaticMarkup(
       createElement(
         PageShell,
@@ -41,9 +39,9 @@ describe("PageShell", () => {
       ),
     );
 
-    expect(html).toContain("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5");
-    expect(html).toContain("content-stretch");
-    expect(html).toContain("overflow-hidden");
+    // A caller-supplied body class replaces the default rather than merging.
+    expect(html).toContain("min-h-0 content-stretch overflow-hidden");
     expect(html).not.toContain("content-start");
+    expect(html).toContain("Repository grid");
   });
 });

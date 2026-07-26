@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  initialRepositorySelection,
   repositoryDetailBodyClass,
   repositoryListEmptyClass,
   repositoryListEmptyPanelClass,
@@ -11,9 +10,6 @@ import {
 import type { Repository } from "../../api/schemas";
 
 describe("repository page model", () => {
-  it("does not preselect a repository", () => {
-    expect(initialRepositorySelection([repository("debian-internal")])).toBeUndefined();
-  });
 
   it("highlights only the selected repository row", () => {
     expect(repositoryRowStateClass("debian-internal", "debian-internal")).toContain("border-l-primary");

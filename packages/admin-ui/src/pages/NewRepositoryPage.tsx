@@ -15,12 +15,6 @@ import { cn } from "../lib/utils";
 import { ADMIN_UI_PATHS } from "../navigation";
 import { RepositoryDependencyFields } from "../repositories/create/repository-create-dependency-renderer";
 import {
-  repositoryCreateBodyClass,
-  repositoryCreateFooterClass,
-  repositoryCreateStepPanelClass,
-  repositoryCreateSummaryPanelClass,
-} from "../repositories/create/repository-create-layout-model";
-import {
   repositoryCreateAvailabilityError,
   repositoryCreateFieldErrors,
   repositoryCreateStepForServerError,
@@ -158,8 +152,8 @@ export function NewRepositoryPage() {
       )}
     >
       <StepIndicator steps={plugin.steps} currentStep={currentStep} />
-      <div className={repositoryCreateBodyClass()}>
-        <div className={repositoryCreateStepPanelClass()}>
+      <div className="grid min-h-0 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-h-0 overflow-y-auto rounded-lg border border-border bg-panel p-5">
           {currentStep === "plugin" && (
             <PluginStep
               options={pluginOptions}
@@ -213,7 +207,7 @@ export function NewRepositoryPage() {
             </div>
           )}
         </div>
-        <aside className={repositoryCreateSummaryPanelClass()}>
+        <aside className="min-h-0 overflow-y-auto rounded-lg border border-border bg-panel p-4">
           <div className="flex items-center gap-2">
             <Package className="h-4 w-4 text-primary" />
             <h2 className="text-sm font-semibold">{summaryTitle}</h2>
@@ -231,7 +225,7 @@ export function NewRepositoryPage() {
           </div>
         </aside>
       </div>
-      <div className={repositoryCreateFooterClass()}>
+      <div className="flex shrink-0 items-center justify-between border-t border-border bg-background/95 py-4 backdrop-blur">
         <Button
           type="button"
           variant="outline"

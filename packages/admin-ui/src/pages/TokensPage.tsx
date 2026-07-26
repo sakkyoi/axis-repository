@@ -19,7 +19,6 @@ import type { PublishToken, PublishTokenCreateResponse, Repository } from "../ap
 import {
   buildCreatePublishTokenInput,
   deletePublishTokenDialogContent,
-  initialPublishTokenSelection,
   publishTokenDetailActionRowClass,
   publishTokenDetailBodyClass,
   publishTokenListEmptyClass,
@@ -51,7 +50,7 @@ import { asJson, ErrorState, PageShell, formatDate } from "./shared";
 export function TokensPage() {
   const tokens = usePublishTokens();
   const repositories = useRepositories();
-  const [selectedName, setSelectedName] = useState<string | undefined>(() => initialPublishTokenSelection([]));
+  const [selectedName, setSelectedName] = useState<string>();
   const [pendingRevokeName, setPendingRevokeName] = useState<string>();
   const [pendingRotateName, setPendingRotateName] = useState<string>();
   const [pendingDeleteName, setPendingDeleteName] = useState<string>();

@@ -1,9 +1,6 @@
 import type { Repository } from "../../api/schemas";
 import type { DestructiveActionDialogContent } from "../../components/ui/destructive-action-dialog-model";
 
-export function initialRepositorySelection(_repositories: Repository[]): string | undefined {
-  return undefined;
-}
 
 export function repositoryRowStateClass(repositoryName: string, selectedName: string | undefined): string {
   return repositoryName === selectedName

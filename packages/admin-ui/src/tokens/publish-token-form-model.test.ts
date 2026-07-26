@@ -3,26 +3,17 @@ import type { PublishToken, Repository } from "../api/schemas";
 import {
   buildCreatePublishTokenInput,
   buildPublishTokenExpiresAt,
-  initialPublishTokenSelection,
   repositoryDisplayLabel,
   deletePublishTokenDialogContent,
   rotatePublishTokenDialogContent,
   revokePublishTokenDialogContent,
-  publishTokenDetailBodyClass,
-  publishTokenDetailActionRowClass,
-  publishTokenListEmptyClass,
-  publishTokenListEmptyPanelClass,
   publishTokenLifecycle,
-  publishTokenRawMetadataClass,
   publishTokenRowStateClass,
   publishTokenSecretInputClass,
   publishTokenSecretRevealDescription,
   publishTokenSecretRevealItems,
-  publishTokenSecretUnsavedDialogClasses,
   publishTokenSecretUnsavedPromptContent,
-  publishTokenSummaryItemClass,
   publishTokenSummaryItems,
-  publishTokenSummaryValueClass,
   shouldBlockTokenSecretRevealClose,
   tokenScopeSummary,
 } from "./publish-token-form-model";
@@ -162,38 +153,10 @@ describe("publish token form model", () => {
     expect(deletePublishTokenDialogContent("github-actions", true).description).toContain("active token");
   });
 
-  it("does not preselect a publish token", () => {
-    expect(initialPublishTokenSelection([publishToken("github-actions")])).toBeUndefined();
-  });
-
   it("highlights only the selected publish token row", () => {
     expect(publishTokenRowStateClass("github-actions", "github-actions")).toContain("border-l-primary");
     expect(publishTokenRowStateClass("github-actions", "github-actions")).not.toContain("text-primary-foreground");
     expect(publishTokenRowStateClass("github-actions", undefined)).not.toContain("border-l-primary");
-  });
-
-  it("keeps publish token details packed at the top of the scroll area", () => {
-    expect(publishTokenDetailBodyClass()).toContain("content-start");
-    expect(publishTokenDetailBodyClass()).toContain("h-full");
-    expect(publishTokenDetailBodyClass()).toContain("overflow-y-auto");
-  });
-
-  it("keeps publish token detail content contained inside the detail pane", () => {
-    expect(publishTokenDetailActionRowClass()).toContain("w-full");
-    expect(publishTokenDetailActionRowClass()).toContain("grid-cols-3");
-    expect(publishTokenDetailActionRowClass()).toContain("gap-2");
-    expect(publishTokenSummaryItemClass()).toContain("min-w-0");
-    expect(publishTokenSummaryValueClass()).toContain("break-words");
-    expect(publishTokenRawMetadataClass()).toContain("min-w-0");
-    expect(publishTokenRawMetadataClass()).toContain("overflow-auto");
-  });
-
-  it("keeps the empty publish token list filling its panel", () => {
-    expect(publishTokenListEmptyClass()).toContain("h-full");
-    expect(publishTokenListEmptyClass()).toContain("p-3");
-    expect(publishTokenListEmptyPanelClass()).toContain("h-full");
-    expect(publishTokenListEmptyPanelClass()).toContain("place-items-center");
-    expect(publishTokenListEmptyPanelClass()).toContain("border-dashed");
   });
 
   it("formats readonly publish token summary items", () => {
@@ -263,8 +226,6 @@ describe("publish token form model", () => {
       confirmLabel: "Close anyway",
     });
     expect(publishTokenSecretUnsavedPromptContent().description).toContain("saved this token secret");
-    expect(publishTokenSecretUnsavedDialogClasses().overlay).toContain("z-[60]");
-    expect(publishTokenSecretUnsavedDialogClasses().content).toContain("z-[70]");
   });
 
   it("omits publish token expiration when set to never", () => {

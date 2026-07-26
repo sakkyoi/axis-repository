@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { clipboardCopiedResetMs } from "./copy-feedback-model";
+
+const COPIED_RESET_MS = 1500;
 
 export function useClipboardCopyFeedback() {
   const [copied, setCopied] = useState(false);
@@ -22,7 +23,7 @@ export function useClipboardCopyFeedback() {
     copiedResetTimeoutRef.current = setTimeout(() => {
       setCopied(false);
       copiedResetTimeoutRef.current = undefined;
-    }, clipboardCopiedResetMs());
+    }, COPIED_RESET_MS);
   }
 
   return { copied, copyText, clearCopiedFeedback };

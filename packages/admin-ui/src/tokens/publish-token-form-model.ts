@@ -97,9 +97,6 @@ export function repositoryDisplayLabel(repository: Repository): string {
   return `${repository.name} (${repository.ecosystem})`;
 }
 
-export function initialPublishTokenSelection(_tokens: PublishToken[]): string | undefined {
-  return undefined;
-}
 
 export function publishTokenRowStateClass(tokenName: string, selectedName: string | undefined): string {
   return tokenName === selectedName

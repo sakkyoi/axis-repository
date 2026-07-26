@@ -14,7 +14,6 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { ErrorState } from "../../pages/shared";
-import { repositoryEmptyStatePanelClass } from "../detail/repository-empty-state-model";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
   repositoryArtifactDeleteDialogContent,
@@ -103,7 +102,7 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
         {artifacts.isError && <div className="p-3"><ErrorState title="Repository artifacts unavailable" error={artifacts.error} /></div>}
         {!artifacts.isLoading && !artifacts.isError && rows.length === 0 && (
           <div className="grid min-h-64 p-3">
-            <div className={repositoryEmptyStatePanelClass()}>
+            <div className="grid min-h-[calc(16rem-1.5rem)] place-items-center rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
               No indexed artifacts yet. Publish artifacts or rebuild the index after adding repository contents.
             </div>
           </div>
