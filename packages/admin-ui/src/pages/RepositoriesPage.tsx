@@ -9,8 +9,14 @@ import { ADMIN_UI_PATHS, repositorySettingsPath, repositoryWorkspacePath } from 
 import { pluginLifecycleSummary } from "../repositories/plugins/plugin-lifecycle";
 import { repositorySummarySectionsFor } from "../repositories/plugins/repository-detail-plugins";
 import { RepositoryDetailSections } from "../repositories/detail/repository-detail-shared";
-import { repositoryDetailBodyClass, repositoryRowStateClass, repositorySummaryItems } from "../repositories/detail/repository-page-model";
-import { EmptyState, ErrorState, PageHeader, formatDate } from "./shared";
+import {
+  repositoryDetailBodyClass,
+  repositoryListEmptyClass,
+  repositoryListEmptyPanelClass,
+  repositoryRowStateClass,
+  repositorySummaryItems,
+} from "../repositories/detail/repository-page-model";
+import { ErrorState, PageHeader, formatDate } from "./shared";
 
 export function RepositoriesPage() {
   const navigate = useNavigate();
@@ -43,8 +49,10 @@ export function RepositoriesPage() {
           <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
             <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
               {repositories.data.length === 0 ? (
-                <div className="p-4">
-                  <EmptyState message="No repositories have been created." />
+                <div className={repositoryListEmptyClass()}>
+                  <div className={repositoryListEmptyPanelClass()}>
+                    No repositories have been created.
+                  </div>
                 </div>
               ) : (
               <table className="w-full border-collapse text-sm">

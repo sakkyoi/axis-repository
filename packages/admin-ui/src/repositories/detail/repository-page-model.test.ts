@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   initialRepositorySelection,
   repositoryDetailBodyClass,
+  repositoryListEmptyClass,
+  repositoryListEmptyPanelClass,
   repositorySummaryItems,
   repositoryRowStateClass,
 } from "./repository-page-model";
@@ -22,6 +24,14 @@ describe("repository page model", () => {
     expect(repositoryDetailBodyClass()).toContain("content-start");
     expect(repositoryDetailBodyClass()).toContain("h-full");
     expect(repositoryDetailBodyClass()).toContain("overflow-y-auto");
+  });
+
+  it("keeps the empty repository list filling its panel", () => {
+    expect(repositoryListEmptyClass()).toContain("h-full");
+    expect(repositoryListEmptyClass()).toContain("p-3");
+    expect(repositoryListEmptyPanelClass()).toContain("h-full");
+    expect(repositoryListEmptyPanelClass()).toContain("place-items-center");
+    expect(repositoryListEmptyPanelClass()).toContain("border-dashed");
   });
 
   it("formats readonly repository summary items", () => {
