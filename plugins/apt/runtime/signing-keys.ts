@@ -82,13 +82,28 @@ export class AptSigningKeyResource implements RepositorySigningKeyCapability {
     return toPublicSigningKey(await this.options.secrets.get(id));
   }
 
-  async getActivePrivateKey(id: string): Promise<RepositoryActivePrivateSigningKey> {
+  async getActivePrivateKey(
+    id: string,
+    repositoryName: string,
+  ): Promise<RepositoryActivePrivateSigningKey> {
     const secret = await this.options.secrets.getActive(id);
+    // Repository config is mutable, so the id reaching this point is not
+    // necessarily one this repository owns. Refuse to hand back key material
+    // that belongs to a different repository.
+    if (secret.repositoryName !== repositoryName) {
+      throw new NotFoundError();
+    }
     return toActivePrivateSigningKey(secret);
   }
 
   async revoke(id: string): Promise<RepositoryPublicSigningKey> {
     return toPublicSigningKey(await this.options.secrets.revoke(id));
+  }
+}
+
+function assertAptSigningKeyNamespace(record: { namespace: string }): void {
+  if (record.namespace !== APT_SIGNING_KEY_NAMESPACE) {
+    throw new NotFoundError();
   }
 }
 
@@ -102,6 +117,7 @@ async function readAndDecryptPrivateKey(privateKeyArmored: string, passphrase: s
 }
 
 function toPublicSigningKey(record: RepositorySecretRecord): RepositoryPublicSigningKey {
+  assertAptSigningKeyNamespace(record);
   return {
     id: record.id,
     repositoryName: record.repositoryName,
@@ -115,6 +131,7 @@ function toPublicSigningKey(record: RepositorySecretRecord): RepositoryPublicSig
 }
 
 function toActivePrivateSigningKey(record: RepositoryActiveSecret): RepositoryActivePrivateSigningKey {
+  assertAptSigningKeyNamespace(record);
   if (record.revokedAt) {
     throw new ValidationError("Signing key has been revoked");
   }

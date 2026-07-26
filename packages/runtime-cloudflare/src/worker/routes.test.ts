@@ -3529,6 +3529,83 @@ describe("Cloudflare runtime routes", () => {
       .toContain("-----BEGIN PGP SIGNATURE-----");
   });
 
+  it("refuses to sign a repository with another repository's signing key", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const debBytes = aptDebFixture();
+    const debSha256 = await sha256Hex(debBytes);
+    // createSigningKey imports into debian-internal, so this key belongs there.
+    const victimKey = await createSigningKey(app);
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      config: validAptConfig(victimKey.id),
+    });
+    await createRepository(app, {
+      name: "debian-attacker",
+      ecosystem: "apt",
+      config: validAptConfig(victimKey.id),
+    });
+
+    const sessionResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-sessions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          repositoryName: "debian-attacker",
+          ecosystem: "apt",
+          artifacts: [{
+            filename: "myapp_1.2.3_amd64.deb",
+            size: debBytes.byteLength,
+            sha256: debSha256,
+            contentType: "application/vnd.debian.binary-package",
+            metadata: {
+              package: "myapp",
+              version: "1.2.3",
+              architecture: "amd64",
+              component: "main",
+              description: "Example package",
+              maintainer: "Release Team <release@example.com>",
+            },
+          }],
+        }),
+      }),
+    );
+    expect(sessionResponse.status).toBe(201);
+    const session = (await sessionResponse.json()) as {
+      id: string;
+      uploads: Array<{ uploadId: string; url: string; headers: Record<string, string> }>;
+    };
+    const upload = session.uploads[0]!;
+
+    await app.fetch(new Request(`https://axis.example${upload.url}`, {
+      method: "PUT",
+      headers: upload.headers,
+      body: debBytes,
+    }));
+    await app.fetch(new Request(
+      `https://axis.example/admin/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+      { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    const finalizeResponse = await app.fetch(
+      new Request(`https://axis.example/admin/publish-sessions/${session.id}/finalize`, {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(finalizeResponse.status).toBe(404);
+    expect(
+      harness.repositoryObjectStore.objects.some((object) =>
+        object.key.startsWith("repositories/debian-attacker/dists/"),
+      ),
+    ).toBe(false);
+  });
+
   it("fails closed when finalizing APT without matching signing key scope", async () => {
     const { generateKey } = await import("openpgp");
     const key = await generateKey({

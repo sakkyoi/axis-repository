@@ -33,7 +33,12 @@ export interface RepositorySigningKeyCapability {
     userIdEmail: string;
   }): Promise<RepositoryPublicSigningKey>;
   getPublicKey(id: string): Promise<RepositoryPublicSigningKey>;
-  getActivePrivateKey(id: string): Promise<RepositoryActivePrivateSigningKey>;
+  /**
+   * Resolves a usable private key only when it belongs to `repositoryName`.
+   * The repository is required so that callers cannot sign one repository's
+   * metadata with another repository's key.
+   */
+  getActivePrivateKey(id: string, repositoryName: string): Promise<RepositoryActivePrivateSigningKey>;
   revoke(id: string): Promise<RepositoryPublicSigningKey>;
 }
 

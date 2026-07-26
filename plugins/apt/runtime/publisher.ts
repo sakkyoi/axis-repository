@@ -50,7 +50,10 @@ export class AptPublisher implements ArtifactPublisher {
     }
     const enrichedInput = await this.enrichArtifactsWithDebControlMetadata(input);
     const metadata = await buildAptRepositoryMetadata(enrichedInput);
-    const key = await this.options.signingKeys.getActivePrivateKey(metadata.config.signingKeyId);
+    const key = await this.options.signingKeys.getActivePrivateKey(
+      metadata.config.signingKeyId,
+      input.repository.name,
+    );
     const publishedAt = input.session.publishStartedAt ?? input.session.finalizingStartedAt ?? input.session.createdAt;
     const signingDate = new Date(publishedAt);
     const inReleasePath = metadata.releasePath.replace(/\/Release$/, "/InRelease");
