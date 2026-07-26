@@ -7,6 +7,11 @@ export interface AdminUiAsset {
 
 export interface AdminUiRuntimeConfig {
   apiBaseUrl?: string;
+  /**
+   * Origin the browser uploads artifacts to, when that is not this origin.
+   * Narrows connect-src to the one host presigned uploads actually need.
+   */
+  uploadOrigin?: string;
 }
 
 function jsonForInlineScript(value: unknown): string {
@@ -37,6 +42,17 @@ function bytesToText(value: BodyInit): string {
   throw new Error("Admin UI HTML asset must be text-compatible");
 }
 
+const MODULE_SCRIPT_TAG = /<script\b(?![^>]*\bnonce=)([^>]*\btype="module"[^>]*)>/gi;
+
+/**
+ * Injects the runtime config and stamps the nonce onto every script the shell
+ * loads.
+ *
+ * The build's own module script needs the nonce too: the policy is nonce-only,
+ * so an unstamped tag would simply not run. That is the point — with no host
+ * source in `script-src`, a same-origin URL is not sufficient on its own, which
+ * is what stops a publisher-supplied artifact being loaded as a script.
+ */
 export function injectAdminUiRuntimeConfig(
   html: BodyInit,
   config: AdminUiRuntimeConfig,
@@ -46,7 +62,9 @@ export function injectAdminUiRuntimeConfig(
   const configScript = `<script${nonceAttribute}>window.__AXIS_ADMIN_CONFIG__=${jsonForInlineScript({
     apiBaseUrl: config.apiBaseUrl ?? "",
   })};</script>`;
-  const htmlText = bytesToText(html);
+  const htmlText = nonce
+    ? bytesToText(html).replace(MODULE_SCRIPT_TAG, `<script nonce="${nonce}"$1>`)
+    : bytesToText(html);
   const moduleScriptIndex = htmlText.search(/<script\b[^>]*\btype="module"[^>]*>/i);
   if (moduleScriptIndex >= 0) {
     return `${htmlText.slice(0, moduleScriptIndex)}${configScript}${htmlText.slice(moduleScriptIndex)}`;

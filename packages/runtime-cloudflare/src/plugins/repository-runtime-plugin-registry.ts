@@ -46,6 +46,22 @@ function clonePlugin(descriptor: ArtifactRepositoryPlugin): ArtifactRepositoryPl
   };
 }
 
+const ECOSYSTEM_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+
+/**
+ * An ecosystem id decides which secret namespaces a plugin owns
+ * (`<ecosystem>` and `<ecosystem>.*`), so it has to be a single flat token.
+ * Allowing a dot would let a plugin registered as `apt` own everything
+ * belonging to one registered as `apt.extra`.
+ */
+export function assertRegistrableEcosystem(ecosystem: string): void {
+  if (!ECOSYSTEM_PATTERN.test(ecosystem)) {
+    throw new ValidationError(
+      `Repository plugin ecosystem must be lowercase alphanumeric with hyphens: ${ecosystem}`,
+    );
+  }
+}
+
 function validateAdminResourceRoutes(descriptor: RepositoryRuntimePluginDescriptor): void {
   const seenRouteNames = new Set<string>();
   for (const route of descriptor.adminResources?.routes ?? []) {
@@ -62,6 +78,7 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
   private readonly plugins = new Map<Ecosystem, ArtifactRepositoryPlugin>();
 
   register(descriptor: RepositoryRuntimePluginDescriptor): void {
+    assertRegistrableEcosystem(descriptor.ecosystem);
     if (this.plugins.has(descriptor.ecosystem)) {
       throw new ValidationError(
         `Artifact publisher is already registered for ecosystem: ${descriptor.ecosystem}`,

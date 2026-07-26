@@ -197,5 +197,11 @@ Axis deliberately emits no `Access-Control-Allow-Origin` headers, so pointing
 this at a different origin does not work in a browser. Leave it unset for a
 normal deployment.
 
+The admin UI is served under a nonce-only `script-src` with `strict-dynamic`,
+which requires a browser supporting CSP level 3 (Chrome 52+, Firefox 52+,
+Safari 15.4+). There is no host-source fallback on purpose: repository objects
+are served from the same origin with a publisher-chosen content type, so
+allowing `'self'` would let an uploaded artifact be loaded as a script.
+
 Cloudflare deploy configuration lives in root `wrangler.jsonc`. Keep local
 secrets in root `.dev.vars`.

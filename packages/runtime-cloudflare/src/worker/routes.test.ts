@@ -1778,7 +1778,42 @@ describe("Cloudflare runtime routes", () => {
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("frame-ancestors 'none'");
     expect(policy).toContain("base-uri 'none'");
-    expect(policy).not.toContain("'unsafe-inline'; script-src");
+
+    // Repository objects are served from this origin with a publisher-chosen
+    // content type, so a host source in script-src would let an uploaded
+    // artifact be loaded as a script.
+    expect(policy).toContain(`script-src 'nonce-${nonce}' 'strict-dynamic'`);
+    expect(policy).not.toMatch(/script-src[^;]*'self'/);
+    expect(policy).not.toMatch(/script-src[^;]*https:/);
+
+    // Every script the shell loads must carry the nonce, including the build's
+    // own module script, or nonce-only would simply break the app.
+    const scriptTags = body.match(/<script\b[^>]*>/gi) ?? [];
+    expect(scriptTags.length).toBeGreaterThanOrEqual(2);
+    for (const tag of scriptTags) {
+      expect(tag, tag).toContain(`nonce="${nonce}"`);
+    }
+  });
+
+  it("narrows connect-src to the presigned upload host", async () => {
+    const sameOrigin = createApp(createDevDependencies());
+    const presigned = createApp(createDevDependencies(undefined, {
+      uploadOrigin: "https://account123.r2.cloudflarestorage.com",
+    }));
+
+    const sameOriginPolicy = (await sameOrigin.fetch(new Request("https://axis.example/ui/")))
+      .headers.get("content-security-policy") ?? "";
+    const presignedPolicy = (await presigned.fetch(new Request("https://axis.example/ui/")))
+      .headers.get("content-security-policy") ?? "";
+
+    // Allowing all of https: would be an open exfiltration channel after any
+    // injection; only the host uploads actually go to is needed.
+    expect(sameOriginPolicy).toContain("connect-src 'self';");
+    expect(presignedPolicy).toContain(
+      "connect-src 'self' https://account123.r2.cloudflarestorage.com;",
+    );
+    expect(sameOriginPolicy).not.toMatch(/connect-src[^;]*\bhttps:(?!\/\/)/);
+    expect(presignedPolicy).not.toMatch(/connect-src[^;]*\bhttps:(?!\/\/)/);
   });
 
   it("issues a fresh admin UI script nonce per response", async () => {

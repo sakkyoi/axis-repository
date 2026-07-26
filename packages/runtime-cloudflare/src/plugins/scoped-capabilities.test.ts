@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MemoryStateStore, NotFoundError, ValidationError, type Clock, type RandomId } from "@axis-repository/core";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
+import { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import {
@@ -33,6 +34,34 @@ describe("ownsSecretNamespace", () => {
     expect(ownsSecretNamespace("apt", "aptitude")).toBe(false);
     expect(ownsSecretNamespace("apt", "pypi.token")).toBe(false);
     expect(ownsSecretNamespace("pypi", "apt.signing-key")).toBe(false);
+  });
+});
+
+describe("ecosystem ids that namespace ownership depends on", () => {
+  it("refuses ids that could swallow another plugin's namespaces", () => {
+    const registry = new RepositoryRuntimePluginRegistry();
+    const descriptor = {
+      ecosystem: "apt.extra",
+      name: "apt-extra",
+      version: "0.0.0",
+      capabilities: [],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => undefined,
+      publish: {
+        validateArtifacts: () => undefined,
+        authorize: () => undefined,
+        finalize: async () => ({ publishedAt: "2026-07-26T00:00:00.000Z", objects: [] }),
+      },
+    };
+
+    // ownsSecretNamespace treats "apt." as a prefix, so a plugin registered as
+    // "apt" would own everything belonging to "apt.extra".
+    expect(() => registry.register(descriptor)).toThrow(/lowercase alphanumeric/);
+    for (const ecosystem of ["APT", "apt/x", "apt_x", "-apt", "", "apt.signing-key"]) {
+      expect(() => registry.register({ ...descriptor, ecosystem }), ecosystem)
+        .toThrow(/lowercase alphanumeric/);
+    }
+    expect(() => registry.register({ ...descriptor, ecosystem: "apt-extra" })).not.toThrow();
   });
 });
 

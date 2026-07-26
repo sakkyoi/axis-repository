@@ -168,7 +168,14 @@ export function createDurableObjectDependencies(
 
   return {
     adminAuthService,
-    adminUiRuntimeConfig: { apiBaseUrl: env.ADMIN_UI_API_BASE_URL ?? "" },
+    adminUiRuntimeConfig: {
+      apiBaseUrl: env.ADMIN_UI_API_BASE_URL ?? "",
+      // Only the presigned backend uploads cross-origin; the same-origin
+      // brokers upload back to this worker.
+      ...(uploadBackend === "r2" && env.R2_ACCOUNT_ID
+        ? { uploadOrigin: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com` }
+        : {}),
+    },
     repositoryService: new PluginRepositoryService({
       repositoryService,
       plugins: repositoryRuntimePlugins,

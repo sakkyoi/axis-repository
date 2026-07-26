@@ -353,17 +353,27 @@ function objectResponse(input: {
   });
 }
 
-// The admin UI ships one inline script (the injected runtime config); everything
-// else is same-origin. Uploads go straight to presigned storage hosts, so
-// connect-src has to allow outbound https.
-function adminUiContentSecurityPolicy(nonce: string): string {
+/**
+ * Nonce-only script policy.
+ *
+ * `'self'` is deliberately absent: repository objects are served from this same
+ * origin with a publisher-controlled content type, so a host source would let
+ * an uploaded artifact be loaded as a script by any injection. `strict-dynamic`
+ * makes browsers ignore host sources entirely and trust only what an already
+ * trusted script loads, which also covers route chunks the build may add later.
+ */
+function adminUiContentSecurityPolicy(nonce: string, uploadOrigin?: string): string {
+  // Presigned uploads go straight from the browser to the storage host. Naming
+  // that one origin keeps connect-src from having to allow all of https:, which
+  // would otherwise be an open exfiltration channel after any injection.
+  const connectSources = ["'self'", ...(uploadOrigin ? [uploadOrigin] : [])];
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}'`,
+    `script-src 'nonce-${nonce}' 'strict-dynamic'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self' data:",
-    "connect-src 'self' https:",
+    `connect-src ${connectSources.join(" ")}`,
     "object-src 'none'",
     "base-uri 'none'",
     "frame-ancestors 'none'",
@@ -388,7 +398,10 @@ function adminUiAssetResponse(asset: AdminUiAsset, dependencies: AppDependencies
       headers: {
         "content-type": asset.contentType,
         "cache-control": "no-store",
-        "content-security-policy": adminUiContentSecurityPolicy(nonce),
+        "content-security-policy": adminUiContentSecurityPolicy(
+          nonce,
+          dependencies.adminUiRuntimeConfig.uploadOrigin,
+        ),
       },
     },
   );
