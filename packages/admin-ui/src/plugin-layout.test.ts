@@ -113,6 +113,7 @@ describe("admin UI plugin layout", () => {
 
     expect(settingsPage).toContain("RepositoryPluginAvailabilityHelp");
     expect(settingsPage).toContain("<Info");
+    expect(settingsPage).not.toContain("title={description}");
     expect(settingsPage).not.toContain('<section className="rounded-lg border border-border bg-panel p-5 text-sm text-muted-foreground">');
   });
 });

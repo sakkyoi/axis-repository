@@ -181,6 +181,7 @@ export function SettingsPage() {
 
 function RepositoryPluginAvailabilityHelp() {
   const description = "Repository plugin availability is resolved from the deployment catalog plus admin policy overrides stored by this Axis runtime.";
+  const descriptionId = "repository-plugin-availability-help";
 
   return (
     <span className="group relative inline-flex">
@@ -188,11 +189,14 @@ function RepositoryPluginAvailabilityHelp() {
         type="button"
         className="inline-flex size-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Repository plugin availability help"
-        title={description}
+        aria-describedby={descriptionId}
       >
         <Info className="size-4" aria-hidden="true" />
       </button>
-      <span className="pointer-events-none absolute left-1/2 top-7 z-20 hidden w-72 -translate-x-1/2 rounded-md border border-border bg-panel px-3 py-2 text-xs font-normal text-panel-foreground shadow-lg group-focus-within:block group-hover:block">
+      <span
+        id={descriptionId}
+        className="pointer-events-none absolute left-1/2 top-7 z-20 hidden w-72 -translate-x-1/2 rounded-md border border-border bg-panel px-3 py-2 text-xs font-normal text-panel-foreground shadow-lg group-focus-within:block group-hover:block"
+      >
         {description}
       </span>
     </span>
