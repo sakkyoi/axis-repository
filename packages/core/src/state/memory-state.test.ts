@@ -362,6 +362,18 @@ describe("MemoryStateStore", () => {
     expect(await state.publishTokens.list()).toEqual([token({ id: "tok_2", name: "shared-name" })]);
   });
 
+  it("deletes publish tokens by name and clears indexes", async () => {
+    const state = new MemoryStateStore();
+    await state.publishTokens.save(token({ id: "tok_1", name: "github-actions" }));
+
+    await expect(state.publishTokens.deleteByName("github-actions")).resolves.toBe(true);
+
+    expect(await state.publishTokens.getById("tok_1")).toBeNull();
+    expect(await state.publishTokens.getByName("github-actions")).toBeNull();
+    expect(await state.publishTokens.list()).toEqual([]);
+    await expect(state.publishTokens.deleteByName("github-actions")).resolves.toBe(false);
+  });
+
   it("compare-and-sets publish session status only when the expected status matches", async () => {
     const state = new MemoryStateStore();
     await state.publishSessions.save(session({ status: "ready" }));

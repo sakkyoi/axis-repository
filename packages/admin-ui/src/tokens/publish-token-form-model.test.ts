@@ -5,11 +5,14 @@ import {
   buildPublishTokenExpiresAt,
   initialPublishTokenSelection,
   repositoryDisplayLabel,
+  deletePublishTokenDialogContent,
+  rotatePublishTokenDialogContent,
   revokePublishTokenDialogContent,
   publishTokenDetailBodyClass,
   publishTokenDetailActionRowClass,
   publishTokenListEmptyClass,
   publishTokenListEmptyPanelClass,
+  publishTokenLifecycle,
   publishTokenRawMetadataClass,
   publishTokenRowStateClass,
   publishTokenSecretInputClass,
@@ -145,6 +148,20 @@ describe("publish token form model", () => {
     });
   });
 
+  it("builds destructive dialog copy for rotating and deleting publish tokens", () => {
+    expect(rotatePublishTokenDialogContent("github-actions")).toMatchObject({
+      title: "Rotate publish token",
+      confirmLabel: "Rotate token",
+      confirmationText: "github-actions",
+    });
+    expect(deletePublishTokenDialogContent("github-actions", false)).toMatchObject({
+      title: "Delete publish token",
+      confirmLabel: "Delete token",
+      confirmationText: "github-actions",
+    });
+    expect(deletePublishTokenDialogContent("github-actions", true).description).toContain("active token");
+  });
+
   it("does not preselect a publish token", () => {
     expect(initialPublishTokenSelection([publishToken("github-actions")])).toBeUndefined();
   });
@@ -183,8 +200,33 @@ describe("publish token form model", () => {
       ["Repositories", "debian-internal"],
       ["Signing key scopes", "signing_key_prod"],
       ["Created", "2026-07-23T00:00:00.000Z"],
+      ["Last rotated", "never"],
       ["Expires", "never"],
     ]);
+  });
+
+  it("derives publish token lifecycle states", () => {
+    expect(publishTokenLifecycle(publishToken("github-actions"), new Date("2026-07-23T00:00:00.000Z"))).toEqual({
+      label: "active",
+      variant: "success",
+      active: true,
+    });
+    expect(publishTokenLifecycle({
+      ...publishToken("github-actions"),
+      expiresAt: "2026-07-22T00:00:00.000Z",
+    }, new Date("2026-07-23T00:00:00.000Z"))).toEqual({
+      label: "expired",
+      variant: "default",
+      active: false,
+    });
+    expect(publishTokenLifecycle({
+      ...publishToken("github-actions"),
+      revokedAt: "2026-07-22T00:00:00.000Z",
+    }, new Date("2026-07-23T00:00:00.000Z"))).toEqual({
+      label: "revoked",
+      variant: "destructive",
+      active: false,
+    });
   });
 
   it("formats one-time publish token reveal dialog content", () => {

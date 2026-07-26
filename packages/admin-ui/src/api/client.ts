@@ -93,6 +93,8 @@ export interface AxisClient {
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
   createPublishToken(input: CreatePublishTokenInput): Promise<PublishTokenCreateResponse>;
   revokePublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
+  rotatePublishToken(name: string): Promise<PublishTokenCreateResponse>;
+  deletePublishToken(name: string): Promise<void>;
 }
 
 function encodePathSegment(value: string): string {
@@ -241,6 +243,13 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async revokePublishToken(name: string) {
       const response = await http.post(`/admin/publish-tokens/${encodePathSegment(name)}/revoke`);
       return publishTokenSchema.parse(response.data);
+    },
+    async rotatePublishToken(name: string) {
+      const response = await http.post(`/admin/publish-tokens/${encodePathSegment(name)}/rotate`);
+      return publishTokenCreateResponseSchema.parse(response.data);
+    },
+    async deletePublishToken(name: string) {
+      await http.delete(`/admin/publish-tokens/${encodePathSegment(name)}`);
     },
   };
 }

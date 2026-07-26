@@ -52,11 +52,13 @@ describe("admin API schemas", () => {
         ecosystemScopes: {},
         signingKeyIds: [],
         createdAt: "2026-07-22T00:00:00.000Z",
+        rotatedAt: "2026-07-23T00:00:00.000Z",
       },
       secret: "axis_publish_secret",
     });
 
     expect(response.secret).toBe("axis_publish_secret");
+    expect(response.token.rotatedAt).toBe("2026-07-23T00:00:00.000Z");
     expect(response.token).not.toHaveProperty("tokenHash");
   });
 
@@ -886,6 +888,49 @@ describe("createAxisClient", () => {
       "PUT https://uploads.example/upl_1",
       "POST /admin/publish-sessions/pub_1/uploads/upl_1/verify",
       "POST /admin/publish-sessions/pub_1/finalize",
+    ]);
+  });
+
+  it("rotates and deletes publish tokens through admin endpoints", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      adminToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: config.method === "post"
+          ? {
+              token: {
+                id: "ptok_1",
+                name: "github-actions",
+                permissions: ["publish"],
+                repositories: ["debian-internal"],
+                ecosystemScopes: {},
+                signingKeyIds: [],
+                createdAt: "2026-07-23T00:00:00.000Z",
+                rotatedAt: "2026-07-23T00:01:00.000Z",
+              },
+              secret: "axis_publish_rotated",
+            }
+          : undefined,
+        status: config.method === "delete" ? 204 : 200,
+        statusText: config.method === "delete" ? "No Content" : "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.rotatePublishToken("github actions")).resolves.toMatchObject({
+      secret: "axis_publish_rotated",
+      token: { name: "github-actions", rotatedAt: "2026-07-23T00:01:00.000Z" },
+    });
+    await expect(client.deletePublishToken("github actions")).resolves.toBeUndefined();
+
+    expect(requests).toEqual([
+      "POST /admin/publish-tokens/github%20actions/rotate",
+      "DELETE /admin/publish-tokens/github%20actions",
     ]);
   });
 });

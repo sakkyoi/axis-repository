@@ -128,6 +128,7 @@ export interface PublishTokenStore {
   getByName(name: string): Promise<PublishTokenRecord | null>;
   list(): Promise<PublishTokenRecord[]>;
   save(token: PublishTokenRecord): Promise<void>;
+  deleteByName(name: string): Promise<boolean>;
 }
 
 export interface RepositorySecretStore {

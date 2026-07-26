@@ -969,11 +969,27 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     return jsonResponse(publicPublishToken(await dependencies.publishTokenService.revoke(revokePublishTokenName)));
   }
+  const rotatePublishTokenName = parseAdminResourceActionPath(request.url, "publish-tokens", "rotate");
+  if (rotatePublishTokenName) {
+    requireAdmin(request, dependencies.adminToken);
+    if (request.method !== "POST") {
+      throw new NotFoundError();
+    }
+    const result = await dependencies.publishTokenService.rotate(rotatePublishTokenName);
+    return jsonResponse({
+      token: publicPublishToken(result.record),
+      secret: result.secret,
+    });
+  }
   const adminPublishTokenName = parseAdminResourcePath(request.url, "publish-tokens");
   if (adminPublishTokenName) {
     requireAdmin(request, dependencies.adminToken);
     if (request.method === "GET") {
       return jsonResponse(publicPublishToken(await dependencies.publishTokenService.getByName(adminPublishTokenName)));
+    }
+    if (request.method === "DELETE") {
+      await dependencies.publishTokenService.delete(adminPublishTokenName);
+      return new Response(null, { status: 204 });
     }
     throw new NotFoundError();
   }

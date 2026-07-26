@@ -237,3 +237,21 @@ export function useRevokePublishToken() {
   });
 }
 
+export function useRotatePublishToken() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => client.rotatePublishToken(name),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["publish-tokens"] }),
+  });
+}
+
+export function useDeletePublishToken() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => client.deletePublishToken(name),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["publish-tokens"] }),
+  });
+}
+

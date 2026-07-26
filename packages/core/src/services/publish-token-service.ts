@@ -31,6 +31,11 @@ export interface CreatePublishTokenResult {
   secret: string;
 }
 
+export interface RotatePublishTokenResult {
+  record: PublishTokenRecord;
+  secret: string;
+}
+
 export interface PublishTokenServiceOptions {
   state: StateStore;
   clock: Clock;
@@ -103,6 +108,31 @@ export class PublishTokenService {
     };
     await this.options.state.publishTokens.save(revoked);
     return copyRecord(revoked);
+  }
+
+  async rotate(name: string): Promise<RotatePublishTokenResult> {
+    const record = await this.options.state.publishTokens.getByName(name);
+    if (!record) {
+      throw new NotFoundError(`Publish token not found: ${name}`);
+    }
+    if (record.revokedAt) {
+      throw new ValidationError("Publish token has been revoked");
+    }
+    const secret = `axis_publish_${this.options.randomId.create("tok")}`;
+    const rotated: PublishTokenRecord = {
+      ...record,
+      tokenHash: await this.options.hasher.hash(secret),
+      rotatedAt: this.options.clock.now().toISOString(),
+    };
+    await this.options.state.publishTokens.save(rotated);
+    return { record: copyRecord(rotated), secret };
+  }
+
+  async delete(name: string): Promise<void> {
+    const deleted = await this.options.state.publishTokens.deleteByName(name);
+    if (!deleted) {
+      throw new NotFoundError(`Publish token not found: ${name}`);
+    }
   }
 
   async verify(secret: string): Promise<TokenPrincipal> {

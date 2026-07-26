@@ -110,6 +110,7 @@ export const publishTokenSchema = z.object({
   signingKeyIds: z.array(z.string()),
   createdAt: z.string(),
   expiresAt: z.string().optional(),
+  rotatedAt: z.string().optional(),
   revokedAt: z.string().optional(),
 });
 

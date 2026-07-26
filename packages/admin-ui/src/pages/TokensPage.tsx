@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Plus, RotateCcw } from "lucide-react";
+import { Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { CopyToClipboardButton } from "../components/ui/copy-to-clipboard-button";
@@ -7,15 +7,24 @@ import { DestructiveActionDialog } from "../components/ui/destructive-action-dia
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { useCreatePublishToken, usePublishTokens, useRepositories, useRevokePublishToken } from "../api/hooks";
+import {
+  useCreatePublishToken,
+  useDeletePublishToken,
+  usePublishTokens,
+  useRepositories,
+  useRevokePublishToken,
+  useRotatePublishToken,
+} from "../api/hooks";
 import type { PublishToken, PublishTokenCreateResponse, Repository } from "../api/schemas";
 import {
   buildCreatePublishTokenInput,
+  deletePublishTokenDialogContent,
   initialPublishTokenSelection,
   publishTokenDetailActionRowClass,
   publishTokenDetailBodyClass,
   publishTokenListEmptyClass,
   publishTokenListEmptyPanelClass,
+  publishTokenLifecycle,
   publishTokenRawMetadataClass,
   publishTokenRawMetadataContainerClass,
   publishTokenRowStateClass,
@@ -29,6 +38,7 @@ import {
   publishTokenSummaryItems,
   publishTokenSummaryValueClass,
   repositoryDisplayLabel,
+  rotatePublishTokenDialogContent,
   revokePublishTokenDialogContent,
   shouldBlockTokenSecretRevealClose,
   type PublishTokenExpirationMode,
@@ -43,9 +53,20 @@ export function TokensPage() {
   const repositories = useRepositories();
   const [selectedName, setSelectedName] = useState<string | undefined>(() => initialPublishTokenSelection([]));
   const [pendingRevokeName, setPendingRevokeName] = useState<string>();
+  const [pendingRotateName, setPendingRotateName] = useState<string>();
+  const [pendingDeleteName, setPendingDeleteName] = useState<string>();
+  const [revealedToken, setRevealedToken] = useState<PublishTokenCreateResponse>();
   const selected = tokens.data?.find((token) => token.name === selectedName);
   const revoke = useRevokePublishToken();
+  const rotate = useRotatePublishToken();
+  const deleteToken = useDeletePublishToken();
   const revokeDialogContent = pendingRevokeName ? revokePublishTokenDialogContent(pendingRevokeName) : undefined;
+  const rotateDialogContent = pendingRotateName ? rotatePublishTokenDialogContent(pendingRotateName) : undefined;
+  const pendingDeleteToken = tokens.data?.find((token) => token.name === pendingDeleteName);
+  const pendingDeleteLifecycle = pendingDeleteToken ? publishTokenLifecycle(pendingDeleteToken) : undefined;
+  const deleteDialogContent = pendingDeleteName
+    ? deletePublishTokenDialogContent(pendingDeleteName, Boolean(pendingDeleteLifecycle?.active))
+    : undefined;
 
   function closeRevokeDialog() {
     if (revoke.isPending) return;
@@ -57,6 +78,41 @@ export function TokensPage() {
     if (!pendingRevokeName) return;
     revoke.mutate(pendingRevokeName, {
       onSuccess: () => setPendingRevokeName(undefined),
+    });
+  }
+
+  function closeRotateDialog() {
+    if (rotate.isPending) return;
+    setPendingRotateName(undefined);
+    rotate.reset();
+  }
+
+  function confirmRotateToken() {
+    if (!pendingRotateName) return;
+    rotate.mutate(pendingRotateName, {
+      onSuccess: (result) => {
+        setPendingRotateName(undefined);
+        setRevealedToken(result);
+      },
+    });
+  }
+
+  function closeDeleteDialog() {
+    if (deleteToken.isPending) return;
+    setPendingDeleteName(undefined);
+    deleteToken.reset();
+  }
+
+  function confirmDeleteToken() {
+    if (!pendingDeleteName) return;
+    const deletingName = pendingDeleteName;
+    deleteToken.mutate(deletingName, {
+      onSuccess: () => {
+        setPendingDeleteName(undefined);
+        if (selectedName === deletingName) {
+          setSelectedName(undefined);
+        }
+      },
     });
   }
 
@@ -92,20 +148,12 @@ export function TokensPage() {
                   </thead>
                   <tbody>
                     {tokens.data.map((token) => (
-                      <tr
+                      <PublishTokenRow
                         key={token.id}
-                        className={`cursor-pointer border-t border-border ${publishTokenRowStateClass(token.name, selectedName)}`}
-                        onClick={() => setSelectedName(token.name)}
-                      >
-                        <td className="px-3 py-2 font-medium">{token.name}</td>
-                        <td className="px-3 py-2">{token.permissions.join(", ")}</td>
-                        <td className="px-3 py-2">{token.repositories.join(", ")}</td>
-                        <td className="px-3 py-2">
-                          <Badge variant={token.revokedAt ? "destructive" : "success"}>
-                            {token.revokedAt ? "revoked" : "active"}
-                          </Badge>
-                        </td>
-                      </tr>
+                        token={token}
+                        selectedName={selectedName}
+                        onSelect={() => setSelectedName(token.name)}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -114,8 +162,10 @@ export function TokensPage() {
             {selected ? (
               <PublishTokenDetail
                 token={selected}
-                revokePending={revoke.isPending}
+                actionPending={revoke.isPending || rotate.isPending || deleteToken.isPending}
                 onRevoke={() => setPendingRevokeName(selected.name)}
+                onRotate={() => setPendingRotateName(selected.name)}
+                onDelete={() => setPendingDeleteName(selected.name)}
               />
             ) : <PublishTokenDetailEmptyState />}
           </div>
@@ -139,7 +189,74 @@ export function TokensPage() {
           onConfirm={confirmRevokeToken}
         />
       )}
+      {rotateDialogContent && (
+        <DestructiveActionDialog
+          open={Boolean(pendingRotateName)}
+          title={rotateDialogContent.title}
+          description={rotateDialogContent.description}
+          confirmLabel={rotateDialogContent.confirmLabel}
+          pendingLabel={rotateDialogContent.pendingLabel}
+          confirmationText={rotateDialogContent.confirmationText}
+          pending={rotate.isPending}
+          error={rotate.isError ? rotate.error : undefined}
+          onOpenChange={(open) => {
+            if (!open) {
+              closeRotateDialog();
+            }
+          }}
+          onConfirm={confirmRotateToken}
+        />
+      )}
+      {deleteDialogContent && (
+        <DestructiveActionDialog
+          open={Boolean(pendingDeleteName)}
+          title={deleteDialogContent.title}
+          description={deleteDialogContent.description}
+          confirmLabel={deleteDialogContent.confirmLabel}
+          pendingLabel={deleteDialogContent.pendingLabel}
+          confirmationText={deleteDialogContent.confirmationText}
+          pending={deleteToken.isPending}
+          error={deleteToken.isError ? deleteToken.error : undefined}
+          onOpenChange={(open) => {
+            if (!open) {
+              closeDeleteDialog();
+            }
+          }}
+          onConfirm={confirmDeleteToken}
+        />
+      )}
+      <TokenCreatedDialog
+        result={revealedToken}
+        onClose={() => setRevealedToken(undefined)}
+      />
     </section>
+  );
+}
+
+function PublishTokenRow({
+  token,
+  selectedName,
+  onSelect,
+}: {
+  token: PublishToken;
+  selectedName: string | undefined;
+  onSelect: () => void;
+}) {
+  const lifecycle = publishTokenLifecycle(token);
+  return (
+    <tr
+      className={`cursor-pointer border-t border-border ${publishTokenRowStateClass(token.name, selectedName)}`}
+      onClick={onSelect}
+    >
+      <td className="px-3 py-2 font-medium">{token.name}</td>
+      <td className="px-3 py-2">{token.permissions.join(", ")}</td>
+      <td className="px-3 py-2">{token.repositories.join(", ")}</td>
+      <td className="px-3 py-2">
+        <Badge variant={lifecycle.variant}>
+          {lifecycle.label}
+        </Badge>
+      </td>
+    </tr>
   );
 }
 
@@ -158,14 +275,19 @@ function PublishTokenDetailEmptyState() {
 
 function PublishTokenDetail({
   token,
-  revokePending,
+  actionPending,
   onRevoke,
+  onRotate,
+  onDelete,
 }: {
   token: PublishToken;
-  revokePending: boolean;
+  actionPending: boolean;
   onRevoke: () => void;
+  onRotate: () => void;
+  onDelete: () => void;
 }) {
   const summaryItems = publishTokenSummaryItems(token);
+  const lifecycle = publishTokenLifecycle(token);
   return (
     <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
       <div className="sticky top-0 z-10 border-b border-border bg-panel p-4">
@@ -174,8 +296,8 @@ function PublishTokenDetail({
             <h2 className="truncate text-base font-semibold">{token.name}</h2>
             <p className="text-sm text-muted-foreground">Created {formatDate(token.createdAt)}</p>
           </div>
-          <Badge className="shrink-0" variant={token.revokedAt ? "destructive" : "success"}>
-            {token.revokedAt ? "revoked" : "active"}
+          <Badge className="shrink-0" variant={lifecycle.variant}>
+            {lifecycle.label}
           </Badge>
         </div>
       </div>
@@ -183,11 +305,27 @@ function PublishTokenDetail({
         <div className={publishTokenDetailActionRowClass()}>
           <Button
             variant="destructive"
-            disabled={Boolean(token.revokedAt) || revokePending}
+            disabled={!lifecycle.active || actionPending}
             onClick={onRevoke}
           >
             <RotateCcw className="mr-2 h-4 w-4" />
             Revoke token
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!lifecycle.active || actionPending}
+            onClick={onRotate}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Rotate token
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={actionPending}
+            onClick={onDelete}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete token
           </Button>
         </div>
         <div className={publishTokenSummaryGridClass()}>
@@ -195,7 +333,9 @@ function PublishTokenDetail({
             <div key={label} className={publishTokenSummaryItemClass()}>
               <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
               <span className={publishTokenSummaryValueClass()}>
-                {label === "Created" || label === "Expires" && value !== "never" ? formatDate(value) : value}
+                {label === "Created" || (label === "Last rotated" || label === "Expires") && value !== "never"
+                  ? formatDate(value)
+                  : value}
               </span>
             </div>
           ))}

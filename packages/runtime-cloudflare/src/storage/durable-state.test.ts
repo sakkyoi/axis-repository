@@ -293,6 +293,28 @@ describe("DurableStateStore", () => {
     });
   });
 
+  it("deletes publish tokens by name and clears indexes", async () => {
+    const state = new DurableStateStore(new FakeDurableStorage());
+    const original: PublishTokenRecord = {
+      id: "ptok_1",
+      name: "github-actions",
+      tokenHash: "hash",
+      permissions: ["publish"],
+      repositories: ["debian-internal"],
+      ecosystemScopes: {},
+      signingKeyIds: [],
+      createdAt: "2026-07-14T00:00:00.000Z",
+    };
+
+    await state.publishTokens.save(original);
+
+    await expect(state.publishTokens.deleteByName("github-actions")).resolves.toBe(true);
+    await expect(state.publishTokens.getById("ptok_1")).resolves.toBeNull();
+    await expect(state.publishTokens.getByName("github-actions")).resolves.toBeNull();
+    await expect(state.publishTokens.list()).resolves.toEqual([]);
+    await expect(state.publishTokens.deleteByName("github-actions")).resolves.toBe(false);
+  });
+
   it("persists repository secrets by id and scoped name and lists them sorted", async () => {
     const state = new DurableStateStore(new FakeDurableStorage());
     await state.repositorySecrets.save(repositorySecret({ id: "repository_secret_2", name: "zeta" }));

@@ -66,6 +66,7 @@ export interface PublishTokenRecord {
   signingKeyIds: string[];
   createdAt: string;
   expiresAt?: string;
+  rotatedAt?: string;
   revokedAt?: string;
 }
 

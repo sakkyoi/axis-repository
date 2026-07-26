@@ -3575,6 +3575,60 @@ describe("Cloudflare runtime routes", () => {
     expect(secondBody.revokedAt).toBe(firstBody.revokedAt);
   });
 
+  it("rotates publish tokens by name and returns the one-time secret", async () => {
+    const app = createApp();
+    const originalSecret = await createToken(app, {
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens/github-actions/rotate", {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const body = (await response.json()) as { token: Record<string, unknown>; secret: string };
+
+    expect(response.status).toBe(200);
+    expect(body.secret).toMatch(/^axis_publish_/);
+    expect(body.secret).not.toBe(originalSecret);
+    expect(body.token).toMatchObject({
+      name: "github-actions",
+      rotatedAt: expect.any(String),
+    });
+    expect(body.token).not.toHaveProperty("tokenHash");
+    expect(JSON.stringify(body.token)).not.toContain(body.secret);
+  });
+
+  it("deletes publish tokens by name", async () => {
+    const app = createApp();
+    await createToken(app, {
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens/github-actions", {
+        method: "DELETE",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    const getResponse = await app.fetch(
+      new Request("https://axis.example/admin/publish-tokens/github-actions", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
+    expect(getResponse.status).toBe(404);
+  });
+
   it("returns not found for missing publish token admin resources", async () => {
     const app = createApp();
 

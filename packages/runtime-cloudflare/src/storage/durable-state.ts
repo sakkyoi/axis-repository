@@ -144,6 +144,15 @@ export class DurableStateStore implements StateStore {
       await this.storage.put(tokenKey(token.id), token);
       await this.storage.put(tokenNameKey(token.name), token.id);
     },
+    deleteByName: async (name: string): Promise<boolean> => {
+      const id = await this.storage.get<string>(tokenNameKey(name));
+      if (!id) {
+        return false;
+      }
+      await this.storage.delete(tokenNameKey(name));
+      await this.storage.delete(tokenKey(id));
+      return true;
+    },
   };
 
   readonly repositorySecrets = {

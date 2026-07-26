@@ -20,6 +20,13 @@ const randomId: RandomId = {
   create: (prefix: string) => `${prefix}_fixed`,
 };
 
+function sequenceRandomId(values: string[]): RandomId {
+  let index = 0;
+  return {
+    create: (prefix: string) => values[index++] ?? `${prefix}_${index}`,
+  };
+}
+
 const hasher: SecretHasher = {
   hash: async (secret: string) => `hash:${secret}`,
   verify: async (secret: string, hash: string) => hash === `hash:${secret}`,
@@ -431,5 +438,78 @@ describe("PublishTokenService", () => {
     });
 
     await expect(service.revoke("missing")).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("rotates publish token secrets without changing token scope", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId: sequenceRandomId(["ptok_initial", "tok_initial", "tok_rotated"]),
+      hasher,
+    });
+    const result = await service.create({
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+      expiresAt: "2026-07-14T00:00:00.000Z",
+    });
+
+    const rotated = await service.rotate("github-actions");
+
+    expect(rotated.secret).toBe("axis_publish_tok_rotated");
+    expect(rotated.record).toMatchObject({
+      id: result.record.id,
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+      expiresAt: "2026-07-14T00:00:00.000Z",
+      rotatedAt: "2026-07-13T00:00:00.000Z",
+    });
+    await expect(service.verify(result.secret)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.verify(rotated.secret)).resolves.toMatchObject({
+      name: "github-actions",
+      signingKeyIds: ["signing_key_prod"],
+    });
+  });
+
+  it("does not rotate revoked publish tokens", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+    await service.create({
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+    await service.revoke("github-actions");
+
+    await expect(service.rotate("github-actions")).rejects.toThrow("Publish token has been revoked");
+  });
+
+  it("deletes publish tokens", async () => {
+    const service = new PublishTokenService({
+      state: new MemoryStateStore(),
+      clock,
+      randomId,
+      hasher,
+    });
+    const result = await service.create({
+      name: "github-actions",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    await expect(service.delete("github-actions")).resolves.toBeUndefined();
+    await expect(service.getByName("github-actions")).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.verify(result.secret)).rejects.toBeInstanceOf(UnauthorizedError);
   });
 });

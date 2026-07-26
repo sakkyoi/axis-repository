@@ -115,6 +115,19 @@ export function publishTokenListEmptyPanelClass(): string {
   return "grid h-full min-h-0 place-items-center rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground";
 }
 
+export function publishTokenLifecycle(
+  token: Pick<PublishToken, "expiresAt" | "revokedAt">,
+  now: Date = new Date(),
+): { label: "active" | "expired" | "revoked"; variant: "default" | "destructive" | "success"; active: boolean } {
+  if (token.revokedAt) {
+    return { label: "revoked", variant: "destructive", active: false };
+  }
+  if (token.expiresAt && Date.parse(token.expiresAt) <= now.getTime()) {
+    return { label: "expired", variant: "default", active: false };
+  }
+  return { label: "active", variant: "success", active: true };
+}
+
 export function publishTokenDetailBodyClass(): string {
   return "grid h-full min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4";
 }
@@ -162,6 +175,7 @@ export function publishTokenSummaryItems(token: PublishToken): Array<[string, st
     ["Repositories", summary.repositories],
     ["Signing key scopes", summary.signingKeys],
     ["Created", token.createdAt],
+    ["Last rotated", token.rotatedAt ?? "never"],
     ["Expires", token.expiresAt ?? "never"],
   ];
 }
@@ -215,6 +229,28 @@ export function revokePublishTokenDialogContent(tokenName: string): DestructiveA
     description: `Revoke ${tokenName}? Existing automation using this token will stop working.`,
     confirmLabel: "Revoke token",
     pendingLabel: "Revoking...",
+    confirmationText: tokenName,
+  };
+}
+
+export function rotatePublishTokenDialogContent(tokenName: string): DestructiveActionDialogContent {
+  return {
+    title: "Rotate publish token",
+    description: `Rotate ${tokenName}? The current secret will stop working immediately, and the replacement secret will only be shown once.`,
+    confirmLabel: "Rotate token",
+    pendingLabel: "Rotating...",
+    confirmationText: tokenName,
+  };
+}
+
+export function deletePublishTokenDialogContent(tokenName: string, active: boolean): DestructiveActionDialogContent {
+  return {
+    title: "Delete publish token",
+    description: active
+      ? `Delete active token ${tokenName}? Existing automation using this token will stop working and the token record will be removed.`
+      : `Delete ${tokenName}? The token record will be removed from the list.`,
+    confirmLabel: "Delete token",
+    pendingLabel: "Deleting...",
     confirmationText: tokenName,
   };
 }

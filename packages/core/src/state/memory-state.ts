@@ -106,6 +106,15 @@ export class MemoryStateStore implements StateStore {
       this.publishTokenById.set(token.id, token);
       this.publishTokenIdByName.set(token.name, token.id);
     },
+    deleteByName: async (name: string): Promise<boolean> => {
+      const id = this.publishTokenIdByName.get(name);
+      if (!id) {
+        return false;
+      }
+      this.publishTokenIdByName.delete(name);
+      this.publishTokenById.delete(id);
+      return true;
+    },
   };
 
   readonly repositorySecrets = {
