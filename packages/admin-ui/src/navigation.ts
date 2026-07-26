@@ -7,6 +7,7 @@ export const ADMIN_UI_PATHS = {
   repositorySettings: "/ui/repositories/:name/settings",
   tokens: "/ui/tokens",
   users: "/ui/users",
+  profile: "/ui/profile",
   settings: "/ui/settings",
 } as const;
 

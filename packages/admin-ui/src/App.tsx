@@ -3,6 +3,7 @@ import { AppLayout } from "./components/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
 import { NewRepositoryPage } from "./pages/NewRepositoryPage";
+import { ProfilePage } from "./pages/ProfilePage";
 import { RepositoriesPage } from "./pages/RepositoriesPage";
 import { RepositorySettingsPage, RepositoryWorkspacePage } from "./pages/RepositoryWorkspacePage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -24,6 +25,7 @@ export default function App() {
           <Route path={ADMIN_UI_PATHS.repositories} element={<RepositoriesPage />} />
           <Route path={ADMIN_UI_PATHS.tokens} element={<TokensPage />} />
           <Route path={ADMIN_UI_PATHS.users} element={<UsersPage />} />
+          <Route path={ADMIN_UI_PATHS.profile} element={<ProfilePage />} />
           <Route path={ADMIN_UI_PATHS.settings} element={<SettingsPage />} />
         </Route>
       </Route>

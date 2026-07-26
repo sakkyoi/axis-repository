@@ -43,6 +43,14 @@ export function useAdminUsers() {
   });
 }
 
+export function useAdminSession() {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["admin-session"],
+    queryFn: () => client.getAdminSession(),
+  });
+}
+
 export function useChangeOwnPassword() {
   const client = useAxisClient();
   return useMutation({

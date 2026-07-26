@@ -2,7 +2,6 @@ import { UserPlus, Users } from "lucide-react";
 import { useAdminUsers } from "../api/hooks";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { ChangePasswordDialog } from "../users/change-password-dialog";
 import { adminUsersPanelClass, usersPageShellClass } from "../users/users-page-model";
 import { ErrorState, PageHeader, formatDate } from "./shared";
 
@@ -16,13 +15,10 @@ export function UsersPage() {
         title="Users"
         description="Admin identities for this Axis Repository deployment."
         action={(
-          <div className="flex items-center gap-2">
-            <ChangePasswordDialog />
-            <Button type="button" variant="outline" disabled>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add user
-            </Button>
-          </div>
+          <Button type="button" variant="outline" disabled>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Add user
+          </Button>
         )}
       />
 

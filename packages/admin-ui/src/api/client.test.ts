@@ -275,6 +275,39 @@ describe("createAxisClient", () => {
     expect(requests).toEqual(["GET /admin/session"]);
   });
 
+  it("returns the current admin session principal", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      accessToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          ok: true,
+          principal: {
+            type: "admin",
+            subject: "admin_user_1",
+            username: "admin",
+            role: "owner",
+            scopes: ["admin:*"],
+            sessionId: "admin_session_1",
+          },
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.getAdminSession()).resolves.toMatchObject({
+      principal: { username: "admin", role: "owner" },
+    });
+    expect(requests).toEqual(["GET /admin/session"]);
+  });
+
   it("logs in, refreshes, and logs out admin sessions", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",

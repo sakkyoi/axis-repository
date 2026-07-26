@@ -17,6 +17,7 @@ describe("admin UI navigation namespace", () => {
     expect(ADMIN_UI_PATHS.repositorySettings).toBe("/ui/repositories/:name/settings");
     expect(ADMIN_UI_PATHS.tokens).toBe("/ui/tokens");
     expect(ADMIN_UI_PATHS.users).toBe("/ui/users");
+    expect(ADMIN_UI_PATHS.profile).toBe("/ui/profile");
     expect(ADMIN_UI_PATHS.settings).toBe("/ui/settings");
     expect(ADMIN_UI_NAV_ITEMS.map((item) => item.to)).toEqual([
       "/ui/repositories",
