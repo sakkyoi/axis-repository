@@ -12,6 +12,9 @@ import {
   publishTokenListEmptyPanelClass,
   publishTokenRawMetadataClass,
   publishTokenRowStateClass,
+  publishTokenSecretInputClass,
+  publishTokenSecretRevealDescription,
+  publishTokenSecretRevealItems,
   publishTokenSummaryItemClass,
   publishTokenSummaryItems,
   publishTokenSummaryValueClass,
@@ -177,6 +180,17 @@ describe("publish token form model", () => {
       ["Repositories", "debian-internal"],
       ["Signing key scopes", "signing_key_prod"],
       ["Created", "2026-07-23T00:00:00.000Z"],
+      ["Expires", "never"],
+    ]);
+  });
+
+  it("formats one-time publish token reveal dialog content", () => {
+    expect(publishTokenSecretRevealDescription()).toContain("shown only once");
+    expect(publishTokenSecretInputClass()).toContain("font-mono");
+    expect(publishTokenSecretRevealItems(publishToken("github-actions"))).toEqual([
+      ["Name", "github-actions"],
+      ["Permissions", "publish"],
+      ["Repositories", "debian-internal"],
       ["Expires", "never"],
     ]);
   });

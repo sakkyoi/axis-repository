@@ -166,6 +166,24 @@ export function publishTokenSummaryItems(token: PublishToken): Array<[string, st
   ];
 }
 
+export function publishTokenSecretRevealDescription(): string {
+  return "This token secret is shown only once. Copy it now before closing this dialog.";
+}
+
+export function publishTokenSecretInputClass(): string {
+  return "font-mono text-xs";
+}
+
+export function publishTokenSecretRevealItems(token: PublishToken): Array<[string, string]> {
+  const summary = tokenScopeSummary(token);
+  return [
+    ["Name", token.name],
+    ["Permissions", summary.permissions],
+    ["Repositories", summary.repositories],
+    ["Expires", token.expiresAt ?? "never"],
+  ];
+}
+
 export function revokePublishTokenDialogContent(tokenName: string): DestructiveActionDialogContent {
   return {
     title: "Revoke publish token",
