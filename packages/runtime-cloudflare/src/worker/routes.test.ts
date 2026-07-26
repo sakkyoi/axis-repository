@@ -2948,6 +2948,86 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("redacts upload capabilities and peer token scope when reading sessions back", async () => {
+    const app = createApp(createDevDependencies());
+    await createRepository(app, { name: "debian-internal", ecosystem: "apt" });
+    const peerToken = await createToken(app, {
+      name: "peer-ci",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+    const otherToken = await createToken(app, {
+      name: "other-ci",
+      repositories: ["debian-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
+      signingKeyIds: ["signing_key_prod"],
+    });
+
+    const createResponse = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${peerToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        repositoryName: "debian-internal",
+        ecosystem: "apt",
+        artifacts: [{
+          filename: "myapp_1.2.3_amd64.deb",
+          size: 1,
+          sha256: "a".repeat(64),
+          contentType: "application/vnd.debian.binary-package",
+          metadata: {
+            package: "myapp",
+            version: "1.2.3",
+            architecture: "amd64",
+            component: "main",
+            description: "Example package",
+            maintainer: "Release Team <release@example.com>",
+          },
+        }],
+      }),
+    }));
+    const created = (await createResponse.json()) as {
+      id: string;
+      uploads: Array<Record<string, unknown>>;
+    };
+
+    // The creator gets the capability exactly once, at creation.
+    expect(created.uploads[0]).toHaveProperty("url");
+    expect(created.uploads[0]).toHaveProperty("headers");
+
+    const listed = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+      headers: { authorization: `Bearer ${otherToken}` },
+    }));
+    const listedBody = (await listed.json()) as {
+      sessions: Array<{ uploads: Array<Record<string, unknown>>; requestedBy: Record<string, unknown> }>;
+    };
+    const peerSession = listedBody.sessions[0]!;
+
+    expect(peerSession.uploads[0]).not.toHaveProperty("url");
+    expect(peerSession.uploads[0]).not.toHaveProperty("headers");
+    expect(peerSession.uploads[0]).toMatchObject({ uploadId: expect.any(String), filename: "myapp_1.2.3_amd64.deb" });
+    // Identity and attribution stay; permissions, repositories, ecosystem
+    // scopes, and signing key scope of the peer token do not.
+    expect(Object.keys(peerSession.requestedBy).sort()).toEqual(["name", "owner", "tokenId"]);
+    expect(peerSession.requestedBy).toMatchObject({ name: "peer-ci" });
+
+    const fetched = await app.fetch(new Request(`https://axis.example/api/publish-sessions/${created.id}`, {
+      headers: { authorization: `Bearer ${otherToken}` },
+    }));
+    const fetchedBody = (await fetched.json()) as { session: { uploads: Array<Record<string, unknown>> } };
+    expect(fetchedBody.session.uploads[0]).not.toHaveProperty("url");
+
+    const adminListed = await app.fetch(new Request("https://axis.example/admin/publish-sessions", {
+      headers: { authorization: "Bearer dev-admin-token" },
+    }));
+    const adminBody = (await adminListed.json()) as {
+      sessions: Array<{ uploads: Array<Record<string, unknown>> }>;
+    };
+    expect(adminBody.sessions[0]!.uploads[0]).not.toHaveProperty("url");
+  });
+
   it("lists all publish sessions through the admin endpoint", async () => {
     const app = createApp(createDevDependencies());
     await createRepository(app, { name: "debian-internal", ecosystem: "apt" });

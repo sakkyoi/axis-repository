@@ -6,7 +6,7 @@ import {
   useFinalizeAdminPublishSession,
   useVerifyAdminPublishUpload,
 } from "../../api/hooks";
-import type { PublishArtifact, PublishSession, Repository } from "../../api/schemas";
+import type { CreatedPublishSession, PublishArtifact, Repository } from "../../api/schemas";
 
 export interface RepositoryPublishFlowInput {
   repositoryName: string;
@@ -17,8 +17,8 @@ export interface RepositoryPublishFlowInput {
     repositoryName: string;
     ecosystem: string;
     artifacts: PublishArtifact[];
-  }): Promise<PublishSession>;
-  uploadArtifact(upload: PublishSession["uploads"][number], file: File): Promise<void>;
+  }): Promise<CreatedPublishSession>;
+  uploadArtifact(upload: CreatedPublishSession["uploads"][number], file: File): Promise<void>;
   verifyUpload(input: { sessionId: string; uploadId: string }): Promise<unknown>;
   finalizeSession(sessionId: string): Promise<unknown>;
   refresh(): Promise<unknown>;

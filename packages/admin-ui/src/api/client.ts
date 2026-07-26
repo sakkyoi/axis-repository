@@ -5,6 +5,7 @@ import {
   adminAuthResponseSchema,
   adminUsersResponseSchema,
   publishSessionsResponseSchema,
+  createdPublishSessionSchema,
   publishSessionSchema,
   publishTokenCreateResponseSchema,
   publishTokenSchema,
@@ -29,6 +30,7 @@ import {
   type PublishArtifact,
   type AdminAuthResponse,
   type AdminUser,
+  type CreatedPublishSession,
   type UploadTarget,
 } from "./schemas";
 
@@ -96,7 +98,7 @@ export interface AxisClient {
   getRepositoryPluginResource(name: string, namespace: string, path: readonly string[]): Promise<unknown>;
   postRepositoryPluginResource(name: string, namespace: string, path: readonly string[], input?: unknown): Promise<unknown>;
   listPublishSessions(): Promise<PublishSession[]>;
-  createAdminPublishSession(input: CreateAdminPublishSessionInput): Promise<PublishSession>;
+  createAdminPublishSession(input: CreateAdminPublishSessionInput): Promise<CreatedPublishSession>;
   uploadPublishArtifact(target: UploadTarget, body: Blob): Promise<void>;
   verifyAdminPublishUpload(sessionId: string, uploadId: string): Promise<PublishSession>;
   finalizeAdminPublishSession(sessionId: string): Promise<PublishSession>;
@@ -243,7 +245,7 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     },
     async createAdminPublishSession(input: CreateAdminPublishSessionInput) {
       const response = await http.post("/admin/publish-sessions", input);
-      return publishSessionSchema.parse(response.data);
+      return createdPublishSessionSchema.parse(response.data);
     },
     async uploadPublishArtifact(target: UploadTarget, body: Blob) {
       await axios.request({

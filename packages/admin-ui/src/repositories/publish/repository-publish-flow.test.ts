@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PublishArtifact, PublishSession } from "../../api/schemas";
+import type { CreatedPublishSession, PublishArtifact } from "../../api/schemas";
 import { publishRepositoryArtifacts } from "./repository-publish-flow";
 
 const artifact: PublishArtifact = {
@@ -10,7 +10,7 @@ const artifact: PublishArtifact = {
   metadata: {},
 };
 
-const session: PublishSession = {
+const session: CreatedPublishSession = {
   id: "pub_1",
   repositoryName: "debian-internal",
   ecosystem: "apt",
@@ -18,10 +18,6 @@ const session: PublishSession = {
   requestedBy: {
     tokenId: "admin",
     name: "admin",
-    permissions: ["publish"],
-    repositories: ["debian-internal"],
-    ecosystemScopes: {},
-    signingKeyIds: [],
   },
   artifacts: [artifact],
   uploads: [

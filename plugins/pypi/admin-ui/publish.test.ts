@@ -18,10 +18,6 @@ function session(): PublishSession {
     requestedBy: {
       tokenId: "tok_1",
       name: "ci",
-      permissions: ["publish"],
-      repositories: ["python-internal"],
-      ecosystemScopes: {},
-      signingKeyIds: [],
     },
     artifacts: [{
       filename: "demo-1.2.3-py3-none-any.whl",

@@ -69,6 +69,25 @@ function publicPublishToken(record: PublishTokenRecord): Omit<PublishTokenRecord
   return publicRecord;
 }
 
+/**
+ * Upload targets carry presigned URLs and signed headers, so they are bearer
+ * capabilities for writing to storage. They are handed out once when the
+ * session is created; every later read of the session redacts them, along with
+ * the authorization detail of the principal that created it. Otherwise any
+ * token scoped to the same repository could read a peer's in-flight capability.
+ */
+function readablePublishSession(session: PublishSession) {
+  return {
+    ...session,
+    requestedBy: {
+      tokenId: session.requestedBy.tokenId,
+      name: session.requestedBy.name,
+      ...(session.requestedBy.owner ? { owner: { ...session.requestedBy.owner } } : {}),
+    },
+    uploads: session.uploads.map(({ url, headers, ...upload }) => upload),
+  };
+}
+
 function publicAdminUser(record: AdminUserRecord): Omit<AdminUserRecord, "passwordHash"> {
   const { passwordHash, ...publicRecord } = record;
   return publicRecord;
@@ -1332,7 +1351,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (url.pathname === "/admin/publish-sessions" && request.method === "GET") {
     await requireAdmin(request, dependencies.adminAuthService);
     const sessions = await dependencies.publishSessionService.listAll();
-    return jsonResponse({ sessions });
+    return jsonResponse({ sessions: sessions.map(readablePublishSession) });
   }
   if (url.pathname === "/admin/publish-sessions" && request.method === "POST") {
     await requireAdmin(request, dependencies.adminAuthService);
@@ -1399,7 +1418,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const secret = requireBearer(request);
     const principal = await dependencies.publishTokenService.verify(secret);
     const sessions = await dependencies.publishSessionService.list({ principal });
-    return jsonResponse({ sessions });
+    return jsonResponse({ sessions: sessions.map(readablePublishSession) });
   }
   if (url.pathname === "/api/publish-sessions" && request.method === "POST") {
     const secret = requireBearer(request);
@@ -1423,7 +1442,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const secret = requireBearer(request);
     const principal = await dependencies.publishTokenService.verify(secret);
     const session = await dependencies.publishSessionService.get({ sessionId, principal });
-    return jsonResponse({ session });
+    return jsonResponse({ session: readablePublishSession(session) });
   }
   const verifyUploadMatch = url.pathname.match(
     /^\/api\/publish-sessions\/([^/]+)\/uploads\/([^/]+)\/verify$/,

@@ -219,14 +219,24 @@ export const publishFailureSchema = z.object({
   failedAt: z.string(),
 });
 
+// Reading a session back never returns presigned upload URLs or the creating
+// token's authorization detail; only the create response carries them.
+export const uploadTargetSummarySchema = uploadTargetSchema.omit({ url: true, headers: true });
+
+export const tokenPrincipalSummarySchema = z.object({
+  tokenId: z.string(),
+  name: z.string(),
+  owner: principalRefSchema.optional(),
+});
+
 export const publishSessionSchema = z.object({
   id: z.string(),
   repositoryName: z.string(),
   ecosystem: z.string(),
   status: publishSessionStatusSchema,
-  requestedBy: tokenPrincipalSchema,
+  requestedBy: tokenPrincipalSummarySchema,
   artifacts: z.array(publishArtifactSchema),
-  uploads: z.array(uploadTargetSchema),
+  uploads: z.array(uploadTargetSummarySchema),
   verifiedUploads: z.array(verifiedUploadSchema),
   createdAt: z.string(),
   expiresAt: z.string(),
@@ -235,6 +245,10 @@ export const publishSessionSchema = z.object({
   finalizedAt: z.string().optional(),
   failure: publishFailureSchema.optional(),
   publishResult: publishResultSchema.optional(),
+});
+
+export const createdPublishSessionSchema = publishSessionSchema.extend({
+  uploads: z.array(uploadTargetSchema),
 });
 
 export const publishSessionsResponseSchema = z.object({
@@ -361,6 +375,7 @@ export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;
 export type PublishToken = z.infer<typeof publishTokenSchema>;
 export type PublishTokenCreateResponse = z.infer<typeof publishTokenCreateResponseSchema>;
 export type PublishSession = z.infer<typeof publishSessionSchema>;
+export type CreatedPublishSession = z.infer<typeof createdPublishSessionSchema>;
 export type PublishSessionStatus = z.infer<typeof publishSessionStatusSchema>;
 export type PublishArtifact = z.infer<typeof publishArtifactSchema>;
 export type UploadTarget = z.infer<typeof uploadTargetSchema>;

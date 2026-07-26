@@ -21,10 +21,6 @@ const session = (overrides: Partial<PublishSession>): PublishSession => ({
   requestedBy: {
     tokenId: "tok_1",
     name: "ci",
-    permissions: ["publish"],
-    repositories: ["debian-internal"],
-    ecosystemScopes: {},
-    signingKeyIds: [],
   },
   artifacts: [],
   uploads: [],

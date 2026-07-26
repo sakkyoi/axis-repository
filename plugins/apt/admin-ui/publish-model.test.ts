@@ -99,10 +99,6 @@ function session(): PublishSession {
     requestedBy: {
       tokenId: "tok_1",
       name: "ci",
-      permissions: ["publish"],
-      repositories: ["debian-internal"],
-      ecosystemScopes: {},
-      signingKeyIds: [],
     },
     artifacts: [{
       filename: "myapp_1.2.3_amd64.deb",
