@@ -1,0 +1,68 @@
+import { describe, expect, it } from "vitest";
+import { UnauthorizedError } from "@axis-repository/core";
+import { Sha256SecretHasher } from "../crypto";
+import {
+  BootstrapAdminPasswordVerifier,
+  HmacAdminAccessTokenCodec,
+  adminRefreshCookie,
+  clearAdminRefreshCookie,
+  refreshTokenFromCookie,
+} from "./admin-auth";
+
+describe("HmacAdminAccessTokenCodec", () => {
+  it("creates and verifies admin access tokens", async () => {
+    const codec = new HmacAdminAccessTokenCodec("session-secret", () => new Date("2026-07-26T00:00:00.000Z"));
+    const token = await codec.create({
+      type: "admin",
+      subject: "admin",
+      scopes: ["admin:*"],
+      sessionId: "admin_session_1",
+    }, new Date("2026-07-26T00:15:00.000Z"));
+
+    await expect(codec.verify(token)).resolves.toEqual({
+      type: "admin",
+      subject: "admin",
+      scopes: ["admin:*"],
+      sessionId: "admin_session_1",
+    });
+  });
+
+  it("rejects expired or tampered admin access tokens", async () => {
+    const codec = new HmacAdminAccessTokenCodec("session-secret", () => new Date("2026-07-26T00:20:00.000Z"));
+    const token = await new HmacAdminAccessTokenCodec("session-secret").create({
+      type: "admin",
+      subject: "admin",
+      scopes: ["admin:*"],
+      sessionId: "admin_session_1",
+    }, new Date("2026-07-26T00:15:00.000Z"));
+
+    await expect(codec.verify(token)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(new HmacAdminAccessTokenCodec("other-secret").verify(token)).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+});
+
+describe("BootstrapAdminPasswordVerifier", () => {
+  it("verifies configured admin password hashes", async () => {
+    const hasher = new Sha256SecretHasher("pepper");
+    const verifier = new BootstrapAdminPasswordVerifier({
+      username: "admin",
+      passwordHash: await hasher.hash("correct-password"),
+      hasher,
+    });
+
+    await expect(verifier.verify("admin", "correct-password")).resolves.toBe(true);
+    await expect(verifier.verify("admin", "wrong-password")).resolves.toBe(false);
+    await expect(verifier.verify("other", "correct-password")).resolves.toBe(false);
+  });
+});
+
+describe("admin refresh cookies", () => {
+  it("sets, reads, and clears refresh cookies", () => {
+    const cookie = adminRefreshCookie("refresh-secret", "2026-08-25T00:00:00.000Z");
+
+    expect(cookie).toContain("axis_admin_refresh=refresh-secret");
+    expect(cookie).toContain("HttpOnly");
+    expect(refreshTokenFromCookie(new Request("https://axis.example", { headers: { cookie } }))).toBe("refresh-secret");
+    expect(clearAdminRefreshCookie()).toContain("Max-Age=0");
+  });
+});

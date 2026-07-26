@@ -236,23 +236,31 @@ describe("createAxisClient", () => {
   it("creates an axios-backed client with normalized base URL and bearer auth", () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
 
     expect(client.http.defaults.baseURL).toBe("https://axis.example");
     expect(client.http.defaults.headers.common.Authorization).toBe("Bearer admin-secret");
   });
 
-  it("verifies admin tokens through the session endpoint", async () => {
+  it("verifies admin access tokens through the session endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
       requests.push(`${config.method?.toUpperCase()} ${config.url}`);
       return {
-        data: { ok: true },
+        data: {
+          ok: true,
+          principal: {
+            type: "admin",
+            subject: "admin",
+            scopes: ["admin:*"],
+            sessionId: "admin_session_1",
+          },
+        },
         status: 200,
         statusText: "OK",
         headers: {},
@@ -260,15 +268,59 @@ describe("createAxisClient", () => {
       };
     };
 
-    await client.verifyAdminToken();
+    await client.verifyAdminSession();
 
     expect(requests).toEqual(["GET /admin/session"]);
+  });
+
+  it("logs in, refreshes, and logs out admin sessions", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+    });
+    const requests: Array<{ method: string; url: string; data: unknown }> = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push({
+        method: config.method?.toUpperCase() ?? "",
+        url: config.url ?? "",
+        data: config.data ? JSON.parse(String(config.data)) : undefined,
+      });
+      return {
+        data: {
+          accessToken: "access-token",
+          accessTokenExpiresAt: "2026-07-26T00:15:00.000Z",
+          principal: {
+            type: "admin",
+            subject: "admin",
+            scopes: ["admin:*"],
+            sessionId: "admin_session_1",
+          },
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.loginAdmin({ username: "admin", password: "password" })).resolves.toMatchObject({
+      accessToken: "access-token",
+    });
+    await expect(client.refreshAdminSession()).resolves.toMatchObject({
+      accessToken: "access-token",
+    });
+    await client.logoutAdmin();
+
+    expect(requests).toEqual([
+      { method: "POST", url: "/admin/auth/login", data: { username: "admin", password: "password" } },
+      { method: "POST", url: "/admin/auth/refresh", data: undefined },
+      { method: "POST", url: "/admin/auth/logout", data: undefined },
+    ]);
   });
 
   it("creates repositories through the admin endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: Array<{ method: string; url: string; data: unknown }> = [];
     client.http.defaults.adapter = async (config) => {
@@ -339,7 +391,7 @@ describe("createAxisClient", () => {
   it("deletes repositories through the admin endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
@@ -361,7 +413,7 @@ describe("createAxisClient", () => {
   it("lists repository plugin metadata through the admin endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
@@ -419,7 +471,7 @@ describe("createAxisClient", () => {
   it("updates repository plugin policy overrides through the admin endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: Array<{ method: string; url: string; data: unknown }> = [];
     client.http.defaults.adapter = async (config) => {
@@ -462,7 +514,7 @@ describe("createAxisClient", () => {
   it("uses a generic admin-scoped endpoint for repository client helpers", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
@@ -486,7 +538,7 @@ describe("createAxisClient", () => {
   it("lists repository objects through an admin-scoped endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
@@ -523,7 +575,7 @@ describe("createAxisClient", () => {
   it("lists repository artifacts through an admin-scoped endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
@@ -569,7 +621,7 @@ describe("createAxisClient", () => {
   it("rebuilds repository artifact indexes through an admin-scoped endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
@@ -596,7 +648,7 @@ describe("createAxisClient", () => {
   it("deletes repository artifacts through an admin-scoped endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
@@ -661,7 +713,7 @@ describe("createAxisClient", () => {
   it("gets repository object detail through an admin-scoped endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
@@ -699,7 +751,7 @@ describe("createAxisClient", () => {
   it("lists repository activity pages through an admin-scoped endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
@@ -727,7 +779,7 @@ describe("createAxisClient", () => {
   it("uses generic admin-scoped endpoints for repository plugin resources", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: Array<{ method: string; url: string; data: unknown }> = [];
     client.http.defaults.adapter = async (config) => {
@@ -767,7 +819,7 @@ describe("createAxisClient", () => {
   it("lists publish sessions through the publish API endpoint", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {
@@ -812,7 +864,7 @@ describe("createAxisClient", () => {
   it("creates, uploads, verifies, and finalizes admin publish sessions", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: Array<{ method: string; url: string; data?: unknown; headers?: unknown }> = [];
     client.http.defaults.adapter = async (config) => {
@@ -916,7 +968,7 @@ describe("createAxisClient", () => {
   it("rotates and deletes publish tokens through admin endpoints", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
-      adminToken: "admin-secret",
+      accessToken: "admin-secret",
     });
     const requests: string[] = [];
     client.http.defaults.adapter = async (config) => {

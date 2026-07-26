@@ -18,11 +18,20 @@ export function LoginPage() {
   const auth = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [token, setToken] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
 
   const from = (location.state as LoginLocationState | null)?.from ?? ADMIN_UI_PATHS.repositories;
+
+  if (auth.isInitializing) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+        Loading...
+      </main>
+    );
+  }
 
   if (auth.isAuthenticated) {
     return <Navigate to={from} replace />;
@@ -32,13 +41,13 @@ export function LoginPage() {
     event.preventDefault();
     setIsVerifying(true);
     const result = await authenticateAdminLogin({
-      token,
+      username,
+      password,
       login: auth.login,
-      verifyToken: (adminToken) =>
+      authenticate: (credentials) =>
         createAxisClient({
-          adminToken,
           baseUrl: getRuntimeConfig().apiBaseUrl,
-        }).verifyAdminToken(),
+        }).loginAdmin(credentials),
     });
     setIsVerifying(false);
     if (!result.authenticated) {
@@ -64,13 +73,23 @@ export function LoginPage() {
         )}
         <form className="grid gap-3" onSubmit={submit}>
           <label className="grid gap-2">
-            <span className="text-sm font-medium">Admin token</span>
+            <span className="text-sm font-medium">Username</span>
             <Input
               autoFocus
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder="admin"
+              autoComplete="username"
+            />
+          </label>
+          <label className="grid gap-2">
+            <span className="text-sm font-medium">Password</span>
+            <Input
               type="password"
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-              placeholder="Bearer token value"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Password"
+              autoComplete="current-password"
             />
           </label>
           <Button type="submit" disabled={isVerifying}>

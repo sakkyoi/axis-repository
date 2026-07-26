@@ -174,7 +174,10 @@ function basicAuth(secret: string, username = "axis"): string {
 type TestAxisEnv = {
   AXIS_ADMIN?: DurableObjectNamespace | undefined;
   AXIS_OBJECTS?: R2Bucket | undefined;
-  ADMIN_TOKEN?: string | undefined;
+  AXIS_ADMIN_USERNAME?: string | undefined;
+  AXIS_ADMIN_PASSWORD_HASH?: string | undefined;
+  AXIS_ADMIN_PASSWORD?: string | undefined;
+  AXIS_SESSION_SECRET?: string | undefined;
   TOKEN_HASH_PEPPER?: string | undefined;
   SIGNING_KEY_ENCRYPTION_SECRET?: string | undefined;
   R2_ACCOUNT_ID?: string | undefined;
@@ -188,7 +191,9 @@ type TestAxisEnv = {
 function createObject(env: TestAxisEnv = {}) {
   return new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, {
     AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
-    ADMIN_TOKEN: "admin",
+    AXIS_ADMIN_USERNAME: "admin",
+    AXIS_ADMIN_PASSWORD: "admin-password",
+    AXIS_SESSION_SECRET: "test-session-secret",
     TOKEN_HASH_PEPPER: "pepper",
     SIGNING_KEY_ENCRYPTION_SECRET: "local-signing-secret",
     R2_ACCOUNT_ID: "account123",
@@ -199,13 +204,35 @@ function createObject(env: TestAxisEnv = {}) {
   } as AxisEnv);
 }
 
+async function adminAuthorizationHeader(object: AxisAdminDO): Promise<string> {
+  const response = await object.fetch(
+    new Request("https://axis.example/admin/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "admin-password" }),
+    }),
+  );
+  expect(response.status).toBe(200);
+  const body = (await response.json()) as { accessToken: string };
+  return `Bearer ${body.accessToken}`;
+}
+
 describe("AxisAdminDO", () => {
-  it("requires an admin token", () => {
-    expect(() => createObject({ ADMIN_TOKEN: undefined })).toThrow(
-      "ADMIN_TOKEN is required for AxisAdminDO",
+  it("requires admin bootstrap credentials", () => {
+    expect(() => createObject({ AXIS_ADMIN_USERNAME: undefined })).toThrow(
+      "AXIS_ADMIN_USERNAME is required for AxisAdminDO",
     );
-    expect(() => createObject({ ADMIN_TOKEN: "" })).toThrow(
-      "ADMIN_TOKEN is required for AxisAdminDO",
+    expect(() => createObject({ AXIS_ADMIN_USERNAME: "" })).toThrow(
+      "AXIS_ADMIN_USERNAME is required for AxisAdminDO",
+    );
+    expect(() => createObject({ AXIS_ADMIN_PASSWORD: undefined })).toThrow(
+      "AXIS_ADMIN_PASSWORD_HASH is required for AxisAdminDO",
+    );
+    expect(() => createObject({ AXIS_SESSION_SECRET: undefined })).toThrow(
+      "AXIS_SESSION_SECRET is required for AxisAdminDO",
+    );
+    expect(() => createObject({ AXIS_SESSION_SECRET: "" })).toThrow(
+      "AXIS_SESSION_SECRET is required for AxisAdminDO",
     );
   });
 
@@ -270,18 +297,18 @@ describe("AxisAdminDO", () => {
     const object = createObject({
       UPLOAD_BACKEND: "memory",
       AXIS_OBJECTS: undefined,
-      ADMIN_TOKEN: "test-admin-token",
       R2_ACCOUNT_ID: undefined,
       R2_BUCKET_NAME: undefined,
       R2_ACCESS_KEY_ID: undefined,
       R2_SECRET_ACCESS_KEY: undefined,
     });
+    const adminAuthorization = await adminAuthorizationHeader(object);
 
     const response = await object.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
-          authorization: "Bearer test-admin-token",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
@@ -299,12 +326,13 @@ describe("AxisAdminDO", () => {
       R2_ACCESS_KEY_ID: undefined,
       R2_SECRET_ACCESS_KEY: undefined,
     });
+    const adminAuthorization = await adminAuthorizationHeader(object);
 
     const response = await object.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
-          authorization: "Bearer admin",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
@@ -322,13 +350,14 @@ describe("AxisAdminDO", () => {
       userIDs: [{ name: "Axis Test", email: "axis@example.test" }],
       passphrase: "correct-passphrase",
     });
-    const object = createObject({ ADMIN_TOKEN: "test-admin-token" });
+    const object = createObject();
+    const adminAuthorization = await adminAuthorizationHeader(object);
 
     const createSigningKey = await object.fetch(
       new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys/import", {
         method: "POST",
         headers: {
-          authorization: "Bearer test-admin-token",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -345,7 +374,7 @@ describe("AxisAdminDO", () => {
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
-          authorization: "Bearer test-admin-token",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -359,7 +388,7 @@ describe("AxisAdminDO", () => {
 
     const repositoryDetail = await object.fetch(
       new Request("https://axis.example/admin/repositories/debian-internal", {
-        headers: { authorization: "Bearer test-admin-token" },
+        headers: { authorization: adminAuthorization },
       }),
     );
     expect(repositoryDetail.status).toBe(200);
@@ -373,7 +402,7 @@ describe("AxisAdminDO", () => {
       new Request("https://axis.example/admin/repositories/debian-internal", {
         method: "PATCH",
         headers: {
-          authorization: "Bearer test-admin-token",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({ visibility: "public" }),
@@ -389,7 +418,7 @@ describe("AxisAdminDO", () => {
       new Request("https://axis.example/admin/publish-tokens", {
         method: "POST",
         headers: {
-          authorization: "Bearer test-admin-token",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -406,7 +435,7 @@ describe("AxisAdminDO", () => {
 
     const tokenDetail = await object.fetch(
       new Request("https://axis.example/admin/publish-tokens/github-actions", {
-        headers: { authorization: "Bearer test-admin-token" },
+        headers: { authorization: adminAuthorization },
       }),
     );
     expect(tokenDetail.status).toBe(200);
@@ -418,7 +447,7 @@ describe("AxisAdminDO", () => {
     const revokeToken = await object.fetch(
       new Request("https://axis.example/admin/publish-tokens/github-actions/revoke", {
         method: "POST",
-        headers: { authorization: "Bearer test-admin-token" },
+        headers: { authorization: adminAuthorization },
       }),
     );
     expect(revokeToken.status).toBe(200);
@@ -429,7 +458,7 @@ describe("AxisAdminDO", () => {
 
     const signingKeyDetail = await object.fetch(
       new Request(`https://axis.example/admin/repositories/debian-internal/apt/signing-keys/${signingKey.id}`, {
-        headers: { authorization: "Bearer test-admin-token" },
+        headers: { authorization: adminAuthorization },
       }),
     );
     expect(signingKeyDetail.status).toBe(200);
@@ -453,14 +482,14 @@ describe("AxisAdminDO", () => {
     const debBytes = aptDebFixture();
     const object = createObject({
       AXIS_OBJECTS: bucket as unknown as R2Bucket,
-      ADMIN_TOKEN: "test-admin-token",
     });
+    const adminAuthorization = await adminAuthorizationHeader(object);
 
     const createSigningKey = await object.fetch(
       new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys/import", {
         method: "POST",
         headers: {
-          authorization: "Bearer test-admin-token",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -477,7 +506,7 @@ describe("AxisAdminDO", () => {
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
-          authorization: "Bearer test-admin-token",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -500,7 +529,7 @@ describe("AxisAdminDO", () => {
       new Request("https://axis.example/admin/publish-tokens", {
         method: "POST",
         headers: {
-          authorization: "Bearer test-admin-token",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -659,18 +688,18 @@ describe("AxisAdminDO", () => {
     const object = createObject({
       UPLOAD_BACKEND: "memory",
       AXIS_OBJECTS: undefined,
-      ADMIN_TOKEN: "test-admin-token",
       R2_ACCOUNT_ID: undefined,
       R2_BUCKET_NAME: undefined,
       R2_ACCESS_KEY_ID: undefined,
       R2_SECRET_ACCESS_KEY: undefined,
     });
+    const adminAuthorization = await adminAuthorizationHeader(object);
 
     const createRepository = await object.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
-          authorization: "Bearer test-admin-token",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({ name: "node-internal", ecosystem: "npm" }),
@@ -685,9 +714,15 @@ describe("AxisAdminDO", () => {
     });
   });
 
-  it("still requires admin token for memory backend", () => {
-    expect(() => createObject({ UPLOAD_BACKEND: "memory", ADMIN_TOKEN: undefined })).toThrow(
-      "ADMIN_TOKEN is required for AxisAdminDO",
+  it("still requires admin credentials for memory backend", () => {
+    expect(() => createObject({ UPLOAD_BACKEND: "memory", AXIS_ADMIN_USERNAME: undefined })).toThrow(
+      "AXIS_ADMIN_USERNAME is required for AxisAdminDO",
+    );
+    expect(() => createObject({ UPLOAD_BACKEND: "memory", AXIS_ADMIN_PASSWORD: undefined })).toThrow(
+      "AXIS_ADMIN_PASSWORD_HASH is required for AxisAdminDO",
+    );
+    expect(() => createObject({ UPLOAD_BACKEND: "memory", AXIS_SESSION_SECRET: undefined })).toThrow(
+      "AXIS_SESSION_SECRET is required for AxisAdminDO",
     );
   });
 
@@ -705,12 +740,13 @@ describe("AxisAdminDO", () => {
 
   it("persists repository state across requests", async () => {
     const object = createObject();
+    const adminAuthorization = await adminAuthorizationHeader(object);
 
     const create = await object.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
-          authorization: "Bearer admin",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
@@ -720,7 +756,7 @@ describe("AxisAdminDO", () => {
 
     const list = await object.fetch(
       new Request("https://axis.example/admin/repositories", {
-        headers: { authorization: "Bearer admin" },
+        headers: { authorization: adminAuthorization },
       }),
     );
 
@@ -732,12 +768,13 @@ describe("AxisAdminDO", () => {
 
   it("creates publish sessions with R2 presigned upload targets", async () => {
     const object = createObject();
+    const adminAuthorization = await adminAuthorizationHeader(object);
 
     const createRepository = await object.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
-          authorization: "Bearer admin",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
@@ -749,7 +786,7 @@ describe("AxisAdminDO", () => {
       new Request("https://axis.example/admin/publish-tokens", {
         method: "POST",
         headers: {
-          authorization: "Bearer admin",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -819,12 +856,13 @@ describe("AxisAdminDO", () => {
       R2_ACCESS_KEY_ID: undefined,
       R2_SECRET_ACCESS_KEY: undefined,
     });
+    const adminAuthorization = await adminAuthorizationHeader(object);
 
     const createRepository = await object.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
-          authorization: "Bearer admin",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({ name: "debian-internal", ecosystem: "apt", config: validAptConfig() }),
@@ -836,7 +874,7 @@ describe("AxisAdminDO", () => {
       new Request("https://axis.example/admin/publish-tokens", {
         method: "POST",
         headers: {
-          authorization: "Bearer admin",
+          authorization: adminAuthorization,
           "content-type": "application/json",
         },
         body: JSON.stringify({

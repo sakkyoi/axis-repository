@@ -24,6 +24,7 @@ import {
 } from "../plugins/repository-plugin-policy";
 import { dispatchRepositoryAdminResource } from "../plugins/repository-plugin-admin-resources";
 import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
+import { adminRefreshCookie, clearAdminRefreshCookie, refreshTokenFromCookie } from "../auth/admin-auth";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;
@@ -892,15 +893,64 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (url.pathname === "/health") {
     return jsonResponse({ ok: true, service: "axis-repository" });
   }
+  if (url.pathname === "/admin/auth/login") {
+    if (request.method !== "POST") {
+      throw new NotFoundError();
+    }
+    const body = await readJsonObject(request);
+    const result = await dependencies.adminAuthService.login({
+      username: stringField(body, "username"),
+      password: stringField(body, "password"),
+    });
+    return jsonResponse(
+      {
+        accessToken: result.accessToken,
+        accessTokenExpiresAt: result.accessTokenExpiresAt,
+        principal: result.principal,
+      },
+      { headers: { "set-cookie": adminRefreshCookie(result.refreshToken, result.refreshTokenExpiresAt) } },
+    );
+  }
+  if (url.pathname === "/admin/auth/refresh") {
+    if (request.method !== "POST") {
+      throw new NotFoundError();
+    }
+    const refreshToken = refreshTokenFromCookie(request);
+    if (!refreshToken) {
+      throw new UnauthorizedError();
+    }
+    const result = await dependencies.adminAuthService.refresh(refreshToken);
+    return jsonResponse(
+      {
+        accessToken: result.accessToken,
+        accessTokenExpiresAt: result.accessTokenExpiresAt,
+        principal: result.principal,
+      },
+      { headers: { "set-cookie": adminRefreshCookie(result.refreshToken, result.refreshTokenExpiresAt) } },
+    );
+  }
+  if (url.pathname === "/admin/auth/logout") {
+    if (request.method !== "POST") {
+      throw new NotFoundError();
+    }
+    const refreshToken = refreshTokenFromCookie(request);
+    if (refreshToken) {
+      await dependencies.adminAuthService.logout(refreshToken);
+    }
+    return new Response(null, { status: 204, headers: { "set-cookie": clearAdminRefreshCookie() } });
+  }
   if (url.pathname === "/admin/session") {
-    requireAdmin(request, dependencies.adminToken);
     if (request.method === "GET") {
-      return jsonResponse({ ok: true });
+      const token = requireBearer(request);
+      return jsonResponse({
+        ok: true,
+        principal: await dependencies.adminAuthService.verifyAccessToken(token),
+      });
     }
     throw new NotFoundError();
   }
   if (url.pathname === "/admin/repositories") {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "GET") {
       return jsonResponse({ repositories: await dependencies.repositoryService.list() });
     }
@@ -918,7 +968,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
   }
   if (url.pathname === "/admin/repository-plugins") {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "GET") {
       return jsonResponse({ plugins: await repositoryPluginMetadata(dependencies) });
     }
@@ -926,7 +976,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminRepositoryPluginEcosystem = parseAdminResourcePath(request.url, "repository-plugins");
   if (adminRepositoryPluginEcosystem) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "PATCH") {
       if (
         !getRepositoryPluginCatalogEntry(adminRepositoryPluginEcosystem)
@@ -945,7 +995,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminRepositoryName = parseAdminResourcePath(request.url, "repositories");
   if (adminRepositoryName) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "GET") {
       return jsonResponse(await dependencies.repositoryService.getByName(adminRepositoryName));
     }
@@ -964,7 +1014,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     throw new NotFoundError();
   }
   if (url.pathname === "/admin/publish-tokens") {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "GET") {
       const publishTokens = await dependencies.publishTokenService.list();
       return jsonResponse({ publishTokens: publishTokens.map(publicPublishToken) });
@@ -992,7 +1042,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const revokePublishTokenName = parseAdminResourceActionPath(request.url, "publish-tokens", "revoke");
   if (revokePublishTokenName) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "POST") {
       throw new NotFoundError();
     }
@@ -1000,7 +1050,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const rotatePublishTokenName = parseAdminResourceActionPath(request.url, "publish-tokens", "rotate");
   if (rotatePublishTokenName) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "POST") {
       throw new NotFoundError();
     }
@@ -1012,7 +1062,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminPublishTokenName = parseAdminResourcePath(request.url, "publish-tokens");
   if (adminPublishTokenName) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "GET") {
       return jsonResponse(publicPublishToken(await dependencies.publishTokenService.getByName(adminPublishTokenName)));
     }
@@ -1024,7 +1074,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminClientHelperPath = parseAdminRepositoryClientHelperPath(url.pathname);
   if (adminClientHelperPath && request.method === "GET") {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     const repository = await dependencies.repositoryService.getByName(adminClientHelperPath.repositoryName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     const helpers = repositoryClientHelpers(dependencies, repository, adminClientHelperPath.namespace);
@@ -1039,7 +1089,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminRepositoryActivityName = parseAdminRepositoryActivityPath(url.pathname);
   if (adminRepositoryActivityName) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "GET") {
       throw new NotFoundError();
     }
@@ -1052,7 +1102,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminRepositoryArtifactsName = parseAdminRepositoryArtifactsPath(url.pathname);
   if (adminRepositoryArtifactsName) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "GET") {
       throw new NotFoundError();
     }
@@ -1065,7 +1115,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminRepositoryArtifactsRebuildName = parseAdminRepositoryArtifactsRebuildIndexPath(url.pathname);
   if (adminRepositoryArtifactsRebuildName) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "POST") {
       throw new NotFoundError();
     }
@@ -1080,7 +1130,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminRepositoryArtifactPath = parseAdminRepositoryArtifactPath(url.pathname);
   if (adminRepositoryArtifactPath) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "DELETE") {
       throw new NotFoundError();
     }
@@ -1112,7 +1162,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminRepositoryObjectDetailName = parseAdminRepositoryObjectDetailPath(url.pathname);
   if (adminRepositoryObjectDetailName) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     if (request.method !== "GET") {
       throw new NotFoundError();
     }
@@ -1134,7 +1184,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminRepositoryObjectsName = parseAdminRepositoryObjectsPath(url.pathname);
   if (adminRepositoryObjectsName) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     const repository = await dependencies.repositoryService.getByName(adminRepositoryObjectsName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     if (request.method === "GET") {
@@ -1178,7 +1228,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminPluginResourcePath = parseAdminRepositoryPluginResourcePath(request.url);
   if (adminPluginResourcePath) {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     let repository: Repository | undefined;
     try {
       repository = await dependencies.repositoryService.getByName(adminPluginResourcePath.repositoryName);
@@ -1206,12 +1256,12 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     });
   }
   if (url.pathname === "/admin/publish-sessions" && request.method === "GET") {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     const sessions = await dependencies.publishSessionService.listAll();
     return jsonResponse({ sessions });
   }
   if (url.pathname === "/admin/publish-sessions" && request.method === "POST") {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     const body = await readJsonObject(request);
     const artifacts = parseArtifacts(body);
     const session = await dependencies.publishSessionService.createAsAdmin({
@@ -1225,7 +1275,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     /^\/admin\/publish-sessions\/([^/]+)\/uploads\/([^/]+)\/verify$/,
   );
   if (adminVerifyUploadMatch && request.method === "POST") {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     const [, sessionId, uploadId] = adminVerifyUploadMatch;
     if (!sessionId || !uploadId) {
       throw new NotFoundError();
@@ -1261,7 +1311,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   }
   const adminFinalizeMatch = url.pathname.match(/^\/admin\/publish-sessions\/([^/]+)\/finalize$/);
   if (adminFinalizeMatch && request.method === "POST") {
-    requireAdmin(request, dependencies.adminToken);
+    await requireAdmin(request, dependencies.adminAuthService);
     const [, sessionId] = adminFinalizeMatch;
     if (!sessionId) {
       throw new NotFoundError();

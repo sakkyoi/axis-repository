@@ -1,6 +1,7 @@
 import type {
   PublishSession,
   PublishTokenRecord,
+  AdminRefreshSessionRecord,
   Repository,
   RepositoryArtifactRecord,
   RepositoryActivityRecord,
@@ -21,6 +22,7 @@ const repositoryKey = (name: string) => `repository:${name}`;
 const sessionKey = (id: string) => `publish-session:${id}`;
 const tokenKey = (id: string) => `publish-token:${id}`;
 const tokenNameKey = (name: string) => `publish-token-name:${name}`;
+const adminRefreshSessionKey = (id: string) => `admin-refresh-session:${id}`;
 const signingKeyKey = (id: string) => `signing-key:${id}`;
 const signingKeyNameKey = (repositoryName: string, name: string) => `signing-key-name:${repositoryName}:${name}`;
 const repositorySecretKey = (id: string) => `repository-secret:${id}`;
@@ -169,6 +171,23 @@ export class DurableStateStore implements StateStore {
       await this.storage.delete(tokenNameKey(name));
       await this.storage.delete(tokenKey(id));
       return true;
+    },
+  };
+
+  readonly adminRefreshSessions = {
+    get: async (id: string): Promise<AdminRefreshSessionRecord | null> => {
+      return (await this.storage.get<AdminRefreshSessionRecord>(adminRefreshSessionKey(id))) ?? null;
+    },
+    list: async (): Promise<AdminRefreshSessionRecord[]> => {
+      const values = await this.storage.list<AdminRefreshSessionRecord>({
+        prefix: "admin-refresh-session:",
+      });
+      return [...values.values()].sort((left, right) =>
+        right.createdAt.localeCompare(left.createdAt),
+      );
+    },
+    save: async (session: AdminRefreshSessionRecord): Promise<void> => {
+      await this.storage.put(adminRefreshSessionKey(session.id), session);
     },
   };
 

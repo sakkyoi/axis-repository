@@ -1,7 +1,8 @@
 export interface AuthenticateAdminLoginInput {
-  token: string;
-  verifyToken: (token: string) => Promise<void>;
-  login: (token: string) => void;
+  username: string;
+  password: string;
+  authenticate: (input: { username: string; password: string }) => Promise<{ accessToken: string }>;
+  login: (accessToken: string) => void;
 }
 
 export type AuthenticateAdminLoginResult =
@@ -11,17 +12,19 @@ export type AuthenticateAdminLoginResult =
 export async function authenticateAdminLogin(
   input: AuthenticateAdminLoginInput,
 ): Promise<AuthenticateAdminLoginResult> {
-  const trimmed = input.token.trim();
-  if (!trimmed) {
-    return { authenticated: false, error: "Admin token is required." };
+  const username = input.username.trim();
+  if (!username) {
+    return { authenticated: false, error: "Username is required." };
+  }
+  if (!input.password) {
+    return { authenticated: false, error: "Password is required." };
   }
 
   try {
-    await input.verifyToken(trimmed);
+    const result = await input.authenticate({ username, password: input.password });
+    input.login(result.accessToken);
   } catch {
-    return { authenticated: false, error: "Admin token is invalid." };
+    return { authenticated: false, error: "Username or password is invalid." };
   }
-
-  input.login(trimmed);
   return { authenticated: true };
 }

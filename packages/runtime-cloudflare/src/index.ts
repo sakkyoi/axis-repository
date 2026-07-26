@@ -10,7 +10,7 @@ function fallbackAppFor(env?: AxisEnv): ReturnType<typeof createApp> {
   const apiBaseUrl = env?.ADMIN_UI_API_BASE_URL ?? "";
   const cached = fallbackApps.get(apiBaseUrl);
   if (cached) return cached;
-  const app = createApp(createDevDependencies(undefined, undefined, { apiBaseUrl }));
+  const app = createApp(createDevDependencies(undefined, { apiBaseUrl }));
   fallbackApps.set(apiBaseUrl, app);
   return app;
 }

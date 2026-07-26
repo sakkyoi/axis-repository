@@ -28,6 +28,19 @@ export const repositoriesResponseSchema = z.object({
   repositories: z.array(repositorySchema),
 });
 
+export const adminPrincipalSchema = z.object({
+  type: z.literal("admin"),
+  subject: z.string(),
+  scopes: z.array(z.string()),
+  sessionId: z.string(),
+});
+
+export const adminAuthResponseSchema = z.object({
+  accessToken: z.string(),
+  accessTokenExpiresAt: z.string(),
+  principal: adminPrincipalSchema,
+});
+
 export const repositoryObjectDirectorySchema = z.object({
   name: z.string(),
   path: z.string(),
@@ -303,9 +316,12 @@ export const signingKeysResponseSchema = z.object({
 
 export const adminSessionSchema = z.object({
   ok: z.literal(true),
+  principal: adminPrincipalSchema,
 });
 
 export type Repository = z.infer<typeof repositorySchema>;
+export type AdminPrincipal = z.infer<typeof adminPrincipalSchema>;
+export type AdminAuthResponse = z.infer<typeof adminAuthResponseSchema>;
 export type RepositoryObjectDirectory = z.infer<typeof repositoryObjectDirectorySchema>;
 export type RepositoryObject = z.infer<typeof repositoryObjectSchema>;
 export type RepositoryObjectDetail = z.infer<typeof repositoryObjectDetailSchema>;

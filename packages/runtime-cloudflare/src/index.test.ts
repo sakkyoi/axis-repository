@@ -53,36 +53,48 @@ class FakeR2Bucket {
   }
 }
 
+function axisEnv(overrides: Partial<AxisEnv> = {}): AxisEnv {
+  return {
+    AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
+    AXIS_ADMIN_USERNAME: "admin",
+    AXIS_ADMIN_PASSWORD: "admin-password",
+    AXIS_SESSION_SECRET: "test-session-secret",
+    TOKEN_HASH_PEPPER: "pepper",
+    SIGNING_KEY_ENCRYPTION_SECRET: "signing-secret",
+    R2_ACCOUNT_ID: "account123",
+    R2_BUCKET_NAME: "axis-repository",
+    R2_ACCESS_KEY_ID: "access",
+    R2_SECRET_ACCESS_KEY: "secret",
+    ...overrides,
+  };
+}
+
+async function adminAccessToken(fetch: (request: Request) => Promise<Response>): Promise<string> {
+  const response = await fetch(new Request("https://axis.example/admin/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "admin", password: "admin-password" }),
+  }));
+  expect(response.status).toBe(200);
+  const body = await response.json() as { accessToken: string };
+  return body.accessToken;
+}
+
 describe("worker entrypoint", () => {
   it("proxies API requests to the configured AxisAdminDO", async () => {
-    const object = new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, {
-      AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
-      ADMIN_TOKEN: "admin",
-      TOKEN_HASH_PEPPER: "pepper",
-      SIGNING_KEY_ENCRYPTION_SECRET: "signing-secret",
-      R2_ACCOUNT_ID: "account123",
-      R2_BUCKET_NAME: "axis-repository",
-      R2_ACCESS_KEY_ID: "access",
-      R2_SECRET_ACCESS_KEY: "secret",
-    });
+    const object = new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, axisEnv());
     const namespace = new FakeNamespace(object);
     const env = {
+      ...axisEnv(),
       AXIS_ADMIN: namespace,
-      AXIS_OBJECTS: new FakeR2Bucket(),
-      ADMIN_TOKEN: "admin",
-      TOKEN_HASH_PEPPER: "pepper",
-      SIGNING_KEY_ENCRYPTION_SECRET: "signing-secret",
-      R2_ACCOUNT_ID: "account123",
-      R2_BUCKET_NAME: "axis-repository",
-      R2_ACCESS_KEY_ID: "access",
-      R2_SECRET_ACCESS_KEY: "secret",
-    } as unknown as AxisEnv;
+    };
+    const accessToken = await adminAccessToken((request) => worker.fetch(request, env as unknown as AxisEnv));
 
     const response = await worker.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
-          authorization: "Bearer admin",
+          authorization: `Bearer ${accessToken}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -98,41 +110,27 @@ describe("worker entrypoint", () => {
           },
         }),
       }),
-      env,
+      env as unknown as AxisEnv,
     );
 
     expect(response.status).toBe(201);
-    expect(namespace.requestedNames).toEqual(["global"]);
+    expect(namespace.requestedNames).toEqual(["global", "global"]);
   });
 
   it("passes admin UI runtime config from Worker env into the Durable Object app", async () => {
-    const object = new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, {
-      AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
-      ADMIN_TOKEN: "admin",
-      TOKEN_HASH_PEPPER: "pepper",
-      SIGNING_KEY_ENCRYPTION_SECRET: "signing-secret",
-      R2_ACCOUNT_ID: "account123",
-      R2_BUCKET_NAME: "axis-repository",
-      R2_ACCESS_KEY_ID: "access",
-      R2_SECRET_ACCESS_KEY: "secret",
+    const object = new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, axisEnv({
       ADMIN_UI_API_BASE_URL: "https://admin-api.example/base",
-    });
+    }));
     const namespace = new FakeNamespace(object);
     const env = {
+      ...axisEnv({
+        ADMIN_UI_API_BASE_URL: "https://admin-api.example/base",
+      }),
       AXIS_ADMIN: namespace,
-      AXIS_OBJECTS: new FakeR2Bucket(),
-      ADMIN_TOKEN: "admin",
-      TOKEN_HASH_PEPPER: "pepper",
-      SIGNING_KEY_ENCRYPTION_SECRET: "signing-secret",
-      R2_ACCOUNT_ID: "account123",
-      R2_BUCKET_NAME: "axis-repository",
-      R2_ACCESS_KEY_ID: "access",
-      R2_SECRET_ACCESS_KEY: "secret",
-      ADMIN_UI_API_BASE_URL: "https://admin-api.example/base",
-    } as unknown as AxisEnv;
+    };
 
-    const root = await worker.fetch(new Request("https://axis.example/"), env);
-    const response = await worker.fetch(new Request("https://axis.example/ui/"), env);
+    const root = await worker.fetch(new Request("https://axis.example/"), env as unknown as AxisEnv);
+    const response = await worker.fetch(new Request("https://axis.example/ui/"), env as unknown as AxisEnv);
 
     expect(root.status).toBe(302);
     expect(root.headers.get("location")).toBe("/ui/");

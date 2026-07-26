@@ -1,53 +1,80 @@
-import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-
-const adminTokenKey = "axis.adminToken";
+import { createAxisClient } from "./api/client";
+import type { AdminAuthResponse } from "./api/schemas";
+import { getRuntimeConfig } from "./runtime-config";
 
 export interface AuthContextValue {
-  adminToken: string;
+  accessToken: string;
   isAuthenticated: boolean;
-  login(token: string): void;
+  isInitializing: boolean;
+  login(accessToken: string): void;
   logout(): void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+let pendingBootstrapRefresh: Promise<AdminAuthResponse | null> | null = null;
 
-export function getStoredAdminToken(storage: Pick<Storage, "getItem"> = window.sessionStorage): string {
-  return storage.getItem(adminTokenKey) ?? "";
-}
-
-export function setStoredAdminToken(storage: Pick<Storage, "setItem">, token: string): void {
-  storage.setItem(adminTokenKey, token.trim());
-}
-
-export function clearStoredAdminToken(storage: Pick<Storage, "removeItem"> = window.sessionStorage): void {
-  storage.removeItem(adminTokenKey);
+export function normalizeAccessToken(value: string): string {
+  return value.trim();
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [adminToken, setAdminToken] = useState(() => getStoredAdminToken());
+  const [accessToken, setAccessToken] = useState("");
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    pendingBootstrapRefresh ??= createAxisClient({
+      baseUrl: getRuntimeConfig().apiBaseUrl,
+    }).refreshAdminSession()
+      .catch(() => null)
+      .finally(() => {
+        pendingBootstrapRefresh = null;
+      });
+
+    pendingBootstrapRefresh
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        const refreshedAccessToken = result ? normalizeAccessToken(result.accessToken) : "";
+        setAccessToken(refreshedAccessToken);
+        if (refreshedAccessToken) {
+          queryClient.clear();
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsInitializing(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      adminToken,
-      isAuthenticated: Boolean(adminToken),
-      login(token: string) {
-        const trimmed = token.trim();
+      accessToken,
+      isAuthenticated: Boolean(accessToken),
+      isInitializing,
+      login(nextAccessToken: string) {
+        const trimmed = normalizeAccessToken(nextAccessToken);
         if (!trimmed) {
           return;
         }
-        setStoredAdminToken(window.sessionStorage, trimmed);
-        setAdminToken(trimmed);
+        setAccessToken(trimmed);
         queryClient.clear();
       },
       logout() {
-        clearStoredAdminToken();
-        setAdminToken("");
+        setAccessToken("");
         queryClient.clear();
       },
     }),
-    [adminToken, queryClient],
+    [accessToken, isInitializing, queryClient],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

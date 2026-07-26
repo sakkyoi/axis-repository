@@ -2,7 +2,7 @@ import axios, { type AxiosInstance } from "axios";
 
 export interface HttpOptions {
   baseUrl: string;
-  adminToken: string;
+  accessToken?: string;
 }
 
 export function normalizeBaseUrl(baseUrl: string): string {
@@ -21,8 +21,9 @@ export function createHttpClient(options: HttpOptions): AxiosInstance {
   const http = axios.create({
     baseURL: normalizeBaseUrl(options.baseUrl),
     timeout: 15000,
+    withCredentials: true,
   });
-  const token = options.adminToken.trim();
+  const token = options.accessToken?.trim() ?? "";
   if (token) {
     http.defaults.headers.common.Authorization = `Bearer ${token}`;
   }

@@ -56,6 +56,24 @@ export interface TokenPrincipal {
   signingKeyIds: string[];
 }
 
+export interface AdminPrincipal {
+  type: "admin";
+  subject: string;
+  scopes: string[];
+  sessionId: string;
+}
+
+export interface AdminRefreshSessionRecord {
+  id: string;
+  subject: string;
+  tokenHash: string;
+  scopes: string[];
+  createdAt: string;
+  expiresAt: string;
+  rotatedAt?: string;
+  revokedAt?: string;
+}
+
 export interface PublishTokenRecord {
   id: string;
   name: string;

@@ -14,9 +14,9 @@ import { getRuntimeConfig } from "../runtime-config";
 const REPOSITORY_ACTIVITY_PAGE_LIMIT = 10;
 
 export function useAxisClient() {
-  const { adminToken } = useAuth();
+  const { accessToken } = useAuth();
   const { apiBaseUrl } = getRuntimeConfig();
-  return useMemo(() => createAxisClient({ adminToken, baseUrl: apiBaseUrl }), [adminToken, apiBaseUrl]);
+  return useMemo(() => createAxisClient({ accessToken, baseUrl: apiBaseUrl }), [accessToken, apiBaseUrl]);
 }
 
 export function useRepositories() {

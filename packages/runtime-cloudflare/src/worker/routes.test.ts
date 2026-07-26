@@ -463,7 +463,7 @@ describe("Cloudflare runtime routes", () => {
     ]));
   });
 
-  it("rejects admin repository routes without admin token", async () => {
+  it("rejects admin repository routes without an access token", async () => {
     const app = createApp();
     const response = await app.fetch(new Request("https://axis.example/admin/repositories"));
 
@@ -473,7 +473,7 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("verifies valid admin tokens through the admin session route", async () => {
+  it("verifies valid admin access tokens through the admin session route", async () => {
     const app = createApp();
     const response = await app.fetch(
       new Request("https://axis.example/admin/session", {
@@ -482,10 +482,54 @@ describe("Cloudflare runtime routes", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true });
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      principal: {
+        type: "admin",
+        subject: "admin",
+        scopes: ["admin:*"],
+        sessionId: "admin_session_dev",
+      },
+    });
   });
 
-  it("rejects invalid admin tokens through the admin session route", async () => {
+  it("logs in, refreshes, and logs out admin sessions", async () => {
+    const app = createApp();
+    const loginResponse = await app.fetch(new Request("https://axis.example/admin/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "admin" }),
+    }));
+    expect(loginResponse.status).toBe(200);
+    expect(loginResponse.headers.get("set-cookie")).toContain("axis_admin_refresh=");
+    const loginCookie = loginResponse.headers.get("set-cookie") ?? "";
+    const loginBody = await loginResponse.json() as { accessToken: string; principal: { subject: string } };
+    expect(loginBody.principal.subject).toBe("admin");
+
+    const refreshResponse = await app.fetch(new Request("https://axis.example/admin/auth/refresh", {
+      method: "POST",
+      headers: { cookie: loginCookie },
+    }));
+    expect(refreshResponse.status).toBe(200);
+    expect(refreshResponse.headers.get("set-cookie")).toContain("axis_admin_refresh=");
+    const refreshBody = await refreshResponse.json() as { accessToken: string };
+    expect(refreshBody.accessToken).toBe("dev-admin-token");
+
+    const staleRefreshResponse = await app.fetch(new Request("https://axis.example/admin/auth/refresh", {
+      method: "POST",
+      headers: { cookie: loginCookie },
+    }));
+    expect(staleRefreshResponse.status).toBe(401);
+
+    const logoutResponse = await app.fetch(new Request("https://axis.example/admin/auth/logout", {
+      method: "POST",
+      headers: { cookie: refreshResponse.headers.get("set-cookie") ?? "" },
+    }));
+    expect(logoutResponse.status).toBe(204);
+    expect(logoutResponse.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("rejects invalid admin access tokens through the admin session route", async () => {
     const app = createApp();
     const response = await app.fetch(
       new Request("https://axis.example/admin/session", {

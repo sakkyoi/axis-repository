@@ -28,7 +28,7 @@ export function SettingsPage() {
         </div>
         <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
           <span className="font-medium">Auth storage</span>
-          <span className="font-mono text-muted-foreground">sessionStorage</span>
+          <span className="font-mono text-muted-foreground">memory access token + HttpOnly refresh cookie</span>
         </div>
         <div className="flex items-center justify-between gap-4">
           <span className="font-medium">Config source</span>

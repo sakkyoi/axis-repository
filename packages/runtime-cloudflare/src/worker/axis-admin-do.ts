@@ -1,5 +1,6 @@
 import {
   RepositoryActivityService,
+  AdminAuthService,
   PublishSessionService,
   PublishTokenService,
   PluginPolicyService,
@@ -8,6 +9,7 @@ import {
 } from "@axis-repository/core";
 import { createApp } from "./app";
 import { WebCryptoRandomId, Sha256SecretHasher } from "../crypto";
+import { BootstrapAdminPasswordVerifier, HmacAdminAccessTokenCodec } from "../auth/admin-auth";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import { DurableStateStore, type DurableStorage } from "../storage/durable-state";
 import type { AppDependencies } from "./dev-dependencies";
@@ -21,7 +23,10 @@ import { RepositorySecretService } from "../storage/repository-secret-service";
 export interface AxisEnv {
   AXIS_ADMIN?: DurableObjectNamespace;
   AXIS_OBJECTS?: R2Bucket;
-  ADMIN_TOKEN?: string;
+  AXIS_ADMIN_USERNAME?: string;
+  AXIS_ADMIN_PASSWORD_HASH?: string;
+  AXIS_ADMIN_PASSWORD?: string;
+  AXIS_SESSION_SECRET?: string;
   TOKEN_HASH_PEPPER?: string;
   SIGNING_KEY_ENCRYPTION_SECRET?: string;
   R2_ACCOUNT_ID?: string;
@@ -75,9 +80,6 @@ export function createDurableObjectDependencies(
   storage: DurableStorage,
   env: AxisEnv,
 ): AppDependencies {
-  if (!env.ADMIN_TOKEN) {
-    throw new Error("ADMIN_TOKEN is required for AxisAdminDO");
-  }
   if (!env.TOKEN_HASH_PEPPER) {
     throw new Error("TOKEN_HASH_PEPPER is required for AxisAdminDO");
   }
@@ -89,6 +91,19 @@ export function createDurableObjectDependencies(
   const clock: Clock = { now: () => new Date() };
   const randomId = new WebCryptoRandomId();
   const hasher = new Sha256SecretHasher(env.TOKEN_HASH_PEPPER);
+  const adminAuthService = new AdminAuthService({
+    state,
+    clock,
+    randomId,
+    hasher,
+    passwordVerifier: new BootstrapAdminPasswordVerifier({
+      username: requiredEnv(env.AXIS_ADMIN_USERNAME, "AXIS_ADMIN_USERNAME"),
+      ...(env.AXIS_ADMIN_PASSWORD_HASH === undefined ? {} : { passwordHash: env.AXIS_ADMIN_PASSWORD_HASH }),
+      ...(env.AXIS_ADMIN_PASSWORD === undefined ? {} : { devPassword: env.AXIS_ADMIN_PASSWORD }),
+      hasher,
+    }),
+    accessTokens: new HmacAdminAccessTokenCodec(requiredEnv(env.AXIS_SESSION_SECRET, "AXIS_SESSION_SECRET")),
+  });
   const encryption = new SecretEncryption(env.SIGNING_KEY_ENCRYPTION_SECRET);
   const repositorySecrets = new RepositorySecretService({
     state,
@@ -131,7 +146,7 @@ export function createDurableObjectDependencies(
   });
 
   return {
-    adminToken: env.ADMIN_TOKEN,
+    adminAuthService,
     adminUiRuntimeConfig: { apiBaseUrl: env.ADMIN_UI_API_BASE_URL ?? "" },
     repositoryService: new PluginRepositoryService({
       repositoryService,

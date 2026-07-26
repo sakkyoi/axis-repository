@@ -2,6 +2,7 @@ import axios, { type AxiosInstance } from "axios";
 import { createHttpClient, type HttpOptions } from "./http";
 import {
   adminSessionSchema,
+  adminAuthResponseSchema,
   publishSessionsResponseSchema,
   publishSessionSchema,
   publishTokenCreateResponseSchema,
@@ -25,6 +26,7 @@ import {
   type RepositoryVisibility,
   type PublishSession,
   type PublishArtifact,
+  type AdminAuthResponse,
   type UploadTarget,
 } from "./schemas";
 
@@ -67,7 +69,10 @@ export interface ListRepositoryActivitiesOptions {
 
 export interface AxisClient {
   http: AxiosInstance;
-  verifyAdminToken(): Promise<void>;
+  loginAdmin(input: { username: string; password: string }): Promise<AdminAuthResponse>;
+  refreshAdminSession(): Promise<AdminAuthResponse>;
+  logoutAdmin(): Promise<void>;
+  verifyAdminSession(): Promise<void>;
   listRepositoryPlugins(): Promise<RepositoryPlugin[]>;
   updateRepositoryPluginPolicy(ecosystem: string, input: UpdateRepositoryPluginPolicyInput): Promise<RepositoryPlugin>;
   listRepositories(): Promise<Repository[]>;
@@ -124,7 +129,18 @@ export function createAxisClient(options: HttpOptions): AxisClient {
   const http = createHttpClient(options);
   return {
     http,
-    async verifyAdminToken() {
+    async loginAdmin(input: { username: string; password: string }) {
+      const response = await http.post("/admin/auth/login", input);
+      return adminAuthResponseSchema.parse(response.data);
+    },
+    async refreshAdminSession() {
+      const response = await http.post("/admin/auth/refresh");
+      return adminAuthResponseSchema.parse(response.data);
+    },
+    async logoutAdmin() {
+      await http.post("/admin/auth/logout");
+    },
+    async verifyAdminSession() {
       const response = await http.get("/admin/session");
       adminSessionSchema.parse(response.data);
     },

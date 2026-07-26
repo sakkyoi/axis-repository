@@ -1,6 +1,7 @@
 import type {
   PublishSession,
   PublishTokenRecord,
+  AdminRefreshSessionRecord,
   Repository,
   RepositoryArtifactRecord,
   RepositoryActivityRecord,
@@ -18,6 +19,7 @@ export class MemoryStateStore implements StateStore {
   private readonly repositoryByName = new Map<string, Repository>();
   private readonly publishSessionById = new Map<string, PublishSession>();
   private readonly publishTokenById = new Map<string, PublishTokenRecord>();
+  private readonly adminRefreshSessionById = new Map<string, AdminRefreshSessionRecord>();
   private readonly publishTokenIdByName = new Map<string, string>();
   private readonly repositorySecretById = new Map<string, RepositorySecretRecord | SigningKeyRecord>();
   private readonly repositorySecretIdByName = new Map<string, string>();
@@ -127,6 +129,20 @@ export class MemoryStateStore implements StateStore {
       this.publishTokenIdByName.delete(name);
       this.publishTokenById.delete(id);
       return true;
+    },
+  };
+
+  readonly adminRefreshSessions = {
+    get: async (id: string): Promise<AdminRefreshSessionRecord | null> => {
+      return this.adminRefreshSessionById.get(id) ?? null;
+    },
+    list: async (): Promise<AdminRefreshSessionRecord[]> => {
+      return [...this.adminRefreshSessionById.values()].sort((left, right) =>
+        right.createdAt.localeCompare(left.createdAt),
+      );
+    },
+    save: async (session: AdminRefreshSessionRecord): Promise<void> => {
+      this.adminRefreshSessionById.set(session.id, session);
     },
   };
 

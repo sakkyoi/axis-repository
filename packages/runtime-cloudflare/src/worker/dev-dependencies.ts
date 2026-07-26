@@ -1,5 +1,7 @@
 import {
   MemoryStateStore,
+  AdminAuthService,
+  UnauthorizedError,
   PluginPolicyService,
   RepositoryActivityService,
   PublishSessionService,
@@ -21,7 +23,7 @@ import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 
 export interface AppDependencies {
-  adminToken: string;
+  adminAuthService: AdminAuthService;
   adminUiRuntimeConfig: AdminUiRuntimeConfig;
   repositoryService: PluginRepositoryService;
   publishTokenService: PublishTokenService;
@@ -42,18 +44,27 @@ export interface DevDependencyHarness {
 }
 
 export function createDevDependencies(
-  adminToken = "dev-admin-token",
   signingKeyEncryptionSecret = "dev-signing-key-encryption-secret",
   adminUiRuntimeConfig: AdminUiRuntimeConfig = {},
+  adminUsername = "admin",
+  adminPassword = "admin",
 ): AppDependencies {
-  return createDevDependencyHarness(adminToken, signingKeyEncryptionSecret, adminUiRuntimeConfig).dependencies;
+  return createDevDependencyHarness(signingKeyEncryptionSecret, adminUiRuntimeConfig, {}, adminUsername, adminPassword).dependencies;
 }
 
 export function createDevDependencyHarness(
-  adminToken = "dev-admin-token",
-  signingKeyEncryptionSecret = "dev-signing-key-encryption-secret",
-  adminUiRuntimeConfig: AdminUiRuntimeConfig = {},
+  signingKeyEncryptionSecretOrLegacyAdminToken = "dev-signing-key-encryption-secret",
+  adminUiRuntimeConfigOrSigningKeySecret: AdminUiRuntimeConfig | string = {},
+  legacyAdminUiRuntimeConfig: AdminUiRuntimeConfig = {},
+  adminUsername = "admin",
+  adminPassword = "admin",
 ): DevDependencyHarness {
+  const signingKeyEncryptionSecret = typeof adminUiRuntimeConfigOrSigningKeySecret === "string"
+    ? adminUiRuntimeConfigOrSigningKeySecret
+    : signingKeyEncryptionSecretOrLegacyAdminToken;
+  const adminUiRuntimeConfig = typeof adminUiRuntimeConfigOrSigningKeySecret === "string"
+    ? legacyAdminUiRuntimeConfig
+    : adminUiRuntimeConfigOrSigningKeySecret;
   const state = new MemoryStateStore();
   const clock: Clock = { now: () => new Date() };
   const randomId: RandomId = {
@@ -65,6 +76,36 @@ export function createDevDependencyHarness(
     hash: async (secret: string): Promise<string> => `dev:${secret}`,
     verify: async (secret: string, hash: string): Promise<boolean> => hash === `dev:${secret}`,
   };
+  let refreshSequence = 0;
+  const adminAuthService = new AdminAuthService({
+    state,
+    clock,
+    randomId: {
+      create(prefix: string): string {
+        if (prefix === "admin_session") return "admin_session_dev";
+        if (prefix === "refresh") return `refresh_dev_${++refreshSequence}`;
+        return randomId.create(prefix);
+      },
+    },
+    hasher,
+    passwordVerifier: {
+      verify: async (username, password) => username === adminUsername && password === adminPassword,
+    },
+    accessTokens: {
+      create: async () => "dev-admin-token",
+      verify: async (token) => {
+        if (token !== "dev-admin-token") {
+          throw new UnauthorizedError();
+        }
+        return {
+          type: "admin",
+          subject: adminUsername,
+          scopes: ["admin:*"],
+          sessionId: "admin_session_dev",
+        };
+      },
+    },
+  });
   const objectStore = new MemoryRepositoryObjectStore();
   const uploadBroker = new SameOriginUploadBroker(objectStore);
   const repositorySecrets = new RepositorySecretService({
@@ -94,7 +135,7 @@ export function createDevDependencyHarness(
 
   return {
     dependencies: {
-      adminToken,
+      adminAuthService,
       adminUiRuntimeConfig,
       repositoryService: new PluginRepositoryService({
         repositoryService,

@@ -775,6 +775,7 @@ describe("PublishSessionService", () => {
         },
       },
       publishTokens: backingState.publishTokens,
+      adminRefreshSessions: backingState.adminRefreshSessions,
       publishSessions: backingState.publishSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
@@ -928,6 +929,7 @@ describe("PublishSessionService", () => {
     const state: StateStore = {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
+      adminRefreshSessions: backingState.adminRefreshSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,
@@ -1018,6 +1020,7 @@ describe("PublishSessionService", () => {
     const state: StateStore = {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
+      adminRefreshSessions: backingState.adminRefreshSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,

@@ -319,7 +319,7 @@ describe("package boundaries", () => {
 
   test("runtime-cloudflare package keeps feature files grouped by architectural area", () => {
     const runtimeSourceDir = path.join(rootDir, "packages/runtime-cloudflare/src");
-    const expectedDirs = ["admin-ui-assets", "plugins", "signing", "storage", "uploads", "worker"];
+    const expectedDirs = ["admin-ui-assets", "auth", "plugins", "signing", "storage", "uploads", "worker"];
     for (const dir of expectedDirs) {
       expect(existsSync(path.join(runtimeSourceDir, dir)), `runtime-cloudflare/src/${dir} must exist`).toBe(true);
     }

@@ -31,7 +31,9 @@ local secrets and must not be committed.
 For normal local development, use Wrangler's local R2 binding:
 
 ```text
-ADMIN_TOKEN=admin-local-token
+AXIS_ADMIN_USERNAME=admin
+AXIS_ADMIN_PASSWORD=admin-local-password
+AXIS_SESSION_SECRET=local-dev-session-secret
 TOKEN_HASH_PEPPER=local-dev-pepper
 SIGNING_KEY_ENCRYPTION_SECRET=local-dev-signing-secret
 UPLOAD_BACKEND=local-r2
@@ -45,7 +47,9 @@ instead of using production R2.
 For deployed or remote R2 uploads, use presigned R2 upload mode:
 
 ```text
-ADMIN_TOKEN=admin-local-token
+AXIS_ADMIN_USERNAME=admin
+AXIS_ADMIN_PASSWORD_HASH=sha256:<password-hash>
+AXIS_SESSION_SECRET=<random-session-secret>
 TOKEN_HASH_PEPPER=local-dev-pepper
 SIGNING_KEY_ENCRYPTION_SECRET=local-dev-signing-secret
 UPLOAD_BACKEND=r2
@@ -61,7 +65,9 @@ When `UPLOAD_BACKEND` is unset, Axis uses `r2`.
 For pure local development without Wrangler R2, use memory upload mode:
 
 ```text
-ADMIN_TOKEN=admin-local-token
+AXIS_ADMIN_USERNAME=admin
+AXIS_ADMIN_PASSWORD=admin-local-password
+AXIS_SESSION_SECRET=local-dev-session-secret
 TOKEN_HASH_PEPPER=local-dev-pepper
 SIGNING_KEY_ENCRYPTION_SECRET=local-dev-signing-secret
 UPLOAD_BACKEND=memory
@@ -85,11 +91,22 @@ using the `R2_*` credentials above, so end-to-end verification requires the
 Worker `AXIS_OBJECTS` binding to read the same R2 bucket that receives the
 upload.
 
-Create a repository with an explicit local admin token:
+Log in to get a short-lived admin access token:
+
+```bash
+ACCESS_TOKEN="$(
+  curl -s -X POST http://localhost:8787/admin/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"username":"admin","password":"admin-local-password"}' \
+    | jq -r .accessToken
+)"
+```
+
+Create a repository with the admin access token:
 
 ```bash
 curl -X POST http://localhost:8787/admin/repositories \
-  -H "Authorization: Bearer admin-local-token" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"debian-internal","ecosystem":"apt"}'
 ```

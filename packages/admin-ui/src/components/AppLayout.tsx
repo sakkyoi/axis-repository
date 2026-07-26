@@ -4,6 +4,7 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import { useAuth } from "../auth";
+import { createAxisClient } from "../api/client";
 import { ADMIN_UI_NAV_ITEMS } from "../navigation";
 import { getRuntimeConfig } from "../runtime-config";
 import { useTheme, type ThemePreference } from "../theme";
@@ -24,6 +25,17 @@ export function AppLayout() {
   const auth = useAuth();
   const theme = useTheme();
   const apiBaseUrl = getRuntimeConfig().apiBaseUrl || "same-origin";
+
+  async function logout() {
+    try {
+      await createAxisClient({
+        accessToken: auth.accessToken,
+        baseUrl: getRuntimeConfig().apiBaseUrl,
+      }).logoutAdmin();
+    } finally {
+      auth.logout();
+    }
+  }
 
   return (
     <div className="grid h-screen overflow-hidden grid-cols-[240px_minmax(0,1fr)] bg-background text-foreground">
@@ -82,7 +94,7 @@ export function AppLayout() {
               })}
             </div>
             <Badge variant="success">Signed in</Badge>
-            <Button type="button" variant="outline" onClick={auth.logout}>
+            <Button type="button" variant="outline" onClick={() => void logout()}>
               <LogOut className="mr-2 h-4 w-4" />
               Sign out
             </Button>

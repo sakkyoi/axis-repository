@@ -1,6 +1,8 @@
 import type {
   PublishSession,
   PublishTokenRecord,
+  AdminPrincipal,
+  AdminRefreshSessionRecord,
   RepositorySecretRecord,
   SigningKeyRecord,
   UploadedObject,
@@ -65,6 +67,15 @@ export interface RepositoryObjectMetadata {
   contentType?: string;
   contentLength?: number;
   etag?: string;
+}
+
+export interface AdminPasswordVerifier {
+  verify(username: string, password: string): Promise<boolean>;
+}
+
+export interface AdminAccessTokenCodec {
+  create(principal: AdminPrincipal, expiresAt: Date): Promise<string>;
+  verify(token: string): Promise<AdminPrincipal>;
 }
 
 export interface RepositoryObjectListDirectory {
@@ -133,6 +144,12 @@ export interface PublishTokenStore {
   deleteByName(name: string): Promise<boolean>;
 }
 
+export interface AdminRefreshSessionStore {
+  get(id: string): Promise<AdminRefreshSessionRecord | null>;
+  list(): Promise<AdminRefreshSessionRecord[]>;
+  save(session: AdminRefreshSessionRecord): Promise<void>;
+}
+
 export interface RepositorySecretStore {
   getById(id: string): Promise<RepositorySecretRecord | SigningKeyRecord | null>;
   getByName(name: string, repositoryName: string, namespace: string): Promise<RepositorySecretRecord | null>;
@@ -167,6 +184,7 @@ export interface StateStore {
   repositories: RepositoryStore;
   publishSessions: PublishSessionStore;
   publishTokens: PublishTokenStore;
+  adminRefreshSessions: AdminRefreshSessionStore;
   repositorySecrets: RepositorySecretStore;
   repositoryPluginPolicies: RepositoryPluginPolicyStore;
   repositoryActivities: RepositoryActivityStore;
