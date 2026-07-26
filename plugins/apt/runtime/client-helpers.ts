@@ -1,3 +1,4 @@
+import { pluginJsonResponse } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import type { Repository } from "@axis-repository/core";
 import type {
   RepositoryClientHelpers,
@@ -15,16 +16,6 @@ function aptClientRepositoryInfo(repository: Repository): AptClientRepositoryInf
     codename: config.codename,
     components: config.components ?? ["main"],
   };
-}
-
-function jsonResponse(value: unknown, init?: ResponseInit): Response {
-  return new Response(JSON.stringify(value), {
-    ...init,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      ...(init?.headers ?? {}),
-    },
-  });
 }
 
 function repositoryCacheControl(repository: Repository): string {
@@ -63,12 +54,12 @@ export function createAptClientHelpers(input: {
       {
         ...aptClientHelperAction("source"),
         handle: async ({ repository, origin }) =>
-          jsonResponse(buildAptSourceInfo({ origin, repository: aptClientRepositoryInfo(repository) })),
+          pluginJsonResponse(buildAptSourceInfo({ origin, repository: aptClientRepositoryInfo(repository) })),
       },
       {
         ...aptClientHelperAction("install"),
         handle: async ({ repository, origin }) =>
-          jsonResponse(buildAptInstallInfo({ origin, repository: aptClientRepositoryInfo(repository) })),
+          pluginJsonResponse(buildAptInstallInfo({ origin, repository: aptClientRepositoryInfo(repository) })),
       },
     ],
   };

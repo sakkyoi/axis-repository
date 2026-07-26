@@ -10,7 +10,7 @@ import {
   type RepositoryObjectMetadata,
   type RepositoryObjectStore,
 } from "@axis-repository/core";
-import type { RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { objectBytes, type RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { readDebControlMetadata, type DebControlMetadata } from "./deb-control";
 import { buildAptRepositoryMetadata, parseAptRepositoryConfig } from "./metadata";
 
@@ -187,26 +187,3 @@ function metadataString(metadata: Record<string, unknown>, field: string): strin
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-async function objectBytes(object: RepositoryObject): Promise<Uint8Array> {
-  if (object.body instanceof Uint8Array) {
-    return object.body;
-  }
-  if (typeof object.body === "string") {
-    return new TextEncoder().encode(object.body);
-  }
-  const chunks: Uint8Array[] = [];
-  const reader = object.body.getReader();
-  while (true) {
-    const next = await reader.read();
-    if (next.done) break;
-    chunks.push(next.value);
-  }
-  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
-}

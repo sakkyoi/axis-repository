@@ -1,7 +1,7 @@
 import type { RepositoryArtifactRecord, RepositoryObject, RepositoryObjectListItem, RepositoryObjectStore } from "@axis-repository/core";
 import { pypiPluginManifest } from "../manifest";
 import type { ArtifactRepositoryPlugin, DescribePublishedArtifactsInput, RebuildRepositoryArtifactIndexInput } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { createPrefixServingPredicate, GenericManifestPublisher } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { GenericManifestPublisher, createPrefixServingPredicate, listAllObjects, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { createPypiClientHelpers } from "./client-helpers";
 import { validatePypiRepositoryConfig } from "./config";
 
@@ -86,40 +86,3 @@ async function rebuildPypiArtifactIndex(input: RebuildRepositoryArtifactIndexInp
   return artifacts;
 }
 
-async function listAllObjects(objectStore: RepositoryObjectStore, prefix: string): Promise<RepositoryObjectListItem[]> {
-  const objects: RepositoryObjectListItem[] = [];
-  let cursor: string | undefined;
-  do {
-    const page = await objectStore.listObjects({
-      prefix,
-      ...(cursor ? { cursor } : {}),
-    });
-    objects.push(...page.objects);
-    cursor = page.cursor;
-  } while (cursor);
-  return objects;
-}
-
-async function objectBytes(object: RepositoryObject): Promise<Uint8Array> {
-  if (object.body instanceof Uint8Array) {
-    return object.body;
-  }
-  if (typeof object.body === "string") {
-    return new TextEncoder().encode(object.body);
-  }
-  const chunks: Uint8Array[] = [];
-  const reader = object.body.getReader();
-  while (true) {
-    const next = await reader.read();
-    if (next.done) break;
-    chunks.push(next.value);
-  }
-  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
-}

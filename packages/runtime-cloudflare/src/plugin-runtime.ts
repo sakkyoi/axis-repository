@@ -52,4 +52,9 @@ export {
 } from "./plugins/repository-plugin-client-helpers";
 export { RepositoryRuntimePluginRegistry } from "./plugins/repository-runtime-plugin-registry";
 export { GenericManifestPublisher } from "./plugins/generic-manifest-publisher";
+export {
+  listAllObjects,
+  objectBytes,
+  pluginJsonResponse,
+} from "./plugins/repository-object-helpers";
 export { readJsonObject, stringField } from "./http";
