@@ -2,60 +2,76 @@ import {
   ValidationError,
   type PublishArtifactsInput,
 } from "@axis-repository/core";
-import { parseAptRepositoryConfig, validatePathSegment, type AptRepositoryConfig, type AptResolvedRepositoryConfig } from "./config";
+import type { DebianStanza } from "../shared/stanza";
+import { parseAptRepositoryConfig, validatePathSegment, type AptResolvedRepositoryConfig } from "./config";
 import {
   buildPackageIndexes,
   buildPackageStanza,
   gzip,
+  indexKey,
+  mergePackageStanzas,
+  resolveAptRepositoryConfig,
   validateAptArtifacts,
   validateAptPublishArtifacts,
+  type AptIndexStanzas,
   type AptPackageIndex,
   type AptPoolCopy,
 } from "./packages";
 import { buildRelease } from "./release";
 
 export type { AptRepositoryConfig } from "./config";
-export type { AptPackageIndex, AptPoolCopy } from "./packages";
-export { parseAptRepositoryConfig, validateAptPublishArtifacts };
+export type { AptIndexStanzas, AptPackageIndex, AptPoolCopy } from "./packages";
+export { parseAptRepositoryConfig, validateAptPublishArtifacts, gzip };
 
-export interface AptRepositoryMetadata {
+/** The indexes and signed-over `Release` that make up one published suite. */
+export interface AptIndexMetadata {
   config: AptResolvedRepositoryConfig;
-  poolCopies: AptPoolCopy[];
+  stanzasByIndex: Map<string, AptIndexStanzas>;
   packageIndexes: AptPackageIndex[];
-  packagesPath: string;
-  packagesGzPath: string;
   releasePath: string;
-  packages: string;
-  packagesGz: Uint8Array;
   release: string;
 }
 
-export async function buildAptRepositoryMetadata(input: PublishArtifactsInput): Promise<AptRepositoryMetadata> {
+export interface AptRepositoryMetadata extends AptIndexMetadata {
+  poolCopies: AptPoolCopy[];
+}
+
+/**
+ * Builds the published state for a repository from the indexes it already has
+ * plus the artifacts of one publish session.
+ *
+ * `existingIndexes` is what makes a publish additive. A session only describes
+ * the artifacts uploaded to it, so building the indexes from the session alone
+ * would drop every package published before it — the `.deb` files would stay
+ * in the pool while disappearing from `Packages`.
+ */
+export async function buildAptRepositoryMetadata(
+  input: PublishArtifactsInput & { existingIndexes?: Map<string, AptIndexStanzas> },
+): Promise<AptRepositoryMetadata> {
   const parsedConfig = parseAptRepositoryConfig(input.repository);
   const repositoryName = validatePathSegment(input.repository.name, "repository name");
-  const releasePath = `repositories/${repositoryName}/dists/${parsedConfig.codename}/Release`;
-  const stanzasByIndex = new Map<string, { component: string; architecture: string; stanzas: string[] }>();
+  const existingIndexes = input.existingIndexes ?? new Map<string, AptIndexStanzas>();
+  const incoming = new Map<string, AptIndexStanzas>();
   const poolCopies: AptPoolCopy[] = [];
   const validatedArtifacts = validateAptArtifacts({
     repository: input.repository,
     artifacts: input.artifacts.map((publishedArtifact) => publishedArtifact.artifact),
   });
-  const config: AptResolvedRepositoryConfig = {
-    ...parsedConfig,
-    components: effectiveComponents(parsedConfig),
-    architectures: effectiveArchitectures(parsedConfig, validatedArtifacts),
-  };
+  const config = resolveAptRepositoryConfig({
+    config: parsedConfig,
+    existing: existingIndexes,
+    publishedArchitectures: validatedArtifacts.map((artifact) => artifact.architecture),
+  });
 
   for (const [index, publishedArtifact] of input.artifacts.entries()) {
     const validated = validatedArtifacts[index];
     if (!validated) {
       throw new ValidationError("APT artifact validation mismatch");
     }
-    const metadata = validated.artifact.metadata;
 
     const relativeFilename = `pool/${validated.component}/${validated.packageName}/${validated.filename}`;
     const packageStanza = buildPackageStanza({
-      metadata,
+      metadata: validated.artifact.metadata,
       packageName: validated.packageName,
       version: validated.version,
       architecture: validated.architecture,
@@ -74,63 +90,77 @@ export async function buildAptRepositoryMetadata(input: PublishArtifactsInput): 
 
     const targetArchitectures = validated.architecture === "all" ? config.architectures : [validated.architecture];
     for (const targetArchitecture of targetArchitectures) {
-      const indexKey = `${validated.component}\0${targetArchitecture}`;
-      const index = stanzasByIndex.get(indexKey) ?? {
-        component: validated.component,
-        architecture: targetArchitecture,
-        stanzas: [],
-      };
-      index.stanzas.push(packageStanza);
-      stanzasByIndex.set(indexKey, index);
+      addStanza(incoming, validated.component, targetArchitecture, packageStanza);
     }
   }
 
-  const packageIndexes = await buildPackageIndexes({
-    repositoryName,
-    codename: config.codename,
-    config,
-    stanzasByIndex,
-  });
-  const firstIndex = packageIndexes[0];
-  const fallbackPackagesPath = `repositories/${repositoryName}/dists/${config.codename}/${config.components[0]}/binary-${config.architectures[0]}/Packages`;
-  const release = await buildRelease({
-    repositoryName,
-    config,
-    publishDate: input.session.publishStartedAt ?? input.session.finalizingStartedAt ?? input.session.createdAt,
-    packageIndexes,
-  });
-
   return {
-    config,
+    ...(await buildAptIndexMetadata({
+      repositoryName,
+      config,
+      stanzasByIndex: mergePackageStanzas(existingIndexes, incoming),
+      publishDate: input.session.publishStartedAt ?? input.session.finalizingStartedAt ?? input.session.createdAt,
+    })),
     poolCopies,
-    packageIndexes,
-    packagesPath: firstIndex?.packagesPath ?? fallbackPackagesPath,
-    packagesGzPath: firstIndex?.packagesGzPath ?? `${fallbackPackagesPath}.gz`,
-    releasePath,
-    packages: firstIndex?.packages ?? "",
-    packagesGz: firstIndex?.packagesGz ?? await gzip(new Uint8Array()),
-    release,
   };
 }
 
-function effectiveArchitectures(
-  config: AptRepositoryConfig,
-  artifacts: Array<{ architecture: string }>,
-): string[] {
-  if (config.architectures) {
-    return config.architectures;
+/** Builds indexes and `Release` from stanzas that are already settled. */
+export async function buildAptIndexMetadata(input: {
+  repositoryName: string;
+  config: AptResolvedRepositoryConfig;
+  stanzasByIndex: Map<string, AptIndexStanzas>;
+  publishDate: string;
+}): Promise<AptIndexMetadata> {
+  const packageIndexes = await buildPackageIndexes({
+    repositoryName: input.repositoryName,
+    codename: input.config.codename,
+    config: input.config,
+    stanzasByIndex: input.stanzasByIndex,
+  });
+
+  return {
+    config: input.config,
+    stanzasByIndex: input.stanzasByIndex,
+    packageIndexes,
+    releasePath: `repositories/${input.repositoryName}/dists/${input.config.codename}/Release`,
+    release: await buildRelease({
+      repositoryName: input.repositoryName,
+      config: input.config,
+      publishDate: input.publishDate,
+      packageIndexes,
+    }),
+  };
+}
+
+/** Drops every stanza whose `Filename` matches, across all indexes. */
+export function removeStanzasByFilename(
+  stanzasByIndex: Map<string, AptIndexStanzas>,
+  relativeFilenames: Set<string>,
+): Map<string, AptIndexStanzas> {
+  const remaining = new Map<string, AptIndexStanzas>();
+
+  for (const [key, index] of stanzasByIndex) {
+    remaining.set(key, {
+      ...index,
+      stanzas: index.stanzas.filter((stanza) => {
+        const filename = stanza.find((field) => field.name.toLowerCase() === "filename")?.value;
+        return filename === undefined || !relativeFilenames.has(filename);
+      }),
+    });
   }
 
-  const concrete = uniqueSorted(artifacts
-    .map((artifact) => artifact.architecture)
-    .filter((architecture) => architecture !== "all"));
-  return concrete.length > 0 ? concrete : ["all"];
+  return remaining;
 }
 
-function effectiveComponents(config: AptRepositoryConfig): string[] {
-  return config.components ?? ["main"];
-}
-
-function uniqueSorted(values: string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+function addStanza(
+  indexes: Map<string, AptIndexStanzas>,
+  component: string,
+  architecture: string,
+  stanza: DebianStanza,
+): void {
+  const key = indexKey(component, architecture);
+  const index = indexes.get(key) ?? { component, architecture, stanzas: [] };
+  index.stanzas.push(stanza);
+  indexes.set(key, index);
 }

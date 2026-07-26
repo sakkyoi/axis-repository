@@ -1,38 +1,18 @@
 import {
   ValidationError,
   type ArtifactPublisher,
-  type PublishedObject,
   type PublishedArtifactInput,
   type PublishArtifactsInput,
   type PublishArtifactRequest,
   type PublishResult,
-  type RepositoryObjectMetadata,
   type RepositoryObjectStore,
 } from "@axis-repository/core";
 import { objectBytes, type RepositorySigningKeyCapability } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { debControlMetadataFields } from "./packages";
 import { readDebControlMetadata, type DebControlMetadata } from "./deb-control";
+import { readAptPackageIndexes, writeAptRepositoryIndexes, type AptReleaseSigner } from "./index-store";
 import { buildAptRepositoryMetadata, parseAptRepositoryConfig } from "./metadata";
 import type { AptRepositoryConfig } from "./config";
-
-const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";
-const GZIP_CONTENT_TYPE = "application/gzip";
-const DEB_CONTENT_TYPE = "application/vnd.debian.binary-package";
-const PGP_SIGNATURE_CONTENT_TYPE = "application/pgp-signature";
-
-interface AptReleaseSigner {
-  clearSign(input: {
-    text: string;
-    privateKeyArmored: string;
-    passphrase: string;
-    signingDate: Date;
-  }): Promise<string>;
-  detachSign(input: {
-    text: string;
-    privateKeyArmored: string;
-    passphrase: string;
-    signingDate: Date;
-  }): Promise<string>;
-}
 
 export class AptPublisher implements ArtifactPublisher {
   constructor(
@@ -51,60 +31,30 @@ export class AptPublisher implements ArtifactPublisher {
       throw new ValidationError("Publish token is not scoped to the repository signing key");
     }
     const enrichedInput = await this.enrichArtifactsWithDebControlMetadata(input, config, objectStore);
-    const metadata = await buildAptRepositoryMetadata(enrichedInput);
+    const metadata = await buildAptRepositoryMetadata({
+      ...enrichedInput,
+      existingIndexes: await readAptPackageIndexes({
+        objectStore,
+        repositoryName: input.repository.name,
+        codename: config.codename,
+      }),
+    });
     const key = await this.options.signingKeys.getActivePrivateKey(
       metadata.config.signingKeyId,
       input.repository.name,
     );
     const publishedAt = input.session.publishStartedAt ?? input.session.finalizingStartedAt ?? input.session.createdAt;
-    const signingDate = new Date(publishedAt);
-    const inReleasePath = metadata.releasePath.replace(/\/Release$/, "/InRelease");
-    const releaseGpgPath = metadata.releasePath.replace(/\/Release$/, "/Release.gpg");
-    const signingInput = {
-      text: metadata.release,
-      privateKeyArmored: key.privateKeyArmored,
-      passphrase: key.passphrase,
-      signingDate,
-    };
-    const inRelease = await this.options.signer.clearSign(signingInput);
-    const releaseGpg = await this.options.signer.detachSign(signingInput);
-    const publishedObjects: PublishedObject[] = [
-      ...metadata.poolCopies.map((copy) => ({
-        key: copy.destinationKey,
-        contentType: copy.contentType || DEB_CONTENT_TYPE,
-      })),
-      ...metadata.packageIndexes.flatMap((packageIndex) => [
-        { key: packageIndex.packagesPath, contentType: TEXT_CONTENT_TYPE },
-        { key: packageIndex.packagesGzPath, contentType: GZIP_CONTENT_TYPE },
-      ]),
-      { key: metadata.releasePath, contentType: TEXT_CONTENT_TYPE },
-      { key: inReleasePath, contentType: TEXT_CONTENT_TYPE },
-      { key: releaseGpgPath, contentType: PGP_SIGNATURE_CONTENT_TYPE },
-    ];
-    const previousByKey = new Map(
-      await Promise.all(publishedObjects.map(async (object) => [object.key, await objectStore.headObject(object.key)] as const)),
-    );
-
-    for (const copy of metadata.poolCopies) {
-      await objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
-    }
-
-    for (const packageIndex of metadata.packageIndexes) {
-      await objectStore.putText(packageIndex.packagesPath, packageIndex.packages, TEXT_CONTENT_TYPE);
-      await objectStore.putBytes(packageIndex.packagesGzPath, packageIndex.packagesGz, GZIP_CONTENT_TYPE);
-    }
-
-    await objectStore.putText(metadata.releasePath, metadata.release, TEXT_CONTENT_TYPE);
-    await objectStore.putText(inReleasePath, inRelease, TEXT_CONTENT_TYPE);
-    await objectStore.putText(releaseGpgPath, releaseGpg, PGP_SIGNATURE_CONTENT_TYPE);
-
-    return {
+    const written = await writeAptRepositoryIndexes({
+      objectStore,
+      repositoryName: input.repository.name,
+      metadata,
+      signer: this.options.signer,
+      signingKey: key,
       publishedAt,
-      objects: publishedObjects.map((object) => ({
-        ...object,
-        ...publishedObjectPrevious(previousByKey.get(object.key) ?? null),
-      })),
-    };
+      poolCopies: metadata.poolCopies,
+    });
+
+    return { publishedAt, objects: written.objects };
   }
 
   private async enrichArtifactsWithDebControlMetadata(
@@ -145,20 +95,7 @@ export class AptPublisher implements ArtifactPublisher {
   }
 }
 
-function publishedObjectPrevious(previous: RepositoryObjectMetadata | null): Pick<PublishedObject, "previous"> | Record<string, never> {
-  if (!previous) {
-    return {};
-  }
-  return {
-    previous: {
-      ...(previous.contentType !== undefined ? { contentType: previous.contentType } : {}),
-      ...(previous.contentLength !== undefined ? { size: previous.contentLength } : {}),
-      ...(previous.etag !== undefined ? { etag: previous.etag } : {}),
-    },
-  };
-}
-
-function aptArtifactMetadataFromDebControl(input: {
+export function aptArtifactMetadataFromDebControl(input: {
   config: AptRepositoryConfig;
   artifact: PublishArtifactRequest;
   control: DebControlMetadata;
@@ -169,28 +106,23 @@ function aptArtifactMetadataFromDebControl(input: {
   // validated these values.
   const configuredComponents = input.config.components;
   const defaultComponent = configuredComponents?.length === 1 ? configuredComponents[0] : undefined;
-
-  return {
+  const metadata: Record<string, unknown> = {
     package: input.control.package,
     version: input.control.version,
     architecture: input.control.architecture,
     component: metadataString(existing, "component") ?? defaultComponent,
     description: input.control.description,
     maintainer: input.control.maintainer,
-    section: input.control.section,
-    priority: input.control.priority,
-    homepage: input.control.homepage,
-    depends: input.control.depends,
-    recommends: input.control.recommends,
-    suggests: input.control.suggests,
-    conflicts: input.control.conflicts,
-    replaces: input.control.replaces,
-    provides: input.control.provides,
   };
+
+  for (const [controlField, metadataField] of debControlMetadataFields) {
+    metadata[metadataField] = input.control[controlField];
+  }
+
+  return metadata;
 }
 
 function metadataString(metadata: Record<string, unknown>, field: string): string | undefined {
   const value = metadata[field];
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
-

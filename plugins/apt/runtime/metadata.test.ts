@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError, type PublishArtifactsInput } from "@axis-repository/core";
-import { buildAptRepositoryMetadata, parseAptRepositoryConfig, validateAptPublishArtifacts } from "./metadata";
+import { buildAptRepositoryMetadata, parseAptRepositoryConfig, validateAptPublishArtifacts, type AptRepositoryMetadata } from "./metadata";
+import type { AptPackageIndex } from "./packages";
 
 const textDecoder = new TextDecoder();
+
+function firstIndex(metadata: AptRepositoryMetadata): AptPackageIndex {
+  const index = metadata.packageIndexes[0];
+  if (!index) {
+    throw new Error("expected at least one package index");
+  }
+  return index;
+}
 
 const input = (overrides: Partial<PublishArtifactsInput> = {}): PublishArtifactsInput => ({
   repository: {
@@ -133,7 +142,7 @@ describe("APT metadata", () => {
 
     expect(metadata.config.components).toEqual(["main"]);
     expect(metadata.poolCopies[0]!.destinationKey).toBe("repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb");
-    expect(metadata.packagesPath).toBe("repositories/debian-internal/dists/noble/main/binary-amd64/Packages");
+    expect(firstIndex(metadata).packagesPath).toBe("repositories/debian-internal/dists/noble/main/binary-amd64/Packages");
     expect(metadata.release).toContain("Components: main\n");
   });
 
@@ -227,13 +236,14 @@ describe("APT metadata", () => {
         contentType: "application/vnd.debian.binary-package",
       },
     ]);
-    expect(metadata.packagesPath).toBe("repositories/debian-internal/dists/noble/main/binary-amd64/Packages");
-    expect(metadata.packagesGzPath).toBe("repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz");
-    expect(metadata.packages).toContain("Package: myapp\n");
-    expect(metadata.packages).toContain("Filename: pool/main/myapp/myapp_1.2.3_amd64.deb\n");
-    expect(metadata.packages).toContain(`SHA256: ${"a".repeat(64)}\n`);
-    expect(metadata.packagesGz.byteLength).toBeGreaterThan(0);
-    await expect(gunzip(metadata.packagesGz)).resolves.toBe(metadata.packages);
+    const index = firstIndex(metadata);
+    expect(index.packagesPath).toBe("repositories/debian-internal/dists/noble/main/binary-amd64/Packages");
+    expect(index.packagesGzPath).toBe("repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz");
+    expect(index.packages).toContain("Package: myapp\n");
+    expect(index.packages).toContain("Filename: pool/main/myapp/myapp_1.2.3_amd64.deb\n");
+    expect(index.packages).toContain(`SHA256: ${"a".repeat(64)}\n`);
+    expect(index.packagesGz.byteLength).toBeGreaterThan(0);
+    await expect(gunzip(index.packagesGz)).resolves.toBe(index.packages);
     expect(metadata.releasePath).toBe("repositories/debian-internal/dists/noble/Release");
     expect(metadata.release).toContain("Origin: debian-internal\n");
     expect(metadata.release).toContain("Label: debian-internal\n");
@@ -246,26 +256,25 @@ describe("APT metadata", () => {
     expect(metadata.release).toContain("SHA256:\n");
     expect(metadata.release).toContain("SHA512:\n");
 
-    const packagesBytes = new TextEncoder().encode(metadata.packages);
+    const packagesBytes = new TextEncoder().encode(index.packages);
     expect(metadata.release).toContain(
       ` ${await digestHex("SHA-256", packagesBytes)} ${packagesBytes.byteLength} main/binary-amd64/Packages\n`,
     );
     expect(metadata.release).toContain(
-      ` ${await digestHex("SHA-256", metadata.packagesGz)} ${metadata.packagesGz.byteLength} main/binary-amd64/Packages.gz\n`,
+      ` ${await digestHex("SHA-256", index.packagesGz)} ${index.packagesGz.byteLength} main/binary-amd64/Packages.gz\n`,
     );
     expect(metadata.release).toContain(
       ` ${await digestHex("SHA-512", packagesBytes)} ${packagesBytes.byteLength} main/binary-amd64/Packages\n`,
     );
     expect(metadata.release).toContain(
-      ` ${await digestHex("SHA-512", metadata.packagesGz)} ${metadata.packagesGz.byteLength} main/binary-amd64/Packages.gz\n`,
+      ` ${await digestHex("SHA-512", index.packagesGz)} ${index.packagesGz.byteLength} main/binary-amd64/Packages.gz\n`,
     );
     expect(metadata.packageIndexes).toHaveLength(1);
-    expect(metadata.packageIndexes[0]).toMatchObject({
+    expect(index).toMatchObject({
       component: "main",
       architecture: "amd64",
-      packagesPath: metadata.packagesPath,
-      packagesGzPath: metadata.packagesGzPath,
-      packages: metadata.packages,
+      relativePath: "main/binary-amd64/Packages",
+      relativeGzPath: "main/binary-amd64/Packages.gz",
     });
   });
 
@@ -441,7 +450,7 @@ describe("APT metadata", () => {
   });
 
   it("rejects control characters in emitted APT metadata fields", async () => {
-    for (const field of ["package", "version", "architecture", "component", "description", "maintainer"] as const) {
+    for (const field of ["package", "version", "architecture", "component", "maintainer"] as const) {
       const unsafe = input();
       unsafe.artifacts[0]!.artifact.metadata[field] = `${unsafe.artifacts[0]!.artifact.metadata[field]}\nInjected: yes`;
 
@@ -460,6 +469,17 @@ describe("APT metadata", () => {
       "conflicts",
       "replaces",
       "provides",
+      "source",
+      "installedSize",
+      "multiArch",
+      "essential",
+      "preDepends",
+      "enhances",
+      "breaks",
+      "builtUsing",
+      "origin",
+      "bugs",
+      "tag",
     ] as const) {
       const unsafe = input();
       unsafe.artifacts[0]!.artifact.metadata[field] = "safe\u0000unsafe";
@@ -468,6 +488,23 @@ describe("APT metadata", () => {
         `artifact metadata ${field} must not contain control characters`,
       );
     }
+  });
+
+  it("keeps a long description across lines but refuses one that starts a new field", async () => {
+    const injected = input();
+    injected.artifacts[0]!.artifact.metadata.description = "Example package\nInjected: yes";
+    await expect(buildAptRepositoryMetadata(injected)).rejects.toThrow(
+      "artifact metadata description continuation lines must start with a space",
+    );
+
+    const long = input();
+    long.artifacts[0]!.artifact.metadata.description = "Example package\n This is the long form.\n .\n Second paragraph.";
+
+    const metadata = await buildAptRepositoryMetadata(long);
+
+    expect(firstIndex(metadata).packages).toContain(
+      "Description: Example package\n This is the long form.\n .\n Second paragraph.\n",
+    );
   });
 
   it("maps optional APT artifact metadata fields to Debian field casing", async () => {
@@ -483,19 +520,39 @@ describe("APT metadata", () => {
       conflicts: "old-myapp",
       replaces: "older-myapp",
       provides: "myapp-virtual",
+      source: "myapp-src",
+      installedSize: "2048",
+      multiArch: "foreign",
+      essential: "no",
+      preDepends: "libc6 (>= 2.34)",
+      enhances: "myapp-extras",
+      breaks: "myapp-plugin (<< 2.0)",
+      builtUsing: "openssl (= 3.0.2-0ubuntu1)",
     };
 
     const metadata = await buildAptRepositoryMetadata(optional);
 
-    expect(metadata.packages).toContain("Section: utils\n");
-    expect(metadata.packages).toContain("Priority: optional\n");
-    expect(metadata.packages).toContain("Homepage: https://example.com/myapp\n");
-    expect(metadata.packages).toContain("Depends: libc6\n");
-    expect(metadata.packages).toContain("Recommends: ca-certificates\n");
-    expect(metadata.packages).toContain("Suggests: docs\n");
-    expect(metadata.packages).toContain("Conflicts: old-myapp\n");
-    expect(metadata.packages).toContain("Replaces: older-myapp\n");
-    expect(metadata.packages).toContain("Provides: myapp-virtual\n");
+    const packages = firstIndex(metadata).packages;
+    expect(packages).toContain("Section: utils\n");
+    expect(packages).toContain("Priority: optional\n");
+    expect(packages).toContain("Homepage: https://example.com/myapp\n");
+    expect(packages).toContain("Depends: libc6\n");
+    expect(packages).toContain("Recommends: ca-certificates\n");
+    expect(packages).toContain("Suggests: docs\n");
+    expect(packages).toContain("Conflicts: old-myapp\n");
+    expect(packages).toContain("Replaces: older-myapp\n");
+    expect(packages).toContain("Provides: myapp-virtual\n");
+    // Without these, apt resolves dependencies wrongly rather than not at all:
+    // it unpacks in the wrong order, refuses to displace a conflicting
+    // package, or cannot satisfy a foreign-architecture dependency.
+    expect(packages).toContain("Source: myapp-src\n");
+    expect(packages).toContain("Installed-Size: 2048\n");
+    expect(packages).toContain("Multi-Arch: foreign\n");
+    expect(packages).toContain("Essential: no\n");
+    expect(packages).toContain("Pre-Depends: libc6 (>= 2.34)\n");
+    expect(packages).toContain("Enhances: myapp-extras\n");
+    expect(packages).toContain("Breaks: myapp-plugin (<< 2.0)\n");
+    expect(packages).toContain("Built-Using: openssl (= 3.0.2-0ubuntu1)\n");
   });
 
   it("sorts package stanzas deterministically independent of artifact input order", async () => {
@@ -552,10 +609,11 @@ describe("APT metadata", () => {
     const orderedMetadata = await buildAptRepositoryMetadata(ordered);
     const reversedMetadata = await buildAptRepositoryMetadata(reversed);
 
-    expect(orderedMetadata.packages).toBe(reversedMetadata.packages);
+    const orderedPackages = firstIndex(orderedMetadata).packages;
+    expect(orderedPackages).toBe(firstIndex(reversedMetadata).packages);
     expect(orderedMetadata.release).toBe(reversedMetadata.release);
-    expect(orderedMetadata.packages.indexOf("Package: alpha\n")).toBeLessThan(
-      orderedMetadata.packages.indexOf("Package: zeta\n"),
+    expect(orderedPackages.indexOf("Package: alpha\n")).toBeLessThan(
+      orderedPackages.indexOf("Package: zeta\n"),
     );
   });
 });

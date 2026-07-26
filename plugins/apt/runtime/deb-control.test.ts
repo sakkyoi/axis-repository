@@ -14,7 +14,10 @@ describe("Debian package control metadata", () => {
         "Maintainer: Release Team <release@example.com>",
         "Description: Example package",
         " more details",
-        "Depends: libc6",
+        " .",
+        " and a second paragraph",
+        "Depends: libc6,",
+        " libssl3",
         "",
       ].join("\n"),
     });
@@ -24,8 +27,11 @@ describe("Debian package control metadata", () => {
       version: "1.2.3",
       architecture: "amd64",
       maintainer: "Release Team <release@example.com>",
-      description: "Example package more details",
-      depends: "libc6",
+      // The short summary, the extended description and its paragraph break
+      // all survive; apt shows the long form from these lines.
+      description: "Example package\n more details\n .\n and a second paragraph",
+      // Wrapping in a dependency list is only formatting, so it is folded back.
+      depends: "libc6, libssl3",
     });
   });
 

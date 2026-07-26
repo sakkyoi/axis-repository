@@ -2473,6 +2473,13 @@ describe("Cloudflare runtime routes", () => {
     });
     await expect(harness.repositoryObjectStore.headObject(artifact!.objectKeys[0]!)).resolves.toBeNull();
     await expect(artifactsAfterDelete.json()).resolves.toEqual({ artifacts: [], truncated: false });
+    // Leaving the stanza behind would keep apt asking for a .deb that is gone,
+    // and the signed Release would still vouch for that index.
+    await expect(harness.repositoryObjectStore.headObject(
+      "repositories/debian-internal/dists/noble/main/binary-amd64/Packages",
+    )).resolves.toBeNull();
+    expect(readStoredText(harness.repositoryObjectStore, "repositories/debian-internal/dists/noble/Release"))
+      .not.toContain("main/binary-amd64/Packages");
     const activityBody = await activity.json() as { activities: Array<{ type: string; metadata: Record<string, unknown> }> };
     expect(activityBody.activities[0]).toMatchObject({
       type: "artifact-index.rebuild",

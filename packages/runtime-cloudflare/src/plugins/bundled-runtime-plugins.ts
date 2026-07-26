@@ -44,6 +44,7 @@ const bundledRuntimePluginFactories: Record<string, RuntimePluginFactory> = {
         signer: input.aptReleaseSigner,
       }),
       signingKeys,
+      signer: input.aptReleaseSigner,
     });
   },
   pypi: (input) => createPypiPlugin({ objectStoreFor: input.objectStoreFor }),

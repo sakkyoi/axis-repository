@@ -95,6 +95,41 @@ class FakeR2Bucket {
     };
   }
 
+  async list(options?: { prefix?: string; delimiter?: string; cursor?: string; limit?: number }): Promise<{
+    objects: Array<{ key: string; size: number; httpMetadata?: { contentType?: string }; httpEtag?: string }>;
+    delimitedPrefixes: string[];
+    truncated: boolean;
+  }> {
+    const prefix = options?.prefix ?? "";
+    const delimitedPrefixes = new Set<string>();
+    const objects: Array<{ key: string; size: number; httpMetadata?: { contentType?: string }; httpEtag?: string }> = [];
+
+    for (const [key, object] of [...this.objects].sort(([left], [right]) => left.localeCompare(right))) {
+      if (!key.startsWith(prefix)) {
+        continue;
+      }
+      const rest = key.slice(prefix.length);
+      const delimiterIndex = options?.delimiter ? rest.indexOf(options.delimiter) : -1;
+      if (options?.delimiter && delimiterIndex >= 0) {
+        delimitedPrefixes.add(`${prefix}${rest.slice(0, delimiterIndex + options.delimiter.length)}`);
+        continue;
+      }
+      const bytes = object.value instanceof Uint8Array ? object.value : new TextEncoder().encode(object.value);
+      objects.push({
+        key,
+        size: bytes.byteLength,
+        ...(object.contentType ? { httpMetadata: { contentType: object.contentType } } : {}),
+        httpEtag: `"fake-${bytes.byteLength}"`,
+      });
+    }
+
+    return { objects, delimitedPrefixes: [...delimitedPrefixes], truncated: false };
+  }
+
+  async delete(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
+
   async put(
     key: string,
     value: string | Uint8Array | ReadableStream,

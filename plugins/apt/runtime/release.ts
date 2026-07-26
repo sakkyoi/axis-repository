@@ -1,4 +1,5 @@
 import type { AptResolvedRepositoryConfig } from "./config";
+import { digestHex } from "./digest";
 import type { AptPackageIndex } from "./packages";
 
 const textEncoder = new TextEncoder();
@@ -44,9 +45,4 @@ export async function buildRelease(input: {
     ...sha512Lines,
     "",
   ].join("\n");
-}
-
-async function digestHex(algorithm: "SHA-256" | "SHA-512", bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest(algorithm, bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }

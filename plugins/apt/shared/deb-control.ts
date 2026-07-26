@@ -1,13 +1,17 @@
 import { XzReadableStream } from "xz-decompress";
+import { DebControlParseError, foldStanzaValue, parseStanza } from "./stanza";
 
 export type DebControlMetadata = Record<string, string>;
 
-export class DebControlParseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "DebControlParseError";
-  }
-}
+export { DebControlParseError };
+
+/**
+ * Fields whose line structure carries meaning and so survives parsing intact.
+ * `Description` is the short summary followed by the extended description, in
+ * which a line of "." marks a paragraph break. Every other field wraps purely
+ * for readability, so those are folded back onto one line.
+ */
+const verbatimControlFields = new Set(["description"]);
 
 const textDecoder = new TextDecoder();
 const arGlobalHeader = "!<arch>\n";
@@ -105,25 +109,10 @@ function readControlFileFromTar(bytes: Uint8Array): string {
 
 export function parseDebianControl(text: string): DebControlMetadata {
   const metadata: DebControlMetadata = {};
-  let currentField = "";
 
-  for (const rawLine of text.replace(/\r\n/g, "\n").split("\n")) {
-    if (!rawLine) {
-      continue;
-    }
-    if (/^[ \t]/.test(rawLine)) {
-      if (currentField) {
-        metadata[currentField] = `${metadata[currentField] ?? ""} ${rawLine.trim()}`.trim();
-      }
-      continue;
-    }
-
-    const separator = rawLine.indexOf(":");
-    if (separator <= 0) {
-      throw new DebControlParseError("APT artifact control metadata is invalid");
-    }
-    currentField = rawLine.slice(0, separator).toLowerCase();
-    metadata[currentField] = rawLine.slice(separator + 1).trim();
+  for (const field of parseStanza(text)) {
+    const name = field.name.toLowerCase();
+    metadata[name] = verbatimControlFields.has(name) ? field.value : foldStanzaValue(field.value);
   }
 
   return metadata;
