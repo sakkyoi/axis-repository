@@ -1,4 +1,9 @@
-import { decompressDebArchiveMember, findDebArchiveMember } from "./deb-archive";
+import {
+  debArchiveSourceFromBytes,
+  decompressDebArchiveMember,
+  findDebArchiveMember,
+  type DebArchiveSource,
+} from "./deb-archive";
 import { normalizeTarPath, readTarEntries, tarEntryIsFile } from "./tar";
 
 /**
@@ -8,12 +13,18 @@ import { normalizeTarPath, readTarEntries, tarEntryIsFile } from "./tar";
  * file", and directories are owned by every package that installs into them.
  * Paths lose the "./" that dpkg writes in front of them, because a `Contents`
  * index names paths relative to the filesystem root.
+ *
+ * Nothing but the names is read, so the cost does not follow how large the
+ * installed files are.
  */
-export async function readDebFilePaths(bytes: Uint8Array): Promise<string[]> {
-  const archive = findDebArchiveMember(bytes, "data.tar");
+export async function readDebFilePaths(
+  source: DebArchiveSource | Uint8Array,
+): Promise<string[]> {
+  const archive = source instanceof Uint8Array ? debArchiveSourceFromBytes(source) : source;
+  const member = await findDebArchiveMember(archive, "data.tar");
   const paths: string[] = [];
 
-  for await (const entry of readTarEntries(decompressDebArchiveMember(archive))) {
+  for await (const entry of readTarEntries(decompressDebArchiveMember(archive, member))) {
     if (!tarEntryIsFile(entry.header)) {
       continue;
     }

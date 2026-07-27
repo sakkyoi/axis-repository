@@ -58,6 +58,7 @@ export { GenericManifestPublisher } from "./plugins/generic-manifest-publisher";
 export {
   listAllObjects,
   objectBytes,
+  objectStream,
   pluginJsonResponse,
 } from "./plugins/repository-object-helpers";
 export { readJsonObject, stringField } from "./http";

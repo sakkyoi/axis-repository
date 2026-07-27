@@ -1,4 +1,9 @@
-import { decompressDebArchiveMember, findDebArchiveMember } from "./deb-archive";
+import {
+  debArchiveSourceFromBytes,
+  decompressDebArchiveMember,
+  findDebArchiveMember,
+  type DebArchiveSource,
+} from "./deb-archive";
 import { DebControlParseError, foldStanzaValue, parseStanza } from "./stanza";
 import { readTarEntries } from "./tar";
 
@@ -16,15 +21,19 @@ const verbatimControlFields = new Set(["description"]);
 
 const textDecoder = new TextDecoder();
 
-export async function readDebControlMetadata(bytes: Uint8Array): Promise<DebControlMetadata> {
-  return parseDebianControl(await readControlFile(bytes));
+export async function readDebControlMetadata(
+  source: DebArchiveSource | Uint8Array,
+): Promise<DebControlMetadata> {
+  return parseDebianControl(await readControlFile(
+    source instanceof Uint8Array ? debArchiveSourceFromBytes(source) : source,
+  ));
 }
 
-async function readControlFile(bytes: Uint8Array): Promise<string> {
-  const archive = findDebArchiveMember(bytes, "control.tar");
-  for await (const entry of readTarEntries(decompressDebArchiveMember(archive))) {
+async function readControlFile(source: DebArchiveSource): Promise<string> {
+  const member = await findDebArchiveMember(source, "control.tar");
+  for await (const entry of readTarEntries(decompressDebArchiveMember(source, member))) {
     if (entry.header.name === "control" || entry.header.name === "./control") {
-      return textDecoder.decode(entry.bytes);
+      return textDecoder.decode(await entry.bytes());
     }
   }
   throw new DebControlParseError("APT artifact control archive does not contain a control file");

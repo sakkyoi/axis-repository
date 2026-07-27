@@ -10,8 +10,20 @@ export interface TarEntryHeader {
   typeFlag: string;
 }
 
+export interface TarEntry {
+  header: TarEntryHeader;
+  /**
+   * Reads this entry's payload.
+   *
+   * A caller that never asks is never charged for it: the payload is skipped
+   * over in the stream rather than allocated. Listing the paths in a data
+   * archive therefore costs nothing per file, however large the files are.
+   */
+  bytes(): Promise<Uint8Array>;
+}
+
 /**
- * Walks a tar stream, yielding each entry's header and its payload bytes.
+ * Walks a tar stream, yielding each entry's header and a reader for its payload.
  *
  * A `.deb` holds two tars: the control archive, of which one small file is
  * read, and the data archive, of which only the entry names are needed. Both
@@ -19,7 +31,7 @@ export interface TarEntryHeader {
  */
 export async function* readTarEntries(
   stream: ReadableStream<Uint8Array>,
-): AsyncGenerator<{ header: TarEntryHeader; bytes: Uint8Array }> {
+): AsyncGenerator<TarEntry> {
   const reader = new TarByteReader(stream);
   let pendingLongName: string | undefined;
 
@@ -30,24 +42,34 @@ export async function* readTarEntries(
     }
 
     const header = parseTarHeader(headerBlock);
-    const bytes = await reader.read(header.size);
-    if (!bytes) {
-      throw new DebControlParseError("Debian archive tar is truncated");
-    }
-    await reader.skip(paddingFor(header.size));
 
     // GNU tar stores a name longer than 100 bytes as its own preceding entry.
     if (header.typeFlag === "L") {
-      pendingLongName = readNullTerminatedText(bytes);
+      pendingLongName = readNullTerminatedText(await readPayload(reader, header.size));
+      await reader.skip(paddingFor(header.size));
       continue;
     }
 
+    let payload: Uint8Array | undefined;
     yield {
       header: pendingLongName === undefined ? header : { ...header, name: pendingLongName },
-      bytes,
+      bytes: async () => (payload ??= await readPayload(reader, header.size)),
     };
+
+    if (payload === undefined) {
+      await reader.skip(header.size);
+    }
+    await reader.skip(paddingFor(header.size));
     pendingLongName = undefined;
   }
+}
+
+async function readPayload(reader: TarByteReader, size: number): Promise<Uint8Array> {
+  const bytes = await reader.read(size);
+  if (!bytes) {
+    throw new DebControlParseError("Debian archive tar is truncated");
+  }
+  return bytes;
 }
 
 export function tarEntryIsFile(header: TarEntryHeader): boolean {
@@ -69,6 +91,12 @@ export function normalizeTarPath(name: string): string {
 export function streamFromBytes(bytes: Uint8Array) {
   return new Blob([arrayBufferFromBytes(bytes)]).stream();
 }
+
+/** The byte-stream shape both of those declarations accept. */
+export type ByteStream = ReturnType<typeof streamFromBytes>;
+
+/** The chunk that shape carries, which the two declarations also disagree about. */
+export type ByteChunk = ByteStream extends ReadableStream<infer Chunk> ? Chunk : never;
 
 function arrayBufferFromBytes(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
@@ -147,9 +175,30 @@ class TarByteReader {
     return output;
   }
 
+  /** Discards bytes without allocating them, however many are asked for. */
   async skip(length: number): Promise<void> {
-    if (length > 0) {
-      await this.read(length);
+    let remaining = length;
+    while (remaining > 0) {
+      if (this.bufferedLength === 0) {
+        if (this.done) {
+          return;
+        }
+        await this.pull();
+        continue;
+      }
+      const chunk = this.buffered[0];
+      if (!chunk) {
+        this.bufferedLength = 0;
+        continue;
+      }
+      const take = Math.min(chunk.byteLength, remaining);
+      if (take === chunk.byteLength) {
+        this.buffered.shift();
+      } else {
+        this.buffered[0] = chunk.subarray(take);
+      }
+      this.bufferedLength -= take;
+      remaining -= take;
     }
   }
 

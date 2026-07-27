@@ -11,6 +11,7 @@ import { listAllObjects, objectBytes, type RepositorySigningKeyCapability } from
 import { aptArtifactKind, debControlMetadataFields } from "./packages";
 import { readDebControlMetadata, type DebControlMetadata } from "./deb-control";
 import { readDebFilePaths } from "../shared/deb-files";
+import { openUploadedDebArchive } from "./deb-source";
 import {
   readAptSuiteStates,
   suiteContentsIndexes,
@@ -89,29 +90,35 @@ export class AptPublisher implements ArtifactPublisher {
     config: AptRepositoryConfig,
     objectStore: RepositoryObjectStore,
   ): Promise<PublishedArtifactInput> {
-    const object = await objectStore.getObject(artifact.verified.objectKey);
-    if (!object) {
-      throw new ValidationError("APT artifact upload object could not be read for metadata parsing");
-    }
-
     const kind = aptArtifactKind(artifact.artifact.filename);
     if (kind === "source-component") {
       // A tarball carries no metadata of its own; the .dsc describes it.
       return artifact;
     }
 
-    const bytes = await objectBytes(object);
     if (kind === "source") {
+      // A .dsc is a few kilobytes of text, so it is read whole.
+      const object = await objectStore.getObject(artifact.verified.objectKey);
+      if (!object) {
+        throw new ValidationError("APT artifact upload object could not be read for metadata parsing");
+      }
       return {
         ...artifact,
         artifact: {
           ...artifact.artifact,
-          metadata: { ...artifact.artifact.metadata, dscText: textDecoder.decode(bytes) },
+          metadata: {
+            ...artifact.artifact.metadata,
+            dscText: textDecoder.decode(await objectBytes(object)),
+          },
         },
       };
     }
 
-    const control = await readDebControlMetadata(bytes);
+    // A .deb is read where it lies. Uploads may be gigabytes, and pulling one
+    // into a worker's 128 MB heap to read a few kilobytes of control fields
+    // would put a ceiling on package size that nothing else here imposes.
+    const source = await openUploadedDebArchive(objectStore, artifact.verified.objectKey);
+    const control = await readDebControlMetadata(source);
     return {
       ...artifact,
       artifact: {
@@ -122,9 +129,9 @@ export class AptPublisher implements ArtifactPublisher {
             artifact: artifact.artifact,
             control,
           }),
-          // Read while the archive is already in hand; Contents would
-          // otherwise have to download every .deb again.
-          filePaths: await readDebFilePaths(bytes),
+          // Read while the archive is already located; Contents would
+          // otherwise have to walk every .deb again.
+          filePaths: await readDebFilePaths(source),
         },
       },
     };
