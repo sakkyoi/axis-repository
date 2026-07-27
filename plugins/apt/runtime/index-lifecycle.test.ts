@@ -189,6 +189,11 @@ function byHashKeys(objectStore: MemoryRepositoryObjectStore): string[] {
   return storedKeys(objectStore).filter((key) => key.includes("/by-hash/"));
 }
 
+/** How many times a key has been written, the store keeping every write. */
+function writeCount(objectStore: MemoryRepositoryObjectStore, key: string): number {
+  return [...objectStore.objects].filter((object) => object.key === key).length;
+}
+
 const PACKAGES_KEY = "repositories/debian-internal/dists/noble/main/binary-amd64/Packages";
 const CONTENTS_KEY = "repositories/debian-internal/dists/noble/main/Contents-amd64.gz";
 const INSTALLER_PACKAGES_KEY = "repositories/debian-internal/dists/noble/main/debian-installer/binary-amd64/Packages";
@@ -735,5 +740,65 @@ describe("APT index lifecycle", () => {
     const harness = await createHarness();
 
     await expect(harness.reconcile({ signingKeyId: "signing_key_missing" })).resolves.toEqual([]);
+  });
+});
+
+describe("APT index writes", () => {
+  it("leaves the indexes a publish does not change alone", async () => {
+    // Every publish rebuilds all of dists/, so without a comparison the whole
+    // tree is rewritten to store bytes that are already there. A repository
+    // with many architectures would pay for all of them on every publish.
+    const harness = await createHarness();
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }]);
+    const untouched = [PACKAGES_KEY, CONTENTS_KEY, ...byHashKeys(harness.objectStore)];
+    const before = untouched.map((key) => writeCount(harness.objectStore, key));
+
+    await harness.publish("pub_2", [{ name: "beta", version: "2.0.0", architecture: "arm64" }]);
+
+    expect(untouched.map((key) => writeCount(harness.objectStore, key))).toEqual(before);
+    expect(writeCount(harness.objectStore, packagesKey("noble", "arm64"))).toBe(1);
+  });
+
+  it("still writes an index whose object went missing", async () => {
+    // Release says these match, but the objects it names are gone — a write
+    // that failed part way through leaves exactly this. Trusting Release on its
+    // own would leave the repository permanently short of them.
+    const harness = await createHarness();
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }]);
+    const missingByHash = byHashKeys(harness.objectStore)[0] ?? "";
+    await harness.objectStore.deleteObject(`${PACKAGES_KEY}.gz`);
+    await harness.objectStore.deleteObject(missingByHash);
+
+    await harness.publish("pub_2", [{ name: "beta", version: "2.0.0", architecture: "arm64" }]);
+
+    expect(storedKeys(harness.objectStore)).toContain(`${PACKAGES_KEY}.gz`);
+    expect(storedKeys(harness.objectStore)).toContain(missingByHash);
+  });
+
+  it("writes the by-hash copies when by-hash is turned on for an existing repository", async () => {
+    // The indexes have not changed, but they have never had a by-hash copy, so
+    // the Release now promising one has to be made true.
+    const harness = await createHarness();
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }], { acquireByHash: false });
+    expect(byHashKeys(harness.objectStore)).toEqual([]);
+
+    await harness.publish("pub_2", [{ name: "alpha", version: "1.0.0" }]);
+
+    expect(byHashKeys(harness.objectStore).length).toBeGreaterThan(0);
+    const release = storedText(harness.objectStore, "repositories/debian-internal/dists/noble/Release") ?? "";
+    for (const key of byHashKeys(harness.objectStore)) {
+      expect(release).toContain(key.slice(key.lastIndexOf("/") + 1));
+    }
+  });
+
+  it("writes Release again even when no index moved, so its date and signature are current", async () => {
+    const harness = await createHarness();
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }]);
+
+    await harness.publish("pub_2", [{ name: "alpha", version: "1.0.0" }]);
+
+    expect(writeCount(harness.objectStore, "repositories/debian-internal/dists/noble/Release")).toBe(2);
+    expect(writeCount(harness.objectStore, "repositories/debian-internal/dists/noble/InRelease")).toBe(2);
+    expect(writeCount(harness.objectStore, PACKAGES_KEY)).toBe(1);
   });
 });

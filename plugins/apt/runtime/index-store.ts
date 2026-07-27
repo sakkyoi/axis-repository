@@ -1,5 +1,6 @@
 import type {
   PublishedObject,
+  RepositoryObjectListItem,
   RepositoryObjectMetadata,
   RepositoryObjectStore,
 } from "@axis-repository/core";
@@ -12,6 +13,7 @@ import type { AptIndexMetadata } from "./metadata";
 import { indexKey, type AptPoolCopy, type AptSuiteIndexes } from "./packages";
 import {
   BY_HASH_SECTIONS,
+  RELEASE_CHECKSUM_SECTIONS,
   acquireByHashEnabled,
   checksumForSection,
   type ReleaseChecksumSection,
@@ -193,10 +195,16 @@ export async function writeAptRepositoryIndexes(input: {
   const objects = [...poolObjects, ...prepared.flatMap((suite) => suite.indexObjects)];
   const previous = await capturePreviousObjectMetadata(input.objectStore, objects.map((object) => object.key));
   const removedObjectKeys: string[] = [];
+  // The listing that finds stale objects also says which of the objects about
+  // to be written are already there, so nothing is skipped on the strength of
+  // a Release entry alone.
+  const existingKeys = new Map<PreparedSuiteWrite, Set<string>>();
   for (const suite of prepared) {
+    const existing = await listAllObjects(input.objectStore, suite.prefix);
+    existingKeys.set(suite, new Set(existing.map((object) => object.key)));
     removedObjectKeys.push(...await removeStaleIndexObjects({
       objectStore: input.objectStore,
-      prefix: suite.prefix,
+      existing,
       keptKeys: new Set([
         ...suite.indexObjects.map((object) => object.key),
         ...suite.byHash.objects.map((object) => object.key),
@@ -209,7 +217,7 @@ export async function writeAptRepositoryIndexes(input: {
     await input.objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
   }
   for (const suite of prepared) {
-    await suite.commit();
+    await suite.commit(existingKeys.get(suite) ?? new Set());
   }
 
   return {
@@ -222,7 +230,8 @@ interface PreparedSuiteWrite {
   prefix: string;
   indexObjects: PublishedObject[];
   byHash: { objects: ByHashObject[]; retainedKeys: Set<string> };
-  commit(): Promise<void>;
+  /** @param existingKeys every key already under this suite, as just listed. */
+  commit(existingKeys: Set<string>): Promise<void>;
 }
 
 /**
@@ -258,16 +267,33 @@ async function prepareSuiteWrite(input: {
     { key: inReleasePath, contentType: TEXT_CONTENT_TYPE },
     { key: releaseGpgPath, contentType: PGP_SIGNATURE_CONTENT_TYPE },
   ];
-  const byHash = acquireByHashEnabled(input.metadata.config)
-    ? await planByHashObjects({ objectStore: input.objectStore, prefix, releasePath, indexFiles })
-    : { objects: [], retainedKeys: new Set<string>() };
+
+  const published = await readPublishedRelease(input.objectStore, releasePath);
+  const digested = await digestIndexFiles(indexFiles);
+  const byHashEnabled = acquireByHashEnabled(input.metadata.config);
+  const byHash = {
+    objects: byHashEnabled ? byHashObjects(prefix, digested) : [],
+    retainedKeys: previousByHashKeys(prefix, published),
+  };
 
   return {
     prefix,
     indexObjects,
     byHash,
-    commit: async () => {
+    commit: async (existingKeys) => {
+      // Most publishes touch one architecture of one component, and rewriting
+      // every other index would cost a write apiece to store bytes already
+      // there. An index is written when it differs from what Release describes,
+      // or when the object it describes is not actually there.
+      const rewritten = new Set(digested
+        .filter((entry) => !matchesPublished(entry, published)
+          || !existingKeys.has(`${prefix}${entry.file.relativePath}`))
+        .map((entry) => entry.file.relativePath));
+
       for (const file of indexFiles) {
+        if (!rewritten.has(file.relativePath)) {
+          continue;
+        }
         const key = `${prefix}${file.relativePath}`;
         if (file.text === undefined) {
           await input.objectStore.putBytes(key, file.bytes, file.contentType);
@@ -276,8 +302,15 @@ async function prepareSuiteWrite(input: {
         }
       }
       for (const object of byHash.objects) {
+        // A by-hash copy is named by its own digest, so an unchanged index
+        // already has one under exactly this key.
+        if (!rewritten.has(object.relativePath) && existingKeys.has(object.key)) {
+          continue;
+        }
         await input.objectStore.putBytes(object.key, object.bytes, object.contentType);
       }
+      // Release carries the publish date and a fresh signature, so all three
+      // are written every time even when no index moved.
       await input.objectStore.putText(releasePath, release, TEXT_CONTENT_TYPE);
       await input.objectStore.putText(inReleasePath, inRelease, TEXT_CONTENT_TYPE);
       await input.objectStore.putText(releaseGpgPath, releaseGpg, PGP_SIGNATURE_CONTENT_TYPE);
@@ -285,14 +318,40 @@ async function prepareSuiteWrite(input: {
   };
 }
 
+interface DigestedIndexFile {
+  file: AptIndexFile;
+  digests: Map<ReleaseChecksumSection, string>;
+}
+
+/** Digests each index once, for both the by-hash keys and the change check. */
+async function digestIndexFiles(indexFiles: AptIndexFile[]): Promise<DigestedIndexFile[]> {
+  return Promise.all(indexFiles.map(async (file) => ({
+    file,
+    digests: new Map(await Promise.all(BY_HASH_SECTIONS.map(async (section) => [
+      section,
+      await checksumForSection(section, file.bytes),
+    ] as const))),
+  })));
+}
+
+function matchesPublished(entry: DigestedIndexFile, published: PublishedReleaseState | null): boolean {
+  const path = entry.file.relativePath;
+  if (published?.sizes.get(path) !== entry.file.bytes.byteLength) {
+    return false;
+  }
+  const digest = entry.digests.get("SHA256");
+  return digest !== undefined && published.digests.get(path)?.get("SHA256") === digest;
+}
+
 interface ByHashObject {
   key: string;
+  relativePath: string;
   bytes: Uint8Array;
   contentType: string;
 }
 
 /**
- * Works out the `by-hash` copies of each index and which older ones to keep.
+ * Works out the `by-hash` copies of each index.
  *
  * A client that reads `Release` and then fetches an index can otherwise land
  * on a newer one than its `Release` describes, and reject the mismatch.
@@ -301,48 +360,79 @@ interface ByHashObject {
  * `Release` being replaced, is kept alongside the current one. Anything older
  * is dropped, which bounds what this costs in storage.
  */
-async function planByHashObjects(input: {
-  objectStore: RepositoryObjectStore;
-  prefix: string;
-  releasePath: string;
-  indexFiles: AptIndexFile[];
-}): Promise<{ objects: ByHashObject[]; retainedKeys: Set<string> }> {
-  const objects: ByHashObject[] = [];
-
-  for (const file of input.indexFiles) {
-    for (const section of BY_HASH_SECTIONS) {
-      objects.push({
-        key: byHashKey(input.prefix, file.relativePath, section, await checksumForSection(section, file.bytes)),
-        bytes: file.bytes,
-        contentType: file.contentType,
-      });
-    }
-  }
-
-  return { objects, retainedKeys: await previousByHashKeys(input) };
+function byHashObjects(prefix: string, digested: DigestedIndexFile[]): ByHashObject[] {
+  return digested.flatMap((entry) => BY_HASH_SECTIONS.flatMap((section) => {
+    const digest = entry.digests.get(section);
+    return digest === undefined ? [] : [{
+      key: byHashKey(prefix, entry.file.relativePath, section, digest),
+      relativePath: entry.file.relativePath,
+      bytes: entry.file.bytes,
+      contentType: entry.file.contentType,
+    }];
+  }));
 }
 
-async function previousByHashKeys(input: {
-  objectStore: RepositoryObjectStore;
-  prefix: string;
-  releasePath: string;
-}): Promise<Set<string>> {
-  const storedRelease = await input.objectStore.getObject(input.releasePath);
+/**
+ * What the `Release` already on disk says about the indexes it describes.
+ *
+ * It names every index with its size and digests, which is enough to tell
+ * whether a freshly built index differs from the published one without reading
+ * any of them back.
+ */
+interface PublishedReleaseState {
+  digests: Map<string, Map<ReleaseChecksumSection, string>>;
+  sizes: Map<string, number>;
+  /** Whether that write also published `by-hash` copies of those indexes. */
+  byHashEnabled: boolean;
+}
+
+async function readPublishedRelease(
+  objectStore: RepositoryObjectStore,
+  releasePath: string,
+): Promise<PublishedReleaseState | null> {
+  const storedRelease = await objectStore.getObject(releasePath);
   if (!storedRelease) {
-    return new Set();
+    return null;
   }
 
-  const retained = new Set<string>();
+  const digests = new Map<string, Map<ReleaseChecksumSection, string>>();
+  const sizes = new Map<string, number>();
+  let byHashEnabled = false;
   let section: ReleaseChecksumSection | undefined;
+
   for (const line of textDecoder.decode(await objectBytes(storedRelease)).split("\n")) {
     const sectionMatch = /^([A-Za-z0-9]+):$/.exec(line);
     if (sectionMatch) {
-      section = BY_HASH_SECTIONS.find((candidate) => candidate === sectionMatch[1]);
+      section = RELEASE_CHECKSUM_SECTIONS.find((candidate) => candidate === sectionMatch[1]);
       continue;
     }
-    const entry = /^ ([0-9a-f]+) +\d+ +(\S+)$/.exec(line);
-    if (section && entry?.[1] && entry[2]) {
-      retained.add(byHashKey(input.prefix, entry[2], section, entry[1]));
+    if (line === "Acquire-By-Hash: yes") {
+      byHashEnabled = true;
+      continue;
+    }
+    const entry = /^ ([0-9a-f]+) +(\d+) +(\S+)$/.exec(line);
+    const [, digest, size, path] = entry ?? [];
+    if (!section || !digest || !size || !path) {
+      continue;
+    }
+    const forPath = digests.get(path) ?? new Map<ReleaseChecksumSection, string>();
+    forPath.set(section, digest);
+    digests.set(path, forPath);
+    sizes.set(path, Number(size));
+  }
+
+  return { digests, sizes, byHashEnabled };
+}
+
+function previousByHashKeys(prefix: string, previous: PublishedReleaseState | null): Set<string> {
+  const retained = new Set<string>();
+
+  for (const [path, sections] of previous?.digests ?? []) {
+    for (const section of BY_HASH_SECTIONS) {
+      const digest = sections.get(section);
+      if (digest) {
+        retained.add(byHashKey(prefix, path, section, digest));
+      }
     }
   }
 
@@ -391,13 +481,12 @@ export function withPreviousMetadata(
  */
 async function removeStaleIndexObjects(input: {
   objectStore: RepositoryObjectStore;
-  prefix: string;
+  existing: RepositoryObjectListItem[];
   keptKeys: Set<string>;
 }): Promise<string[]> {
-  const existing = await listAllObjects(input.objectStore, input.prefix);
   const removed: string[] = [];
 
-  for (const object of existing) {
+  for (const object of input.existing) {
     if (input.keptKeys.has(object.key)) {
       continue;
     }
