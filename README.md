@@ -227,6 +227,35 @@ because it would advertise a source package apt cannot fetch.
 The `apt/source` and `apt/install` helpers return `sourcePackageLines`, the
 `deb-src` counterpart of `sourceLines`.
 
+### Index Compression
+
+`Packages`, `Sources` and `Translation-en` are each published three ways: plain,
+gzip and zstd. apt fetches the smallest form it can decompress out of those
+`Release` lists, so a client that understands zstd downloads roughly half what
+it would otherwise; one that predates zstd support takes the gzip form, which
+is why both are published rather than only the smaller. On a realistic index
+zstd -19 lands within about one percent of `xz -9`, and both are around a
+quarter smaller than `gzip -9`.
+
+`Contents` is the exception and is published gzip-only — see below.
+
+A Cloudflare Worker has no zstd: `CompressionStream` offers only gzip and
+deflate, and every xz or zstd package on npm is either a native binding or a
+WebAssembly build whose loader wants `fetch`, WASI or threads. So libzstd is
+vendored as WebAssembly in `plugins/apt/shared/zstd.wasm`, alongside a
+generated symbol map, and driven by a few lines of glue in `shared/zstd.ts`.
+The compression itself is libzstd, unmodified.
+
+The binary is imported as a module rather than embedded as bytes, because a
+Worker refuses to compile WebAssembly at run time — `Wasm code generation
+disallowed by embedder`. Wrangler uploads it as its own module and compiles it
+at deploy; the test runner compiles it while loading the file. Regenerate both
+files after bumping the source package:
+
+```bash
+node scripts/generate-zstd-wasm.mjs
+```
+
 ### Contents Indexes
 
 Each component publishes `dists/<suite>/<component>/Contents-<arch>.gz`, which
