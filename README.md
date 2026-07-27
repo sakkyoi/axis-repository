@@ -230,12 +230,22 @@ The `apt/source` and `apt/install` helpers return `sourcePackageLines`, the
 ### Index Compression
 
 `Packages`, `Sources` and `Translation-en` are each published three ways: plain,
-gzip and zstd. apt fetches the smallest form it can decompress out of those
-`Release` lists, so a client that understands zstd downloads roughly half what
-it would otherwise; one that predates zstd support takes the gzip form, which
-is why both are published rather than only the smaller. On a realistic index
-zstd -19 lands within about one percent of `xz -9`, and both are around a
-quarter smaller than `gzip -9`.
+gzip and zstd. On a realistic index the zstd form is about a quarter smaller
+than the gzip one, and within about one percent of what `xz -9` would give.
+
+**apt does not take the smallest form on its own.** It walks
+`Acquire::CompressionTypes` in the order those are declared, which upstream
+sets to `xz, bz2, lzma, gz, lz4, zst` — so a default client takes the gzip
+form and never asks for the zstd one. Verified against apt 3.2.0: with default
+settings it requests `Packages.gz`; with
+
+```text
+Acquire::CompressionTypes::Order "zst";
+```
+
+in `/etc/apt/apt.conf.d/`, it requests `Packages.zst` and the transfer drops
+accordingly. Until a client opts in, publishing zstd costs storage and saves it
+nothing.
 
 `Contents` is the exception and is published gzip-only — see below.
 

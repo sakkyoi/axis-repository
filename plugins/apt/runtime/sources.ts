@@ -124,12 +124,15 @@ export async function buildSourceStanza(input: {
 
   stanza.push({ name: "Directory", value: input.directory });
   for (const { field, digest } of checksumFields) {
-    const lines = files
-      .filter((file) => file[digest] !== undefined)
-      .map((file) => ` ${file[digest] ?? ""} ${file.size} ${file.name}`);
-    if (lines.length > 0) {
-      stanza.push({ name: field, value: `\n${lines.join("\n")}`.slice(1) });
+    // A checksum section has to cover every file or none: a `.dsc` that omits
+    // Checksums-Sha1 would otherwise publish a list naming only the `.dsc`,
+    // which reads as "these are all the files" to anything that trusts it.
+    if (!files.every((file) => file[digest] !== undefined)) {
+      continue;
     }
+    // Every entry belongs on its own indented line, starting below the name.
+    const lines = files.map((file) => ` ${file[digest] ?? ""} ${file.size} ${file.name}`);
+    stanza.push({ name: field, value: `\n${lines.join("\n")}` });
   }
 
   return stanza;

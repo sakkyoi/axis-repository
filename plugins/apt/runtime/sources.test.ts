@@ -108,8 +108,32 @@ describe("Sources stanza", () => {
     const stanza = await stanzaFor(dscBody);
 
     expect(stanzaField(stanza, "Files")).toContain(`${md5Hex(bytes)} ${bytes.byteLength} myapp_1.2.3-1.dsc`);
-    expect(stanzaField(stanza, "Checksums-Sha256")?.split("\n")).toHaveLength(3);
+    expect(stanzaField(stanza, "Checksums-Sha256")?.split("\n")).toHaveLength(4);
     expect(stanzaField(stanza, "Checksums-Sha256")).toContain(`${"a".repeat(64)} 4096 myapp_1.2.3.orig.tar.xz`);
+  });
+
+  it("omits a checksum section the .dsc does not cover for every file", async () => {
+    // Modern dpkg-source often writes no Checksums-Sha1. Emitting one holding
+    // only the .dsc would claim to be the complete file list.
+    const withoutSha1 = dscBody.replace(/Checksums-Sha1:\n( .*\n)+/, "");
+    const stanza = await stanzaFor(withoutSha1);
+
+    expect(stanzaField(stanza, "Checksums-Sha1")).toBeUndefined();
+    expect(stanzaField(stanza, "Checksums-Sha256")?.split("\n")).toHaveLength(4);
+    expect(stanzaField(stanza, "Files")?.split("\n")).toHaveLength(4);
+  });
+
+  it("starts each checksum list below its field name, one entry per line", async () => {
+    const published = formatSourcesIndex([await stanzaFor(dscBody)]) ?? "";
+
+    // Debian writes "Files:" alone, then indented entries. Putting the first
+    // entry on the name's line is what every other tool would then misread.
+    expect(published).toContain("\nFiles:\n ");
+    expect(published).toContain("\nChecksums-Sha256:\n ");
+    expect(published).not.toMatch(/^Files: {2}/m);
+    for (const line of published.split("\n")) {
+      expect(line).not.toMatch(/^\S.*: {2}\S/);
+    }
   });
 
   it("names the pool paths apt has to fetch", async () => {

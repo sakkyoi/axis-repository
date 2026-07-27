@@ -69,7 +69,21 @@ export function parseStanza(text: string): DebianStanza {
 }
 
 export function formatStanza(stanza: DebianStanza): string {
-  return `${stanza.map((field) => `${field.name}: ${field.value}`).join("\n")}\n`;
+  return `${stanza.map((field) => formatField(field)).join("\n")}\n`;
+}
+
+/**
+ * A value that begins on its own line keeps the field name bare.
+ *
+ * `Files:` and `Package-List:` are written that way — the name, then every
+ * entry on an indented line of its own. Emitting the usual space after the
+ * colon would put the first entry on the name's line with two spaces in front
+ * of it, which is not how any Debian tool writes them.
+ */
+function formatField(field: DebianStanzaField): string {
+  return field.value.startsWith("\n")
+    ? `${field.name}:${field.value}`
+    : `${field.name}: ${field.value}`;
 }
 
 export function stanzaField(stanza: DebianStanza, name: string): string | undefined {
