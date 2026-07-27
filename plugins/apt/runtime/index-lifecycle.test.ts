@@ -439,6 +439,14 @@ describe("APT index lifecycle", () => {
 
     expect(storedText(harness.objectStore, PACKAGES_KEY)).toContain("Package: gamma\n");
     expect(artifacts.map((artifact) => artifact.name).sort()).toEqual(["alpha", "gamma"]);
+    // The stanza has to name the real digest and size: apt rejects a package
+    // whose download does not match what Packages said it would be.
+    const pool = storedBytes(harness.objectStore, "repositories/debian-internal/pool/main/gamma/gamma_3.0.0_amd64.deb");
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", pool ?? new Uint8Array(0)))]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    expect(storedText(harness.objectStore, PACKAGES_KEY)).toContain(`SHA256: ${digest}\n`);
+    expect(storedText(harness.objectStore, PACKAGES_KEY)).toContain(`Size: ${pool?.byteLength}\n`);
   });
 
   it("publishes each index under by-hash and keeps one older generation", async () => {

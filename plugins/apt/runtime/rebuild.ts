@@ -7,11 +7,13 @@ import {
 import {
   listAllObjects,
   objectBytes,
+  objectStream,
   type RepositorySigningKeyCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { stanzaField, type DebianStanza } from "../shared/stanza";
 import { readDebControlMetadata } from "./deb-control";
-import { digestHex } from "./digest";
+import { debArchiveSourceForObject } from "./deb-source";
+import { digestStreamHex } from "./digest";
 import {
   readAptSuiteStates,
   suiteContentsIndexes,
@@ -275,20 +277,33 @@ async function stanzaFromPoolObject(input: {
   relativeFilename: string;
   config: ReturnType<typeof parseAptRepositoryConfig>;
 }): Promise<DebianStanza | undefined> {
+  const head = await input.objectStore.headObject(input.objectKey);
+  if (!head || head.contentLength === undefined) {
+    return undefined;
+  }
+
+  // A pool object is read the same way an upload is: its control fields come
+  // from ranged reads, and its digest from streaming it past a hash. Neither
+  // needs the package in memory, and reconciling has to cope with whatever
+  // size was published.
+  const source = debArchiveSourceForObject({
+    objectStore: input.objectStore,
+    key: input.objectKey,
+    size: head.contentLength,
+  });
+  const control = await readDebControlMetadata(source);
   const stored = await input.objectStore.getObject(input.objectKey);
   if (!stored) {
     return undefined;
   }
 
-  const bytes = await objectBytes(stored);
-  const control = await readDebControlMetadata(bytes);
   const metadata = aptArtifactMetadataFromDebControl({
     config: input.config,
     artifact: {
       filename: input.relativeFilename.split("/").pop() ?? input.relativeFilename,
-      size: bytes.byteLength,
+      size: head.contentLength,
       sha256: "",
-      contentType: stored.contentType ?? "application/vnd.debian.binary-package",
+      contentType: head.contentType ?? "application/vnd.debian.binary-package",
       metadata: { component: input.relativeFilename.split("/")[1] ?? "main" },
     },
     control,
@@ -302,8 +317,8 @@ async function stanzaFromPoolObject(input: {
     maintainer: requiredControlField(control.maintainer, "maintainer"),
     description: requiredControlField(control.description, "description"),
     filename: input.relativeFilename,
-    size: bytes.byteLength,
-    sha256: await digestHex("SHA-256", bytes),
+    size: head.contentLength,
+    sha256: await digestStreamHex("SHA-256", objectStream(stored)),
   });
 }
 
