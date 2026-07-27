@@ -183,7 +183,8 @@ are future publishers.
 
 An apt repository is configured under `config.apt`. Creating one through the
 admin UI asks for the codename and the signing key; the rest are optional and
-are set through `PATCH /admin/repositories/<name>` with a `config` object.
+are editable in the repository's APT settings section, or through
+`PATCH /admin/repositories/<name>` with a `config` object.
 
 | Field | Type | Effect |
 | --- | --- | --- |

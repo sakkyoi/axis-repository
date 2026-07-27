@@ -5,7 +5,7 @@ import type {
   RepositoryCreateWizardState,
 } from "@axis-repository/admin-ui/plugin-ui";
 import { repositoryCreateStepsForConfig } from "@axis-repository/admin-ui/plugin-ui";
-import { buildCreateAptRepositoryInput, type AptRepositoryFormValues } from "./forms";
+import { buildCreateAptRepositoryInput, emptyAptSettings, type AptRepositoryFormValues } from "./forms";
 
 function field(name: string): PluginRepositoryConfigFieldManifest {
   const configField = aptPluginManifest.repositoryConfig.fields.find((candidate) => candidate.name === name);
@@ -32,6 +32,7 @@ function validateRequiredTextField(state: RepositoryCreateWizardState, name: str
 
 function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormValues {
   return {
+    ...emptyAptSettings,
     name: state.name,
     visibility: state.visibility,
     codename: state.config.codename ?? "",

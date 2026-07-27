@@ -55,7 +55,7 @@ export function AptSettingsSection({
     try {
       await updateRepository.mutateAsync({
         name: repository.name,
-        input: buildUpdateAptRepositoryInput(aptValues),
+        input: buildUpdateAptRepositoryInput(aptValues, repository),
       });
       setAptError("");
     } catch (caught) {
@@ -98,7 +98,7 @@ export function AptSigningKeysSection({
       input: buildUpdateAptRepositoryInput({
         ...buildAptRepositoryFormValues(repository),
         signingKeyId: signingKey.id,
-      }),
+      }, repository),
     });
   }
 
@@ -140,6 +140,13 @@ function AptRepositoryFields({
         <Input value={values.codename} onChange={(event) => onChange("codename", event.target.value)} placeholder="noble" required />
       </label>
       <label className="grid gap-2">
+        <span className="text-sm font-medium">Suites</span>
+        <Input value={values.suites} onChange={(event) => onChange("suites", event.target.value)} placeholder={`default: ${values.codename || "codename"}`} />
+        <span className="text-xs text-muted-foreground">
+          Every suite this repository publishes, space separated. Must include the codename.
+        </span>
+      </label>
+      <label className="grid gap-2">
         <span className="text-sm font-medium">Component allowlist</span>
         <Input value={values.components} onChange={(event) => onChange("components", event.target.value)} placeholder="default: main" />
       </label>
@@ -147,6 +154,7 @@ function AptRepositoryFields({
         <span className="text-sm font-medium">Architecture allowlist</span>
         <Input value={values.architectures} onChange={(event) => onChange("architectures", event.target.value)} placeholder="auto-detect" />
       </label>
+      <AptReleaseFields values={values} onChange={onChange} />
       <label className="grid gap-2">
         <span className="text-sm font-medium">Signing key</span>
         {signingKeyState.currentKeyRevoked && (
@@ -173,5 +181,86 @@ function AptRepositoryFields({
         )}
       </label>
     </div>
+  );
+}
+
+/**
+ * The `Release` fields, which describe the repository rather than shape it.
+ *
+ * They are separated from the fields above because changing one of these is
+ * safe at any time: nothing already published moves, and the next write picks
+ * them up. The codename, suites, components and architectures decide where
+ * files live, so changing those can orphan what is already there.
+ */
+function AptReleaseFields({
+  values,
+  onChange,
+}: {
+  values: AptRepositoryFormValues;
+  onChange: <K extends keyof AptRepositoryFormValues>(field: K, value: AptRepositoryFormValues[K]) => void;
+}) {
+  return (
+    <>
+      <label className="grid gap-2">
+        <span className="text-sm font-medium">Origin</span>
+        <Input value={values.origin} onChange={(event) => onChange("origin", event.target.value)} placeholder="default: repository name" />
+      </label>
+      <label className="grid gap-2">
+        <span className="text-sm font-medium">Label</span>
+        <Input value={values.label} onChange={(event) => onChange("label", event.target.value)} placeholder="default: repository name" />
+      </label>
+      <label className="grid gap-2">
+        <span className="text-sm font-medium">Suite override</span>
+        <Input value={values.suite} onChange={(event) => onChange("suite", event.target.value)} placeholder="default: codename" />
+        <span className="text-xs text-muted-foreground">
+          Publishes as a named suite such as stable, when that differs from the codename. Only for a repository with one suite.
+        </span>
+      </label>
+      <label className="grid gap-2">
+        <span className="text-sm font-medium">Description</span>
+        <Input value={values.description} onChange={(event) => onChange("description", event.target.value)} placeholder="optional" />
+      </label>
+      <label className="grid gap-2">
+        <span className="text-sm font-medium">Release validity (days)</span>
+        <Input
+          type="number"
+          min={1}
+          value={values.validityDays}
+          onChange={(event) => onChange("validityDays", event.target.value)}
+          placeholder="never expires"
+        />
+        <span className="text-xs text-muted-foreground">
+          Writes Valid-Until, so a stale mirror cannot hold clients on an old package set. Axis re-signs before it lapses, so you do not have to keep publishing.
+        </span>
+      </label>
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          className="h-4 w-4"
+          checked={values.notAutomatic}
+          onChange={(event) => onChange("notAutomatic", event.target.checked)}
+        />
+        <span className="text-sm font-medium">Not automatic</span>
+      </label>
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          className="h-4 w-4"
+          checked={values.butAutomaticUpgrades}
+          disabled={!values.notAutomatic}
+          onChange={(event) => onChange("butAutomaticUpgrades", event.target.checked)}
+        />
+        <span className="text-sm font-medium">But automatic upgrades</span>
+      </label>
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          className="h-4 w-4"
+          checked={values.acquireByHash}
+          onChange={(event) => onChange("acquireByHash", event.target.checked)}
+        />
+        <span className="text-sm font-medium">Publish indexes under by-hash</span>
+      </label>
+    </>
   );
 }
