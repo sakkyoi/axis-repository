@@ -43,7 +43,16 @@ UPLOAD_BACKEND=local-r2
 `AXIS_ADMIN_PASSWORD_HASH` are bootstrap inputs for the first owner user. After
 the owner user has been seeded into state, the bootstrap password secret can be
 removed. Keep `AXIS_SESSION_SECRET`; it is still required to sign and verify
-admin sessions.
+admin sessions. `AXIS_ADMIN_PASSWORD` must be at least 8 characters; a shorter
+one fails the first sign-in rather than seeding an account nobody can use.
+
+An admin session is held by an `axis_admin_refresh` cookie, which the browser
+exchanges for a short-lived access token on every page load. The cookie is
+marked `Secure` only when the request itself arrived over HTTPS: a browser
+silently discards a `Secure` cookie served from an `http://` origin, so
+marking it unconditionally would make signing in over `http://<host>:8787`
+appear to work and then drop you back to the login screen on the next reload.
+Deployments are served over HTTPS and keep the flag.
 
 Admin passwords are stored with PBKDF2-HMAC-SHA256 using a per-user salt, and
 the iteration count is embedded in the stored hash so it can be raised later

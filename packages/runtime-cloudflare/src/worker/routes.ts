@@ -28,7 +28,7 @@ import {
 import { dispatchRepositoryAdminResource } from "../plugins/repository-plugin-admin-resources";
 import { scopeSecretsToEcosystem } from "../plugins/scoped-capabilities";
 import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
-import { adminRefreshCookie, clearAdminRefreshCookie, refreshTokenFromCookie } from "../auth/admin-auth";
+import { adminRefreshCookie, clearAdminRefreshCookie, refreshTokenFromCookie, requestIsSecure } from "../auth/admin-auth";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;
@@ -1018,7 +1018,15 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         accessTokenExpiresAt: result.accessTokenExpiresAt,
         principal: result.principal,
       },
-      { headers: { "set-cookie": adminRefreshCookie(result.refreshToken, result.refreshTokenExpiresAt) } },
+      {
+        headers: {
+          "set-cookie": adminRefreshCookie({
+            refreshToken: result.refreshToken,
+            expiresAt: result.refreshTokenExpiresAt,
+            secure: requestIsSecure(request),
+          }),
+        },
+      },
     );
   }
   if (url.pathname === "/admin/auth/refresh") {
@@ -1036,7 +1044,15 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         accessTokenExpiresAt: result.accessTokenExpiresAt,
         principal: result.principal,
       },
-      { headers: { "set-cookie": adminRefreshCookie(result.refreshToken, result.refreshTokenExpiresAt) } },
+      {
+        headers: {
+          "set-cookie": adminRefreshCookie({
+            refreshToken: result.refreshToken,
+            expiresAt: result.refreshTokenExpiresAt,
+            secure: requestIsSecure(request),
+          }),
+        },
+      },
     );
   }
   if (url.pathname === "/admin/auth/logout") {
@@ -1049,7 +1065,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       // cookie, or the browser keeps presenting a dead token forever.
       await dependencies.adminAuthService.logout(refreshToken).catch(() => undefined);
     }
-    return new Response(null, { status: 204, headers: { "set-cookie": clearAdminRefreshCookie() } });
+    return new Response(null, { status: 204, headers: { "set-cookie": clearAdminRefreshCookie(requestIsSecure(request)) } });
   }
   if (url.pathname === "/admin/auth/change-password") {
     if (request.method !== "POST") {
@@ -1061,7 +1077,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       currentPassword: stringField(body, "currentPassword"),
       newPassword: stringField(body, "newPassword"),
     });
-    return new Response(null, { status: 204, headers: { "set-cookie": clearAdminRefreshCookie() } });
+    return new Response(null, { status: 204, headers: { "set-cookie": clearAdminRefreshCookie(requestIsSecure(request)) } });
   }
   if (url.pathname === "/admin/session") {
     if (request.method === "GET") {

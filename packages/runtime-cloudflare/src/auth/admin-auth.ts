@@ -100,19 +100,50 @@ export class HmacAdminAccessTokenCodec implements AdminAccessTokenCodec {
 
 export const adminRefreshCookieName = "axis_admin_refresh";
 
-export function adminRefreshCookie(refreshToken: string, expiresAt: string): string {
+/**
+ * Whether the refresh cookie may be marked `Secure`.
+ *
+ * A browser silently discards a `Secure` cookie that arrives over a plain HTTP
+ * origin, and reports nothing. Marking it unconditionally means signing in over
+ * `http://<host>` appears to work — the access token lives in memory — and then
+ * reloading the page drops straight back to the login screen, because there is
+ * no cookie left to exchange for a new one. Only `localhost` escapes that, and
+ * only in some browsers.
+ *
+ * The scheme is read from the request URL rather than a forwarded header, so a
+ * client cannot talk the server out of the flag on a deployment that really is
+ * served over HTTPS.
+ */
+export function requestIsSecure(request: Request): boolean {
+  return new URL(request.url).protocol === "https:";
+}
+
+export function adminRefreshCookie(input: {
+  refreshToken: string;
+  expiresAt: string;
+  secure: boolean;
+}): string {
   return [
-    `${adminRefreshCookieName}=${refreshToken}`,
+    `${adminRefreshCookieName}=${input.refreshToken}`,
     "Path=/admin/auth",
     "HttpOnly",
-    "Secure",
+    ...(input.secure ? ["Secure"] : []),
     "SameSite=Lax",
-    `Expires=${new Date(expiresAt).toUTCString()}`,
+    `Expires=${new Date(input.expiresAt).toUTCString()}`,
   ].join("; ");
 }
 
-export function clearAdminRefreshCookie(): string {
-  return `${adminRefreshCookieName}=; Path=/admin/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+export function clearAdminRefreshCookie(secure: boolean): string {
+  // The attributes have to match the cookie being cleared, or the browser
+  // treats this as a different cookie and leaves the original in place.
+  return [
+    `${adminRefreshCookieName}=`,
+    "Path=/admin/auth",
+    "HttpOnly",
+    ...(secure ? ["Secure"] : []),
+    "SameSite=Lax",
+    "Max-Age=0",
+  ].join("; ");
 }
 
 export function refreshTokenFromCookie(request: Request): string | undefined {
