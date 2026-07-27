@@ -21,6 +21,19 @@ export const aptPluginManifest = {
         description: "Debian distribution codename used under dists/.",
       },
       {
+        // Asked for up front because it decides the directory layout. Adding a
+        // suite later is safe, but removing one strands its whole dists tree:
+        // nothing writes to it again and nothing renews its Release, while a
+        // client still pointed at it keeps taking signed but frozen metadata.
+        name: "suites",
+        label: "Suites",
+        kind: "string-list",
+        step: "config",
+        required: false,
+        placeholder: "leave empty for just the codename",
+        description: "Every suite this repository publishes, space separated. Must include the codename.",
+      },
+      {
         name: "signingKey",
         label: "Signing key",
         kind: "signing-key-provisioning",

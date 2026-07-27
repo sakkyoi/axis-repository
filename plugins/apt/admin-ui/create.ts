@@ -5,7 +5,7 @@ import type {
   RepositoryCreateWizardState,
 } from "@axis-repository/admin-ui/plugin-ui";
 import { repositoryCreateStepsForConfig } from "@axis-repository/admin-ui/plugin-ui";
-import { buildCreateAptRepositoryInput, emptyAptSettings, type AptRepositoryFormValues } from "./forms";
+import { aptSuitesFor, buildCreateAptRepositoryInput, emptyAptSettings, type AptRepositoryFormValues } from "./forms";
 
 function field(name: string): PluginRepositoryConfigFieldManifest {
   const configField = aptPluginManifest.repositoryConfig.fields.find((candidate) => candidate.name === name);
@@ -30,12 +30,22 @@ function validateRequiredTextField(state: RepositoryCreateWizardState, name: str
   return state.config[name]?.trim() ? [] : [requiredFieldError(name)];
 }
 
+function validateSuites(state: RepositoryCreateWizardState): string[] {
+  try {
+    aptSuitesFor(aptFormValues(state));
+    return [];
+  } catch (error) {
+    return [error instanceof Error ? error.message : "Suites are invalid"];
+  }
+}
+
 function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormValues {
   return {
     ...emptyAptSettings,
     name: state.name,
     visibility: state.visibility,
     codename: state.config.codename ?? "",
+    suites: state.config.suites ?? "",
     components: state.config.components ?? "",
     architectures: state.config.architectures ?? "",
     signingKeyMode: state.setup.signingKeyMode ?? "generate",
@@ -73,7 +83,10 @@ export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
       return state.name.trim() ? [] : ["Repository name is required"];
     }
     if (step === "config") {
-      return validateRequiredTextField(state, "codename");
+      const missing = validateRequiredTextField(state, "codename");
+      // Catch a suite list that omits the codename here, rather than letting
+      // the wizard reach the signing key step before the server refuses it.
+      return missing.length > 0 ? missing : validateSuites(state);
     }
     if (step === "setup") {
       try {

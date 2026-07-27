@@ -84,6 +84,14 @@ const aptRepositoryBaseFormSchema = z.object({
 ).refine(
   (values) => values.suite === "" || parseOptionalList(values.suites).length <= 1,
   { message: "Suite override cannot be set for a repository publishing more than one suite", path: ["suite"] },
+).refine(
+  // The codename is where a publish goes when it names no suite, so a list
+  // that leaves it out makes every default publish fail.
+  (values) => {
+    const suites = parseOptionalList(values.suites);
+    return suites.length === 0 || suites.includes(values.codename.trim());
+  },
+  { message: "Suites must include the codename", path: ["suites"] },
 );
 
 const aptRepositoryUpdateFormSchema = z.intersection(
@@ -223,6 +231,16 @@ export function buildAptRepositoryFormValues(repository: Repository): AptReposit
     signingKeyPassphrase: "",
     signingKeyExistingId: typeof apt.signingKeyId === "string" ? apt.signingKeyId : "",
   };
+}
+
+/**
+ * The suites a form describes, or nothing when it just uses the codename.
+ *
+ * Exposed so the create wizard can reject a bad list on the step that asks for
+ * it, instead of carrying the mistake to the signing key step.
+ */
+export function aptSuitesFor(values: AptRepositoryFormValues): string[] {
+  return parseOptionalList(parseBaseForm(values).suites);
 }
 
 export function activeSigningKeys(keys: SigningKey[]): SigningKey[] {

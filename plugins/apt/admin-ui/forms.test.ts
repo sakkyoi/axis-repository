@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   activeSigningKeys,
+  aptSuitesFor,
   emptyAptSettings,
   buildAptRepositoryFormValues,
   buildCreateAptRepositoryInput,
@@ -8,6 +9,7 @@ import {
   signingKeySetupPanelClass,
 } from "./forms";
 import type { Repository, SigningKey } from "@axis-repository/admin-ui/plugin-ui";
+import type { AptRepositoryFormValues } from "./forms";
 
 describe("APT repository forms", () => {
   it("builds create input from typed APT repository values", () => {
@@ -279,5 +281,44 @@ describe("APT settings that describe the Release", () => {
       { ...values, suites: "noble jammy", suite: "stable" },
       stored,
     )).toThrow("Suite override cannot be set for a repository publishing more than one suite");
+  });
+});
+
+describe("suites in the create wizard", () => {
+  const values = (overrides: Partial<AptRepositoryFormValues> = {}): AptRepositoryFormValues => ({
+    ...emptyAptSettings,
+    name: "debian-internal",
+    visibility: "private",
+    codename: "noble",
+    components: "",
+    architectures: "",
+    signingKeyMode: "generate",
+    signingKeyName: "release",
+    signingKeyUserIdName: "Axis Repository",
+    signingKeyUserIdEmail: "axis@example.test",
+    signingKeyPrivateKeyArmored: "",
+    signingKeyPassphrase: "",
+    signingKeyExistingId: "",
+    ...overrides,
+  });
+
+  it("omits suites entirely when the repository just uses its codename", () => {
+    expect(buildCreateAptRepositoryInput(values()).config.apt).not.toHaveProperty("suites");
+    expect(aptSuitesFor(values())).toEqual([]);
+  });
+
+  it("carries a suite list into the created repository", () => {
+    const input = buildCreateAptRepositoryInput(values({ suites: "noble jammy" }));
+
+    expect((input.config.apt as Record<string, unknown>).suites).toEqual(["noble", "jammy"]);
+  });
+
+  it("refuses a list that leaves out the codename, which every default publish needs", () => {
+    expect(() => buildCreateAptRepositoryInput(values({ suites: "jammy bookworm" })))
+      .toThrow("Suites must include the codename");
+  });
+
+  it("accepts commas as well as spaces, since both read naturally", () => {
+    expect(aptSuitesFor(values({ suites: "noble, jammy" }))).toEqual(["noble", "jammy"]);
   });
 });

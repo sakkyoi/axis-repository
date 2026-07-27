@@ -33,6 +33,7 @@ describe("repository create plugins", () => {
     expect(plugin.repositoryConfig.namespace).toBe("apt");
     expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step])).toEqual([
       ["codename", "text", "config"],
+      ["suites", "string-list", "config"],
       ["signingKey", "signing-key-provisioning", "setup"],
     ]);
   });
