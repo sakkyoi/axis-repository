@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Repository } from "@axis-repository/core";
 import type { ArtifactRepositoryPlugin, RepositoryMaintenanceResult } from "../plugins/repository-plugin-contract";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
+import { RepositoryWriteLock } from "./repository-write-lock";
 import {
   MAINTENANCE_MAX_INTERVAL_MS,
   MAINTENANCE_MIN_INTERVAL_MS,
@@ -46,6 +47,7 @@ describe("runRepositoryMaintenance", () => {
         })),
       }),
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
+      writeLock: new RepositoryWriteLock(),
       clock,
     });
 
@@ -57,6 +59,7 @@ describe("runRepositoryMaintenance", () => {
       repositories: [repository("idle")],
       plugins: registry({ apt: maintenancePlugin(async () => ({ refreshed: [] })) }),
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
+      writeLock: new RepositoryWriteLock(),
       clock,
     });
 
@@ -73,6 +76,7 @@ describe("runRepositoryMaintenance", () => {
         })),
       }),
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
+      writeLock: new RepositoryWriteLock(),
       clock,
     });
 
@@ -92,6 +96,7 @@ describe("runRepositoryMaintenance", () => {
         })),
       }),
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
+      writeLock: new RepositoryWriteLock(),
       clock,
     });
 
@@ -105,6 +110,7 @@ describe("runRepositoryMaintenance", () => {
       repositories: [repository("pypi-only", "pypi")],
       plugins: registry({ pypi: {} }),
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
+      writeLock: new RepositoryWriteLock(),
       clock,
     });
 

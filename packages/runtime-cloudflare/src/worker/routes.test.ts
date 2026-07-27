@@ -5058,3 +5058,67 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 });
+
+describe("concurrent publishes to one repository", () => {
+  it("keeps both sessions' packages when they finalize at the same moment", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const { token } = await createPublishSession(app, harness.repositoryObjectStore);
+
+    async function publish(packageName: string) {
+      const bytes = debArchive({
+        control: [
+          `Package: ${packageName}`,
+          "Version: 1.0.0",
+          "Architecture: amd64",
+          "Maintainer: Release Team <release@example.com>",
+          "Section: main",
+          `Description: ${packageName}`,
+        ].join("\n"),
+      });
+      const sha256 = await sha256Hex(bytes);
+      const created = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          repositoryName: "debian-internal",
+          ecosystem: "apt",
+          artifacts: [{
+            filename: `${packageName}_1.0.0_amd64.deb`,
+            size: bytes.byteLength,
+            sha256,
+            contentType: "application/vnd.debian.binary-package",
+            metadata: { package: packageName, version: "1.0.0", architecture: "amd64", component: "main" },
+          }],
+        }),
+      }));
+      expect(created.status).toBe(201);
+      const session = (await created.json()) as { id: string; uploads: Array<{ uploadId: string; objectKey: string }> };
+      const upload = session.uploads[0]!;
+      await harness.repositoryObjectStore.putBytes(upload.objectKey, bytes, "application/vnd.debian.binary-package");
+      await app.fetch(new Request(
+        `https://axis.example/api/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+        { method: "POST", headers: { authorization: `Bearer ${token}` } },
+      ));
+      return () => app.fetch(new Request(
+        `https://axis.example/api/publish-sessions/${session.id}/finalize`,
+        { method: "POST", headers: { authorization: `Bearer ${token}` } },
+      ));
+    }
+
+    // Both sessions are prepared, then finalized together: each reads the
+    // current index and writes back the merged result, so without ordering the
+    // later write erases whatever the earlier one added.
+    const finalizeAlpha = await publish("alpha");
+    const finalizeBeta = await publish("beta");
+    const responses = await Promise.all([finalizeAlpha(), finalizeBeta()]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    const packages = readStoredText(
+      harness.repositoryObjectStore,
+      "repositories/debian-internal/dists/noble/main/binary-amd64/Packages",
+    );
+    expect(packages).toContain("Package: alpha\n");
+    expect(packages).toContain("Package: beta\n");
+  });
+});

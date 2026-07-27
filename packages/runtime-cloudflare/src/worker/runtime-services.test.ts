@@ -17,6 +17,7 @@ import {
 import { describe, expect, it } from "vitest";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService } from "./runtime-services";
+import { RepositoryWriteLock } from "./repository-write-lock";
 
 const clock: Clock = {
   now: () => new Date("2026-07-24T00:00:00.000Z"),
@@ -118,6 +119,7 @@ describe("PluginPublishSessionService", () => {
       randomId,
     });
     const service = new PluginPublishSessionService({
+      writeLock: new RepositoryWriteLock(),
       publishSessionService: corePublishSessionService,
       repositoryService,
       plugins,
@@ -189,6 +191,7 @@ describe("PluginPublishSessionService", () => {
       randomId,
     });
     const service = new PluginPublishSessionService({
+      writeLock: new RepositoryWriteLock(),
       publishSessionService: corePublishSessionService,
       repositoryService,
       plugins,
@@ -246,6 +249,7 @@ describe("PluginPublishSessionService", () => {
       },
     });
     const service = new PluginPublishSessionService({
+      writeLock: new RepositoryWriteLock(),
       publishSessionService: new PublishSessionService({
         state,
         uploadBroker,
@@ -308,6 +312,7 @@ describe("PluginPublishSessionService", () => {
       randomId,
     });
     const service = new PluginPublishSessionService({
+      writeLock: new RepositoryWriteLock(),
       publishSessionService: corePublishSessionService,
       repositoryService,
       plugins,
@@ -393,6 +398,7 @@ describe("PluginPublishSessionService", () => {
       randomId,
     });
     const service = new PluginPublishSessionService({
+      writeLock: new RepositoryWriteLock(),
       publishSessionService: corePublishSessionService,
       repositoryService,
       plugins,
@@ -465,6 +471,7 @@ describe("PluginRepositoryArtifactIndexService", () => {
     });
     const objectStore = memoryObjectStore([indexedArtifact.objectKeys[0]!]);
     const service = new PluginRepositoryArtifactIndexService({
+      writeLock: new RepositoryWriteLock(),
       repositoryService,
       plugins,
       repositoryObjectStore: objectStore,
@@ -525,6 +532,7 @@ describe("PluginRepositoryArtifactIndexService", () => {
     });
     const objectStore = memoryObjectStore([indexedArtifact.objectKeys[0]!]);
     const service = new PluginRepositoryArtifactIndexService({
+      writeLock: new RepositoryWriteLock(),
       repositoryService,
       plugins,
       repositoryObjectStore: objectStore,

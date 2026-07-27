@@ -27,6 +27,7 @@ import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runt
 import { ensureRepositoryPluginEnabled } from "../plugins/repository-plugin-policy";
 import type { DeleteRepositoryArtifactResult } from "../plugins/repository-plugin-contract";
 import { scopeObjectStoreToRepository } from "../plugins/scoped-capabilities";
+import type { RepositoryWriteLock } from "./repository-write-lock";
 
 export interface CreatePluginRepositoryInput extends CreateRepositoryInput {
   provisioning?: Record<string, unknown>;
@@ -121,6 +122,7 @@ export class PluginPublishSessionService {
       pluginPolicyService: PluginPolicyService;
       repositoryActivityService?: RepositoryActivityService;
       repositoryArtifactStore?: RepositoryArtifactStore;
+      writeLock: RepositoryWriteLock;
     },
   ) {}
 
@@ -218,6 +220,14 @@ export class PluginPublishSessionService {
   }
 
   private async finalizeAndRecordUpdates(input: FinalizePublishSessionInput): Promise<FinalizePublishSessionResult> {
+    const session = await this.getExistingSession(input.sessionId);
+    // Finalizing reads the repository's current indexes and writes the merged
+    // result back, so two sessions overlapping on one repository would each
+    // start from the same state and the later write would erase the earlier.
+    return this.options.writeLock.run(session.repositoryName, () => this.finalizeUnlocked(input));
+  }
+
+  private async finalizeUnlocked(input: FinalizePublishSessionInput): Promise<FinalizePublishSessionResult> {
     const result = await this.options.publishSessionService.finalize(input);
     const repository = await this.options.repositoryService.getByName(result.session.repositoryName);
     const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
@@ -274,10 +284,17 @@ export class PluginRepositoryArtifactIndexService {
       repositoryObjectStore: RepositoryObjectStore;
       repositoryArtifactStore: RepositoryArtifactStore;
       clock: { now(): Date };
+      writeLock: RepositoryWriteLock;
     },
   ) {}
 
   async rebuild(input: { repositoryName: string }): Promise<{ artifacts: RepositoryArtifactRecord[] }> {
+    // Reconciling rewrites every index from the pool, so it has to wait for
+    // any publish in flight rather than race it.
+    return this.options.writeLock.run(input.repositoryName, () => this.rebuildUnlocked(input));
+  }
+
+  private async rebuildUnlocked(input: { repositoryName: string }): Promise<{ artifacts: RepositoryArtifactRecord[] }> {
     const repository = await this.options.repositoryService.getByName(input.repositoryName);
     const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
     const artifacts = await plugin.artifacts?.rebuildIndex({
@@ -296,6 +313,19 @@ export class PluginRepositoryArtifactIndexService {
     artifact: RepositoryArtifactRecord;
     artifacts: RepositoryArtifactRecord[];
   }> {
+    // Deleting removes pool objects and then reconciles, which is the same
+    // read-modify-write as a publish. The lock is not re-entrant, so the
+    // reconcile inside runs unlocked.
+    return this.options.writeLock.run(input.repositoryName, () => this.deleteArtifactUnlocked(input));
+  }
+
+  private async deleteArtifactUnlocked(input: {
+    repositoryName: string;
+    artifactId: string;
+  }): Promise<DeleteRepositoryArtifactResult & {
+    artifact: RepositoryArtifactRecord;
+    artifacts: RepositoryArtifactRecord[];
+  }> {
     const repository = await this.options.repositoryService.getByName(input.repositoryName);
     const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
     const artifacts = await this.options.repositoryArtifactStore.listByRepository(repository.name);
@@ -308,7 +338,7 @@ export class PluginRepositoryArtifactIndexService {
       artifact,
       objectStore: scopeObjectStoreToRepository(this.options.repositoryObjectStore, repository.name),
     }) ?? await this.deleteArtifactObjects(repository, artifact);
-    const rebuildResult = await this.rebuild({ repositoryName: repository.name });
+    const rebuildResult = await this.rebuildUnlocked({ repositoryName: repository.name });
     return {
       artifact,
       ...deleteResult,

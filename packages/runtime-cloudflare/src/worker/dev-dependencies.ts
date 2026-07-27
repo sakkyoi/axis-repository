@@ -16,6 +16,7 @@ import {
 } from "@axis-repository/core";
 import type { AdminUiRuntimeConfig } from "../admin-ui-assets";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
+import { RepositoryWriteLock } from "./repository-write-lock";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import SameOriginUploadBroker from "../uploads/same-origin-upload-broker";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
@@ -42,6 +43,7 @@ export interface AppDependencies {
   repositoryObjectStore: RepositoryObjectStore;
   localUploadBroker?: SameOriginUploadBroker;
   repositoryRuntimePlugins: RepositoryRuntimePluginRegistry;
+  repositoryWriteLock: RepositoryWriteLock;
 }
 
 export interface DevDependencyHarness {
@@ -168,12 +170,14 @@ export function createDevDependencyHarness(
     clock,
     randomId,
   });
+  const writeLock = new RepositoryWriteLock();
   const repositoryArtifactIndexService = new PluginRepositoryArtifactIndexService({
     repositoryService,
     plugins: repositoryRuntimePlugins,
     repositoryObjectStore: objectStore,
     repositoryArtifactStore: state.repositoryArtifacts,
     clock,
+    writeLock,
   });
 
   return {
@@ -193,6 +197,7 @@ export function createDevDependencyHarness(
         pluginPolicyService,
         repositoryActivityService,
         repositoryArtifactStore: state.repositoryArtifacts,
+        writeLock,
       }),
       repositoryActivityService,
       repositoryArtifactStore: state.repositoryArtifacts,
@@ -202,6 +207,7 @@ export function createDevDependencyHarness(
       repositoryArtifactIndexService,
       localUploadBroker: uploadBroker,
       repositoryRuntimePlugins,
+      repositoryWriteLock: writeLock,
     },
     repositoryObjectStore: objectStore,
   };

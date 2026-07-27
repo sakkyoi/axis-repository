@@ -19,6 +19,7 @@ import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
+import { RepositoryWriteLock } from "./repository-write-lock";
 import {
   MAINTENANCE_MAX_INTERVAL_MS,
   MAINTENANCE_MIN_INTERVAL_MS,
@@ -189,12 +190,14 @@ export function createDurableObjectDependencies(
     clock,
     randomId,
   });
+  const writeLock = new RepositoryWriteLock();
   const repositoryArtifactIndexService = new PluginRepositoryArtifactIndexService({
     repositoryService,
     plugins: repositoryRuntimePlugins,
     repositoryObjectStore: objectStore,
     repositoryArtifactStore: state.repositoryArtifacts,
     clock,
+    writeLock,
   });
 
   const artifactOrigin = parseArtifactOrigin(env.AXIS_ARTIFACT_ORIGIN);
@@ -223,6 +226,7 @@ export function createDurableObjectDependencies(
       pluginPolicyService,
       repositoryActivityService,
       repositoryArtifactStore: state.repositoryArtifacts,
+      writeLock,
     }),
     repositoryActivityService,
     repositoryArtifactStore: state.repositoryArtifacts,
@@ -232,6 +236,7 @@ export function createDurableObjectDependencies(
     repositoryObjectStore: objectStore,
     ...(uploadBroker instanceof SameOriginUploadBroker ? { localUploadBroker: uploadBroker } : {}),
     repositoryRuntimePlugins,
+    repositoryWriteLock: writeLock,
   };
 }
 
@@ -267,6 +272,7 @@ export class AxisAdminDO {
         repositories: await this.dependencies.repositoryService.list(),
         plugins: this.dependencies.repositoryRuntimePlugins,
         repositoryObjectStore: this.dependencies.repositoryObjectStore,
+        writeLock: this.dependencies.repositoryWriteLock,
         clock: { now: () => new Date() },
       });
       nextRunAt = run.nextRunAt;
