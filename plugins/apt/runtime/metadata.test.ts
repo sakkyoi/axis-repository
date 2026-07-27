@@ -300,11 +300,9 @@ describe("APT metadata", () => {
     expect(index).toMatchObject({ component: "main", architecture: "amd64" });
     expect(suite(metadata).indexFiles.map((file) => file.relativePath)).toEqual([
       "main/binary-amd64/Packages",
-      "main/binary-amd64/Packages.gz",
-      "main/binary-amd64/Packages.zst",
+      "main/binary-amd64/Packages.gz",
       "main/i18n/Translation-en",
-      "main/i18n/Translation-en.gz",
-      "main/i18n/Translation-en.zst",
+      "main/i18n/Translation-en.gz",
     ]);
   });
 

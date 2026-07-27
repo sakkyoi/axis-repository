@@ -252,42 +252,20 @@ The `apt/source` and `apt/install` helpers return `sourcePackageLines`, the
 
 ### Index Compression
 
-`Packages`, `Sources` and `Translation-en` are each published three ways: plain,
-gzip and zstd. On a realistic index the zstd form is about a quarter smaller
-than the gzip one, and within about one percent of what `xz -9` would give.
+`Packages`, `Sources` and `Translation-en` are each published twice: plain and
+gzip. apt takes the gzip form. `Contents` is published gzip-only — see below.
 
-**apt does not take the smallest form on its own.** It walks
+A zstd form was published here too, and was removed. Two measurements settled
+it. apt does not pick the smallest variant: it walks
 `Acquire::CompressionTypes` in the order those are declared, which upstream
-sets to `xz, bz2, lzma, gz, lz4, zst` — so a default client takes the gzip
-form and never asks for the zstd one. Verified against apt 3.2.0: with default
-settings it requests `Packages.gz`; with
-
-```text
-Acquire::CompressionTypes::Order "zst";
-```
-
-in `/etc/apt/apt.conf.d/`, it requests `Packages.zst` and the transfer drops
-accordingly. Until a client opts in, publishing zstd costs storage and saves it
-nothing.
-
-`Contents` is the exception and is published gzip-only — see below.
-
-A Cloudflare Worker has no zstd: `CompressionStream` offers only gzip and
-deflate, and every xz or zstd package on npm is either a native binding or a
-WebAssembly build whose loader wants `fetch`, WASI or threads. So libzstd is
-vendored as WebAssembly in `plugins/apt/shared/zstd.wasm`, alongside a
-generated symbol map, and driven by a few lines of glue in `shared/zstd.ts`.
-The compression itself is libzstd, unmodified.
-
-The binary is imported as a module rather than embedded as bytes, because a
-Worker refuses to compile WebAssembly at run time — `Wasm code generation
-disallowed by embedder`. Wrangler uploads it as its own module and compiles it
-at deploy; the test runner compiles it while loading the file. Regenerate both
-files after bumping the source package:
-
-```bash
-node scripts/generate-zstd-wasm.mjs
-```
+sets to `xz, bz2, lzma, gz, lz4, zst`, so a default client asks for
+`Packages.gz` and never for `Packages.zst` — verified against apt 3.2.0, which
+only fetched the zstd form once `Acquire::CompressionTypes::Order "zst"` was
+set on the client. And producing it cost more CPU than everything else in a
+publish combined: at level 19 a 3 MiB index took about 1.8 seconds, against
+34 ms for gzip and 40 ms for all three checksums, multiplied by every index in
+every component, architecture and suite. Paying that on every publish, for a
+file almost no client fetches, was the wrong trade.
 
 ### Contents Indexes
 

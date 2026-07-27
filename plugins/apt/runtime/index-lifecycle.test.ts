@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { zstdDecompressSync } from "node:zlib";
 import { generateKey, readKey, readCleartextMessage, verify } from "openpgp";
 import { MemoryStateStore, type PublishArtifactsInput, type Repository } from "@axis-repository/core";
 import {
@@ -442,9 +441,9 @@ describe("APT index lifecycle", () => {
 
     await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }]);
     const firstGeneration = byHashKeys(harness.objectStore);
-    // Packages and Translation-en, each in plain, gzip and zstd form, each of
-    // those under its SHA256 and its SHA512.
-    expect(firstGeneration).toHaveLength(12);
+    // Packages and Translation-en, each in plain and gzip form, each of those
+    // under its SHA256 and its SHA512.
+    expect(firstGeneration).toHaveLength(8);
 
     await harness.publish("pub_2", [{ name: "beta", version: "2.0.0" }]);
     const secondGeneration = byHashKeys(harness.objectStore);
@@ -454,7 +453,7 @@ describe("APT index lifecycle", () => {
     for (const key of firstGeneration) {
       expect(secondGeneration).toContain(key);
     }
-    expect(secondGeneration).toHaveLength(24);
+    expect(secondGeneration).toHaveLength(16);
     const firstPackagesByHash = firstGeneration
       .map((key) => storedContent(harness.objectStore, key))
       .filter((content) => content?.startsWith("Package: "));
@@ -467,30 +466,33 @@ describe("APT index lifecycle", () => {
     const thirdGeneration = byHashKeys(harness.objectStore);
 
     // Anything older than that is dropped, so by-hash cannot grow without end.
-    expect(thirdGeneration).toHaveLength(24);
+    expect(thirdGeneration).toHaveLength(16);
     for (const key of firstGeneration) {
       expect(thirdGeneration).not.toContain(key);
     }
   });
 
-  it("publishes a zstd index that Release vouches for", async () => {
+  it("publishes a gzip index that Release vouches for", async () => {
     const harness = await createHarness();
 
     await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }]);
 
     const plain = storedText(harness.objectStore, PACKAGES_KEY) ?? "";
-    const compressed = storedBytes(harness.objectStore, `${PACKAGES_KEY}.zst`);
+    const compressed = storedBytes(harness.objectStore, `${PACKAGES_KEY}.gz`);
     expect(compressed).toBeDefined();
-    // The reference decompressor has to accept it, or apt will not either.
-    expect(new TextDecoder().decode(zstdDecompressSync(Buffer.from(compressed!)))).toBe(plain);
+    // apt fetches the gzip form by default, so its checksum has to be the one
+    // Release names for it.
+    const stream = new Blob([compressed!.buffer.slice(
+      compressed!.byteOffset,
+      compressed!.byteOffset + compressed!.byteLength,
+    ) as ArrayBuffer]).stream().pipeThrough(new DecompressionStream("gzip"));
+    expect(await new Response(stream).text()).toBe(plain);
 
     const release = storedText(harness.objectStore, "repositories/debian-internal/dists/noble/Release") ?? "";
     const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", compressed!))]
       .map((byte) => byte.toString(16).padStart(2, "0"))
       .join("");
-    expect(release).toContain(` ${digest} ${compressed!.byteLength} main/binary-amd64/Packages.zst\n`);
-    // Publishing both means a client too old for zstd still has the gzip form.
-    expect(release).toContain(" main/binary-amd64/Packages.gz\n");
+    expect(release).toContain(` ${digest} ${compressed!.byteLength} main/binary-amd64/Packages.gz\n`);
   });
 
   it("stops writing by-hash copies when the repository turns it off", async () => {

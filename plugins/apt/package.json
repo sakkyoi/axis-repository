@@ -19,8 +19,5 @@
     "react": "^19.2.8",
     "xz-decompress": "^0.2.3",
     "zod": "^4.4.3"
-  },
-  "devDependencies": {
-    "@bokuweb/zstd-wasm": "^0.0.27"
   }
 }

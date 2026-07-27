@@ -3,11 +3,9 @@ import type { AptResolvedRepositoryConfig } from "./config";
 import { formatContentsIndex, type AptContentsIndexes } from "./contents";
 import { descriptionDigest, gzip, indexKey, type AptPackageIndex } from "./packages";
 import { formatSourcesIndex } from "./sources";
-import { zstdCompress } from "../shared/zstd";
 
 export const TEXT_CONTENT_TYPE = "text/plain; charset=utf-8";
 export const GZIP_CONTENT_TYPE = "application/gzip";
-export const ZSTD_CONTENT_TYPE = "application/zstd";
 
 /**
  * One file published under `dists/<codename>/` and listed in `Release`.
@@ -71,19 +69,18 @@ export async function buildAptIndexFiles(input: {
 }
 
 /**
- * Emits an index in every form apt might ask for.
+ * Emits an index alongside its gzip form.
  *
- * apt fetches the smallest variant it can decompress out of those `Release`
- * lists, so publishing the zstd form roughly halves what a client downloads.
- * One that predates zstd support takes the gzip form instead, which is why
- * both are published rather than only the smaller.
+ * A zstd form was published here too, until measuring showed it cost more CPU
+ * than everything else in a publish combined while apt, ordering by
+ * `Acquire::CompressionTypes` rather than by size, asks for the gzip one
+ * anyway. Only a client configured to prefer zstd would ever have fetched it.
  */
 export async function compressedVariants(relativePath: string, text: string): Promise<AptIndexFile[]> {
   const bytes = textEncoder.encode(text);
   return [
     { relativePath, bytes, contentType: TEXT_CONTENT_TYPE, text },
     { relativePath: `${relativePath}.gz`, bytes: await gzip(bytes), contentType: GZIP_CONTENT_TYPE },
-    { relativePath: `${relativePath}.zst`, bytes: await zstdCompress(bytes), contentType: ZSTD_CONTENT_TYPE },
   ];
 }
 
