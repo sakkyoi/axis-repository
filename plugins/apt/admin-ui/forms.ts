@@ -34,11 +34,17 @@ export interface AptRepositoryFormValues {
 }
 
 /**
- * The `Release` settings a repository starts out without.
+ * The settings a repository starts out without.
  *
- * They are only offered once a repository exists: everything here can be
- * changed later without disturbing what has already been published, so asking
- * for them up front would just lengthen the create wizard.
+ * All of them default to something sensible, so the create wizard asks only
+ * for what it cannot guess. Every `Release` field here can be changed at any
+ * time without disturbing what is already published — the next write picks it
+ * up, and the renewal timer writes one within hours even without a publish.
+ *
+ * `suites` is the exception. Adding one is safe, but removing one leaves that
+ * whole `dists/<suite>/` tree behind: nothing writes to it again, nothing
+ * renews its `Release`, and a client still pointed at it keeps taking signed
+ * but frozen metadata until `Valid-Until` lapses.
  */
 export const emptyAptSettings = {
   suites: "",
