@@ -1,33 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AxisAdminDO, type AxisEnv } from "./axis-admin-do";
 import { debArchive } from "@axis-repository/plugin-apt/test-support";
-import type { DurableStorage } from "../storage/durable-state";
-
-class FakeDurableStorage implements DurableStorage {
-  readonly values = new Map<string, unknown>();
-
-  async get<T>(key: string): Promise<T | undefined> {
-    return this.values.get(key) as T | undefined;
-  }
-
-  async put<T>(key: string, value: T): Promise<void> {
-    this.values.set(key, value);
-  }
-
-  async delete(key: string): Promise<boolean> {
-    return this.values.delete(key);
-  }
-
-  async list<T>(options?: { prefix?: string }): Promise<Map<string, T>> {
-    const result = new Map<string, T>();
-    for (const [key, value] of this.values) {
-      if (!options?.prefix || key.startsWith(options.prefix)) {
-        result.set(key, value as T);
-      }
-    }
-    return result;
-  }
-}
+import { FakeDurableObjectStorage, fakeDurableObjectState } from "./durable-object.test-support";
 
 class FakeR2Bucket {
   readonly objects = new Map<string, {
@@ -224,8 +198,8 @@ type TestAxisEnv = {
   AXIS_ARTIFACT_ORIGIN?: string | undefined;
 };
 
-function createObject(env: TestAxisEnv = {}, storage: FakeDurableStorage = new FakeDurableStorage()) {
-  return new AxisAdminDO({ storage } as unknown as DurableObjectState, {
+function createObject(env: TestAxisEnv = {}, storage: FakeDurableObjectStorage = new FakeDurableObjectStorage()) {
+  return new AxisAdminDO(fakeDurableObjectState(storage) as unknown as DurableObjectState, {
     AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
     AXIS_ADMIN_USERNAME: "admin",
     AXIS_ADMIN_PASSWORD: "admin-password",
@@ -277,7 +251,7 @@ describe("AxisAdminDO", () => {
 
 
   it("allows bootstrap credentials to be removed after the owner user is seeded", async () => {
-    const storage = new FakeDurableStorage();
+    const storage = new FakeDurableObjectStorage();
     const object = createObject({}, storage);
     const adminAuthorization = await adminAuthorizationHeader(object);
 
@@ -1041,5 +1015,40 @@ describe("AxisAdminDO", () => {
     );
 
     expect(verify.status).toBe(200);
+  });
+});
+
+describe("AxisAdminDO maintenance alarm", () => {
+  it("arms an alarm on construction, so expiring metadata is renewed without traffic", async () => {
+    const storage = new FakeDurableObjectStorage();
+    createObject({}, storage);
+    // The constructor schedules inside blockConcurrencyWhile.
+    await Promise.resolve();
+
+    expect(storage.alarm).not.toBeNull();
+    expect(storage.alarm!).toBeGreaterThan(Date.now());
+  });
+
+  it("leaves an existing alarm alone rather than pushing it back on every wake", async () => {
+    const storage = new FakeDurableObjectStorage();
+    const scheduled = Date.now() + 1_000;
+    await storage.setAlarm(scheduled);
+
+    createObject({}, storage);
+    await Promise.resolve();
+
+    expect(storage.alarm).toBe(scheduled);
+  });
+
+  it("rearms after running, so one pass cannot end the schedule", async () => {
+    const storage = new FakeDurableObjectStorage();
+    const object = createObject({}, storage);
+    await Promise.resolve();
+    await storage.deleteAlarm();
+
+    await object.alarm();
+
+    expect(storage.alarm).not.toBeNull();
+    expect(storage.alarm!).toBeGreaterThan(Date.now());
   });
 });

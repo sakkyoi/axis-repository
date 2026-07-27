@@ -19,6 +19,11 @@ import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
+import {
+  MAINTENANCE_MAX_INTERVAL_MS,
+  MAINTENANCE_MIN_INTERVAL_MS,
+  runRepositoryMaintenance,
+} from "./repository-maintenance";
 
 export interface AxisEnv {
   AXIS_ADMIN?: DurableObjectNamespace;
@@ -231,18 +236,48 @@ export function createDurableObjectDependencies(
 }
 
 export class AxisAdminDO {
+  private readonly dependencies: AppDependencies;
   private readonly app: ReturnType<typeof createApp>;
 
   constructor(private readonly state: DurableObjectState, private readonly env: AxisEnv) {
-    this.app = createApp(
-      createDurableObjectDependencies(
-        state.storage as unknown as DurableStorage,
-        env,
-      ),
+    this.dependencies = createDurableObjectDependencies(
+      state.storage as unknown as DurableStorage,
+      env,
     );
+    this.app = createApp(this.dependencies);
+
+    // Published metadata can expire, so the timer has to exist whether or not
+    // anyone is publishing. Starting it here means it survives the object
+    // being evicted and recreated, and recovers if an alarm was ever lost.
+    void state.blockConcurrencyWhile(async () => {
+      if ((await state.storage.getAlarm()) === null) {
+        await state.storage.setAlarm(Date.now() + MAINTENANCE_MIN_INTERVAL_MS);
+      }
+    });
   }
 
   fetch(request: Request): Promise<Response> {
     return this.app.fetch(request);
+  }
+
+  async alarm(): Promise<void> {
+    let nextRunAt = new Date(Date.now() + MAINTENANCE_MAX_INTERVAL_MS);
+    try {
+      const run = await runRepositoryMaintenance({
+        repositories: await this.dependencies.repositoryService.list(),
+        plugins: this.dependencies.repositoryRuntimePlugins,
+        repositoryObjectStore: this.dependencies.repositoryObjectStore,
+        clock: { now: () => new Date() },
+      });
+      nextRunAt = run.nextRunAt;
+      for (const failure of run.failures) {
+        console.error(`Repository maintenance failed for ${failure.repositoryName}: ${failure.message}`);
+      }
+    } catch (error) {
+      // Whatever went wrong, the alarm has to be rearmed: dropping it would
+      // stop every repository's metadata being renewed, silently and forever.
+      console.error(`Repository maintenance run failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    await this.state.storage.setAlarm(nextRunAt);
   }
 }

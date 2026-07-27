@@ -203,8 +203,21 @@ are set through `PATCH /admin/repositories/<name>` with a `config` object.
 Set `validityDays` if the repository is reachable from outside your network.
 Without `Valid-Until`, a signed `Release` is trusted forever, so anyone able to
 serve stale bytes can hold a client on a package set whose vulnerabilities are
-already fixed. The trade-off is that publishing has to happen at least that
-often, or clients start refusing the repository.
+already fixed.
+
+Setting it does not oblige you to keep publishing. A timer inside the Durable
+Object re-signs `Release` once its window is half gone, so a suite nobody has
+published to stays valid rather than taking itself offline — apt refuses an
+expired `Release` outright, and it would refuse the whole repository, not just
+the stale package. Renewal regenerates the indexes from what is already
+published, and they come out byte-identical, so their `by-hash` entries do not
+churn and no client re-downloads anything; only `Release`, `InRelease` and
+`Release.gpg` change.
+
+The timer arms itself when the object starts and re-arms after every pass, so
+it survives eviction and cannot be ended by one failed run. A repository whose
+signing key has been revoked is logged and skipped rather than stopping the
+others.
 
 Free-text fields reject control characters. A newline in `Origin` would
 otherwise start a new `Release` field.

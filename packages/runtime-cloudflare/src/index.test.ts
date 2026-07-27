@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import worker, { AxisAdminDO } from "./index";
 import type { AxisEnv } from "./worker/axis-admin-do";
-import type { DurableStorage } from "./storage/durable-state";
+import { fakeDurableObjectState } from "./worker/durable-object.test-support";
 
 class FakeNamespace {
   readonly object: AxisAdminDO;
@@ -20,30 +20,6 @@ class FakeNamespace {
     return {
       fetch: (request: Request) => this.object.fetch(request),
     };
-  }
-}
-
-class FakeDurableStorage implements DurableStorage {
-  readonly values = new Map<string, unknown>();
-
-  async get<T>(key: string): Promise<T | undefined> {
-    return this.values.get(key) as T | undefined;
-  }
-
-  async put<T>(key: string, value: T): Promise<void> {
-    this.values.set(key, value);
-  }
-
-  async delete(key: string): Promise<boolean> {
-    return this.values.delete(key);
-  }
-
-  async list<T>(options?: { prefix?: string }): Promise<Map<string, T>> {
-    const result = new Map<string, T>();
-    for (const [key, value] of this.values) {
-      if (!options?.prefix || key.startsWith(options.prefix)) result.set(key, value as T);
-    }
-    return result;
   }
 }
 
@@ -82,7 +58,7 @@ async function adminAccessToken(fetch: (request: Request) => Promise<Response>):
 
 describe("worker entrypoint", () => {
   it("proxies API requests to the configured AxisAdminDO", async () => {
-    const object = new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, axisEnv());
+    const object = new AxisAdminDO(fakeDurableObjectState() as unknown as DurableObjectState, axisEnv());
     const namespace = new FakeNamespace(object);
     const env = {
       ...axisEnv(),
@@ -118,7 +94,7 @@ describe("worker entrypoint", () => {
   });
 
   it("passes admin UI runtime config from Worker env into the Durable Object app", async () => {
-    const object = new AxisAdminDO({ storage: new FakeDurableStorage() } as unknown as DurableObjectState, axisEnv({
+    const object = new AxisAdminDO(fakeDurableObjectState() as unknown as DurableObjectState, axisEnv({
       ADMIN_UI_API_BASE_URL: "https://admin-api.example/base",
     }));
     const namespace = new FakeNamespace(object);

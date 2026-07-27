@@ -110,9 +110,34 @@ export interface RepositoryArtifactIndexLifecycle {
   deleteArtifact?(input: DeleteRepositoryArtifactInput): Promise<DeleteRepositoryArtifactResult>;
 }
 
+export interface RepositoryMaintenanceInput {
+  repository: Repository;
+  objectStore: RepositoryObjectStore;
+  now: Date;
+}
+
+export interface RepositoryMaintenanceResult {
+  /** What was refreshed, for the activity log. Empty when nothing was due. */
+  refreshed: string[];
+  /** When this repository next needs attention; absent means never. */
+  nextDueAt?: Date;
+}
+
+/**
+ * Work a repository needs on a timer rather than in response to a request.
+ *
+ * Published metadata can carry an expiry — apt refuses a `Release` whose
+ * `Valid-Until` has passed — and a repository that simply has not been
+ * published to for a while would otherwise go dark on its own.
+ */
+export interface RepositoryMaintenanceLifecycle {
+  run(input: RepositoryMaintenanceInput): Promise<RepositoryMaintenanceResult>;
+}
+
 export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   publish: RepositoryPublishLifecycle;
   artifacts?: RepositoryArtifactIndexLifecycle;
+  maintenance?: RepositoryMaintenanceLifecycle;
   create?: RepositoryCreateLifecycle;
   canServeRepositoryPath: RepositoryPathServingRule;
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;

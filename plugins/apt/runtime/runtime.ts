@@ -10,6 +10,7 @@ import type {
   DescribePublishedArtifactsInput,
   ProvisionRepositoryCreateInput,
   RebuildRepositoryArtifactIndexInput,
+  RepositoryMaintenanceInput,
   RepositorySigningKeyCapability,
   ValidateRepositoryCreateProvisioningInput,
   ValidateRepositoryConfigInput,
@@ -19,6 +20,7 @@ import { createAptAdminResources } from "./admin-resources";
 import { createAptClientHelpers } from "./client-helpers";
 import type { AptReleaseSigner } from "./index-store";
 import { parseAptRepositoryConfig, validateAptPublishArtifacts } from "./metadata";
+import { renewAptReleaseSignatures } from "./maintenance";
 import { reconcileAptRepository } from "./rebuild";
 
 export { AptSigningKeyResource } from "./signing-keys";
@@ -74,6 +76,14 @@ export function createAptPlugin(input: {
       rebuildIndex: (rebuildInput: RebuildRepositoryArtifactIndexInput) =>
         reconcileAptRepository({
           ...rebuildInput,
+          signingKeys: input.signingKeys,
+          signer: input.signer,
+        }),
+    },
+    maintenance: {
+      run: (maintenanceInput: RepositoryMaintenanceInput) =>
+        renewAptReleaseSignatures({
+          ...maintenanceInput,
           signingKeys: input.signingKeys,
           signer: input.signer,
         }),
