@@ -9,6 +9,7 @@ export type {
   RepositoryCreateProvisioningResult,
   ParsedProtocolUpload,
   RepositoryPathResolution,
+  ProtocolUploadSink,
   RepositoryPathResolver,
   RepositoryPathServingRule,
   RepositoryUploadProtocol,
@@ -65,4 +66,11 @@ export {
   objectStream,
   pluginJsonResponse,
 } from "./plugins/repository-object-helpers";
+export {
+  digestHex,
+  digestStreamHex,
+  createIncrementalDigest,
+  type DigestAlgorithm,
+  type IncrementalDigest,
+} from "./storage/digest";
 export { readJsonObject, stringField } from "./http";

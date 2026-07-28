@@ -1,7 +1,7 @@
 import { ValidationError } from "@axis-repository/core";
 import { md5Hex } from "../shared/md5";
 import { formatStanza, parseStanza, stanzaField, type DebianStanza } from "../shared/stanza";
-import { digestHex } from "./digest";
+import { digestHex } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 
 /** One file that makes up a source package, as a `.dsc` lists it. */
 export interface DscFileReference {

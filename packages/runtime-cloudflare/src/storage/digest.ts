@@ -1,6 +1,6 @@
-export type AptDigestAlgorithm = "SHA-1" | "SHA-256" | "SHA-512";
+export type DigestAlgorithm = "SHA-1" | "SHA-256" | "SHA-512";
 
-export async function digestHex(algorithm: AptDigestAlgorithm, bytes: Uint8Array): Promise<string> {
+export async function digestHex(algorithm: DigestAlgorithm, bytes: Uint8Array): Promise<string> {
   return hex(await crypto.subtle.digest(algorithm, bytes));
 }
 
@@ -9,7 +9,7 @@ interface DigestSink extends WritableStream<Uint8Array> {
   readonly digest: Promise<ArrayBuffer>;
 }
 
-type DigestSinkConstructor = new (algorithm: AptDigestAlgorithm) => DigestSink;
+type DigestSinkConstructor = new (algorithm: DigestAlgorithm) => DigestSink;
 
 /**
  * Digests a stream without holding it.
@@ -21,7 +21,7 @@ type DigestSinkConstructor = new (algorithm: AptDigestAlgorithm) => DigestSink;
  * written here.
  */
 export async function digestStreamHex(
-  algorithm: AptDigestAlgorithm,
+  algorithm: DigestAlgorithm,
   stream: ReadableStream<Uint8Array>,
 ): Promise<string> {
   const DigestStream = (crypto as unknown as { DigestStream?: DigestSinkConstructor }).DigestStream;
@@ -56,4 +56,39 @@ function nodeCrypto(): Promise<typeof import("node:crypto")> {
 
 function hex(digest: ArrayBuffer): string {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** Hashes content that arrives in pieces, without holding what it has seen. */
+export interface IncrementalDigest {
+  update(chunk: Uint8Array): Promise<void>;
+  hex(): Promise<string>;
+}
+
+/**
+ * Starts a digest that is fed chunk by chunk.
+ *
+ * Same split as {@link digestStreamHex}: the worker hashes natively as bytes
+ * arrive, and Node — where the tests run — uses its own streaming hash.
+ */
+export async function createIncrementalDigest(algorithm: DigestAlgorithm): Promise<IncrementalDigest> {
+  const DigestStream = (crypto as unknown as { DigestStream?: DigestSinkConstructor }).DigestStream;
+  if (DigestStream) {
+    const sink = new DigestStream(algorithm);
+    const writer = (sink as WritableStream<Uint8Array>).getWriter();
+    return {
+      update: (chunk) => writer.write(chunk),
+      hex: async () => {
+        await writer.close();
+        return hex(await sink.digest);
+      },
+    };
+  }
+
+  const hash = (await nodeCrypto()).createHash(algorithm.replace("-", "").toLowerCase());
+  return {
+    update: async (chunk) => {
+      hash.update(chunk);
+    },
+    hex: async () => hash.digest("hex"),
+  };
 }

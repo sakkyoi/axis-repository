@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { digestHex, digestStreamHex, type AptDigestAlgorithm } from "./digest";
+import { digestHex, digestStreamHex, type DigestAlgorithm } from "./digest";
 
 function streamOf(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   let index = 0;
@@ -34,7 +34,7 @@ function pattern(length: number, seed: number): Uint8Array {
   return bytes;
 }
 
-const ALGORITHMS: AptDigestAlgorithm[] = ["SHA-1", "SHA-256", "SHA-512"];
+const ALGORITHMS: DigestAlgorithm[] = ["SHA-1", "SHA-256", "SHA-512"];
 
 describe("digestStreamHex", () => {
   it.each(ALGORITHMS)("matches a one-shot %s digest", async (algorithm) => {

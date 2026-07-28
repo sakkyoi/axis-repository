@@ -1,6 +1,6 @@
 import { md5Hex } from "../shared/md5";
 import type { AptResolvedRepositoryConfig } from "./config";
-import { digestHex } from "./digest";
+import { digestHex } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import type { AptIndexFile } from "./index-files";
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;

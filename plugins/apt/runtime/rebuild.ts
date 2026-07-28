@@ -5,6 +5,7 @@ import {
   type RepositoryObjectStore,
 } from "@axis-repository/core";
 import {
+  digestStreamHex,
   listAllObjects,
   objectBytes,
   objectStream,
@@ -13,7 +14,6 @@ import {
 import { stanzaField, type DebianStanza } from "../shared/stanza";
 import { readDebControlMetadata } from "./deb-control";
 import { debArchiveSourceForObject } from "./deb-source";
-import { digestStreamHex } from "./digest";
 import {
   readAptSuiteStates,
   suiteContentsIndexes,
