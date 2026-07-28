@@ -10,7 +10,7 @@ import type {
 import { createPrefixServingPredicate, listAllObjects } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { createPypiClientHelpers } from "./client-helpers";
 import { validatePypiRepositoryConfig } from "./config";
-import { SERVED_PREFIXES, packageRelativePath, parsePackageRelativePath } from "./layout";
+import { SERVED_PREFIXES, packageRelativePath, parsePackageRelativePath, resolveSimplePath } from "./layout";
 import { parseDistributionFilename, requireDistributionFilename } from "./names";
 import { PypiPublisher } from "./publisher";
 
@@ -32,6 +32,7 @@ export function createPypiPlugin(input?: {
     version: pypiPluginManifest.version,
     capabilities: [...pypiPluginManifest.capabilities],
     canServeRepositoryPath: createPrefixServingPredicate(SERVED_PREFIXES),
+    resolveRepositoryPath: ({ relativePath }) => resolveSimplePath(relativePath),
     validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
     publish: {
       validateArtifacts: validatePypiArtifacts,

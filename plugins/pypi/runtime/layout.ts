@@ -38,6 +38,30 @@ export function packageObjectKey(
   return `repositories/${repositoryName}/${packageRelativePath(distribution, filename)}`;
 }
 
+/**
+ * Maps a Simple API request to the page that answers it.
+ *
+ * PEP 503 addresses directories — `simple/` and `simple/<project>/` — which
+ * are not object keys, so they resolve to the index stored inside. A request
+ * without the trailing slash resolves the same way rather than 404ing, since
+ * that is the URL a client most often types by hand.
+ */
+export function resolveSimplePath(relativePath: string): { objectPath: string } | null {
+  const path = relativePath.replace(/\/+$/, "");
+  if (path === SIMPLE_PREFIX) {
+    return { objectPath: `${SIMPLE_PREFIX}/index.html` };
+  }
+
+  const project = /^simple\/([^/]+)$/.exec(path)?.[1];
+  if (project) {
+    return { objectPath: `${SIMPLE_PREFIX}/${project}/index.html` };
+  }
+
+  // Anything else addresses an object directly; a trailing slash on a file
+  // path is not something this format serves.
+  return relativePath.endsWith("/") ? null : { objectPath: relativePath };
+}
+
 /** Matches a stored distribution, so the packages tree can be read back. */
 const packagePathPattern = new RegExp(
   `^${PACKAGES_PREFIX}/([A-Za-z0-9][A-Za-z0-9.-]*)/([^/]+)$`,

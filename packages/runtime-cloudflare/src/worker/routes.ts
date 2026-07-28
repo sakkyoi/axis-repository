@@ -479,14 +479,22 @@ function parseRepositoryObjectPath(requestUrl: string): { repositoryName: string
   if (rawSegments.length < 2) {
     return null;
   }
-  const decodedSegments = rawSegments.map(requireSafePathSegment);
+  // A single trailing slash is kept rather than rejected: a format that serves
+  // directory indexes distinguishes `simple/` from `simple`. Any other empty
+  // segment is still refused, so `a//b` stays out.
+  const trailingSlash = rawSegments[rawSegments.length - 1] === "";
+  const namedSegments = trailingSlash ? rawSegments.slice(0, -1) : rawSegments;
+  if (namedSegments.length < 2) {
+    return null;
+  }
+  const decodedSegments = namedSegments.map(requireSafePathSegment);
   const [repositoryName, ...relativeSegments] = decodedSegments;
   if (!repositoryName || relativeSegments.length === 0) {
     return null;
   }
   return {
     repositoryName,
-    relativePath: relativeSegments.join("/"),
+    relativePath: `${relativeSegments.join("/")}${trailingSlash ? "/" : ""}`,
   };
 }
 
@@ -553,7 +561,10 @@ function parseRepositoryClientHelperPath(requestUrl: string): {
     return null;
   }
   const rawSegments = rawPath.slice(prefix.length).split("/");
-  if (rawSegments.length !== 3) {
+  // An empty segment means this is not a helper route: `simple/` has the same
+  // shape as `<namespace>/<action>` but is a directory the object route
+  // serves, and claiming it here would answer that request with a 404.
+  if (rawSegments.length !== 3 || rawSegments.some((segment) => segment === "")) {
     return null;
   }
   const [rawRepositoryName, rawNamespace, rawAction] = rawSegments;
@@ -676,16 +687,36 @@ function parseAdminRepositoryPluginResourcePath(requestUrl: string): {
   };
 }
 
-async function ensureRepositoryPathIsServable(
+/**
+ * Decides whether a path may be served, and which object answers it.
+ *
+ * A plugin that addresses its objects directly resolves to the path itself.
+ * One whose URLs are not object keys — the Simple API's `simple/foo/` — maps
+ * them here, and what it returns is checked the same way a request path is,
+ * so a plugin cannot resolve its way out of the repository.
+ */
+async function resolveServedRepositoryPath(
   dependencies: AppDependencies,
   repository: Repository,
-  relativePath: string,
-): Promise<void> {
+  context: { relativePath: string; accept?: string },
+): Promise<{ objectPath: string; contentType?: string }> {
   await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
   const plugin = dependencies.repositoryRuntimePlugins.getPlugin(repository.ecosystem);
-  if (!plugin?.canServeRepositoryPath({ relativePath })) {
+  if (!plugin?.canServeRepositoryPath(context)) {
     throw new NotFoundError();
   }
+
+  const resolved = plugin.resolveRepositoryPath?.(context)
+    ?? { objectPath: context.relativePath };
+  return { ...resolved, objectPath: requireSafeRelativePath(resolved.objectPath) };
+}
+
+function requireSafeRelativePath(objectPath: string): string {
+  const segments = objectPath.split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
+    throw new NotFoundError();
+  }
+  return segments.join("/");
 }
 
 function repositoryObjectListPrefix(value: string | null): string {
@@ -1574,9 +1605,13 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (repositoryObjectPath && (request.method === "GET" || request.method === "HEAD")) {
     const { repositoryName, relativePath } = repositoryObjectPath;
     const repository = await dependencies.repositoryService.getByName(repositoryName);
-    await ensureRepositoryPathIsServable(dependencies, repository, relativePath);
+    const accept = request.headers.get("accept");
+    const served = await resolveServedRepositoryPath(dependencies, repository, {
+      relativePath,
+      ...(accept ? { accept } : {}),
+    });
     await authorizeRepositoryRead(request, dependencies, repository);
-    const objectKey = `repositories/${repositoryName}/${relativePath}`;
+    const objectKey = `repositories/${repositoryName}/${served.objectPath}`;
     const metadata = await dependencies.repositoryObjectStore.headObject(objectKey);
     if (!metadata) {
       throw new NotFoundError();
@@ -1599,7 +1634,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     return objectResponse({
       method: request.method,
       object,
-      metadata,
+      metadata: served.contentType ? { ...metadata, contentType: served.contentType } : metadata,
       cacheControl,
       ...(parsedRange ? { range: parsedRange } : {}),
     });

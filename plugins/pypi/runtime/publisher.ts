@@ -9,6 +9,12 @@ import {
 } from "@axis-repository/core";
 import { packageObjectKey } from "./layout";
 import { readDistributionMetadata } from "./distribution-source";
+import {
+  readPublishedProjectFiles,
+  writeSimpleIndexes,
+  type PypiIndexWrite,
+} from "./index-store";
+import type { SimpleProjectFile } from "./simple-index";
 import { requireMetadataMatchesFilename } from "./metadata";
 import { requireDistributionFilename } from "./names";
 
@@ -50,9 +56,17 @@ export class PypiPublisher implements ArtifactPublisher {
       });
       requireMetadataMatchesFilename(metadata, distribution);
       return {
+        project: distribution.normalizedName,
         sourceKey: verified.objectKey,
         destinationKey: packageObjectKey(input.repository.name, distribution, artifact.filename),
         contentType: artifact.contentType || DEFAULT_CONTENT_TYPE,
+        // The digest the upload was verified against, so the index states what
+        // was actually stored rather than hashing the file a second time.
+        file: {
+          filename: artifact.filename,
+          sha256: verified.sha256,
+          ...(metadata.requiresPython ? { requiresPython: metadata.requiresPython } : {}),
+        },
       };
     }));
 
@@ -80,14 +94,60 @@ export class PypiPublisher implements ArtifactPublisher {
       await objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
     }
 
+    // The index is written after the files it points at, so a client that
+    // reads a page always finds what the page describes.
+    const indexObjects = await writeSimpleIndexes({
+      objectStore,
+      repositoryName: input.repository.name,
+      projects: await mergedProjects({
+        objectStore,
+        repositoryName: input.repository.name,
+        published: copies,
+      }),
+    });
+
     return {
       publishedAt,
-      objects: copies.map((copy) => withPreviousMetadata(
-        { key: copy.destinationKey, contentType: copy.contentType },
-        previous.get(copy.destinationKey) ?? null,
-      )),
+      objects: [
+        ...copies.map((copy) => withPreviousMetadata(
+          { key: copy.destinationKey, contentType: copy.contentType },
+          previous.get(copy.destinationKey) ?? null,
+        )),
+        ...indexObjects,
+      ],
     };
   }
+}
+
+/**
+ * Merges this session's files into what each affected project already lists.
+ *
+ * Publishing is additive: a project's earlier releases stay on its page, and a
+ * file republished under the same name replaces its own entry rather than
+ * appearing twice.
+ */
+async function mergedProjects(input: {
+  objectStore: RepositoryObjectStore;
+  repositoryName: string;
+  published: Array<{ project: string; file: SimpleProjectFile }>;
+}): Promise<PypiIndexWrite[]> {
+  const byProject = new Map<string, SimpleProjectFile[]>();
+  for (const { project, file } of input.published) {
+    byProject.set(project, [...(byProject.get(project) ?? []), file]);
+  }
+
+  return Promise.all([...byProject].map(async ([project, added]) => {
+    const existing = await readPublishedProjectFiles({
+      objectStore: input.objectStore,
+      repositoryName: input.repositoryName,
+      project,
+    });
+    const files = new Map(existing.map((file) => [file.filename, file] as const));
+    for (const file of added) {
+      files.set(file.filename, file);
+    }
+    return { project, files: [...files.values()] };
+  }));
 }
 
 function withPreviousMetadata(

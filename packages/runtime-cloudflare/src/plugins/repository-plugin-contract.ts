@@ -26,10 +26,36 @@ export interface PublisherMetadata {
 }
 
 export interface RepositoryServingContext {
+  /**
+   * The requested path, relative to the repository, keeping any trailing
+   * slash: `simple/` and `simple` are different requests to a format that
+   * serves directory indexes.
+   */
   relativePath: string;
+  /** The request's `Accept` header, for formats served in more than one shape. */
+  accept?: string;
 }
 
 export type RepositoryPathServingRule = (context: RepositoryServingContext) => boolean;
+
+export interface RepositoryPathResolution {
+  /** The stored object to answer with, relative to the repository. */
+  objectPath: string;
+  /** Content type to answer with, when it differs from how the object was stored. */
+  contentType?: string;
+}
+
+/**
+ * Maps a requested path to the object that answers it.
+ *
+ * Most formats address their objects directly, and a plugin that does needs
+ * none of this. It exists for formats whose URLs are not object keys: the
+ * Simple API asks for `simple/foo/`, a directory, and the same URL answers
+ * with HTML or JSON depending on what the client accepts.
+ */
+export type RepositoryPathResolver = (
+  context: RepositoryServingContext,
+) => RepositoryPathResolution | null;
 
 export interface ValidateRepositoryConfigInput {
   ecosystem: Ecosystem;
@@ -140,6 +166,8 @@ export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   maintenance?: RepositoryMaintenanceLifecycle;
   create?: RepositoryCreateLifecycle;
   canServeRepositoryPath: RepositoryPathServingRule;
+  /** Defaults to serving the requested path as the object key. */
+  resolveRepositoryPath?: RepositoryPathResolver;
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;

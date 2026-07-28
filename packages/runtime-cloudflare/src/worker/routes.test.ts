@@ -5122,3 +5122,94 @@ describe("concurrent publishes to one repository", () => {
     expect(packages).toContain("Package: beta\n");
   });
 });
+
+describe("serving a PyPI Simple index", () => {
+  async function pypiHarness() {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-public",
+      ecosystem: "pypi",
+      visibility: "public",
+      config: {},
+    });
+    return { harness, app };
+  }
+
+  it("answers the index URL pip is given, trailing slash and all", async () => {
+    // PEP 503 addresses directories. The router used to reject any path with
+    // an empty last segment, so the URL the client helper hands out 404'd
+    // before it reached the plugin.
+    const { harness, app } = await pypiHarness();
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-public/simple/index.html",
+      "<a href=\"my-project/\">my-project</a>",
+      "text/html; charset=utf-8",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/simple/"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain("my-project");
+  });
+
+  it("answers a project page", async () => {
+    const { harness, app } = await pypiHarness();
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-public/simple/my-project/index.html",
+      "<a href=\"../../packages/my-project/my_project-1.0-py3-none-any.whl#sha256=abc\">whl</a>",
+      "text/html; charset=utf-8",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/simple/my-project/"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain("my_project-1.0-py3-none-any.whl");
+  });
+
+  it("serves the distribution a project page links to", async () => {
+    const { harness, app } = await pypiHarness();
+    await harness.repositoryObjectStore.putBytes(
+      "repositories/python-public/packages/my-project/my_project-1.0-py3-none-any.whl",
+      new TextEncoder().encode("wheel bytes"),
+      "application/octet-stream",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/packages/my-project/my_project-1.0-py3-none-any.whl"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("wheel bytes");
+  });
+
+  it("still refuses a path with an empty segment in the middle", async () => {
+    // Only one trailing slash is tolerated; anything else stays out.
+    const { app } = await pypiHarness();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/simple//my-project/"),
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("does not serve staged uploads", async () => {
+    const { harness, app } = await pypiHarness();
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-public/_staging/uploads/s/u/secret.whl",
+      "not published",
+      "application/octet-stream",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/_staging/uploads/s/u/secret.whl"),
+    );
+
+    expect(response.status).toBe(404);
+  });
+});

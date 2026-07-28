@@ -110,6 +110,16 @@ async function harness() {
   };
 }
 
+function storedText(objectStore: MemoryRepositoryObjectStore, key: string): string | undefined {
+  const value = [...objectStore.objects].reverse().find((object) => object.key === key)?.value;
+  return typeof value === "string" ? value : undefined;
+}
+
+/** How many times a key has been written, the store keeping every write. */
+function writeCount(objectStore: MemoryRepositoryObjectStore, key: string): number {
+  return [...objectStore.objects].filter((object) => object.key === key).length;
+}
+
 function storedKeys(objectStore: MemoryRepositoryObjectStore): string[] {
   const live = new Set<string>();
   for (const object of objectStore.objects) {
@@ -173,6 +183,80 @@ describe("publishing to a PyPI repository", () => {
 
     await expect(pypi.publish("pub_1", ["alpha-1.0.tar.gz", "alpha-1.0.tar.gz"]))
       .rejects.toThrow(/same distribution twice/);
+  });
+
+  it("lists a published file on the project's page", async () => {
+    const pypi = await harness();
+
+    await pypi.publish("pub_1", ["my_project-1.0-py3-none-any.whl"]);
+
+    const page = storedText(pypi.objectStore, "repositories/python-internal/simple/my-project/index.html");
+    expect(page).toContain("my_project-1.0-py3-none-any.whl");
+    expect(page).toContain("#sha256=");
+  });
+
+  it("lists the project on the root index", async () => {
+    const pypi = await harness();
+
+    await pypi.publish("pub_1", ["my_project-1.0-py3-none-any.whl"]);
+
+    expect(storedText(pypi.objectStore, "repositories/python-internal/simple/index.html"))
+      .toContain('<a href="my-project/">my-project</a>');
+  });
+
+  it("keeps earlier releases on the page when a new one is published", async () => {
+    // Publishing is additive. A page that only listed the newest release would
+    // make every earlier version uninstallable the moment one was added.
+    const pypi = await harness();
+
+    await pypi.publish("pub_1", ["alpha-1.0.tar.gz"]);
+    await pypi.publish("pub_2", ["alpha-2.0.tar.gz"]);
+
+    const page = storedText(pypi.objectStore, "repositories/python-internal/simple/alpha/index.html") ?? "";
+    expect(page).toContain("alpha-1.0.tar.gz");
+    expect(page).toContain("alpha-2.0.tar.gz");
+  });
+
+  it("does not list a file twice when it is published again", async () => {
+    const pypi = await harness();
+
+    await pypi.publish("pub_1", ["alpha-1.0.tar.gz"]);
+    await pypi.publish("pub_2", ["alpha-1.0.tar.gz"]);
+
+    const page = storedText(pypi.objectStore, "repositories/python-internal/simple/alpha/index.html") ?? "";
+    expect(page.match(/alpha-1\.0\.tar\.gz<\/a>/g)).toHaveLength(1);
+  });
+
+  it("states the python requirement the distribution declared", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    const plugin = createPypiPlugin({ objectStoreFor: () => objectStore });
+    await objectStore.putBytes(
+      "_staging/uploads/pub_1/upl_1/thing-1.0-py3-none-any.whl",
+      wheelBytes({
+        name: "thing",
+        version: "1.0",
+        metadata: "Name: thing\nVersion: 1.0\nRequires-Python: >=3.11\n",
+      }),
+      "application/octet-stream",
+    );
+
+    await plugin.publish.finalize(publishInput("pub_1", ["thing-1.0-py3-none-any.whl"]));
+
+    const page = storedText(objectStore, "repositories/python-internal/simple/thing/index.html") ?? "";
+    expect(page).toContain('data-requires-python="&gt;=3.11"');
+  });
+
+  it("leaves an untouched project's page alone", async () => {
+    // Rewriting every page on every publish would cost a write apiece to store
+    // bytes already there.
+    const pypi = await harness();
+    await pypi.publish("pub_1", ["alpha-1.0.tar.gz"]);
+    const before = writeCount(pypi.objectStore, "repositories/python-internal/simple/alpha/index.html");
+
+    await pypi.publish("pub_2", ["beta-1.0.tar.gz"]);
+
+    expect(writeCount(pypi.objectStore, "repositories/python-internal/simple/alpha/index.html"))
+      .toBe(before);
   });
 
   it("refuses a file whose contents are a different project than its name", async () => {
