@@ -4,8 +4,12 @@ import { PACKAGES_PREFIX, SIMPLE_PREFIX } from "./layout";
 import {
   HTML_CONTENT_TYPE,
   SIMPLE_INDEX_FILENAME,
+  SIMPLE_JSON_CONTENT_TYPE,
+  SIMPLE_JSON_FILENAME,
   renderProjectFilesHtml,
+  renderProjectFilesJson,
   renderProjectListHtml,
+  renderProjectListJson,
   type SimpleProjectFile,
 } from "./simple-index";
 
@@ -54,12 +58,20 @@ export function parseProjectFilesHtml(html: string): SimpleProjectFile[] {
     if (!sha256 || !filename) {
       continue;
     }
-    const requiresPython = [...attributes.matchAll(attributePattern)]
-      .find(([, name]) => name === "data-requires-python")?.[2];
+    const attributeValues = new Map(
+      [...attributes.matchAll(attributePattern)].map(([, name = "", value = ""]) => [name, value]),
+    );
+    const requiresPython = attributeValues.get("data-requires-python");
+    const coreMetadata = /^sha256=([0-9a-f]+)$/.exec(attributeValues.get("data-core-metadata") ?? "")?.[1];
+    const yanked = attributeValues.get("data-yanked");
     files.push({
       filename,
       sha256,
       ...(requiresPython ? { requiresPython: unescapeHtml(requiresPython) } : {}),
+      ...(coreMetadata ? { coreMetadataSha256: coreMetadata } : {}),
+      // An empty data-yanked is a yank without a stated reason, which is not
+      // the same as an absent one.
+      ...(yanked === undefined ? {} : { yanked: unescapeHtml(yanked) }),
     });
   }
 
@@ -94,34 +106,58 @@ export async function writeSimpleIndexes(input: {
 }): Promise<PublishedObject[]> {
   const written: PublishedObject[] = [];
 
+  // Both serializations are published, and a client is given whichever it
+  // negotiated; they are generated from the same files so they cannot disagree.
   for (const project of input.projects) {
-    const key = `repositories/${input.repositoryName}/${projectIndexPath(project.project)}`;
-    const html = renderProjectFilesHtml({ project: project.project, files: project.files });
-    if (await writeIfChanged(input.objectStore, key, html)) {
-      written.push({ key, contentType: HTML_CONTENT_TYPE });
-    }
+    const base = `repositories/${input.repositoryName}/${SIMPLE_PREFIX}/${project.project}`;
+    written.push(...await writeIfChanged(input.objectStore, [
+      {
+        key: `${base}/${SIMPLE_INDEX_FILENAME}`,
+        text: renderProjectFilesHtml(project),
+        contentType: HTML_CONTENT_TYPE,
+      },
+      {
+        key: `${base}/${SIMPLE_JSON_FILENAME}`,
+        text: renderProjectFilesJson(project),
+        contentType: SIMPLE_JSON_CONTENT_TYPE,
+      },
+    ]));
   }
 
-  const rootKey = `repositories/${input.repositoryName}/${rootIndexPath()}`;
-  const rootHtml = renderProjectListHtml(await listProjects(input.objectStore, input.repositoryName));
-  if (await writeIfChanged(input.objectStore, rootKey, rootHtml)) {
-    written.push({ key: rootKey, contentType: HTML_CONTENT_TYPE });
-  }
+  const projects = await listProjects(input.objectStore, input.repositoryName);
+  const root = `repositories/${input.repositoryName}/${SIMPLE_PREFIX}`;
+  written.push(...await writeIfChanged(input.objectStore, [
+    {
+      key: `${root}/${SIMPLE_INDEX_FILENAME}`,
+      text: renderProjectListHtml(projects),
+      contentType: HTML_CONTENT_TYPE,
+    },
+    {
+      key: `${root}/${SIMPLE_JSON_FILENAME}`,
+      text: renderProjectListJson(projects),
+      contentType: SIMPLE_JSON_CONTENT_TYPE,
+    },
+  ]));
 
   return written;
 }
 
 async function writeIfChanged(
   objectStore: RepositoryObjectStore,
-  key: string,
-  html: string,
-): Promise<boolean> {
-  const stored = await objectStore.getObject(key);
-  if (stored && new TextDecoder().decode(await objectBytes(stored)) === html) {
-    return false;
+  documents: Array<{ key: string; text: string; contentType: string }>,
+): Promise<PublishedObject[]> {
+  const written: PublishedObject[] = [];
+
+  for (const document of documents) {
+    const stored = await objectStore.getObject(document.key);
+    if (stored && new TextDecoder().decode(await objectBytes(stored)) === document.text) {
+      continue;
+    }
+    await objectStore.putText(document.key, document.text, document.contentType);
+    written.push({ key: document.key, contentType: document.contentType });
   }
-  await objectStore.putText(key, html, HTML_CONTENT_TYPE);
-  return true;
+
+  return written;
 }
 
 /**

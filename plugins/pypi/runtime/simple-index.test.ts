@@ -129,12 +129,36 @@ describe("resolveSimplePath", () => {
     ["simple/my-project", "simple/my-project/index.html"],
   ])("resolves %s to %s", (requested, expected) => {
     // PEP 503 addresses directories, which are not object keys.
-    expect(resolveSimplePath(requested)).toEqual({ objectPath: expected });
+    expect(resolveSimplePath(requested)).toMatchObject({ objectPath: expected });
   });
 
   it("leaves a package path alone", () => {
     expect(resolveSimplePath("packages/my-project/my_project-1.0-py3-none-any.whl"))
       .toEqual({ objectPath: "packages/my-project/my_project-1.0-py3-none-any.whl" });
+  });
+
+  it.each([
+    ["application/vnd.pypi.simple.v1+json", "simple/index.v1.json"],
+    // What pip actually sends: all three, JSON preferred.
+    [
+      "application/vnd.pypi.simple.v1+json, application/vnd.pypi.simple.v1+html;q=0.2, text/html;q=0.01",
+      "simple/index.v1.json",
+    ],
+    ["text/html", "simple/index.html"],
+    ["application/vnd.pypi.simple.v1+html", "simple/index.html"],
+    ["*/*", "simple/index.html"],
+  ])("serves %s as %s", (accept, expected) => {
+    expect(resolveSimplePath("simple/", accept)).toMatchObject({ objectPath: expected });
+  });
+
+  it("falls back to HTML when a client asks for nothing in particular", () => {
+    // Every client understood HTML before PEP 691 existed.
+    expect(resolveSimplePath("simple/")).toMatchObject({ objectPath: "simple/index.html" });
+  });
+
+  it("ignores a type the client refused outright", () => {
+    expect(resolveSimplePath("simple/", "application/vnd.pypi.simple.v1+json;q=0, text/html"))
+      .toMatchObject({ objectPath: "simple/index.html" });
   });
 
   it("refuses a trailing slash on something that is not an index", () => {

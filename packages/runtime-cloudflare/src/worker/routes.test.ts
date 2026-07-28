@@ -5451,3 +5451,56 @@ describe("publishing a PyPI package the way twine does", () => {
     expect(response.status).toBe(404);
   });
 });
+
+describe("negotiating the PyPI Simple API", () => {
+  async function published() {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-public",
+      ecosystem: "pypi",
+      visibility: "public",
+      config: {},
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-public/simple/index.html",
+      "<a href=\"alpha/\">alpha</a>",
+      "text/html; charset=utf-8",
+    );
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-public/simple/index.v1.json",
+      JSON.stringify({ meta: { "api-version": "1.0" }, projects: [{ name: "alpha" }] }),
+      "application/vnd.pypi.simple.v1+json",
+    );
+    return { harness, app };
+  }
+
+  it("answers with JSON when the client prefers it", async () => {
+    // The Accept header pip actually sends.
+    const { app } = await published();
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/python-public/simple/",
+      {
+        headers: {
+          accept: "application/vnd.pypi.simple.v1+json, application/vnd.pypi.simple.v1+html;q=0.2, text/html;q=0.01",
+        },
+      },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/vnd.pypi.simple.v1+json");
+    await expect(response.json()).resolves.toMatchObject({ projects: [{ name: "alpha" }] });
+  });
+
+  it("answers with HTML when the client asks for nothing in particular", async () => {
+    const { app } = await published();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-public/simple/"),
+    );
+
+    expect(response.headers.get("content-type")).toContain("text/html");
+    await expect(response.text()).resolves.toContain("<a href=\"alpha/\">");
+  });
+});

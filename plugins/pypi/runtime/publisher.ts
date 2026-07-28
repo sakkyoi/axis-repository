@@ -9,6 +9,7 @@ import {
 } from "@axis-repository/core";
 import { packageObjectKey } from "./layout";
 import { readDistributionMetadata } from "./distribution-source";
+import { sha256Hex } from "./digest";
 import {
   readPublishedProjectFiles,
   writeSimpleIndexes,
@@ -19,6 +20,8 @@ import { requireMetadataMatchesFilename } from "./metadata";
 import { requireDistributionFilename } from "./names";
 
 const DEFAULT_CONTENT_TYPE = "application/octet-stream";
+/** PEP 658 serves core metadata as plain text, the way METADATA is written. */
+const METADATA_CONTENT_TYPE = "text/plain; charset=utf-8";
 
 /**
  * Moves a session's uploads into the repository.
@@ -55,17 +58,22 @@ export class PypiPublisher implements ArtifactPublisher {
         distribution,
       });
       requireMetadataMatchesFilename(metadata, distribution);
+      const destinationKey = packageObjectKey(input.repository.name, distribution, artifact.filename);
       return {
         project: distribution.normalizedName,
         sourceKey: verified.objectKey,
-        destinationKey: packageObjectKey(input.repository.name, distribution, artifact.filename),
+        destinationKey,
         contentType: artifact.contentType || DEFAULT_CONTENT_TYPE,
+        // Published beside the distribution so a resolver can read its
+        // dependencies without downloading it (PEP 658).
+        coreMetadata: { key: `${destinationKey}.metadata`, text: metadata.text },
         // The digest the upload was verified against, so the index states what
         // was actually stored rather than hashing the file a second time.
         file: {
           filename: artifact.filename,
           sha256: verified.sha256,
           ...(metadata.requiresPython ? { requiresPython: metadata.requiresPython } : {}),
+          coreMetadataSha256: await sha256Hex(new TextEncoder().encode(metadata.text)),
         },
       };
     }));
@@ -92,6 +100,7 @@ export class PypiPublisher implements ArtifactPublisher {
 
     for (const copy of copies) {
       await objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
+      await objectStore.putText(copy.coreMetadata.key, copy.coreMetadata.text, METADATA_CONTENT_TYPE);
     }
 
     // The index is written after the files it points at, so a client that
@@ -109,10 +118,13 @@ export class PypiPublisher implements ArtifactPublisher {
     return {
       publishedAt,
       objects: [
-        ...copies.map((copy) => withPreviousMetadata(
-          { key: copy.destinationKey, contentType: copy.contentType },
-          previous.get(copy.destinationKey) ?? null,
-        )),
+        ...copies.flatMap((copy) => [
+          withPreviousMetadata(
+            { key: copy.destinationKey, contentType: copy.contentType },
+            previous.get(copy.destinationKey) ?? null,
+          ),
+          { key: copy.coreMetadata.key, contentType: METADATA_CONTENT_TYPE },
+        ]),
         ...indexObjects,
       ],
     };

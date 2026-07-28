@@ -8,6 +8,7 @@ import type {
   ValidatePublishArtifactsInput,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { createPrefixServingPredicate, listAllObjects } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { createPypiAdminResources } from "./admin-resources";
 import { createPypiClientHelpers } from "./client-helpers";
 import { validatePypiRepositoryConfig } from "./config";
 import { SERVED_PREFIXES, packageRelativePath, parsePackageRelativePath, resolveSimplePath } from "./layout";
@@ -34,7 +35,7 @@ export function createPypiPlugin(input?: {
     capabilities: [...pypiPluginManifest.capabilities],
     canServeRepositoryPath: createPrefixServingPredicate(SERVED_PREFIXES),
     uploadProtocol: createPypiUploadProtocol(),
-    resolveRepositoryPath: ({ relativePath }) => resolveSimplePath(relativePath),
+    resolveRepositoryPath: ({ relativePath, accept }) => resolveSimplePath(relativePath, accept),
     validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
     publish: {
       validateArtifacts: validatePypiArtifacts,
@@ -46,6 +47,9 @@ export function createPypiPlugin(input?: {
       rebuildIndex: rebuildPypiArtifactIndex,
     },
     clientHelpers: createPypiClientHelpers(),
+    ...(input?.objectStoreFor
+      ? { adminResources: createPypiAdminResources({ objectStoreFor: input.objectStoreFor }) }
+      : {}),
   };
 }
 

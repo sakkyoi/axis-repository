@@ -11,6 +11,23 @@ export const pypiPluginManifest = {
     namespace: "pypi",
     fields: [],
   },
+  adminResources: {
+    namespace: "pypi",
+    routes: [
+      {
+        name: "yank-file",
+        method: "POST",
+        path: ["projects", ":project", "files", ":filename", "yank"],
+        responseKind: "json",
+      },
+      {
+        name: "unyank-file",
+        method: "POST",
+        path: ["projects", ":project", "files", ":filename", "unyank"],
+        responseKind: "json",
+      },
+    ],
+  },
   clientHelpers: {
     namespace: "pypi",
     actions: [

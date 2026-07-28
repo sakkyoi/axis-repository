@@ -147,10 +147,11 @@ describe("publishing to a PyPI repository", () => {
 
     await pypi.publish("pub_1", ["zope_interface-6.1-py3-none-any.whl", "zope.interface-6.1.tar.gz"]);
 
-    expect(storedKeys(pypi.objectStore).filter((key) => key.includes("/packages/"))).toEqual([
-      "repositories/python-internal/packages/zope-interface/zope.interface-6.1.tar.gz",
-      "repositories/python-internal/packages/zope-interface/zope_interface-6.1-py3-none-any.whl",
-    ]);
+    expect(storedKeys(pypi.objectStore).filter((key) => key.includes("/packages/") && !key.endsWith(".metadata")))
+      .toEqual([
+        "repositories/python-internal/packages/zope-interface/zope.interface-6.1.tar.gz",
+        "repositories/python-internal/packages/zope-interface/zope_interface-6.1-py3-none-any.whl",
+      ]);
   });
 
   it("keeps what earlier publishes stored", async () => {
@@ -159,7 +160,8 @@ describe("publishing to a PyPI repository", () => {
     await pypi.publish("pub_1", ["alpha-1.0.tar.gz"]);
     await pypi.publish("pub_2", ["beta-2.0.tar.gz"]);
 
-    const packages = storedKeys(pypi.objectStore).filter((key) => key.includes("/packages/"));
+    const packages = storedKeys(pypi.objectStore)
+      .filter((key) => key.includes("/packages/") && !key.endsWith(".metadata"));
     expect(packages).toHaveLength(2);
   });
 
@@ -257,6 +259,55 @@ describe("publishing to a PyPI repository", () => {
 
     expect(writeCount(pypi.objectStore, "repositories/python-internal/simple/alpha/index.html"))
       .toBe(before);
+  });
+
+  it("publishes the core metadata beside the distribution", async () => {
+    // PEP 658: pip resolves dependencies from this instead of downloading the
+    // whole wheel, which for a large one is the difference between kilobytes
+    // and hundreds of megabytes.
+    const pypi = await harness();
+
+    await pypi.publish("pub_1", ["my_project-1.0-py3-none-any.whl"]);
+
+    const metadata = storedText(
+      pypi.objectStore,
+      "repositories/python-internal/packages/my-project/my_project-1.0-py3-none-any.whl.metadata",
+    );
+    expect(metadata).toContain("Name: my_project");
+    expect(storedText(pypi.objectStore, "repositories/python-internal/simple/my-project/index.html"))
+      .toContain('data-core-metadata="sha256=');
+  });
+
+  it("publishes both serializations of a project page", async () => {
+    const pypi = await harness();
+
+    await pypi.publish("pub_1", ["alpha-1.0.tar.gz"]);
+
+    const json = storedText(pypi.objectStore, "repositories/python-internal/simple/alpha/index.v1.json") ?? "";
+    expect(JSON.parse(json)).toMatchObject({
+      meta: { "api-version": "1.0" },
+      name: "alpha",
+      files: [expect.objectContaining({ filename: "alpha-1.0.tar.gz" })],
+    });
+  });
+
+  it("describes the same files in HTML and in JSON", async () => {
+    // The two are generated from one list, and a client picks between them by
+    // Accept alone; if they disagreed, what pip installs would depend on which
+    // it happened to ask for.
+    const pypi = await harness();
+    await pypi.publish("pub_1", ["alpha-1.0.tar.gz", "alpha-2.0-py3-none-any.whl"]);
+
+    const html = storedText(pypi.objectStore, "repositories/python-internal/simple/alpha/index.html") ?? "";
+    const json = JSON.parse(
+      storedText(pypi.objectStore, "repositories/python-internal/simple/alpha/index.v1.json") ?? "{}",
+    ) as { files: Array<{ filename: string; hashes: { sha256: string } }> };
+
+    for (const file of json.files) {
+      expect(html).toContain(file.filename);
+      expect(html).toContain(`#sha256=${file.hashes.sha256}`);
+    }
+    expect(json.files).toHaveLength(2);
   });
 
   it("refuses a file whose contents are a different project than its name", async () => {

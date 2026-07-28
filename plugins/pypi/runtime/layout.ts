@@ -1,4 +1,11 @@
 import type { PypiDistributionFilename } from "./names";
+import {
+  HTML_CONTENT_TYPE,
+  SIMPLE_HTML_CONTENT_TYPE,
+  SIMPLE_INDEX_FILENAME,
+  SIMPLE_JSON_CONTENT_TYPE,
+  SIMPLE_JSON_FILENAME,
+} from "./simple-index";
 
 /**
  * Where a repository keeps its files.
@@ -46,20 +53,62 @@ export function packageObjectKey(
  * without the trailing slash resolves the same way rather than 404ing, since
  * that is the URL a client most often types by hand.
  */
-export function resolveSimplePath(relativePath: string): { objectPath: string } | null {
+export function resolveSimplePath(
+  relativePath: string,
+  accept?: string,
+): { objectPath: string; contentType?: string } | null {
   const path = relativePath.replace(/\/+$/, "");
+  const index = prefersJson(accept)
+    ? { filename: SIMPLE_JSON_FILENAME, contentType: SIMPLE_JSON_CONTENT_TYPE }
+    : { filename: SIMPLE_INDEX_FILENAME, contentType: HTML_CONTENT_TYPE };
+
   if (path === SIMPLE_PREFIX) {
-    return { objectPath: `${SIMPLE_PREFIX}/index.html` };
+    return { objectPath: `${SIMPLE_PREFIX}/${index.filename}`, contentType: index.contentType };
   }
 
   const project = /^simple\/([^/]+)$/.exec(path)?.[1];
   if (project) {
-    return { objectPath: `${SIMPLE_PREFIX}/${project}/index.html` };
+    return {
+      objectPath: `${SIMPLE_PREFIX}/${project}/${index.filename}`,
+      contentType: index.contentType,
+    };
   }
 
   // Anything else addresses an object directly; a trailing slash on a file
   // path is not something this format serves.
   return relativePath.endsWith("/") ? null : { objectPath: relativePath };
+}
+
+/**
+ * Decides which serialization a client asked for (PEP 691).
+ *
+ * pip sends all three types with quality values, preferring JSON. A client
+ * that says nothing, or only knows `text/html`, gets the HTML — which is what
+ * every client understood before PEP 691 existed.
+ */
+function prefersJson(accept?: string): boolean {
+  if (!accept) {
+    return false;
+  }
+
+  let jsonQuality = 0;
+  let htmlQuality = 0;
+  for (const entry of accept.split(",")) {
+    const [type = "", ...parameters] = entry.trim().split(";").map((part) => part.trim());
+    const quality = Number(
+      parameters.find((parameter) => parameter.startsWith("q="))?.slice(2) ?? "1",
+    );
+    if (!Number.isFinite(quality) || quality <= 0) {
+      continue;
+    }
+    if (type === SIMPLE_JSON_CONTENT_TYPE) {
+      jsonQuality = Math.max(jsonQuality, quality);
+    } else if (type === SIMPLE_HTML_CONTENT_TYPE || type === "text/html" || type === "*/*") {
+      htmlQuality = Math.max(htmlQuality, quality);
+    }
+  }
+
+  return jsonQuality > 0 && jsonQuality >= htmlQuality;
 }
 
 /** Matches a stored distribution, so the packages tree can be read back. */
