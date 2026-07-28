@@ -5754,3 +5754,78 @@ describe("uploading a distribution larger than the worker heap", () => {
     expect(chunksReadAtFirstWrite).toBeLessThan(totalChunks / 4);
   });
 });
+
+describe("deleting a published PyPI distribution", () => {
+  async function publish(
+    app: ReturnType<typeof createApp>,
+    token: string,
+    version: string,
+  ): Promise<void> {
+    const bytes = await sdistBytes({ name: "alpha", version });
+    const form = new FormData();
+    form.set(":action", "file_upload");
+    form.set("sha256_digest", await sha256Hex(bytes));
+    form.set(
+      "content",
+      new File([bytes], `alpha-${version}.tar.gz`, { type: "application/octet-stream" }),
+    );
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/legacy/",
+      {
+        method: "POST",
+        headers: { authorization: `Basic ${btoa(`__token__:${token}`)}` },
+        body: form,
+      },
+    ));
+    expect(response.status).toBe(200);
+  }
+
+  it("stops offering the release to pip", async () => {
+    // Deleting removed the file and left the project page listing it, so pip
+    // resolved against a release it then could not download. A page that
+    // offers a 404 is worse than one that never mentioned the release.
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "public",
+      config: {},
+    });
+    const token = await createToken(app, {
+      name: "pypi-token",
+      repositories: ["python-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+    await publish(app, token, "1.0");
+    await publish(app, token, "2.0");
+
+    const listed = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/python-internal/artifacts",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const { artifacts } = await listed.json() as { artifacts: Array<{ id: string; objectKeys: string[] }> };
+    const target = artifacts.find((artifact) => artifact.objectKeys.some((key) => key.includes("alpha-1.0")))!;
+
+    const deleted = await app.fetch(new Request(
+      `https://axis.example/admin/repositories/python-internal/artifacts/${encodeURIComponent(target.id)}`,
+      { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(deleted.status).toBe(200);
+
+    const page = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/simple/alpha/",
+    ));
+    const html = await page.text();
+    expect(html).not.toContain("alpha-1.0.tar.gz");
+    expect(html).toContain("alpha-2.0.tar.gz");
+
+    // The core metadata published beside it goes too, rather than being served
+    // forever with nothing pointing at it.
+    const metadata = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/packages/alpha/alpha-1.0.tar.gz.metadata",
+    ));
+    expect(metadata.status).toBe(404);
+  });
+});

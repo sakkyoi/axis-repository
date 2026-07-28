@@ -4,6 +4,7 @@ import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare
 import { createPypiPlugin } from "./runtime";
 import { sdistBytes, wheelBytes } from "../shared/dist-fixtures.test-support";
 import { requireDistributionFilename } from "../shared/names";
+import { readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
 
 const NOW = new Date("2026-07-18T00:00:00.000Z");
 
@@ -371,5 +372,107 @@ describe("publishing to a PyPI repository", () => {
 
     expect(rebuilt.map((artifact) => artifact.id)).toEqual(artifacts.map((artifact) => artifact.id));
     expect(rebuilt.map((artifact) => artifact.identity)).toEqual(artifacts.map((artifact) => artifact.identity));
+  });
+
+  it("counts the core metadata beside a distribution as part of the artifact", async () => {
+    // Deleting an artifact deletes the objects it names. A side file left out
+    // of that list is served forever with nothing pointing at it.
+    const pypi = await harness();
+    const { artifacts } = await pypi.publish("pub_1", ["alpha-1.0.tar.gz"]);
+
+    expect(artifacts[0]?.objectKeys).toEqual([
+      "repositories/python-internal/packages/alpha/alpha-1.0.tar.gz",
+      "repositories/python-internal/packages/alpha/alpha-1.0.tar.gz.metadata",
+    ]);
+  });
+
+  it("drops a file the repository no longer holds from its project page", async () => {
+    // Deleting an artifact removes its objects and rebuilds. A page that still
+    // lists the file is worse than no page: pip resolves against it and fails
+    // on the download rather than choosing another release.
+    const pypi = await harness();
+    await pypi.publish("pub_1", ["alpha-1.0.tar.gz", "alpha-2.0.tar.gz"]);
+    await pypi.objectStore.deleteObject("repositories/python-internal/packages/alpha/alpha-1.0.tar.gz");
+    await pypi.objectStore.deleteObject("repositories/python-internal/packages/alpha/alpha-1.0.tar.gz.metadata");
+
+    await pypi.plugin.artifacts!.rebuildIndex({
+      repository: repository(),
+      objectStore: pypi.objectStore,
+      now: NOW,
+    });
+
+    const page = storedText(pypi.objectStore, "repositories/python-internal/simple/alpha/index.html");
+    expect(page).not.toContain("alpha-1.0.tar.gz");
+    expect(page).toContain("alpha-2.0.tar.gz");
+  });
+
+  it("removes the page of a project whose last file is gone", async () => {
+    // The root index is generated from the packages tree and stops listing the
+    // project on its own, but pip asks for a project URL directly, so a page
+    // left behind stays reachable and keeps offering files that are not there.
+    const pypi = await harness();
+    await pypi.publish("pub_1", ["alpha-1.0.tar.gz", "beta-2.0-py3-none-any.whl"]);
+    await pypi.objectStore.deleteObject("repositories/python-internal/packages/alpha/alpha-1.0.tar.gz");
+    await pypi.objectStore.deleteObject("repositories/python-internal/packages/alpha/alpha-1.0.tar.gz.metadata");
+
+    await pypi.plugin.artifacts!.rebuildIndex({
+      repository: repository(),
+      objectStore: pypi.objectStore,
+      now: NOW,
+    });
+
+    expect(await pypi.objectStore.getObject("repositories/python-internal/simple/alpha/index.html")).toBeNull();
+    expect(await pypi.objectStore.getObject("repositories/python-internal/simple/alpha/index.json")).toBeNull();
+    expect(storedText(pypi.objectStore, "repositories/python-internal/simple/index.html")).toContain("beta");
+  });
+
+  it("keeps a yanked release yanked across a rebuild", async () => {
+    // Nothing in a distribution records a yank, so a rebuild that derived the
+    // page purely from the files would quietly offer the release again.
+    const pypi = await harness();
+    await pypi.publish("pub_1", ["alpha-1.0.tar.gz"]);
+    await writeSimpleIndexes({
+      objectStore: pypi.objectStore,
+      repositoryName: "python-internal",
+      projects: [{
+        project: "alpha",
+        files: (await readPublishedProjectFiles({
+          objectStore: pypi.objectStore,
+          repositoryName: "python-internal",
+          project: "alpha",
+        })).map((file) => ({ ...file, yanked: "built against the wrong ABI" })),
+      }],
+    });
+
+    await pypi.plugin.artifacts!.rebuildIndex({
+      repository: repository(),
+      objectStore: pypi.objectStore,
+      now: NOW,
+    });
+
+    const files = await readPublishedProjectFiles({
+      objectStore: pypi.objectStore,
+      repositoryName: "python-internal",
+      project: "alpha",
+    });
+    expect(files[0]?.yanked).toBe("built against the wrong ABI");
+  });
+
+  it("republishes core metadata that has gone missing", async () => {
+    // The side file is what PEP 658 serves and what the page's digest
+    // describes, so a rebuild that carried on without it would leave the page
+    // pointing at nothing.
+    const pypi = await harness();
+    await pypi.publish("pub_1", ["alpha-1.0.tar.gz"]);
+    const key = "repositories/python-internal/packages/alpha/alpha-1.0.tar.gz.metadata";
+    await pypi.objectStore.deleteObject(key);
+
+    await pypi.plugin.artifacts!.rebuildIndex({
+      repository: repository(),
+      objectStore: pypi.objectStore,
+      now: NOW,
+    });
+
+    expect(storedText(pypi.objectStore, key)).toContain("Name: alpha");
   });
 });

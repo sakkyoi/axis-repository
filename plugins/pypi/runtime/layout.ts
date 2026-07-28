@@ -46,6 +46,19 @@ export function packageObjectKey(
 }
 
 /**
+ * Where a distribution's core metadata sits (PEP 658).
+ *
+ * Beside the distribution, under its own name — so the two travel together and
+ * whatever accounts for one accounts for the other.
+ */
+export function coreMetadataKey(distributionKey: string): string {
+  return `${distributionKey}.metadata`;
+}
+
+/** PEP 658 serves core metadata as plain text, the way METADATA is written. */
+export const CORE_METADATA_CONTENT_TYPE = "text/plain; charset=utf-8";
+
+/**
  * Maps a Simple API request to the page that answers it.
  *
  * PEP 503 addresses directories — `simple/` and `simple/<project>/` — which
