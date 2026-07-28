@@ -3,6 +3,10 @@
 [![Status: Experimental](https://img.shields.io/badge/status-experimental-orange)](#)
 [![Development: Active](https://img.shields.io/badge/development-active-blue)](#)
 
+<p align="center">
+  <img src="assets/logo-mark.svg" alt="Axis Repository" width="96" height="96" />
+</p>
+
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sakkyoi/axis-repository)
 
 Axis Repository is a multi-format artifact repository. The current implementation includes a Cloudflare Worker API spine and Durable Object-backed state.
