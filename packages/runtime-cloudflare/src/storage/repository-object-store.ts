@@ -380,11 +380,14 @@ async function etagForBytes(bytes: Uint8Array): Promise<string> {
 }
 
 /**
- * R2 will not take a part smaller than this except as the last one, so writes
- * are gathered up to it before being sent. It is also the ceiling on what a
- * streamed upload holds in memory, whatever the object's eventual size.
+ * How much of an object a streamed write holds before sending it on.
+ *
+ * R2 will not take a part smaller than 5 MiB except as the last one, and
+ * requires every part but the last to be exactly the same size, so this is the
+ * size each one is cut to — and the ceiling on what an upload holds in memory,
+ * whatever the object's eventual size.
  */
-const R2_MINIMUM_PART_BYTES = 5 * 1024 * 1024;
+const R2_PART_BYTES = 5 * 1024 * 1024;
 
 class R2PartWriter implements RepositoryObjectPartWriter {
   private readonly parts: R2UploadedPart[] = [];
@@ -398,8 +401,11 @@ class R2PartWriter implements RepositoryObjectPartWriter {
     this.buffered.push(chunk);
     this.bufferedLength += chunk.byteLength;
     this.size += chunk.byteLength;
-    if (this.bufferedLength >= R2_MINIMUM_PART_BYTES) {
-      await this.flush();
+    // Exactly one part's worth at a time, holding the remainder: R2 requires
+    // every part but the last to be the same size, and rejects the completed
+    // upload otherwise.
+    while (this.bufferedLength >= R2_PART_BYTES) {
+      await this.flush(R2_PART_BYTES);
     }
   }
 
@@ -407,7 +413,7 @@ class R2PartWriter implements RepositoryObjectPartWriter {
     // A zero-length object still has to exist, and an upload with no parts at
     // all cannot be completed, so the tail is flushed even when it is empty.
     if (this.bufferedLength > 0 || this.parts.length === 0) {
-      await this.flush();
+      await this.flush(this.bufferedLength);
     }
     await this.upload.complete(this.parts);
     return { size: this.size };
@@ -417,15 +423,24 @@ class R2PartWriter implements RepositoryObjectPartWriter {
     await this.upload.abort();
   }
 
-  private async flush(): Promise<void> {
-    const body = new Uint8Array(this.bufferedLength);
+  private async flush(length: number): Promise<void> {
+    const body = new Uint8Array(length);
     let offset = 0;
-    for (const chunk of this.buffered) {
-      body.set(chunk, offset);
-      offset += chunk.byteLength;
+    while (offset < length) {
+      const chunk = this.buffered[0];
+      if (!chunk) {
+        break;
+      }
+      const take = Math.min(chunk.byteLength, length - offset);
+      body.set(chunk.subarray(0, take), offset);
+      offset += take;
+      if (take === chunk.byteLength) {
+        this.buffered.shift();
+      } else {
+        this.buffered[0] = chunk.subarray(take);
+      }
+      this.bufferedLength -= take;
     }
-    this.buffered = [];
-    this.bufferedLength = 0;
     this.parts.push(await this.upload.uploadPart(this.parts.length + 1, body));
   }
 }

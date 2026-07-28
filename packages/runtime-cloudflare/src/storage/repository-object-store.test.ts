@@ -115,6 +115,16 @@ class FakeR2Bucket implements R2ObjectBucket {
         return { partNumber, etag: `etag-${partNumber}` };
       },
       complete: async (uploaded: Array<{ partNumber: number; etag: string }>) => {
+        // R2 itself only reports this at completion, and only as an opaque
+        // error, so the rule is spelled out here: every part but the last has
+        // to be the same size, and no smaller than 5 MiB.
+        for (const [index, part] of parts.slice(0, -1).entries()) {
+          if (part.byteLength !== parts[0]?.byteLength || part.byteLength < 5 * 1024 * 1024) {
+            throw new Error(
+              `completeMultipartUpload: part ${index + 1} is ${part.byteLength} bytes`,
+            );
+          }
+        }
         const size = parts.reduce((total, part) => total + part.byteLength, 0);
         const value = new Uint8Array(size);
         let offset = 0;
@@ -702,6 +712,29 @@ describe("writing an object whose length is not known up front", () => {
     const { bucket } = await writeInChunks(12 * 1024 * 1024, 64 * 1024);
 
     expect(bucket.completedUploads.at(-1)?.parts).toBe(3);
+  });
+
+  it("cuts equal parts out of chunks that arrive in uneven sizes", async () => {
+    // R2 requires every part but the last to be the same size, so a chunk that
+    // straddles a part boundary has to be split rather than sent whole. Chunks
+    // arrive in whatever sizes the network hands over, so they cannot be
+    // relied on to fall evenly either individually or in aggregate.
+    const bucket = new FakeR2Bucket();
+    const store = new R2RepositoryObjectStore(bucket);
+    const writer = await store.createPartWriter("uploads/uneven", "application/octet-stream");
+
+    const total = 24 * 1024 * 1024;
+    let written = 0;
+    let seed = 1;
+    while (written < total) {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      const take = Math.min(1 + (seed % (3 * 1024 * 1024)), total - written);
+      await writer.write(new Uint8Array(take).fill(written % 251));
+      written += take;
+    }
+
+    await expect(writer.complete()).resolves.toEqual({ size: total });
+    expect((bucket.puts.at(-1)?.value as Uint8Array).byteLength).toBe(total);
   });
 
   it("completes an object smaller than one part", async () => {
