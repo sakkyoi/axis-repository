@@ -29,7 +29,12 @@ import { dispatchRepositoryAdminResource } from "../plugins/repository-plugin-ad
 import { scopeSecretsToEcosystem } from "../plugins/scoped-capabilities";
 import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
 import { adminRefreshCookie, clearAdminRefreshCookie, refreshTokenFromCookie, requestIsSecure } from "../auth/admin-auth";
-import { readRepositoryDirectory, renderRepositoryDirectoryHtml } from "./repository-directory";
+import {
+  directoryNeedsTrailingSlash,
+  readRepositoryDirectory,
+  renderRepositoryDirectoryHtml,
+  trailingSlashRedirectLocation,
+} from "./repository-directory";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;
@@ -826,9 +831,12 @@ async function repositoryDirectoryResponse(input: {
     return null;
   }
 
-  if (directoryPath !== input.relativePath) {
-    const url = new URL(input.requestUrl);
-    return new Response(null, { status: 301, headers: { location: `${url.pathname}/${url.search}` } });
+  const url = new URL(input.requestUrl);
+  if (directoryNeedsTrailingSlash(url.pathname)) {
+    return new Response(null, {
+      status: 301,
+      headers: { location: trailingSlashRedirectLocation(url.pathname, url.search) },
+    });
   }
 
   const html = renderRepositoryDirectoryHtml({ repositoryName: input.repository.name, listing });

@@ -81,6 +81,49 @@ function trailingName(relativePath: string, directory: boolean): string {
   return `${segments[segments.length - 1] ?? relativePath}${directory ? "/" : ""}`;
 }
 
+/**
+ * Whether a listing at this URL has to be redirected to its slashed form.
+ *
+ * The links in a listing are relative to it, so serving one at a path without
+ * its trailing slash resolves every link a level too high: `/repositories/a`
+ * would link to `/repositories/Packages`.
+ *
+ * This reads the request path rather than the parsed repository path, because
+ * parsing cannot tell `/repositories/a` from `/repositories/a/` — both name
+ * the repository root.
+ */
+export function directoryNeedsTrailingSlash(pathname: string): boolean {
+  return !pathname.endsWith("/");
+}
+
+/**
+ * Where to send a directory asked for without its trailing slash.
+ *
+ * A relative reference rather than an absolute path, so the redirect lands in
+ * the right place even when the worker is reached through a prefix it cannot
+ * see — a reverse proxy mapping `/mirror/…` onto it would otherwise be sent
+ * to `/repositories/a/` and lose the prefix. RFC 7231 allows this, and the
+ * links in the listing itself are relative for the same reason.
+ */
+export function trailingSlashRedirectLocation(pathname: string, search: string): string {
+  return `${relativeReference(pathname.slice(pathname.lastIndexOf("/") + 1))}/${search}`;
+}
+
+/**
+ * Prefixes a relative reference so its first segment cannot read as a scheme.
+ *
+ * RFC 3986 reserves that reading: `pkg:1.0/` is a URI with the scheme `pkg`,
+ * not a path, and a client follows it somewhere else entirely or refuses it.
+ * A `./` in front settles it as a path.
+ *
+ * This carries the redirect, where the segment is whatever the client sent.
+ * The listing's own links are percent-encoded first, which already rules the
+ * colon out; the prefix is there so neither depends on that.
+ */
+function relativeReference(segment: string): string {
+  return `./${segment}`;
+}
+
 export function renderRepositoryDirectoryHtml(input: {
   repositoryName: string;
   listing: RepositoryDirectoryListing;
@@ -88,8 +131,10 @@ export function renderRepositoryDirectoryHtml(input: {
   const path = `/${input.repositoryName}/${input.listing.relativePath}`;
   const rows = input.listing.entries.map((entry) => {
     // Links are relative to the listing, so the same page works whatever
-    // origin or prefix the repository is reached through.
-    const href = escapeHtml(encodeURI(entry.name));
+    // origin or prefix the repository is reached through — and prefixed, so a
+    // name carrying a colon cannot read as a scheme.
+    const href = escapeHtml(relativeReference(encodeURIComponent(entry.name.replace(/\/$/, ""))
+      + (entry.directory ? "/" : "")));
     const size = entry.directory ? "" : formatSize(entry.size);
     return `      <tr><td><a href="${href}">${escapeHtml(entry.name)}</a></td><td>${size}</td></tr>`;
   });

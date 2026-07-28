@@ -5567,17 +5567,51 @@ describe("browsing a repository", () => {
     expect(denied.status).toBe(404);
   });
 
-  it("redirects a directory asked for without its trailing slash", async () => {
+  it.each([
+    ["the repository root", "/repositories/debian-internal", "/repositories/debian-internal/"],
+    ["a directory below it", "/repositories/debian-internal/dists", "/repositories/debian-internal/dists/"],
+  ])("redirects %s when asked for without its trailing slash", async (_case, from, to) => {
     // The links in a listing are relative to it, so serving one at the
-    // slashless path would produce links that resolve a level too high.
+    // slashless path resolves every link a level too high: a listing at
+    // /repositories/a would link to /repositories/Packages.
     const { app } = await browsable();
 
-    const response = await app.fetch(
-      new Request("https://axis.example/repositories/debian-internal/dists", { redirect: "manual" }),
-    );
+    const at = `https://axis.example${from}`;
+    const response = await app.fetch(new Request(at, { redirect: "manual" }));
 
     expect(response.status).toBe(301);
-    expect(response.headers.get("location")).toBe("/repositories/debian-internal/dists/");
+    // Asserted as the client resolves it: the Location is a relative
+    // reference so it survives a prefix the worker cannot see.
+    expect(new URL(response.headers.get("location")!, at).pathname).toBe(to);
+  });
+
+  it("resolves a listing's links against the directory it is served at", async () => {
+    // The property the redirect exists to protect, stated directly.
+    const { app } = await browsable();
+    const at = "https://axis.example/repositories/debian-internal/dists/noble/";
+
+    const body = await (await app.fetch(new Request(at))).text();
+    const hrefs = [...body.matchAll(/<a href="([^"]+)"/g)].map((match) => match[1]!);
+
+    expect(hrefs.map((href) => new URL(href, at).pathname))
+      .toContain("/repositories/debian-internal/dists/noble/InRelease");
+    for (const href of hrefs) {
+      expect(new URL(href, at).pathname.startsWith("/repositories/debian-internal/dists/")).toBe(true);
+    }
+  });
+
+  it("redirects so a prefix the worker cannot see survives", async () => {
+    // A reverse proxy mapping /mirror/… onto the worker sends a path the
+    // worker never learns about; an absolute Location would drop it.
+    const { app } = await browsable();
+    const behindProxy = "https://axis.example/mirror/repositories/debian-internal";
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-internal", { redirect: "manual" }),
+    );
+
+    expect(new URL(response.headers.get("location")!, behindProxy).pathname)
+      .toBe("/mirror/repositories/debian-internal/");
   });
 
   it("still serves a file rather than listing it", async () => {
