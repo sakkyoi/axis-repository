@@ -68,6 +68,11 @@ function memoryObjectStore(existingKeys: string[] = []): RepositoryObjectStore {
     putJson: async () => {},
     putText: async () => {},
     putBytes: async () => {},
+    createPartWriter: async () => ({
+      write: async () => {},
+      complete: async () => ({ size: 0 }),
+      abort: async () => {},
+    }),
     copyObject: async () => {},
     listObjects: async () => ({ prefix: "", directories: [], objects: [], truncated: false }),
     headObject: async (key) => keys.has(key) ? {} : null,

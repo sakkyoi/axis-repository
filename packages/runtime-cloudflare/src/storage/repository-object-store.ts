@@ -1,4 +1,5 @@
 import type {
+  RepositoryObjectPartWriter,
   RepositoryObjectList,
   RepositoryObject,
   RepositoryObjectMetadata,
@@ -34,6 +35,26 @@ export interface R2ObjectBucket {
     value: string | Uint8Array | ReadableStream,
     options?: { httpMetadata?: { contentType?: string } },
   ): Promise<unknown>;
+  createMultipartUpload(
+    key: string,
+    options?: { httpMetadata?: { contentType?: string } },
+  ): Promise<R2MultipartUpload>;
+}
+
+/**
+ * R2's own multipart upload, which is how an object of unknown length is
+ * written: `put` refuses a stream whose length it cannot know, and this does
+ * not need one.
+ */
+export interface R2MultipartUpload {
+  uploadPart(partNumber: number, value: Uint8Array): Promise<R2UploadedPart>;
+  complete(parts: R2UploadedPart[]): Promise<unknown>;
+  abort(): Promise<unknown>;
+}
+
+export interface R2UploadedPart {
+  partNumber: number;
+  etag: string;
 }
 
 export interface R2ListedObject {
@@ -63,6 +84,33 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
 
   async putBytes(key: string, value: Uint8Array, contentType: string): Promise<void> {
     this.objects.push({ key, value: new Uint8Array(value), contentType });
+  }
+
+  async createPartWriter(key: string, contentType: string): Promise<RepositoryObjectPartWriter> {
+    // Nothing appears under the key until the write completes, matching R2:
+    // an abandoned upload must not leave a half-written object behind.
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    const objects = this.objects;
+    return {
+      write: async (chunk) => {
+        chunks.push(new Uint8Array(chunk));
+        size += chunk.byteLength;
+      },
+      complete: async () => {
+        const value = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) {
+          value.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        objects.push({ key, value, contentType });
+        return { size };
+      },
+      abort: async () => {
+        chunks.length = 0;
+      },
+    };
   }
 
   async copyObject(
@@ -173,6 +221,11 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
     await this.bucket.put(key, new Uint8Array(value), {
       httpMetadata: { contentType },
     });
+  }
+
+  async createPartWriter(key: string, contentType: string): Promise<RepositoryObjectPartWriter> {
+    const upload = await this.bucket.createMultipartUpload(key, { httpMetadata: { contentType } });
+    return new R2PartWriter(upload);
   }
 
   async copyObject(
@@ -324,4 +377,55 @@ function bodyFromBytes(bytes: Uint8Array, sourceBody: string | Uint8Array): stri
 async function etagForBytes(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return `"${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}"`;
+}
+
+/**
+ * R2 will not take a part smaller than this except as the last one, so writes
+ * are gathered up to it before being sent. It is also the ceiling on what a
+ * streamed upload holds in memory, whatever the object's eventual size.
+ */
+const R2_MINIMUM_PART_BYTES = 5 * 1024 * 1024;
+
+class R2PartWriter implements RepositoryObjectPartWriter {
+  private readonly parts: R2UploadedPart[] = [];
+  private buffered: Uint8Array[] = [];
+  private bufferedLength = 0;
+  private size = 0;
+
+  constructor(private readonly upload: R2MultipartUpload) {}
+
+  async write(chunk: Uint8Array): Promise<void> {
+    this.buffered.push(chunk);
+    this.bufferedLength += chunk.byteLength;
+    this.size += chunk.byteLength;
+    if (this.bufferedLength >= R2_MINIMUM_PART_BYTES) {
+      await this.flush();
+    }
+  }
+
+  async complete(): Promise<{ size: number }> {
+    // A zero-length object still has to exist, and an upload with no parts at
+    // all cannot be completed, so the tail is flushed even when it is empty.
+    if (this.bufferedLength > 0 || this.parts.length === 0) {
+      await this.flush();
+    }
+    await this.upload.complete(this.parts);
+    return { size: this.size };
+  }
+
+  async abort(): Promise<void> {
+    await this.upload.abort();
+  }
+
+  private async flush(): Promise<void> {
+    const body = new Uint8Array(this.bufferedLength);
+    let offset = 0;
+    for (const chunk of this.buffered) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    this.buffered = [];
+    this.bufferedLength = 0;
+    this.parts.push(await this.upload.uploadPart(this.parts.length + 1, body));
+  }
 }

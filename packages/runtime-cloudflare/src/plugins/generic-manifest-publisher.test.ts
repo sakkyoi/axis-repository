@@ -21,6 +21,15 @@ class FailingPublishObjectStore implements RepositoryObjectStore {
     this.keys.push(key);
   }
 
+  async createPartWriter(key: string) {
+    this.keys.push(key);
+    return {
+      write: async () => undefined,
+      complete: async () => ({ size: 0 }),
+      abort: async () => undefined,
+    };
+  }
+
   async copyObject(sourceKey: string, destinationKey: string): Promise<void> {
     this.keys.push(`${sourceKey}->${destinationKey}`);
   }

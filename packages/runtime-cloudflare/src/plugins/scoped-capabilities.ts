@@ -98,6 +98,8 @@ export function scopeObjectStoreToRepository(
     putJson: async (key, value) => objectStore.putJson(requireWritable(key), value),
     putText: async (key, value, contentType) => objectStore.putText(requireWritable(key), value, contentType),
     putBytes: async (key, value, contentType) => objectStore.putBytes(requireWritable(key), value, contentType),
+    createPartWriter: async (key, contentType) =>
+      objectStore.createPartWriter(requireWritable(key), contentType),
     copyObject: async (sourceKey, destinationKey, contentType) =>
       objectStore.copyObject(requireReadable(sourceKey), requireWritable(destinationKey), contentType),
     getObject: async (key, options?: RepositoryObjectReadOptions): Promise<RepositoryObject | null> =>

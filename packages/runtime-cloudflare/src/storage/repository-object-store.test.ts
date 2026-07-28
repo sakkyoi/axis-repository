@@ -13,6 +13,8 @@ class FakeR2Bucket implements R2ObjectBucket {
     value: string | Uint8Array | ReadableStream;
     options?: { httpMetadata?: { contentType?: string } };
   }> = [];
+  readonly completedUploads: Array<{ key: string; parts: number }> = [];
+  readonly abortedUploads: string[] = [];
   readonly getCalls: Array<{
     key: string;
     options?: { range?: { offset: number; length: number } };
@@ -102,6 +104,31 @@ class FakeR2Bucket implements R2ObjectBucket {
     options?: { httpMetadata?: { contentType?: string } },
   ) {
     this.puts.push(options === undefined ? { key, value } : { key, value, options });
+  }
+
+  async createMultipartUpload(key: string, options?: { httpMetadata?: { contentType?: string } }) {
+    const parts: Uint8Array[] = [];
+    const { completedUploads, abortedUploads, puts } = this;
+    return {
+      uploadPart: async (partNumber: number, value: Uint8Array) => {
+        parts.push(new Uint8Array(value));
+        return { partNumber, etag: `etag-${partNumber}` };
+      },
+      complete: async (uploaded: Array<{ partNumber: number; etag: string }>) => {
+        const size = parts.reduce((total, part) => total + part.byteLength, 0);
+        const value = new Uint8Array(size);
+        let offset = 0;
+        for (const part of parts) {
+          value.set(part, offset);
+          offset += part.byteLength;
+        }
+        completedUploads.push({ key, parts: uploaded.length });
+        puts.push(options === undefined ? { key, value } : { key, value, options });
+      },
+      abort: async () => {
+        abortedUploads.push(key);
+      },
+    };
   }
 
   async delete(key: string) {
@@ -640,5 +667,76 @@ describe("R2RepositoryObjectStore", () => {
       }],
       truncated: false,
     });
+  });
+});
+
+describe("writing an object whose length is not known up front", () => {
+  /** Feeds the writer in chunks of the given size and returns what was stored. */
+  async function writeInChunks(total: number, chunkSize: number) {
+    const bucket = new FakeR2Bucket();
+    const store = new R2RepositoryObjectStore(bucket);
+    const writer = await store.createPartWriter("uploads/big.deb", "application/octet-stream");
+
+    let written = 0;
+    while (written < total) {
+      const take = Math.min(chunkSize, total - written);
+      await writer.write(new Uint8Array(take).fill(written % 251));
+      written += take;
+    }
+    const result = await writer.complete();
+    const put = bucket.puts.at(-1);
+    return { bucket, result, stored: put?.value as Uint8Array };
+  }
+
+  it("stores every byte it was given", async () => {
+    const total = 12 * 1024 * 1024;
+    const { result, stored } = await writeInChunks(total, 64 * 1024);
+
+    expect(result.size).toBe(total);
+    expect(stored.byteLength).toBe(total);
+  });
+
+  it("holds one part rather than the whole object", async () => {
+    // R2 refuses a part under 5 MiB except as the last, so writes are gathered
+    // to that size — which is also the ceiling on what this ever holds.
+    const { bucket } = await writeInChunks(12 * 1024 * 1024, 64 * 1024);
+
+    expect(bucket.completedUploads.at(-1)?.parts).toBe(3);
+  });
+
+  it("completes an object smaller than one part", async () => {
+    // The whole object is the trailing part, which is the one R2 allows to be
+    // short. An upload with no parts at all cannot be completed.
+    const { result, bucket } = await writeInChunks(1024, 1024);
+
+    expect(result.size).toBe(1024);
+    expect(bucket.completedUploads.at(-1)?.parts).toBe(1);
+  });
+
+  it("completes an object with no content at all", async () => {
+    const bucket = new FakeR2Bucket();
+    const store = new R2RepositoryObjectStore(bucket);
+    const writer = await store.createPartWriter("uploads/empty", "text/plain");
+
+    await expect(writer.complete()).resolves.toEqual({ size: 0 });
+    expect(bucket.completedUploads.at(-1)?.parts).toBe(1);
+  });
+
+  it("leaves nothing behind when abandoned", async () => {
+    const bucket = new FakeR2Bucket();
+    const store = new R2RepositoryObjectStore(bucket);
+    const writer = await store.createPartWriter("uploads/abandoned", "text/plain");
+
+    await writer.write(new Uint8Array(1024));
+    await writer.abort();
+
+    expect(bucket.abortedUploads).toContain("uploads/abandoned");
+    expect(bucket.puts.some((put) => put.key === "uploads/abandoned")).toBe(false);
+  });
+
+  it("records the content type the object was created with", async () => {
+    const { bucket } = await writeInChunks(1024, 1024);
+
+    expect(bucket.puts.at(-1)?.options?.httpMetadata?.contentType).toBe("application/octet-stream");
   });
 });

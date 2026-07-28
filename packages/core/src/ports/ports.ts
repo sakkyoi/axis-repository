@@ -116,10 +116,27 @@ export interface RepositoryObject {
   range?: RepositoryObjectRange;
 }
 
+/**
+ * Writes an object whose length is not known when the write begins.
+ *
+ * Object storage wants a length up front, so an upload that is still arriving
+ * cannot simply be handed over. Writing it in parts lifts that: only one part
+ * is ever held, however large the object turns out to be.
+ */
+export interface RepositoryObjectPartWriter {
+  write(chunk: Uint8Array): Promise<void>;
+  /** Finishes the object and returns what was written. */
+  complete(): Promise<{ size: number }>;
+  /** Discards everything written so far, leaving no object behind. */
+  abort(): Promise<void>;
+}
+
 export interface RepositoryObjectStore {
   putJson(key: string, value: unknown): Promise<void>;
   putText(key: string, value: string, contentType: string): Promise<void>;
   putBytes(key: string, value: Uint8Array, contentType: string): Promise<void>;
+  /** Begins a write for content that arrives in pieces. */
+  createPartWriter(key: string, contentType: string): Promise<RepositoryObjectPartWriter>;
   copyObject(sourceKey: string, destinationKey: string, contentType?: string): Promise<void>;
   listObjects(input: { prefix: string; delimiter?: string; cursor?: string; limit?: number }): Promise<RepositoryObjectList>;
   headObject(key: string): Promise<RepositoryObjectMetadata | null>;
