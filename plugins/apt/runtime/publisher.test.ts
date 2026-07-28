@@ -405,6 +405,11 @@ describe("AptPublisher", () => {
       "repositories/debian-internal/dists/noble/main/binary-arm64/Packages.gz",
       "repositories/debian-internal/dists/noble/contrib/binary-amd64/Packages",
       "repositories/debian-internal/dists/noble/contrib/binary-amd64/Packages.gz",
+      // Nothing was published to contrib/arm64, but Release names both the
+      // component and the architecture, and apt refuses a Release that names
+      // a pair it has no index for.
+      "repositories/debian-internal/dists/noble/contrib/binary-arm64/Packages",
+      "repositories/debian-internal/dists/noble/contrib/binary-arm64/Packages.gz",
       "repositories/debian-internal/dists/noble/main/i18n/Translation-en",
       "repositories/debian-internal/dists/noble/main/i18n/Translation-en.gz",
       "repositories/debian-internal/dists/noble/contrib/i18n/Translation-en",

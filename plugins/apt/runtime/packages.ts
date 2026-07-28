@@ -401,11 +401,21 @@ export function buildPackageIndexes(input: {
     for (const architecture of input.config.architectures) {
       for (const installer of [false, true]) {
         const index = input.stanzasByIndex.get(indexKey(component, architecture, installer));
-        if (index === undefined || index.stanzas.length === 0) {
+        // A declared component and architecture always gets a `Packages`,
+        // even an empty one. apt rejects a `Release` that names no files as
+        // providing "only weak security information", and it fails the whole
+        // update rather than the one line — so a suite with nothing published
+        // yet would take every other suite in the sources.list down with it.
+        //
+        // Installer indexes are the exception: `debian-installer` is not part
+        // of an ordinary repository, and apt only looks for it when a source
+        // asks for it.
+        const stanzas = index?.stanzas ?? [];
+        if (installer && stanzas.length === 0) {
           continue;
         }
 
-        const stanzas = index.stanzas
+        const sorted = stanzas
           .map((stanza) => withDescriptionDigest(stanza))
           .sort((left, right) => comparePackageStanzas(left, right));
 
@@ -414,8 +424,8 @@ export function buildPackageIndexes(input: {
           architecture,
           ...(installer ? { installer } : {}),
           relativePath: indexRelativePath({ component, architecture, installer }),
-          packages: stanzas.map((stanza) => formatStanza(stanza)).join("\n"),
-          stanzas,
+          packages: sorted.map((stanza) => formatStanza(stanza)).join("\n"),
+          stanzas: sorted,
         });
       }
     }

@@ -300,9 +300,9 @@ describe("APT metadata", () => {
     expect(index).toMatchObject({ component: "main", architecture: "amd64" });
     expect(suite(metadata).indexFiles.map((file) => file.relativePath)).toEqual([
       "main/binary-amd64/Packages",
-      "main/binary-amd64/Packages.gz",
+      "main/binary-amd64/Packages.gz",
       "main/i18n/Translation-en",
-      "main/i18n/Translation-en.gz",
+      "main/i18n/Translation-en.gz",
     ]);
   });
 
@@ -412,11 +412,17 @@ describe("APT metadata", () => {
     const metadata = await buildAptRepositoryMetadata(multi);
     const indexesByPath = new Map(suite(metadata).packageIndexes.map((index) => [index.relativePath, index]));
 
+    // Every declared component and architecture gets an index, including the
+    // pairs nothing was published to: Release names them in Components and
+    // Architectures, and apt refuses a Release that names a pair it has no
+    // index for.
     expect([...indexesByPath.keys()]).toEqual([
       "main/binary-amd64/Packages",
       "main/binary-arm64/Packages",
       "contrib/binary-amd64/Packages",
+      "contrib/binary-arm64/Packages",
     ]);
+    expect(indexesByPath.get("contrib/binary-arm64/Packages")!.packages).toBe("");
     expect(indexesByPath.get("main/binary-amd64/Packages")!.packages).toContain("Package: portable\n");
     expect(indexesByPath.get("main/binary-amd64/Packages")!.packages).not.toContain("Package: worker\n");
     expect(indexesByPath.get("main/binary-arm64/Packages")!.packages).toContain("Package: portable\n");

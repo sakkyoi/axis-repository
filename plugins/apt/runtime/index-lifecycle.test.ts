@@ -378,7 +378,10 @@ describe("APT index lifecycle", () => {
     expect(artifacts.map((artifact) => artifact.name)).toEqual(["beta"]);
   });
 
-  it("removes an index file when its last package is deleted, so Release stays consistent", async () => {
+  it("empties an index when its last package is deleted rather than dropping it", async () => {
+    // Release keeps naming arm64 in Architectures, and apt refuses a Release
+    // that names an architecture it has no index for. So the index stays and
+    // goes empty; what must not survive is the package itself.
     const harness = await createHarness();
 
     await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0", architecture: "arm64" }]);
@@ -388,10 +391,10 @@ describe("APT index lifecycle", () => {
     await harness.reconcile();
 
     const release = storedText(harness.objectStore, "repositories/debian-internal/dists/noble/Release") ?? "";
-    expect(release).not.toContain("main/binary-arm64/Packages");
-    expect(storedKeys(harness.objectStore)).not.toContain(
-      "repositories/debian-internal/dists/noble/main/binary-arm64/Packages",
-    );
+    expect(release).toContain("Architectures: amd64 arm64");
+    expect(release).toContain("main/binary-arm64/Packages");
+    expect(storedText(harness.objectStore, "repositories/debian-internal/dists/noble/main/binary-arm64/Packages"))
+      .toBe("");
   });
 
   it("re-signs Release after reconciling so the signature still covers the index", async () => {

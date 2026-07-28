@@ -256,7 +256,10 @@ describe("renewing Release before it expires", () => {
 
     const result = await harness.renew(new Date(PUBLISHED_AT.getTime() + 6 * DAY_MS));
 
-    // Only noble was ever published to, so jammy has no Release to renew.
-    expect(result.refreshed).toEqual(["noble"]);
+    // Every declared suite publishes a Release, including one nothing has been
+    // published to yet, so every one of them has an expiry to move on. Leaving
+    // the empty suite out would let its Release expire and take the whole
+    // sources.list down with it.
+    expect([...result.refreshed].sort()).toEqual(["jammy", "noble"]);
   });
 });
