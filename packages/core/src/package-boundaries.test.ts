@@ -36,7 +36,7 @@ const expectedExports: Record<keyof typeof packageDirs, string[]> = {
   runtimeCloudflare: [".", "./plugin-runtime", "./plugin-runtime/testing"],
   publishClient: [".", "./cli"],
   pluginApt: [".", "./admin-ui", "./admin-ui/publish", "./manifest", "./runtime", "./runtime/publisher", "./test-support"],
-  pluginPypi: [".", "./admin-ui", "./admin-ui/detail", "./admin-ui/publish", "./manifest", "./runtime"],
+  pluginPypi: [".", "./admin-ui", "./admin-ui/detail", "./admin-ui/publish", "./manifest", "./runtime", "./test-support"],
 };
 
 const forbiddenWorkspaceDependencies: Record<keyof typeof packageDirs, string[]> = {
@@ -96,6 +96,7 @@ function assertOnlyUsesExportedPackageSubpaths(filePath: string, source: string)
     "@axis-repository/plugin-pypi/admin-ui/publish",
     "@axis-repository/plugin-pypi/manifest",
     "@axis-repository/plugin-pypi/runtime",
+    "@axis-repository/plugin-pypi/test-support",
     "@axis-repository/runtime-cloudflare/plugin-runtime",
     "@axis-repository/runtime-cloudflare/plugin-runtime/testing",
   ]);

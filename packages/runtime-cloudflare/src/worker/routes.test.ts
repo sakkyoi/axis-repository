@@ -3,6 +3,7 @@ import { createApp } from "./app";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { createDevDependencies, createDevDependencyHarness } from "./dev-dependencies";
 import { debArchive } from "@axis-repository/plugin-apt/test-support";
+import { sdistBytes } from "@axis-repository/plugin-pypi/test-support";
 import type { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 
 afterEach(() => {
@@ -4150,9 +4151,9 @@ describe("Cloudflare runtime routes", () => {
           objects: [
             { key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" },
             { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages" },
-            { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz" },
+            { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz" },
             { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en" },
-            { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en.gz" },
+            { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en.gz" },
             { key: "repositories/debian-internal/dists/noble/Release" },
             { key: "repositories/debian-internal/dists/noble/InRelease" },
             { key: "repositories/debian-internal/dists/noble/Release.gpg" },
@@ -5211,5 +5212,83 @@ describe("serving a PyPI Simple index", () => {
     );
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe("concurrent publishes to one PyPI repository", () => {
+  it("keeps both sessions' distributions on the project page", async () => {
+    // Publishing merges into the page already published, so without ordering
+    // the later write erases whatever the earlier one added. The write lock is
+    // ecosystem-agnostic, and this pins that PyPI is behind it too.
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
+    });
+    const token = await createToken(app, {
+      name: "pypi-token",
+      repositories: ["python-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+
+    async function prepare(version: string) {
+      const bytes = sdistBytes({ name: "alpha", version });
+      const filename = `alpha-${version}.tar.gz`;
+      const created = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          repositoryName: "python-internal",
+          ecosystem: "pypi",
+          artifacts: [{
+            filename,
+            size: bytes.byteLength,
+            sha256: await sha256Hex(bytes),
+            contentType: "application/octet-stream",
+            metadata: {},
+          }],
+        }),
+      }));
+      expect(created.status).toBe(201);
+      const session = (await created.json()) as { id: string; uploads: Array<{ uploadId: string; objectKey: string }> };
+      const upload = session.uploads[0]!;
+      await harness.repositoryObjectStore.putBytes(upload.objectKey, bytes, "application/octet-stream");
+      await app.fetch(new Request(
+        `https://axis.example/api/publish-sessions/${session.id}/uploads/${upload.uploadId}/verify`,
+        { method: "POST", headers: { authorization: `Bearer ${token}` } },
+      ));
+      return () => app.fetch(new Request(
+        `https://axis.example/api/publish-sessions/${session.id}/finalize`,
+        { method: "POST", headers: { authorization: `Bearer ${token}` } },
+      ));
+    }
+
+    const finalizeOne = await prepare("1.0");
+    const finalizeTwo = await prepare("2.0");
+
+    // Every read yields to the event loop, so the two publishes really do
+    // interleave over the page they both merge into. Without this the memory
+    // store answers fast enough that one finishes before the other starts, and
+    // the race the lock exists for never happens.
+    const store = harness.repositoryObjectStore;
+    const readObject = store.getObject.bind(store);
+    store.getObject = async (key, options) => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return readObject(key, options);
+    };
+
+    const responses = await Promise.all([finalizeOne(), finalizeTwo()]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    const page = readStoredText(
+      harness.repositoryObjectStore,
+      "repositories/python-internal/simple/alpha/index.html",
+    );
+    expect(page).toContain("alpha-1.0.tar.gz");
+    expect(page).toContain("alpha-2.0.tar.gz");
   });
 });

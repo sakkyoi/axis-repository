@@ -24,6 +24,7 @@
       "@axis-repository/plugin-pypi/admin-ui/publish": ["plugins/pypi/admin-ui/publish.tsx"],
       "@axis-repository/plugin-pypi/manifest": ["plugins/pypi/manifest.ts"],
       "@axis-repository/plugin-pypi/runtime": ["plugins/pypi/runtime/runtime.ts"],
+      "@axis-repository/plugin-pypi/test-support": ["plugins/pypi/runtime/dist-fixtures.test-support.ts"],
       "@axis-repository/runtime-cloudflare/plugin-runtime": ["packages/runtime-cloudflare/src/plugin-runtime.ts"],
       "@axis-repository/runtime-cloudflare/plugin-runtime/testing": ["packages/runtime-cloudflare/src/plugin-runtime-testing.ts"],
       "@axis-repository/admin-ui/plugin-ui": ["packages/admin-ui/src/plugin-ui.ts"]
