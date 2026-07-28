@@ -124,6 +124,104 @@ function relativeReference(segment: string): string {
   return `./${segment}`;
 }
 
+/**
+ * The design tokens the admin console uses, in the two schemes it defines.
+ *
+ * Copied rather than imported: this page is assembled in the worker and can
+ * fetch nothing, so it carries its own styles. `packages/admin-ui/src/styles.css`
+ * remains where the values are decided; these follow it.
+ */
+const DIRECTORY_STYLES = `
+  :root {
+    --background: 48 22% 96%;
+    --foreground: 60 6% 9%;
+    --panel: 48 33% 99%;
+    --muted-foreground: 45 6% 36%;
+    --primary: 72 100% 52%;
+    --border: 42 14% 78%;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: 0 0% 6%;
+      --foreground: 60 11% 96%;
+      --panel: 0 0% 9%;
+      --muted-foreground: 45 6% 66%;
+      --primary: 72 100% 63%;
+      --border: 0 0% 20%;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header {
+    border-bottom: 1px solid hsl(var(--border));
+    background: hsl(var(--panel));
+    padding: 0.75rem 1.5rem;
+  }
+  .wordmark { font-weight: 600; letter-spacing: -0.01em; }
+  .wordmark::before {
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.5rem;
+    border-radius: 1px;
+    background: hsl(var(--primary));
+    vertical-align: baseline;
+  }
+  .repository { color: hsl(var(--muted-foreground)); font-size: 0.8125rem; }
+  main { margin: 0 auto; max-width: 60rem; padding: 1.5rem; }
+  nav {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+    margin-bottom: 1rem;
+    overflow-wrap: anywhere;
+  }
+
+  nav .here { color: hsl(var(--foreground)); font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; }
+  th {
+    border-bottom: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    padding: 0 0.75rem 0.5rem 0;
+    text-align: left;
+    text-transform: uppercase;
+  }
+  th:last-child, td:last-child { text-align: right; padding-right: 0; }
+  td {
+    border-bottom: 1px solid hsl(var(--border) / 0.5);
+    padding: 0.4rem 0.75rem 0.4rem 0;
+  }
+  tbody tr:hover td { background: hsl(var(--panel)); }
+  td a {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow-wrap: anywhere;
+  }
+  td.size {
+    color: hsl(var(--muted-foreground));
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+  /*
+   * :link and :visited both, because the browser's own :visited rule outranks
+   * a bare selector and would otherwise repaint half the listing purple.
+   */
+  a:link, a:visited { color: hsl(var(--foreground)); text-decoration: none; }
+  a:hover { text-decoration: underline; text-decoration-color: hsl(var(--primary)); text-underline-offset: 3px; }
+  nav a:link, nav a:visited { color: hsl(var(--muted-foreground)); }
+  .empty { color: hsl(var(--muted-foreground)); padding: 2rem 0; }
+`;
+
 export function renderRepositoryDirectoryHtml(input: {
   repositoryName: string;
   listing: RepositoryDirectoryListing;
@@ -136,7 +234,8 @@ export function renderRepositoryDirectoryHtml(input: {
     const href = escapeHtml(relativeReference(encodeURIComponent(entry.name.replace(/\/$/, ""))
       + (entry.directory ? "/" : "")));
     const size = entry.directory ? "" : formatSize(entry.size);
-    return `      <tr><td><a href="${href}">${escapeHtml(entry.name)}</a></td><td>${size}</td></tr>`;
+    return `          <tr><td><a href="${href}">${escapeHtml(entry.name)}</a></td>`
+      + `<td class="size">${size}</td></tr>`;
   });
 
   return [
@@ -145,32 +244,58 @@ export function renderRepositoryDirectoryHtml(input: {
     "  <head>",
     "    <meta charset=\"utf-8\" />",
     "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
-    `    <title>Index of ${escapeHtml(path)}</title>`,
-    "    <style>",
-    "      body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 2rem; }",
-    "      h1 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }",
-    "      table { border-collapse: collapse; }",
-    "      td { padding: 0.15rem 1.5rem 0.15rem 0; }",
-    "      td:last-child { text-align: right; color: #666; }",
-    "      a { text-decoration: none; }",
-    "      a:hover { text-decoration: underline; }",
-    "      @media (prefers-color-scheme: dark) {",
-    "        body { background: #111; color: #ddd; }",
-    "        a { color: #7db3ff; }",
-    "        td:last-child { color: #999; }",
-    "      }",
-    "    </style>",
+    `    <title>${escapeHtml(path)} · Axis Repository</title>`,
+    `    <style>${DIRECTORY_STYLES}</style>`,
     "  </head>",
     "  <body>",
-    `    <h1>Index of ${escapeHtml(path)}</h1>`,
-    "    <table>",
-    ...(input.listing.relativePath === "" ? [] : ["      <tr><td><a href=\"../\">../</a></td><td></td></tr>"]),
-    ...rows,
-    "    </table>",
+    "    <header>",
+    "      <div class=\"wordmark\">Axis Repository</div>",
+    `      <div class="repository">${escapeHtml(input.repositoryName)}</div>`,
+    "    </header>",
+    "    <main>",
+    `      <nav aria-label="Breadcrumb">${renderBreadcrumb(input)}</nav>`,
+    ...(input.listing.entries.length === 0
+      ? ["      <p class=\"empty\">Nothing published here yet.</p>"]
+      : [
+        "      <table>",
+        "        <thead><tr><th>Name</th><th>Size</th></tr></thead>",
+        "        <tbody>",
+        ...(input.listing.relativePath === ""
+          ? []
+          : ["          <tr class=\"up\"><td><a href=\"../\">../</a></td><td class=\"size\"></td></tr>"]),
+        ...rows,
+        "        </tbody>",
+        "      </table>",
+      ]),
+    "    </main>",
     "  </body>",
     "</html>",
     "",
   ].join("\n");
+}
+
+/**
+ * The path as clickable ancestors.
+ *
+ * Each link is `../` repeated, which is relative and carries no segment of
+ * its own, so it survives the same prefixes and colons the entry links do.
+ */
+function renderBreadcrumb(input: {
+  repositoryName: string;
+  listing: RepositoryDirectoryListing;
+}): string {
+  const segments = input.listing.relativePath.split("/").filter((segment) => segment !== "");
+  const crumbs = segments.map((segment, index) => {
+    const up = segments.length - index - 1;
+    return up === 0
+      ? `<span class="here">${escapeHtml(segment)}/</span>`
+      : `<a href="${"../".repeat(up)}">${escapeHtml(segment)}</a>/`;
+  });
+
+  const root = segments.length === 0
+    ? `<span class="here">${escapeHtml(input.repositoryName)}/</span>`
+    : `<a href="${"../".repeat(segments.length)}">${escapeHtml(input.repositoryName)}</a>/`;
+  return [root, ...crumbs].join("");
 }
 
 function formatSize(size: number | undefined): string {

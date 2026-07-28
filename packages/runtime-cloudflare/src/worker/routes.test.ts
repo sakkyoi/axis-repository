@@ -5591,12 +5591,14 @@ describe("browsing a repository", () => {
     const at = "https://axis.example/repositories/debian-internal/dists/noble/";
 
     const body = await (await app.fetch(new Request(at))).text();
-    const hrefs = [...body.matchAll(/<a href="([^"]+)"/g)].map((match) => match[1]!);
+    // Entry links only; the breadcrumb and the parent row deliberately go up.
+    const hrefs = [...body.matchAll(/<tr(?! class="up")[^>]*><td><a href="([^"]+)"/g)]
+      .map((match) => match[1]!);
 
     expect(hrefs.map((href) => new URL(href, at).pathname))
       .toContain("/repositories/debian-internal/dists/noble/InRelease");
     for (const href of hrefs) {
-      expect(new URL(href, at).pathname.startsWith("/repositories/debian-internal/dists/")).toBe(true);
+      expect(new URL(href, at).href.startsWith(at)).toBe(true);
     }
   });
 

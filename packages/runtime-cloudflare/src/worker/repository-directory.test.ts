@@ -67,17 +67,38 @@ describe("renderRepositoryDirectoryHtml", () => {
     ],
   };
 
+  /**
+   * The links to entries, as opposed to the ones that deliberately go up: the
+   * breadcrumb's ancestors and the parent row.
+   */
+  function entryHrefs(html: string): string[] {
+    return [...html.matchAll(/<tr(?! class="up")[^>]*><td><a href="([^"]+)"/g)].map((match) => match[1]!);
+  }
+
   it("links so every entry resolves inside the directory", () => {
     // Including a name with a colon: a Debian filename carries one whenever
     // the version has an epoch.
     const at = "https://axis.example/repositories/a/pool/main/";
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
-    const hrefs = [...html.matchAll(/<a href="([^"]+)"/g)].map((match) => match[1]!);
+    const hrefs = entryHrefs(renderRepositoryDirectoryHtml({ repositoryName: "a", listing }));
 
     expect(hrefs.length).toBeGreaterThan(0);
     for (const href of hrefs) {
-      expect(resolved(href, at).startsWith("https://axis.example/repositories/a/pool/")).toBe(true);
+      expect(resolved(href, at).startsWith(at)).toBe(true);
     }
+  });
+
+  it("walks back up through the breadcrumb", () => {
+    const at = "https://axis.example/repositories/a/pool/main/";
+    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const nav = /<nav[^>]*>(.*?)<\/nav>/s.exec(html)?.[1] ?? "";
+    const crumbs = [...nav.matchAll(/<a href="([^"]+)">([^<]*)</g)]
+      .map((match) => ({ href: match[1]!, label: match[2]! }));
+
+    expect(crumbs.map((crumb) => crumb.label)).toEqual(["a", "pool"]);
+    expect(resolved(crumbs[0]!.href, at)).toBe("https://axis.example/repositories/a/");
+    expect(resolved(crumbs[1]!.href, at)).toBe("https://axis.example/repositories/a/pool/");
+    // The directory being shown is named but not linked.
+    expect(nav).toContain("main/");
   });
 
   it("resolves a colon-carrying entry to the object it names", () => {
