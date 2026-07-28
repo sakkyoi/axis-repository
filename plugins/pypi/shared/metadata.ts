@@ -52,13 +52,23 @@ export async function readSdistMetadata(stream: ByteStream): Promise<PypiCoreMet
     stream.pipeThrough(new DecompressionStream("gzip")) as ReadableStream<Uint8Array>,
   );
 
-  for await (const entry of entries) {
-    // Exactly one level down, so a PKG-INFO inside a vendored package or a
-    // test fixture cannot stand in for the distribution's own.
-    const segments = entry.header.name.replace(/^\.\//, "").split("/");
-    if (segments.length === 2 && segments[1] === "PKG-INFO") {
-      return parseCoreMetadata(new TextDecoder().decode(await entry.bytes()));
+  try {
+    for await (const entry of entries) {
+      // Exactly one level down, so a PKG-INFO inside a vendored package or a
+      // test fixture cannot stand in for the distribution's own.
+      const segments = entry.header.name.replace(/^\.\//, "").split("/");
+      if (segments.length === 2 && segments[1] === "PKG-INFO") {
+        return parseCoreMetadata(new TextDecoder().decode(await entry.bytes()));
+      }
     }
+  } catch (error) {
+    // A file that is not a gzipped tar at all fails inside the decompressor,
+    // which raises whatever its runtime raises. That is a bad upload, not a
+    // fault in the repository, and has to be answered as one.
+    if (error instanceof PypiFormatError) {
+      throw error;
+    }
+    throw new PypiFormatError("source distribution could not be read as a gzipped tar archive");
   }
 
   throw new PypiFormatError("source distribution does not contain a PKG-INFO file");

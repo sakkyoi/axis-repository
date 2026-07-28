@@ -109,9 +109,25 @@ export interface RepositoryPublishLifecycle {
   describeArtifacts?(input: DescribePublishedArtifactsInput): RepositoryArtifactRecord[];
 }
 
+/**
+ * Where a protocol hands the bytes it is receiving.
+ *
+ * The plugin never holds them: it passes the stream straight through, and
+ * gets back the size and digest of what was stored, which is what the publish
+ * session needs to be told. A package of several gigabytes therefore costs
+ * the same memory as a small one.
+ */
+export interface ProtocolUploadSink {
+  store(input: {
+    content: AsyncIterable<Uint8Array>;
+    contentType: string;
+  }): Promise<{ key: string; size: number; sha256: string }>;
+}
+
 export interface ParsedProtocolUpload {
   artifact: PublishArtifactRequest;
-  body: Uint8Array;
+  /** The object the sink wrote, for the session to adopt. */
+  storedKey: string;
 }
 
 /**
@@ -126,7 +142,7 @@ export interface ParsedProtocolUpload {
 export interface RepositoryUploadProtocol {
   /** The path under the repository this protocol answers POSTs on. */
   path: string;
-  parseUpload(request: Request): Promise<ParsedProtocolUpload[]>;
+  parseUpload(request: Request, sink: ProtocolUploadSink): Promise<ParsedProtocolUpload[]>;
   /** How this protocol reports success; a bare 200 by default. */
   successResponse?(): Response;
 }

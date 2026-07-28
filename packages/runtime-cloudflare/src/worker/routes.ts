@@ -26,6 +26,8 @@ import {
   repositoryPluginPolicyFields,
 } from "../plugins/repository-plugin-policy";
 import { dispatchRepositoryAdminResource } from "../plugins/repository-plugin-admin-resources";
+import type { ProtocolUploadSink } from "../plugins/repository-plugin-contract";
+import { createIncrementalDigest } from "../storage/digest";
 import { scopeSecretsToEcosystem } from "../plugins/scoped-capabilities";
 import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
 import { adminRefreshCookie, clearAdminRefreshCookie, refreshTokenFromCookie, requestIsSecure } from "../auth/admin-auth";
@@ -51,6 +53,7 @@ export function jsonResponse(value: unknown, init?: ResponseInit): Response {
 }
 
 export function errorResponse(error: unknown): Response {
+
   if (error instanceof AxisError) {
     return jsonResponse({ error: { code: error.code, message: error.message } }, { status: error.status });
   }
@@ -754,42 +757,78 @@ async function handleProtocolUpload(
 
   await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
   const principal = await dependencies.publishTokenService.verify(requireBasicAuthSecret(request));
-  const uploads = await protocol.parseUpload(request);
+  const uploads = await protocol.parseUpload(request, protocolUploadSink(dependencies, repository.name));
   if (uploads.length === 0) {
     throw new ValidationError("Upload does not carry an artifact");
   }
 
-  const localUploadBroker = dependencies.localUploadBroker;
-  if (!localUploadBroker) {
-    throw new NotFoundError();
-  }
-
-  const session = await dependencies.publishSessionService.create({
-    repositoryName: repository.name,
-    ecosystem: repository.ecosystem,
-    principal,
-    artifacts: uploads.map((upload) => upload.artifact),
-  });
-
-  for (const [index, upload] of uploads.entries()) {
-    const target = session.uploads[index];
-    if (!target) {
-      throw new ValidationError("Upload was not paired with a staging target");
-    }
-    await localUploadBroker.putUpload({
-      target,
-      body: upload.body,
-      contentType: upload.artifact.contentType,
-    });
-    await dependencies.publishSessionService.verifyUpload({
-      sessionId: session.id,
-      uploadId: target.uploadId,
+  try {
+    const session = await dependencies.publishSessionService.create({
+      repositoryName: repository.name,
+      ecosystem: repository.ecosystem,
       principal,
+      artifacts: uploads.map((upload) => upload.artifact),
     });
+
+    for (const [index, upload] of uploads.entries()) {
+      const target = session.uploads[index];
+      if (!target) {
+        throw new ValidationError("Upload was not paired with a staging target");
+      }
+      // The bytes are already stored; the session adopts them where it expects
+      // to find them rather than being handed them again.
+      await dependencies.repositoryObjectStore.copyObject(
+        upload.storedKey,
+        target.objectKey,
+        upload.artifact.contentType,
+      );
+      await dependencies.publishSessionService.verifyUpload({
+        sessionId: session.id,
+        uploadId: target.uploadId,
+        principal,
+      });
+    }
+
+    await dependencies.publishSessionService.finalize({ sessionId: session.id, principal });
+  } finally {
+    // The staged copy has served its purpose whether or not the publish did.
+    for (const upload of uploads) {
+      await dependencies.repositoryObjectStore.deleteObject(upload.storedKey).catch(() => undefined);
+    }
   }
 
-  await dependencies.publishSessionService.finalize({ sessionId: session.id, principal });
   return protocol.successResponse?.() ?? new Response(null, { status: 200 });
+}
+
+/**
+ * Stores an arriving upload before anything knows how big it is.
+ *
+ * The publish session has to be told a size and a digest up front, and both
+ * are only known once the bytes have gone past — so they go to storage first,
+ * counted and hashed on the way, and the session adopts the result.
+ */
+function protocolUploadSink(
+  dependencies: AppDependencies,
+  repositoryName: string,
+): ProtocolUploadSink {
+  return {
+    async store({ content, contentType }) {
+      const key = `_staging/protocol/${repositoryName}/${crypto.randomUUID()}`;
+      const writer = await dependencies.repositoryObjectStore.createPartWriter(key, contentType);
+      const digest = await createIncrementalDigest("SHA-256");
+      try {
+        for await (const chunk of content) {
+          await writer.write(chunk);
+          await digest.update(chunk);
+        }
+        const { size } = await writer.complete();
+        return { key, size, sha256: await digest.hex() };
+      } catch (error) {
+        await writer.abort().catch(() => undefined);
+        throw error;
+      }
+    },
+  };
 }
 
 /**

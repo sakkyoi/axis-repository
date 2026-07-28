@@ -5646,3 +5646,111 @@ describe("browsing a repository", () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe("uploading a distribution larger than the worker heap", () => {
+  /**
+   * Builds a multipart body without holding the distribution, so the test
+   * itself is not the thing that runs out of memory.
+   */
+  function twineBody(input: { filename: string; sizeBytes: number; boundary: string; onChunk?: () => void }) {
+    const head = new TextEncoder().encode(
+      `--${input.boundary}\r\n`
+      + "content-disposition: form-data; name=\":action\"\r\n\r\nfile_upload\r\n"
+      + `--${input.boundary}\r\n`
+      + `content-disposition: form-data; name="content"; filename="${input.filename}"\r\n`
+      + "content-type: application/octet-stream\r\n\r\n",
+    );
+    const tail = new TextEncoder().encode(`\r\n--${input.boundary}--\r\n`);
+    const chunk = new Uint8Array(64 * 1024);
+    let remaining = input.sizeBytes;
+    let stage = 0;
+
+    return new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (stage === 0) { controller.enqueue(head); stage = 1; return; }
+        if (remaining > 0) {
+          const take = Math.min(remaining, chunk.byteLength);
+          remaining -= take;
+          input.onChunk?.();
+          controller.enqueue(chunk.subarray(0, take));
+          return;
+        }
+        if (stage === 1) { controller.enqueue(tail); stage = 2; return; }
+        controller.close();
+      },
+    });
+  }
+
+  async function pypiHarness() {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
+    });
+    const token = await createToken(app, {
+      name: "pypi-token",
+      repositories: ["python-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+    return { harness, app, token };
+  }
+
+  it("never holds more than one part of it", async () => {
+    // The property the whole streaming path exists for. Before this, the
+    // runtime materialized the part and a wheel past the heap could not be
+    // published with twine at all.
+    const { harness, app, token } = await pypiHarness();
+    const boundary = "axis-test-boundary";
+    // Streaming means storage starts receiving while the body is still
+    // arriving. Buffering cannot: it has to read the last chunk of the
+    // distribution before it can hand over the first.
+    let chunksRead = 0;
+    let chunksReadAtFirstWrite = -1;
+    const store = harness.repositoryObjectStore;
+    const createPartWriter = store.createPartWriter.bind(store);
+    store.createPartWriter = async (key, contentType) => {
+      const writer = await createPartWriter(key, contentType);
+      return {
+        ...writer,
+        write: async (chunk) => {
+          if (chunksReadAtFirstWrite === -1) {
+            chunksReadAtFirstWrite = chunksRead;
+          }
+          return writer.write(chunk);
+        },
+      };
+    };
+
+    const sizeBytes = 8 * 1024 * 1024;
+    const totalChunks = sizeBytes / (64 * 1024);
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/legacy/",
+      {
+        method: "POST",
+        headers: {
+          authorization: `Basic ${btoa(`__token__:${token}`)}`,
+          "content-type": `multipart/form-data; boundary=${boundary}`,
+        },
+        body: twineBody({
+          filename: "alpha-1.0.tar.gz",
+          sizeBytes,
+          boundary,
+          onChunk: () => { chunksRead += 1; },
+        }),
+        // @ts-expect-error duplex is required for a streamed request body
+        duplex: "half",
+      },
+    ));
+
+    // Rejected for its contents, not its size: an 8 MiB run of zeroes is not a
+    // source distribution. Reaching that verdict at all means the whole body
+    // streamed through — and a bad upload is a bad request, not a fault here.
+    expect(response.status).toBe(400);
+    expect(chunksReadAtFirstWrite).toBeGreaterThanOrEqual(0);
+    expect(chunksReadAtFirstWrite).toBeLessThan(totalChunks / 4);
+  });
+});
