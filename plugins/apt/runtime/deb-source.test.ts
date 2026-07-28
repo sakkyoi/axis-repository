@@ -8,7 +8,7 @@ import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare
 import { readDebFilePaths } from "../shared/deb-files";
 import { readDebControlMetadata } from "../shared/deb-control";
 import { decompressDebArchiveMember, findDebArchiveMember } from "../shared/deb-archive";
-import { readTarEntries } from "../shared/tar";
+import { readTarEntries } from "@axis-repository/core/archives";
 import { openUploadedDebArchive } from "./deb-source";
 import { debArchive, oversizedDebArchiveSource } from "./deb-fixtures.test-support";
 

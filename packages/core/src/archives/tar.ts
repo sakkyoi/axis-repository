@@ -1,4 +1,10 @@
-import { DebControlParseError } from "./stanza";
+/** Raised when an archive cannot be read as the format it claims to be. */
+export class ArchiveParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ArchiveParseError";
+  }
+}
 
 const textDecoder = new TextDecoder();
 const TAR_BLOCK_SIZE = 512;
@@ -67,7 +73,7 @@ export async function* readTarEntries(
 async function readPayload(reader: TarByteReader, size: number): Promise<Uint8Array> {
   const bytes = await reader.read(size);
   if (!bytes) {
-    throw new DebControlParseError("Debian archive tar is truncated");
+    throw new ArchiveParseError("tar archive is truncated");
   }
   return bytes;
 }
@@ -105,7 +111,7 @@ function arrayBufferFromBytes(bytes: Uint8Array): ArrayBuffer {
 function parseTarHeader(block: Uint8Array): TarEntryHeader {
   const size = Number.parseInt(readNullTerminatedText(block.slice(124, 136)).trim() || "0", 8);
   if (!Number.isFinite(size) || size < 0) {
-    throw new DebControlParseError("Debian archive tar header is invalid");
+    throw new ArchiveParseError("tar header is invalid");
   }
 
   const prefix = readNullTerminatedText(block.slice(345, 500));

@@ -8,6 +8,8 @@ import {
   type RepositoryObjectStore,
 } from "@axis-repository/core";
 import { packageObjectKey } from "./layout";
+import { readDistributionMetadata } from "./distribution-source";
+import { requireMetadataMatchesFilename } from "./metadata";
 import { requireDistributionFilename } from "./names";
 
 const DEFAULT_CONTENT_TYPE = "application/octet-stream";
@@ -35,14 +37,24 @@ export class PypiPublisher implements ArtifactPublisher {
       ?? input.session.finalizingStartedAt
       ?? (this.options.now ?? (() => new Date()))().toISOString();
 
-    const copies = input.artifacts.map(({ artifact, verified }) => {
+    // Each file is read where it lies, so its own record of what it is can be
+    // checked against the name it was uploaded under. A wheel called
+    // django-5.0-...whl that contains something else would otherwise be
+    // offered to everyone who asks pip for Django.
+    const copies = await Promise.all(input.artifacts.map(async ({ artifact, verified }) => {
       const distribution = requireDistributionFilename(artifact.filename);
+      const metadata = await readDistributionMetadata({
+        objectStore,
+        key: verified.objectKey,
+        distribution,
+      });
+      requireMetadataMatchesFilename(metadata, distribution);
       return {
         sourceKey: verified.objectKey,
         destinationKey: packageObjectKey(input.repository.name, distribution, artifact.filename),
         contentType: artifact.contentType || DEFAULT_CONTENT_TYPE,
       };
-    });
+    }));
 
     // Two files in one session cannot claim the same path: the second copy
     // would silently replace the first and the session would report both as

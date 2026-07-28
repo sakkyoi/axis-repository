@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { PublishArtifactsInput, Repository } from "@axis-repository/core";
 import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
 import { createPypiPlugin } from "./runtime";
+import { sdistBytes, wheelBytes } from "./dist-fixtures.test-support";
+import { requireDistributionFilename } from "./names";
 
 const NOW = new Date("2026-07-18T00:00:00.000Z");
 
@@ -74,6 +76,13 @@ function publishInput(sessionId: string, filenames: string[]): PublishArtifactsI
   };
 }
 
+/** Builds the distribution a filename claims to be, so publishing accepts it. */
+function distributionBytes(filename: string): Uint8Array {
+  const distribution = requireDistributionFilename(filename);
+  const fixture = { name: distribution.rawName, version: distribution.version };
+  return distribution.kind === "wheel" ? wheelBytes(fixture) : sdistBytes(fixture);
+}
+
 async function harness() {
   const objectStore = new MemoryRepositoryObjectStore();
   const plugin = createPypiPlugin({ objectStoreFor: () => objectStore });
@@ -85,7 +94,7 @@ async function harness() {
       for (const [index, filename] of filenames.entries()) {
         await objectStore.putBytes(
           `_staging/uploads/${sessionId}/upl_${index + 1}/${filename}`,
-          new TextEncoder().encode(`contents of ${filename}`),
+          distributionBytes(filename),
           "application/octet-stream",
         );
       }
@@ -164,6 +173,35 @@ describe("publishing to a PyPI repository", () => {
 
     await expect(pypi.publish("pub_1", ["alpha-1.0.tar.gz", "alpha-1.0.tar.gz"]))
       .rejects.toThrow(/same distribution twice/);
+  });
+
+  it("refuses a file whose contents are a different project than its name", async () => {
+    // The filename is what puts a file on a project page. A wheel named after
+    // Django, containing something else, would be handed to everyone who asks
+    // pip for Django — so the package's own record of itself has to agree.
+    const objectStore = new MemoryRepositoryObjectStore();
+    const plugin = createPypiPlugin({ objectStoreFor: () => objectStore });
+    await objectStore.putBytes(
+      "_staging/uploads/pub_1/upl_1/django-5.0.tar.gz",
+      sdistBytes({ name: "django", version: "5.0", metadata: "Name: impostor\nVersion: 5.0\n" }),
+      "application/octet-stream",
+    );
+
+    await expect(plugin.publish.finalize(publishInput("pub_1", ["django-5.0.tar.gz"])))
+      .rejects.toThrow(/says django but its metadata says impostor/);
+  });
+
+  it("refuses a file whose contents are a different version than its name", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    const plugin = createPypiPlugin({ objectStoreFor: () => objectStore });
+    await objectStore.putBytes(
+      "_staging/uploads/pub_1/upl_1/thing-1.0-py3-none-any.whl",
+      wheelBytes({ name: "thing", version: "1.0", metadata: "Name: thing\nVersion: 9.9\n" }),
+      "application/octet-stream",
+    );
+
+    await expect(plugin.publish.finalize(publishInput("pub_1", ["thing-1.0-py3-none-any.whl"])))
+      .rejects.toThrow(/version 1.0 but its metadata says 9.9/);
   });
 
   it("rebuilds the index from the stored files rather than any bookkeeping", async () => {

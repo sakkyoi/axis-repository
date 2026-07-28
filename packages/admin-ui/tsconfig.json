@@ -14,6 +14,7 @@
     "vite.config.ts",
     "../../scripts/workspace-aliases.ts",
     "../core/src/plugins/plugin-manifests.ts",
+    "../core/src/archives",
     "../../plugins/catalog.ts",
     "../../plugins/bundled.ts",
     "../../plugins/*/plugin.ts",

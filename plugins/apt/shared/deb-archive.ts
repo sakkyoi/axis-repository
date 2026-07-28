@@ -1,7 +1,7 @@
 import { Decompress as ZstdDecompress } from "fzstd";
 import { XzReadableStream } from "xz-decompress";
 import { DebControlParseError } from "./stanza";
-import { streamFromBytes, type ByteChunk, type ByteStream } from "./tar";
+import { streamFromBytes, type ByteChunk, type ByteStream } from "@axis-repository/core/archives";
 
 const textDecoder = new TextDecoder();
 const arGlobalHeader = "!<arch>\n";

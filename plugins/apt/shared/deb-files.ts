@@ -4,7 +4,7 @@ import {
   findDebArchiveMember,
   type DebArchiveSource,
 } from "./deb-archive";
-import { normalizeTarPath, readTarEntries, tarEntryIsFile } from "./tar";
+import { normalizeTarPath, readTarEntries, tarEntryIsFile } from "@axis-repository/core/archives";
 
 /**
  * Lists the files a package installs, as `Contents-<arch>` records them.

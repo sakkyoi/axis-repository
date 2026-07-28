@@ -8,6 +8,7 @@
     "paths": {
       "@axis-repository/core": ["packages/core/src/index.ts"],
       "@axis-repository/plugin-catalog": ["plugins/catalog.ts"],
+      "@axis-repository/core/archives": ["packages/core/src/archives/index.ts"],
       "@axis-repository/core/plugin-manifests": ["packages/core/src/plugins/plugin-manifests.ts"],
       "@axis-repository/core/test-support": ["packages/core/src/state/state-store-contract.test-support.ts"],
       "@axis-repository/plugin-apt": ["plugins/apt/plugin.ts"],

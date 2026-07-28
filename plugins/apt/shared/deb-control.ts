@@ -5,7 +5,7 @@ import {
   type DebArchiveSource,
 } from "./deb-archive";
 import { DebControlParseError, foldStanzaValue, parseStanza } from "./stanza";
-import { readTarEntries } from "./tar";
+import { readTarEntries } from "@axis-repository/core/archives";
 
 export type DebControlMetadata = Record<string, string>;
 

@@ -1,7 +1,7 @@
 import { ValidationError, type RepositoryObjectStore } from "@axis-repository/core";
 import { objectBytes, objectStream } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import type { DebArchiveSource } from "../shared/deb-archive";
-import type { ByteChunk } from "../shared/tar";
+import type { ByteChunk } from "@axis-repository/core/archives";
 
 /**
  * Opens an uploaded `.deb` for reading in place.

@@ -6,7 +6,7 @@ import type {
 } from "@axis-repository/core";
 import { listAllObjects, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { parseStanzas, type DebianStanza } from "../shared/stanza";
-import { streamFromBytes } from "../shared/tar";
+import { streamFromBytes } from "@axis-repository/core/archives";
 import { parseContentsIndex, type AptContentsIndexes } from "./contents";
 import type { AptIndexFile } from "./index-files";
 import type { AptIndexMetadata } from "./metadata";
