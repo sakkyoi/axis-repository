@@ -776,6 +776,14 @@ describe("Cloudflare runtime routes", () => {
                 public: true,
                 displayPath: "simpleUrl",
               },
+              {
+                name: "twine-config",
+                label: "twine upload",
+                responseKind: "text",
+                defaultOpen: false,
+                public: false,
+                displayPath: "pypirc",
+              },
             ],
           },
         },
@@ -5290,5 +5298,156 @@ describe("concurrent publishes to one PyPI repository", () => {
     );
     expect(page).toContain("alpha-1.0.tar.gz");
     expect(page).toContain("alpha-2.0.tar.gz");
+  });
+});
+
+describe("publishing a PyPI package the way twine does", () => {
+  async function pypiUploadHarness() {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
+    });
+    const token = await createToken(app, {
+      name: "pypi-token",
+      repositories: ["python-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+    return { harness, app, token };
+  }
+
+  /** The form twine posts: the distribution plus the fields describing it. */
+  async function uploadForm(input: {
+    filename: string;
+    bytes: Uint8Array;
+    declaredSha256?: string;
+  }): Promise<FormData> {
+    const form = new FormData();
+    form.set(":action", "file_upload");
+    form.set("protocol_version", "1");
+    form.set("name", "alpha");
+    form.set("version", "1.0");
+    form.set("filetype", "sdist");
+    form.set("metadata_version", "2.1");
+    form.set("sha256_digest", input.declaredSha256 ?? await sha256Hex(input.bytes));
+    form.set("content", new File([input.bytes], input.filename, { type: "application/octet-stream" }));
+    return form;
+  }
+
+  function basic(token: string): string {
+    return `Basic ${btoa(`__token__:${token}`)}`;
+  }
+
+  it("publishes a distribution from one request", async () => {
+    const { harness, app, token } = await pypiUploadHarness();
+    const bytes = sdistBytes({ name: "alpha", version: "1.0" });
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/legacy/",
+      {
+        method: "POST",
+        headers: { authorization: basic(token) },
+        body: await uploadForm({ filename: "alpha-1.0.tar.gz", bytes }),
+      },
+    ));
+
+    expect(response.status).toBe(200);
+    await expect(harness.repositoryObjectStore.headObject(
+      "repositories/python-internal/packages/alpha/alpha-1.0.tar.gz",
+    )).resolves.not.toBeNull();
+    expect(readStoredText(
+      harness.repositoryObjectStore,
+      "repositories/python-internal/simple/alpha/index.html",
+    )).toContain("alpha-1.0.tar.gz");
+  });
+
+  it("refuses an upload with no credentials", async () => {
+    const { app } = await pypiUploadHarness();
+    const bytes = sdistBytes({ name: "alpha", version: "1.0" });
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/legacy/",
+      { method: "POST", body: await uploadForm({ filename: "alpha-1.0.tar.gz", bytes }) },
+    ));
+
+    expect(response.status).toBe(401);
+  });
+
+  it("refuses a token that cannot publish to this repository", async () => {
+    const { app } = await pypiUploadHarness();
+    const other = await createToken(app, {
+      name: "elsewhere",
+      repositories: ["somewhere-else"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+    const bytes = sdistBytes({ name: "alpha", version: "1.0" });
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/legacy/",
+      {
+        method: "POST",
+        headers: { authorization: basic(other) },
+        body: await uploadForm({ filename: "alpha-1.0.tar.gz", bytes }),
+      },
+    ));
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+  });
+
+  it("refuses an upload whose bytes do not match the digest it declared", async () => {
+    // twine hashes before sending, so a mismatch means the bytes changed on
+    // the way and must not be stored.
+    const { app, token } = await pypiUploadHarness();
+    const bytes = sdistBytes({ name: "alpha", version: "1.0" });
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/legacy/",
+      {
+        method: "POST",
+        headers: { authorization: basic(token) },
+        body: await uploadForm({
+          filename: "alpha-1.0.tar.gz",
+          bytes,
+          declaredSha256: "b".repeat(64),
+        }),
+      },
+    ));
+
+    expect(response.status).toBe(400);
+    await expect(response.text()).resolves.toContain("sha256");
+  });
+
+  it("refuses a file that is not a distribution", async () => {
+    const { app, token } = await pypiUploadHarness();
+
+    const form = new FormData();
+    form.set(":action", "file_upload");
+    form.set("content", new File([new TextEncoder().encode("nope")], "notes.txt"));
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/legacy/",
+      { method: "POST", headers: { authorization: basic(token) }, body: form },
+    ));
+
+    expect(response.status).toBe(400);
+  });
+
+  it("leaves the endpoint absent for ecosystems with no upload protocol", async () => {
+    // apt has no such client, so nothing should answer there.
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, { name: "debian-internal", ecosystem: "apt", visibility: "private" });
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/debian-internal/legacy/",
+      { method: "POST", body: new FormData() },
+    ));
+
+    expect(response.status).toBe(404);
   });
 });

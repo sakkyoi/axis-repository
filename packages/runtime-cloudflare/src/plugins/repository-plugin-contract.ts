@@ -109,6 +109,28 @@ export interface RepositoryPublishLifecycle {
   describeArtifacts?(input: DescribePublishedArtifactsInput): RepositoryArtifactRecord[];
 }
 
+export interface ParsedProtocolUpload {
+  artifact: PublishArtifactRequest;
+  body: Uint8Array;
+}
+
+/**
+ * An ecosystem's own upload protocol, for clients that do not speak this
+ * repository's publish-session API.
+ *
+ * `twine` posts a package in one request, where a session is created,
+ * uploaded to, verified and finalized in four. The plugin knows that wire
+ * format; the session lifecycle it maps onto is the same for everyone, so it
+ * stays in the worker.
+ */
+export interface RepositoryUploadProtocol {
+  /** The path under the repository this protocol answers POSTs on. */
+  path: string;
+  parseUpload(request: Request): Promise<ParsedProtocolUpload[]>;
+  /** How this protocol reports success; a bare 200 by default. */
+  successResponse?(): Response;
+}
+
 export interface RebuildRepositoryArtifactIndexInput {
   repository: Repository;
   objectStore: RepositoryObjectStore;
@@ -168,6 +190,8 @@ export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   canServeRepositoryPath: RepositoryPathServingRule;
   /** Defaults to serving the requested path as the object key. */
   resolveRepositoryPath?: RepositoryPathResolver;
+  /** An ecosystem-native upload protocol, for clients like `twine`. */
+  uploadProtocol?: RepositoryUploadProtocol;
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;

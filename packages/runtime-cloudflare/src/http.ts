@@ -1,4 +1,10 @@
-import { ValidationError, parseBearerToken, type AdminAuthService, type AdminPrincipal } from "@axis-repository/core";
+import {
+  UnauthorizedError,
+  ValidationError,
+  parseBearerToken,
+  type AdminAuthService,
+  type AdminPrincipal,
+} from "@axis-repository/core";
 
 export async function readJsonObject(request: Request): Promise<Record<string, unknown>> {
   let value: unknown;
@@ -15,6 +21,34 @@ export async function readJsonObject(request: Request): Promise<Record<string, u
 
 export function requireBearer(request: Request): string {
   return parseBearerToken(request.headers.get("authorization"));
+}
+
+/**
+ * Reads a publish token out of HTTP Basic credentials.
+ *
+ * Ecosystem upload clients authenticate this way — `twine` sends `__token__`
+ * as the username and the token as the password. The username is not checked,
+ * so a token pasted under any name works, matching what those clients do.
+ */
+export function requireBasicAuthSecret(request: Request): string {
+  const header = request.headers.get("authorization") ?? "";
+  const encoded = /^Basic\s+(\S+)$/i.exec(header)?.[1];
+  if (!encoded) {
+    throw new UnauthorizedError();
+  }
+
+  let decoded: string;
+  try {
+    decoded = atob(encoded);
+  } catch {
+    throw new UnauthorizedError();
+  }
+
+  const secret = decoded.slice(decoded.indexOf(":") + 1);
+  if (!decoded.includes(":") || !secret) {
+    throw new UnauthorizedError();
+  }
+  return secret;
 }
 
 export function requireAdmin(request: Request, adminAuthService: AdminAuthService): Promise<AdminPrincipal> {

@@ -88,6 +88,13 @@ describe("PyPI plugin lifecycle", () => {
         displayPath: "simpleUrl",
         handle: expect.any(Function),
       }),
+      expect.objectContaining({
+        name: "twine-config",
+        label: "twine upload",
+        public: false,
+        displayPath: "pypirc",
+        handle: expect.any(Function),
+      }),
     ]);
     expect(plugin.clientHelpers?.actions.find((action) => action.name === "simple-url")?.public).toBe(true);
     const response = await dispatchRepositoryClientHelper(plugin.clientHelpers!, {

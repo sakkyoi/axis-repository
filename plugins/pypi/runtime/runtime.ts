@@ -13,6 +13,7 @@ import { validatePypiRepositoryConfig } from "./config";
 import { SERVED_PREFIXES, packageRelativePath, parsePackageRelativePath, resolveSimplePath } from "./layout";
 import { parseDistributionFilename, requireDistributionFilename } from "./names";
 import { PypiPublisher } from "./publisher";
+import { createPypiUploadProtocol } from "./upload-protocol";
 
 export function createPypiPlugin(input?: {
   objectStoreFor?: (repositoryName: string) => RepositoryObjectStore;
@@ -32,6 +33,7 @@ export function createPypiPlugin(input?: {
     version: pypiPluginManifest.version,
     capabilities: [...pypiPluginManifest.capabilities],
     canServeRepositoryPath: createPrefixServingPredicate(SERVED_PREFIXES),
+    uploadProtocol: createPypiUploadProtocol(),
     resolveRepositoryPath: ({ relativePath }) => resolveSimplePath(relativePath),
     validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
     publish: {

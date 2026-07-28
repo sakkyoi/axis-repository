@@ -20,7 +20,7 @@ import {
 import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "@axis-repository/plugin-catalog";
 import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "../admin-ui-assets";
 import type { AppDependencies } from "./dev-dependencies";
-import { isStringArray, optionalObjectField, readJsonObject, requireAdmin, requireBearer, stringArrayField, stringField } from "../http";
+import { isStringArray, optionalObjectField, readJsonObject, requireAdmin, requireBasicAuthSecret, requireBearer, stringArrayField, stringField } from "../http";
 import {
   ensureRepositoryPluginEnabled as ensureEffectiveRepositoryPluginEnabled,
   repositoryPluginPolicyFields,
@@ -709,6 +709,71 @@ async function resolveServedRepositoryPath(
   const resolved = plugin.resolveRepositoryPath?.(context)
     ?? { objectPath: context.relativePath };
   return { ...resolved, objectPath: requireSafeRelativePath(resolved.objectPath) };
+}
+
+/**
+ * Publishes through an ecosystem's own upload protocol.
+ *
+ * `twine` sends one request where the publish-session API takes four, so this
+ * runs the same four steps on the caller's behalf: the session is created,
+ * written to, verified and finalized exactly as any other client's would be,
+ * and so gets the same validation, the same write lock and the same indexes.
+ *
+ * Returns null when the path is not this repository's protocol endpoint, so
+ * the caller can go on matching other routes.
+ */
+async function handleProtocolUpload(
+  dependencies: AppDependencies,
+  request: Request,
+  path: { repositoryName: string; relativePath: string },
+): Promise<Response | null> {
+  const repository = await dependencies.repositoryService.getByName(path.repositoryName).catch(() => null);
+  if (!repository) {
+    return null;
+  }
+  const protocol = dependencies.repositoryRuntimePlugins.getPlugin(repository.ecosystem)?.uploadProtocol;
+  if (!protocol || path.relativePath.replace(/\/+$/, "") !== protocol.path) {
+    return null;
+  }
+
+  await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
+  const principal = await dependencies.publishTokenService.verify(requireBasicAuthSecret(request));
+  const uploads = await protocol.parseUpload(request);
+  if (uploads.length === 0) {
+    throw new ValidationError("Upload does not carry an artifact");
+  }
+
+  const localUploadBroker = dependencies.localUploadBroker;
+  if (!localUploadBroker) {
+    throw new NotFoundError();
+  }
+
+  const session = await dependencies.publishSessionService.create({
+    repositoryName: repository.name,
+    ecosystem: repository.ecosystem,
+    principal,
+    artifacts: uploads.map((upload) => upload.artifact),
+  });
+
+  for (const [index, upload] of uploads.entries()) {
+    const target = session.uploads[index];
+    if (!target) {
+      throw new ValidationError("Upload was not paired with a staging target");
+    }
+    await localUploadBroker.putUpload({
+      target,
+      body: upload.body,
+      contentType: upload.artifact.contentType,
+    });
+    await dependencies.publishSessionService.verifyUpload({
+      sessionId: session.id,
+      uploadId: target.uploadId,
+      principal,
+    });
+  }
+
+  await dependencies.publishSessionService.finalize({ sessionId: session.id, principal });
+  return protocol.successResponse?.() ?? new Response(null, { status: 200 });
 }
 
 function requireSafeRelativePath(objectPath: string): string {
@@ -1599,6 +1664,13 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         action: clientHelperPath.action,
         origin: publicArtifactOrigin(url, dependencies),
       });
+    }
+  }
+  const uploadProtocolPath = servesArtifacts ? parseRepositoryObjectPath(request.url) : null;
+  if (uploadProtocolPath && request.method === "POST") {
+    const response = await handleProtocolUpload(dependencies, request, uploadProtocolPath);
+    if (response) {
+      return response;
     }
   }
   const repositoryObjectPath = servesArtifacts ? parseRepositoryObjectPath(request.url) : null;

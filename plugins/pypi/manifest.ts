@@ -22,6 +22,16 @@ export const pypiPluginManifest = {
         public: true,
         displayPath: "simpleUrl",
       },
+      {
+        name: "twine-config",
+        label: "twine upload",
+        responseKind: "text",
+        defaultOpen: false,
+        // Not public: a public action bypasses repository read authorization,
+        // and only someone who can publish has any use for this.
+        public: false,
+        displayPath: "pypirc",
+      },
     ],
   },
 } satisfies RepositoryPluginManifest;

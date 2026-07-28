@@ -22,6 +22,10 @@ function pypiClientHelperAction(name: string) {
   return { ...action };
 }
 
+function uploadUrl(origin: string, repository: Repository): string {
+  return `${origin.replace(/\/+$/g, "")}/repositories/${repository.name}/legacy/`;
+}
+
 export function createPypiClientHelpers(): RepositoryClientHelpers {
   return {
     namespace: pypiPluginManifest.clientHelpers.namespace,
@@ -35,6 +39,29 @@ export function createPypiClientHelpers(): RepositoryClientHelpers {
             ecosystem: "pypi",
             simpleUrl: url,
             pipIndexUrl: url,
+          });
+        },
+      },
+      {
+        ...pypiClientHelperAction("twine-config"),
+        handle: async ({ repository, origin }) => {
+          const url = uploadUrl(origin, repository);
+          return jsonResponse({
+            repository: repository.name,
+            ecosystem: "pypi",
+            uploadUrl: url,
+            // twine reads ~/.pypirc; the token goes in as the password, which
+            // is why the username is the literal __token__.
+            pypirc: [
+              "[distutils]",
+              `index-servers = ${repository.name}`,
+              "",
+              `[${repository.name}]`,
+              `repository = ${url}`,
+              "username = __token__",
+              "password = <PUBLISH_TOKEN>",
+              "",
+            ].join("\n"),
           });
         },
       },
