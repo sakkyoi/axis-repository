@@ -29,6 +29,7 @@ import { dispatchRepositoryAdminResource } from "../plugins/repository-plugin-ad
 import { scopeSecretsToEcosystem } from "../plugins/scoped-capabilities";
 import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
 import { adminRefreshCookie, clearAdminRefreshCookie, refreshTokenFromCookie, requestIsSecure } from "../auth/admin-auth";
+import { readRepositoryDirectory, renderRepositoryDirectoryHtml } from "./repository-directory";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;
@@ -476,21 +477,23 @@ function parseRepositoryObjectPath(requestUrl: string): { repositoryName: string
   }
   const rawRest = rawPath.slice(prefix.length);
   const rawSegments = rawRest.split("/");
-  if (rawSegments.length < 2) {
-    return null;
-  }
   // A single trailing slash is kept rather than rejected: a format that serves
   // directory indexes distinguishes `simple/` from `simple`. Any other empty
   // segment is still refused, so `a//b` stays out.
-  const trailingSlash = rawSegments[rawSegments.length - 1] === "";
+  const trailingSlash = rawSegments.length > 1 && rawSegments[rawSegments.length - 1] === "";
   const namedSegments = trailingSlash ? rawSegments.slice(0, -1) : rawSegments;
-  if (namedSegments.length < 2) {
+  if (namedSegments.length === 0) {
     return null;
   }
   const decodedSegments = namedSegments.map(requireSafePathSegment);
   const [repositoryName, ...relativeSegments] = decodedSegments;
-  if (!repositoryName || relativeSegments.length === 0) {
+  if (!repositoryName) {
     return null;
+  }
+  // The repository root is a path in its own right: it is what a browser is
+  // pointed at, and it lists the trees the repository publishes.
+  if (relativeSegments.length === 0) {
+    return { repositoryName, relativePath: "" };
   }
   return {
     repositoryName,
@@ -702,13 +705,21 @@ async function resolveServedRepositoryPath(
 ): Promise<{ objectPath: string; contentType?: string }> {
   await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
   const plugin = dependencies.repositoryRuntimePlugins.getPlugin(repository.ecosystem);
+  // The repository root is not a path any plugin serves an object at; it is
+  // the directory above the trees they do, and its listing is filtered by the
+  // same rule, so nothing appears there that the plugin would not hand out.
+  if (context.relativePath === "") {
+    return { objectPath: "" };
+  }
   if (!plugin?.canServeRepositoryPath(context)) {
     throw new NotFoundError();
   }
 
   const resolved = plugin.resolveRepositoryPath?.(context)
     ?? { objectPath: context.relativePath };
-  return { ...resolved, objectPath: requireSafeRelativePath(resolved.objectPath) };
+  return resolved.objectPath === ""
+    ? resolved
+    : { ...resolved, objectPath: requireSafeRelativePath(resolved.objectPath) };
 }
 
 /**
@@ -776,12 +787,68 @@ async function handleProtocolUpload(
   return protocol.successResponse?.() ?? new Response(null, { status: 200 });
 }
 
+/**
+ * Answers a directory in the repository tree with a browsable listing.
+ *
+ * Returns null when the path is not a directory, or is one nothing was
+ * published under, so the caller can answer 404 as before. A path without its
+ * trailing slash is redirected rather than listed, because the links in a
+ * listing are relative to it.
+ */
+async function repositoryDirectoryResponse(input: {
+  dependencies: AppDependencies;
+  repository: Repository;
+  requestUrl: string;
+  relativePath: string;
+  method: string;
+}): Promise<Response | null> {
+  const plugin = input.dependencies.repositoryRuntimePlugins.getPlugin(input.repository.ecosystem);
+  if (!plugin) {
+    return null;
+  }
+  const isRoot = input.relativePath === "";
+  const directoryPath = isRoot || input.relativePath.endsWith("/")
+    ? input.relativePath
+    : `${input.relativePath}/`;
+  // Only a path the plugin serves may be browsed, except the root, which sits
+  // above every such path.
+  if (!isRoot && !plugin.canServeRepositoryPath({ relativePath: directoryPath })) {
+    return null;
+  }
+
+  const listing = await readRepositoryDirectory({
+    objectStore: input.dependencies.repositoryObjectStore,
+    repositoryName: input.repository.name,
+    relativePath: directoryPath,
+    canServe: (relativePath) => plugin.canServeRepositoryPath({ relativePath }),
+  });
+  if (!listing) {
+    return null;
+  }
+
+  if (directoryPath !== input.relativePath) {
+    const url = new URL(input.requestUrl);
+    return new Response(null, { status: 301, headers: { location: `${url.pathname}/${url.search}` } });
+  }
+
+  const html = renderRepositoryDirectoryHtml({ repositoryName: input.repository.name, listing });
+  return new Response(input.method === "HEAD" ? null : html, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": repositoryCacheControl(input.repository),
+    },
+  });
+}
+
 function requireSafeRelativePath(objectPath: string): string {
-  const segments = objectPath.split("/");
+  // A directory path keeps its trailing slash; every other empty segment, and
+  // any traversal, is refused.
+  const trailingSlash = objectPath.endsWith("/");
+  const segments = (trailingSlash ? objectPath.slice(0, -1) : objectPath).split("/");
   if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
     throw new NotFoundError();
   }
-  return segments.join("/");
+  return `${segments.join("/")}${trailingSlash ? "/" : ""}`;
 }
 
 function repositoryObjectListPrefix(value: string | null): string {
@@ -1684,8 +1751,23 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     });
     await authorizeRepositoryRead(request, dependencies, repository);
     const objectKey = `repositories/${repositoryName}/${served.objectPath}`;
-    const metadata = await dependencies.repositoryObjectStore.headObject(objectKey);
+    const metadata = served.objectPath === ""
+      ? null
+      : await dependencies.repositoryObjectStore.headObject(objectKey);
     if (!metadata) {
+      // Nothing is stored here, so this may be a directory in the tree. A
+      // listing is generated rather than stored, since the tree is only ever
+      // whatever the objects say it is.
+      const listing = await repositoryDirectoryResponse({
+        dependencies,
+        repository,
+        requestUrl: request.url,
+        relativePath,
+        method: request.method,
+      });
+      if (listing) {
+        return listing;
+      }
       throw new NotFoundError();
     }
     const cacheControl = repositoryCacheControl(repository);

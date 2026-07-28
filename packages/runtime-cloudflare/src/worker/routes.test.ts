@@ -5507,3 +5507,106 @@ describe("negotiating the PyPI Simple API", () => {
     await expect(response.text()).resolves.toContain("<a href=\"alpha/\">");
   });
 });
+
+describe("browsing a repository", () => {
+  async function browsable(visibility: "public" | "private" = "public") {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, { name: "debian-internal", ecosystem: "apt", visibility });
+    const put = (key: string, body: string) =>
+      harness.repositoryObjectStore.putText(`repositories/debian-internal/${key}`, body, "text/plain");
+    await put("dists/noble/InRelease", "signed");
+    await put("dists/noble/main/binary-amd64/Packages", "Package: alpha\n");
+    await put("pool/main/alpha/alpha_1.0.0_amd64.deb", "deb bytes");
+    // Not something the apt plugin serves, so it must not appear anywhere.
+    await put("publishes/session.json", "{}");
+    return { harness, app };
+  }
+
+  it("answers the repository root with a listing instead of a JSON 404", async () => {
+    // Opening a repository in a browser used to give an error document for
+    // every path that was not a file.
+    const { app } = await browsable();
+
+    const response = await app.fetch(new Request("https://axis.example/repositories/debian-internal/"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    const body = await response.text();
+    expect(body).toContain(">dists/<");
+    expect(body).toContain(">pool/<");
+  });
+
+  it("lists a directory further down", async () => {
+    const { app } = await browsable();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-internal/dists/noble/"),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain(">InRelease<");
+    expect(body).toContain(">main/<");
+  });
+
+  it("shows nothing the plugin would not serve", async () => {
+    // A listing that showed more than the serving rule allows would be a way
+    // around it: the entries are links, and a link nobody can follow is at
+    // best noise and at worst a disclosure.
+    const { app } = await browsable();
+
+    const root = await (await app.fetch(
+      new Request("https://axis.example/repositories/debian-internal/"),
+    )).text();
+
+    expect(root).not.toContain("publishes");
+    const denied = await app.fetch(
+      new Request("https://axis.example/repositories/debian-internal/publishes/"),
+    );
+    expect(denied.status).toBe(404);
+  });
+
+  it("redirects a directory asked for without its trailing slash", async () => {
+    // The links in a listing are relative to it, so serving one at the
+    // slashless path would produce links that resolve a level too high.
+    const { app } = await browsable();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-internal/dists", { redirect: "manual" }),
+    );
+
+    expect(response.status).toBe(301);
+    expect(response.headers.get("location")).toBe("/repositories/debian-internal/dists/");
+  });
+
+  it("still serves a file rather than listing it", async () => {
+    const { app } = await browsable();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("signed");
+  });
+
+  it("answers 404 for a directory nothing was published under", async () => {
+    const { app } = await browsable();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-internal/dists/jammy/"),
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("refuses to list a private repository without a token", async () => {
+    // Browsing must not become a way to read a private repository's contents.
+    const { app } = await browsable("private");
+
+    const response = await app.fetch(new Request("https://axis.example/repositories/debian-internal/"));
+
+    expect(response.status).toBe(401);
+  });
+});
