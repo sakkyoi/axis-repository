@@ -89,7 +89,15 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       ...tseslint.configs.disableTypeChecked.languageOptions,
-      globals: { console: "readonly", process: "readonly", URL: "readonly" },
+      globals: {
+        Buffer: "readonly",
+        File: "readonly",
+        FormData: "readonly",
+        URL: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+        process: "readonly",
+      },
     },
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,
