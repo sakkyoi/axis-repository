@@ -1,7 +1,13 @@
 import type { RepositoryArtifactRecord, RepositoryObjectStore } from "@axis-repository/core";
 import { ValidationError } from "@axis-repository/core";
 import { pypiPluginManifest } from "../manifest";
-import type { ArtifactRepositoryPlugin, DescribePublishedArtifactsInput, RebuildRepositoryArtifactIndexInput } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import type {
+  ArtifactRepositoryPlugin,
+  DescribePublishedArtifactsInput,
+  RebuildRepositoryArtifactIndexInput,
+  ValidatePublishArtifactsInput,
+} from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { requireDistributionFilename } from "./names";
 import { GenericManifestPublisher, createPrefixServingPredicate, listAllObjects, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { createPypiClientHelpers } from "./client-helpers";
 import { validatePypiRepositoryConfig } from "./config";
@@ -26,7 +32,7 @@ export function createPypiPlugin(input?: {
     canServeRepositoryPath: createPrefixServingPredicate(["simple"]),
     validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
     publish: {
-      validateArtifacts: () => {},
+      validateArtifacts: validatePypiArtifacts,
       authorize: () => {},
       finalize: (publishInput) => publisher.publish(publishInput),
       describeArtifacts: describePypiArtifacts,
@@ -36,6 +42,19 @@ export function createPypiPlugin(input?: {
     },
     clientHelpers: createPypiClientHelpers(),
   };
+}
+
+/**
+ * Rejects anything that is not a distribution pip could install.
+ *
+ * The filename is what decides which project page a file is listed on, so a
+ * name that cannot be parsed has no page to go on, and one that normalizes to
+ * an unusable path segment would produce a page nothing can address.
+ */
+function validatePypiArtifacts(input: ValidatePublishArtifactsInput): void {
+  for (const artifact of input.artifacts) {
+    requireDistributionFilename(artifact.filename);
+  }
 }
 
 function describePypiArtifacts(input: DescribePublishedArtifactsInput): RepositoryArtifactRecord[] {
