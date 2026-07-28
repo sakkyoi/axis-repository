@@ -5592,8 +5592,8 @@ describe("browsing a repository", () => {
 
     const body = await (await app.fetch(new Request(at))).text();
     // Entry links only; the breadcrumb and the parent row deliberately go up.
-    const hrefs = [...body.matchAll(/<tr(?! class="up")[^>]*><td><a href="([^"]+)"/g)]
-      .map((match) => match[1]!);
+    const hrefs = [...body.matchAll(/<tr(?![^>]*data-up)[^>]*>([\s\S]*?)<\/tr>/g)]
+      .flatMap((row) => [...row[1]!.matchAll(/href="([^"]+)"/g)].map((match) => match[1]!));
 
     expect(hrefs.map((href) => new URL(href, at).pathname))
       .toContain("/repositories/debian-internal/dists/noble/InRelease");

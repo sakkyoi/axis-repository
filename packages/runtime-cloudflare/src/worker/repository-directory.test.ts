@@ -70,9 +70,14 @@ describe("renderRepositoryDirectoryHtml", () => {
   /**
    * The links to entries, as opposed to the ones that deliberately go up: the
    * breadcrumb's ancestors and the parent row.
+   *
+   * Read row by row rather than by matching a fixed cell shape, so presentation
+   * can change without the assertion quietly matching nothing.
    */
   function entryHrefs(html: string): string[] {
-    return [...html.matchAll(/<tr(?! class="up")[^>]*><td><a href="([^"]+)"/g)].map((match) => match[1]!);
+    const rows = [...html.matchAll(/<tr(?![^>]*data-up)[^>]*>([\s\S]*?)<\/tr>/g)]
+      .map((match) => match[1]!);
+    return rows.flatMap((row) => [...row.matchAll(/href="([^"]+)"/g)].map((match) => match[1]!));
   }
 
   it("links so every entry resolves inside the directory", () => {
@@ -98,7 +103,7 @@ describe("renderRepositoryDirectoryHtml", () => {
     expect(resolved(crumbs[0]!.href, at)).toBe("https://axis.example/repositories/a/");
     expect(resolved(crumbs[1]!.href, at)).toBe("https://axis.example/repositories/a/pool/");
     // The directory being shown is named but not linked.
-    expect(nav).toContain("main/");
+    expect(nav).toContain(">main<");
   });
 
   it("resolves a colon-carrying entry to the object it names", () => {

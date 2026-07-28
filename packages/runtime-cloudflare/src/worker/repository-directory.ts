@@ -124,6 +124,53 @@ function relativeReference(segment: string): string {
   return `./${segment}`;
 }
 
+
+/**
+ * Icons, defined once and referenced per row.
+ *
+ * A pool directory can hold hundreds of files, so the shapes live in a sprite
+ * and each row costs a `<use>` rather than a copy of the path data.
+ */
+const DIRECTORY_ICONS = `
+  <symbol id="i-folder" viewBox="0 0 24 24">
+    <path d="M4 7a2 2 0 0 1 2-2h3.6a2 2 0 0 1 1.4.6L12.4 7H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>
+  </symbol>
+  <symbol id="i-package" viewBox="0 0 24 24">
+    <path d="M20 8.5a1.7 1.7 0 0 0-.85-1.47l-6.3-3.6a1.7 1.7 0 0 0-1.7 0l-6.3 3.6A1.7 1.7 0 0 0 4 8.5v7a1.7 1.7 0 0 0 .85 1.47l6.3 3.6a1.7 1.7 0 0 0 1.7 0l6.3-3.6A1.7 1.7 0 0 0 20 15.5z"/>
+    <path d="m4.3 7.7 7.7 4.4 7.7-4.4"/>
+    <path d="M12 20.9v-8.8"/>
+  </symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24">
+    <path d="M12 3.2 5.5 5.6v5.5c0 3.8 2.6 7.1 6.5 8.4 3.9-1.3 6.5-4.6 6.5-8.4V5.6z"/>
+    <path d="m9.4 11.9 1.9 1.9 3.4-3.6"/>
+  </symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24">
+    <path d="M14 3.5H7.5a1.8 1.8 0 0 0-1.8 1.8v13.4a1.8 1.8 0 0 0 1.8 1.8h9a1.8 1.8 0 0 0 1.8-1.8V7.8z"/>
+    <path d="M13.8 3.6v3.9a1 1 0 0 0 1 1h3.4"/>
+  </symbol>
+`;
+
+/**
+ * Which icon a name gets.
+ *
+ * Only the distinctions a person browsing actually makes: what is a folder,
+ * what is a package they might install, what carries a signature, and
+ * everything else.
+ */
+function iconFor(entry: RepositoryDirectoryEntry): string {
+  if (entry.directory) {
+    return "i-folder";
+  }
+  const name = entry.name.toLowerCase();
+  if (/\.(deb|udeb|whl|tar\.gz|tar\.xz|tgz|gz|xz|zst|bz2)$/.test(name)) {
+    return "i-package";
+  }
+  if (/(^|\/)(inrelease|release)$/.test(name) || /\.(gpg|asc|sig)$/.test(name)) {
+    return "i-shield";
+  }
+  return "i-doc";
+}
+
 /**
  * The design tokens the admin console uses, in the two schemes it defines.
  *
@@ -139,6 +186,8 @@ const DIRECTORY_STYLES = `
     --muted-foreground: 45 6% 36%;
     --primary: 72 100% 52%;
     --border: 42 14% 78%;
+    --ink-accent: 74 42% 28%;
+    --shadow: 60 10% 40%;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -148,78 +197,155 @@ const DIRECTORY_STYLES = `
       --muted-foreground: 45 6% 66%;
       --primary: 72 100% 63%;
       --border: 0 0% 20%;
+      --ink-accent: 72 70% 66%;
+      --shadow: 0 0% 0%;
     }
   }
   * { box-sizing: border-box; }
+  .sprite { display: none; }
   body {
     margin: 0;
-    background: hsl(var(--background));
+    min-height: 100vh;
+    background:
+      radial-gradient(70rem 32rem at 15% -8%, hsl(var(--primary) / 0.09), transparent 60%),
+      hsl(var(--background));
     color: hsl(var(--foreground));
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
   }
-  header {
-    border-bottom: 1px solid hsl(var(--border));
-    background: hsl(var(--panel));
-    padding: 0.75rem 1.5rem;
+  header { padding: 1.75rem 1.5rem 0; }
+  .brand {
+    align-items: center;
+    display: flex;
+    gap: 0.7rem;
+    margin: 0 auto;
+    max-width: 54rem;
   }
-  .wordmark { font-weight: 600; letter-spacing: -0.01em; }
-  .wordmark::before {
-    content: "";
-    display: inline-block;
-    width: 0.5rem;
-    height: 0.5rem;
-    margin-right: 0.5rem;
-    border-radius: 1px;
-    background: hsl(var(--primary));
-    vertical-align: baseline;
+  .mark {
+    align-items: center;
+    background: linear-gradient(150deg, hsl(var(--primary)), hsl(var(--primary) / 0.65));
+    border-radius: 10px;
+    box-shadow: 0 2px 8px -2px hsl(var(--primary) / 0.6);
+    display: flex;
+    height: 30px;
+    justify-content: center;
+    width: 30px;
   }
-  .repository { color: hsl(var(--muted-foreground)); font-size: 0.8125rem; }
-  main { margin: 0 auto; max-width: 60rem; padding: 1.5rem; }
+  .mark span {
+    background: hsl(70 65% 12%);
+    border-radius: 50%;
+    height: 9px;
+    width: 9px;
+  }
+  .wordmark { font-size: 0.95rem; font-weight: 650; letter-spacing: -0.015em; }
+  .repository {
+    color: hsl(var(--muted-foreground));
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.75rem;
+  }
+  main { margin: 0 auto; max-width: 54rem; padding: 1.25rem 1.5rem 3rem; }
   nav {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.8125rem;
-    margin-bottom: 1rem;
-    overflow-wrap: anywhere;
+    gap: 0.15rem;
+    margin-bottom: 0.9rem;
+    padding-left: 0.2rem;
   }
-
-  nav .here { color: hsl(var(--foreground)); font-weight: 600; }
+  nav .sep { color: hsl(var(--muted-foreground) / 0.6); }
+  nav .here {
+    background: hsl(var(--primary) / 0.16);
+    border-radius: 999px;
+    color: hsl(var(--ink-accent));
+    font-weight: 600;
+    padding: 0.1rem 0.55rem;
+  }
+  .card {
+    background: hsl(var(--panel));
+    border: 1px solid hsl(var(--border) / 0.85);
+    border-radius: 16px;
+    box-shadow: 0 1px 2px hsl(var(--shadow) / 0.06), 0 18px 36px -26px hsl(var(--shadow) / 0.5);
+    overflow: hidden;
+  }
   table { border-collapse: collapse; width: 100%; }
   th {
-    border-bottom: 1px solid hsl(var(--border));
     color: hsl(var(--muted-foreground));
-    font-size: 0.75rem;
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    padding: 0 0.75rem 0.5rem 0;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    padding: 0.7rem 1.1rem;
     text-align: left;
     text-transform: uppercase;
   }
-  th:last-child, td:last-child { text-align: right; padding-right: 0; }
-  td {
-    border-bottom: 1px solid hsl(var(--border) / 0.5);
-    padding: 0.4rem 0.75rem 0.4rem 0;
-  }
-  tbody tr:hover td { background: hsl(var(--panel)); }
-  td a {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    overflow-wrap: anywhere;
-  }
+  th:last-child { text-align: right; }
+  tbody tr { border-top: 1px solid hsl(var(--border) / 0.5); }
+  td { padding: 0; }
   td.size {
     color: hsl(var(--muted-foreground));
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
+    padding-right: 1.1rem;
+    text-align: right;
     white-space: nowrap;
   }
+  td a {
+    align-items: center;
+    display: flex;
+    gap: 0.6rem;
+    overflow-wrap: anywhere;
+    padding: 0.68rem 1.1rem;
+  }
+  .icon {
+    color: hsl(var(--muted-foreground) / 0.85);
+    fill: none;
+    flex: none;
+    height: 18px;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
+    transition: transform 0.15s ease, color 0.15s ease;
+    width: 18px;
+  }
+  /*
+   * Folders are filled rather than outlined, so the shape of a listing reads
+   * before any of the names do. Set on the <svg> and not on its paths: <use>
+   * draws into a shadow tree that outside selectors cannot reach, and fill is
+   * inherited, so this is the way in.
+   */
+  .is-folder .icon { color: hsl(var(--ink-accent)); fill: hsl(var(--primary) / 0.32); }
+  tbody tr:hover { background: hsl(var(--primary) / 0.09); }
+  tbody tr:hover .icon { color: hsl(var(--ink-accent)); transform: scale(1.12); }
+  tbody tr:hover .name { text-decoration: underline; text-decoration-color: hsl(var(--primary)); text-underline-offset: 3px; }
+  .name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   /*
    * :link and :visited both, because the browser's own :visited rule outranks
    * a bare selector and would otherwise repaint half the listing purple.
    */
   a:link, a:visited { color: hsl(var(--foreground)); text-decoration: none; }
-  a:hover { text-decoration: underline; text-decoration-color: hsl(var(--primary)); text-underline-offset: 3px; }
-  nav a:link, nav a:visited { color: hsl(var(--muted-foreground)); }
-  .empty { color: hsl(var(--muted-foreground)); padding: 2rem 0; }
+  nav a:link, nav a:visited { color: hsl(var(--muted-foreground)); padding: 0.1rem 0.2rem; }
+  nav a:hover { color: hsl(var(--foreground)); }
+  .empty {
+    align-items: center;
+    color: hsl(var(--muted-foreground));
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 3rem 1rem;
+    text-align: center;
+  }
+  .empty .icon { color: hsl(var(--primary)); height: 30px; opacity: 0.8; width: 30px; }
+  footer {
+    color: hsl(var(--muted-foreground) / 0.75);
+    font-size: 0.6875rem;
+    margin: 0 auto;
+    max-width: 54rem;
+    padding: 0.9rem 1.6rem 0;
+  }
 `;
 
 export function renderRepositoryDirectoryHtml(input: {
@@ -233,9 +359,12 @@ export function renderRepositoryDirectoryHtml(input: {
     // name carrying a colon cannot read as a scheme.
     const href = escapeHtml(relativeReference(encodeURIComponent(entry.name.replace(/\/$/, ""))
       + (entry.directory ? "/" : "")));
-    const size = entry.directory ? "" : formatSize(entry.size);
-    return `          <tr><td><a href="${href}">${escapeHtml(entry.name)}</a></td>`
-      + `<td class="size">${size}</td></tr>`;
+    return [
+      `          <tr${entry.directory ? " class=\"is-folder\"" : ""}>`,
+      `<td><a href="${href}">${icon(iconFor(entry))}`,
+      `<span class="name">${escapeHtml(entry.name)}</span></a></td>`,
+      `<td class="size">${entry.directory ? "" : formatSize(entry.size)}</td></tr>`,
+    ].join("");
   });
 
   return [
@@ -248,30 +377,52 @@ export function renderRepositoryDirectoryHtml(input: {
     `    <style>${DIRECTORY_STYLES}</style>`,
     "  </head>",
     "  <body>",
+    `    <svg class="sprite" aria-hidden="true">${DIRECTORY_ICONS}</svg>`,
     "    <header>",
-    "      <div class=\"wordmark\">Axis Repository</div>",
-    `      <div class="repository">${escapeHtml(input.repositoryName)}</div>`,
+    "      <div class=\"brand\">",
+    "        <span class=\"mark\" aria-hidden=\"true\"><span></span></span>",
+    "        <div>",
+    "          <div class=\"wordmark\">Axis Repository</div>",
+    `          <div class="repository">${escapeHtml(input.repositoryName)}</div>`,
+    "        </div>",
+    "      </div>",
     "    </header>",
     "    <main>",
     `      <nav aria-label="Breadcrumb">${renderBreadcrumb(input)}</nav>`,
+    "      <div class=\"card\">",
     ...(input.listing.entries.length === 0
-      ? ["      <p class=\"empty\">Nothing published here yet.</p>"]
+      ? [
+        "        <div class=\"empty\">",
+        `          ${icon("i-folder")}`,
+        "          <div>Nothing published here yet.</div>",
+        "        </div>",
+      ]
       : [
-        "      <table>",
-        "        <thead><tr><th>Name</th><th>Size</th></tr></thead>",
-        "        <tbody>",
+        "        <table>",
+        "          <thead><tr><th>Name</th><th>Size</th></tr></thead>",
+        "          <tbody>",
         ...(input.listing.relativePath === ""
           ? []
-          : ["          <tr class=\"up\"><td><a href=\"../\">../</a></td><td class=\"size\"></td></tr>"]),
+          : [
+            "          <tr class=\"is-folder\" data-up><td><a href=\"../\">"
+            + `${icon("i-folder")}<span class="name">../</span></a></td>`
+            + "<td class=\"size\"></td></tr>",
+          ]),
         ...rows,
-        "        </tbody>",
-        "      </table>",
+        "          </tbody>",
+        "        </table>",
       ]),
+    "      </div>",
     "    </main>",
+    `    <footer>${input.listing.entries.length} ${input.listing.entries.length === 1 ? "entry" : "entries"}</footer>`,
     "  </body>",
     "</html>",
     "",
   ].join("\n");
+}
+
+function icon(id: string): string {
+  return `<svg class="icon" aria-hidden="true"><use href="#${id}" /></svg>`;
 }
 
 /**
@@ -285,16 +436,17 @@ function renderBreadcrumb(input: {
   listing: RepositoryDirectoryListing;
 }): string {
   const segments = input.listing.relativePath.split("/").filter((segment) => segment !== "");
+  const separator = "<span class=\"sep\">/</span>";
   const crumbs = segments.map((segment, index) => {
     const up = segments.length - index - 1;
     return up === 0
-      ? `<span class="here">${escapeHtml(segment)}/</span>`
-      : `<a href="${"../".repeat(up)}">${escapeHtml(segment)}</a>/`;
+      ? `<span class="here">${escapeHtml(segment)}</span>`
+      : `<a href="${"../".repeat(up)}">${escapeHtml(segment)}</a>${separator}`;
   });
 
   const root = segments.length === 0
-    ? `<span class="here">${escapeHtml(input.repositoryName)}/</span>`
-    : `<a href="${"../".repeat(segments.length)}">${escapeHtml(input.repositoryName)}</a>/`;
+    ? `<span class="here">${escapeHtml(input.repositoryName)}</span>`
+    : `<a href="${"../".repeat(segments.length)}">${escapeHtml(input.repositoryName)}</a>${separator}`;
   return [root, ...crumbs].join("");
 }
 
