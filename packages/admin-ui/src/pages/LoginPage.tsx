@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { LogIn } from "lucide-react";
 import { useAuth } from "../auth";
 import { createAxisClient } from "../api/client";
+import { AxisBrand } from "../components/brand/axis-brand";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -61,10 +62,12 @@ export function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-5 text-foreground">
       <section className="grid w-full max-w-sm gap-5 rounded-lg border border-border bg-panel p-6 shadow-md">
-        <div>
-          <h1 className="text-xl font-semibold">Axis Repository</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Sign in to the admin console.</p>
-        </div>
+        <AxisBrand
+          subtitle="Sign in to the admin console."
+          markClassName="h-12 w-12"
+          titleClassName="text-xl"
+          subtitleClassName="mt-1 text-sm"
+        />
         {error && (
           <Alert className="border-destructive/35 bg-destructive/10 text-destructive">
             <AlertTitle>Sign in failed</AlertTitle>

@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { Monitor, Moon, Package, Settings, ShieldCheck, Sun, Users } from "lucide-react";
+import { AxisBrand } from "./brand/axis-brand";
 import { cn } from "../lib/utils";
 import { ADMIN_UI_NAV_ITEMS } from "../navigation";
 import { ProfileMenu } from "../profile/profile-menu";
@@ -25,10 +26,7 @@ export function AppLayout() {
     <div className="grid h-screen overflow-hidden grid-cols-[240px_minmax(0,1fr)] bg-background text-foreground">
       <aside className="h-screen overflow-y-auto border-r border-border bg-panel">
         <div className="flex h-14 items-center border-b border-border px-5">
-          <div>
-            <div className="text-sm font-semibold">Axis Repository</div>
-            <div className="text-xs text-muted-foreground">Admin Console</div>
-          </div>
+          <AxisBrand subtitle="Admin Console" markClassName="h-8 w-8" />
         </div>
         <nav className="grid gap-1 p-3">
           {ADMIN_UI_NAV_ITEMS.map((item) => {

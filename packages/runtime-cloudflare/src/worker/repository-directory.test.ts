@@ -122,6 +122,15 @@ describe("renderRepositoryDirectoryHtml", () => {
 
     expect(html).toContain("2.0 KiB");
   });
+
+  it("uses the Axis logo mark in the directory header", () => {
+    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+
+    expect(html).toContain("axis-logo-mark");
+    expect(html).toContain("fill=\"currentColor\"");
+    expect(html).toContain("fill=\"#a3e635\"");
+    expect(html).not.toContain("<span class=\"mark\" aria-hidden=\"true\"><span></span></span>");
+  });
 });
 
 describe("readRepositoryDirectory", () => {

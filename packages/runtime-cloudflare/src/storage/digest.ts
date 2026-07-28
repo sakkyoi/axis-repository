@@ -11,6 +11,15 @@ interface DigestSink extends WritableStream<Uint8Array> {
 
 type DigestSinkConstructor = new (algorithm: DigestAlgorithm) => DigestSink;
 
+interface NodeHash {
+  update(chunk: Uint8Array): void;
+  digest(encoding: "hex"): string;
+}
+
+interface NodeCrypto {
+  createHash(algorithm: string): NodeHash;
+}
+
 /**
  * Digests a stream without holding it.
  *
@@ -49,9 +58,9 @@ export async function digestStreamHex(
  * literal import would make wrangler warn about a node builtin on every build
  * and offer to enable `nodejs_compat`, for a branch a worker never reaches.
  */
-function nodeCrypto(): Promise<typeof import("node:crypto")> {
+async function nodeCrypto(): Promise<NodeCrypto> {
   const specifier = "node:crypto";
-  return import(/* @vite-ignore */ specifier);
+  return import(/* @vite-ignore */ specifier) as Promise<NodeCrypto>;
 }
 
 function hex(digest: ArrayBuffer): string {
