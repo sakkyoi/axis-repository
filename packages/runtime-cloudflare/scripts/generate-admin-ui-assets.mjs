@@ -46,7 +46,7 @@ function routePath(filePath) {
 // serves. Without this the worker ships plugin-ui.js and plugin-ui.d.ts and
 // serves them at public URLs.
 function isAdminUiAsset(path) {
-  return path === "/index.html" || path.startsWith("/assets/");
+  return path === "/index.html" || path === "/favicon.svg" || path.startsWith("/assets/");
 }
 
 function contentType(filePath) {

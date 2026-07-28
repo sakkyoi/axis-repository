@@ -317,6 +317,15 @@ describe("Cloudflare runtime routes", () => {
     expect(api.status).toBe(401);
   });
 
+  it("serves the admin UI favicon at the browser default root path", async () => {
+    const app = createApp(createDevDependencies());
+    const response = await app.fetch(new Request("https://axis.example/favicon.svg"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/svg+xml");
+    await expect(response.text()).resolves.toContain("<svg");
+  });
+
   it("does not serve the admin UI shell for reserved namespace roots", async () => {
     const app = createApp(createDevDependencies());
 
