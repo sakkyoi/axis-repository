@@ -7,10 +7,12 @@ import type {
   RebuildRepositoryArtifactIndexInput,
   ValidatePublishArtifactsInput,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { requireDistributionFilename } from "./names";
-import { GenericManifestPublisher, createPrefixServingPredicate, listAllObjects, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { createPrefixServingPredicate, listAllObjects } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { createPypiClientHelpers } from "./client-helpers";
 import { validatePypiRepositoryConfig } from "./config";
+import { SERVED_PREFIXES, packageRelativePath, parsePackageRelativePath } from "./layout";
+import { parseDistributionFilename, requireDistributionFilename } from "./names";
+import { PypiPublisher } from "./publisher";
 
 export function createPypiPlugin(input?: {
   objectStoreFor?: (repositoryName: string) => RepositoryObjectStore;
@@ -18,7 +20,7 @@ export function createPypiPlugin(input?: {
   // Without a store there is nowhere to write. Fail loudly rather than
   // reporting a successful publish that stored nothing.
   const publisher = input?.objectStoreFor
-    ? new GenericManifestPublisher({ objectStoreFor: input.objectStoreFor })
+    ? new PypiPublisher({ objectStoreFor: input.objectStoreFor })
     : {
       publish: async (): Promise<never> => {
         throw new ValidationError("PyPI repository plugin was created without an object store");
@@ -29,7 +31,7 @@ export function createPypiPlugin(input?: {
     name: pypiPluginManifest.runtimeName,
     version: pypiPluginManifest.version,
     capabilities: [...pypiPluginManifest.capabilities],
-    canServeRepositoryPath: createPrefixServingPredicate(["simple"]),
+    canServeRepositoryPath: createPrefixServingPredicate(SERVED_PREFIXES),
     validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
     publish: {
       validateArtifacts: validatePypiArtifacts,
@@ -57,60 +59,105 @@ function validatePypiArtifacts(input: ValidatePublishArtifactsInput): void {
   }
 }
 
+function artifactRecord(input: {
+  repositoryName: string;
+  ecosystem: string;
+  filename: string;
+  normalizedName: string;
+  version: string;
+  objectKey: string;
+  publishedAt: string;
+  updatedAt: string;
+  sessionId?: string;
+  metadata?: Record<string, unknown>;
+}): RepositoryArtifactRecord {
+  return {
+    // Identity is the stored path, so the same file described by a publish and
+    // by a rebuild is one artifact rather than two.
+    id: `artifact_${input.repositoryName}_pypi_${input.normalizedName}_${input.filename}`,
+    repositoryName: input.repositoryName,
+    ecosystem: input.ecosystem,
+    identity: `pypi:${input.normalizedName}:${input.filename}`,
+    name: input.normalizedName,
+    summary: `${input.normalizedName} ${input.version}`,
+    primaryObjectKey: input.objectKey,
+    objectKeys: [input.objectKey],
+    metadata: {
+      ...input.metadata,
+      project: input.normalizedName,
+      version: input.version,
+      filename: input.filename,
+    },
+    publishedAt: input.publishedAt,
+    updatedAt: input.updatedAt,
+    ...(input.sessionId ? { publishSessionId: input.sessionId } : {}),
+  };
+}
+
 function describePypiArtifacts(input: DescribePublishedArtifactsInput): RepositoryArtifactRecord[] {
-  const objectKeys = input.result.objects.map((object) => object.key);
-  return input.session.artifacts.map((artifact) => {
-    const primaryObjectKey = objectKeys.find((key) => key.endsWith(`/${input.session.id}.json`));
-    return {
-      id: `artifact_${input.repository.name}_pypi_${artifact.filename}`,
+  return input.session.artifacts.flatMap((artifact) => {
+    const distribution = parseDistributionFilename(artifact.filename);
+    if (!distribution) {
+      return [];
+    }
+    const relativePath = packageRelativePath(distribution, artifact.filename);
+    const objectKey = input.result.objects
+      .map((object) => object.key)
+      .find((key) => key.endsWith(`/${relativePath}`));
+    if (!objectKey) {
+      return [];
+    }
+    return [artifactRecord({
       repositoryName: input.repository.name,
       ecosystem: input.repository.ecosystem,
-      identity: `pypi:${artifact.filename}`,
-      name: artifact.filename,
-      summary: artifact.filename,
-      ...(primaryObjectKey ? { primaryObjectKey } : {}),
-      objectKeys,
-      metadata: { ...artifact.metadata },
+      filename: artifact.filename,
+      normalizedName: distribution.normalizedName,
+      version: distribution.version,
+      objectKey,
       publishedAt: input.result.publishedAt,
       updatedAt: input.result.publishedAt,
-      publishSessionId: input.session.id,
-    };
+      sessionId: input.session.id,
+      metadata: { ...artifact.metadata },
+    })];
   });
 }
 
-async function rebuildPypiArtifactIndex(input: RebuildRepositoryArtifactIndexInput): Promise<RepositoryArtifactRecord[]> {
-  const publishPrefix = `repositories/${input.repository.name}/publishes/`;
-  const objects = await listAllObjects(input.objectStore, publishPrefix);
+/**
+ * Rebuilds the artifact index from the files the repository actually holds.
+ *
+ * The stored distributions are the repository's own record of itself, so a
+ * rebuild reads those rather than any bookkeeping written alongside them: a
+ * repository whose bookkeeping is lost or wrong can still be repaired.
+ */
+async function rebuildPypiArtifactIndex(
+  input: RebuildRepositoryArtifactIndexInput,
+): Promise<RepositoryArtifactRecord[]> {
+  const repositoryPrefix = `repositories/${input.repository.name}/`;
+  const objects = await listAllObjects(input.objectStore, `${repositoryPrefix}packages/`);
   const artifacts: RepositoryArtifactRecord[] = [];
 
-  for (const object of objects.filter((candidate) => candidate.key.endsWith(".json"))) {
-    const storedObject = await input.objectStore.getObject(object.key);
-    if (!storedObject) continue;
-    const manifest = JSON.parse(new TextDecoder().decode(await objectBytes(storedObject))) as {
-      sessionId?: string;
-      publishedAt?: string;
-      artifacts?: Array<{ filename?: string; metadata?: Record<string, unknown>; objectKey?: string }>;
-    };
-    for (const artifact of manifest.artifacts ?? []) {
-      if (!artifact.filename) continue;
-      const objectKeys = [artifact.objectKey, object.key].filter((key): key is string => Boolean(key));
-      artifacts.push({
-        id: `artifact_${input.repository.name}_pypi_${artifact.filename}`,
-        repositoryName: input.repository.name,
-        ecosystem: input.repository.ecosystem,
-        identity: `pypi:${artifact.filename}`,
-        name: artifact.filename,
-        summary: artifact.filename,
-        primaryObjectKey: artifact.objectKey ?? object.key,
-        objectKeys,
-        metadata: artifact.metadata ?? {},
-        publishedAt: manifest.publishedAt ?? input.now.toISOString(),
-        updatedAt: input.now.toISOString(),
-        ...(manifest.sessionId ? { publishSessionId: manifest.sessionId } : {}),
-      });
+  for (const object of objects) {
+    const stored = parsePackageRelativePath(object.key.slice(repositoryPrefix.length));
+    if (!stored) {
+      continue;
     }
+    const distribution = parseDistributionFilename(stored.filename);
+    // A file whose name does not parse cannot be listed on any project page,
+    // so it is not something this repository publishes.
+    if (!distribution || distribution.normalizedName !== stored.normalizedName) {
+      continue;
+    }
+    artifacts.push(artifactRecord({
+      repositoryName: input.repository.name,
+      ecosystem: input.repository.ecosystem,
+      filename: stored.filename,
+      normalizedName: distribution.normalizedName,
+      version: distribution.version,
+      objectKey: object.key,
+      publishedAt: input.now.toISOString(),
+      updatedAt: input.now.toISOString(),
+    }));
   }
 
   return artifacts;
 }
-

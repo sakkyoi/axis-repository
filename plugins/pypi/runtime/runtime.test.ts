@@ -32,12 +32,25 @@ describe("PyPI plugin lifecycle", () => {
     ).not.toThrow();
   });
 
-  it("serves only PyPI simple API repository paths", () => {
+  it("serves both the index and the files it points at", () => {
+    // An index whose links cannot be fetched is no better than no index: pip
+    // reads simple/, then downloads from packages/.
     const plugin = createPypiPlugin();
 
     expect(plugin.canServeRepositoryPath({ relativePath: "simple" })).toBe(true);
     expect(plugin.canServeRepositoryPath({ relativePath: "simple/my-package/" })).toBe(true);
-    expect(plugin.canServeRepositoryPath({ relativePath: "packages/my-package.whl" })).toBe(false);
+    expect(plugin.canServeRepositoryPath({ relativePath: "packages/my-package/my_package-1.0-py3-none-any.whl" }))
+      .toBe(true);
+  });
+
+  it("does not serve staged uploads", () => {
+    // Staging is scoped to a publish session and is not part of what the
+    // repository publishes; serving it would expose files that were uploaded
+    // but never finalized.
+    const plugin = createPypiPlugin();
+
+    expect(plugin.canServeRepositoryPath({ relativePath: "_staging/uploads/sess_1/upl_1/x.whl" })).toBe(false);
+    expect(plugin.canServeRepositoryPath({ relativePath: "publishes/sess_1.json" })).toBe(false);
   });
 
   it("refuses to publish a file that is not a distribution", () => {
