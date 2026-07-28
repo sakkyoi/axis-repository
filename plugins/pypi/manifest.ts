@@ -15,6 +15,12 @@ export const pypiPluginManifest = {
     namespace: "pypi",
     routes: [
       {
+        name: "list-projects",
+        method: "GET",
+        path: ["projects"],
+        responseKind: "json",
+      },
+      {
         name: "yank-file",
         method: "POST",
         path: ["projects", ":project", "files", ":filename", "yank"],

@@ -1,0 +1,10 @@
+# The admin UI is embedded in the worker as a committed build artifact, and CI
+# fails the build when regenerating it produces a different file. The generator
+# copies bytes straight out of the Vite output, so a source file checked out
+# with CRLF — which is what git does on Windows under core.autocrlf — embeds
+# CRLF and makes every Windows build disagree with every Linux one.
+#
+# Pinning the files the build reads keeps that artifact reproducible wherever
+# it is built.
+packages/admin-ui/index.html text eol=lf
+packages/admin-ui/src/**/*.css text eol=lf

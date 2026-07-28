@@ -2,7 +2,7 @@ import { NotFoundError, ValidationError, type RepositoryObjectStore } from "@axi
 import type { RepositoryAdminResources } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { pluginJsonResponse, readJsonObject } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { pypiPluginManifest } from "../manifest";
-import { readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
+import { listProjects, readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
 import { normalizeProjectName } from "./names";
 
 function pypiAdminResourceRoute(name: string) {
@@ -57,6 +57,22 @@ export function createPypiAdminResources(input: {
   return {
     namespace: pypiPluginManifest.adminResources.namespace,
     routes: [
+      {
+        ...pypiAdminResourceRoute("list-projects"),
+        handle: async ({ repositoryName }) => {
+          // Read from the published pages rather than the artifact index, so
+          // what an operator sees is what clients are being served, yank state
+          // included.
+          const objectStore = input.objectStoreFor(repositoryName);
+          const projects = await listProjects(objectStore, repositoryName);
+          return pluginJsonResponse({
+            projects: await Promise.all(projects.map(async (project) => ({
+              name: project,
+              files: await readPublishedProjectFiles({ objectStore, repositoryName, project }),
+            }))),
+          });
+        },
+      },
       {
         ...pypiAdminResourceRoute("yank-file"),
         handle: async ({ repositoryName, params, request }) => {

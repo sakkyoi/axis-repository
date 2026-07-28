@@ -40,6 +40,7 @@ describe("repository detail plugins", () => {
       "settings",
       "client-helpers",
       "install-hints",
+      "project-files",
     ]);
   });
 
@@ -84,6 +85,7 @@ describe("repository detail plugins", () => {
       "repository-browser",
       "client-helpers",
       "install-hints",
+      "project-files",
     ]);
     expect(repositorySettingsSectionsFor("pypi").map((section) => section.id)).toEqual([
       "settings",

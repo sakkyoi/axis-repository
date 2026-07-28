@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import {
+  Badge,
   Button,
+  EmptyState,
   ErrorState,
+  Input,
   useUpdateRepository,
   VisibilitySelect,
   type Repository,
   type RepositoryPlugin,
   type RepositoryVisibility,
 } from "@axis-repository/admin-ui/plugin-ui";
-import { usePypiClientInfo } from "./api";
+import { usePypiClientInfo, usePypiProjects, useSetPypiFileYanked } from "./api";
 
 export function pypiSimpleIndexUrl(repository: Repository): string {
   return `/repositories/${repository.name}/simple/`;
@@ -82,6 +85,29 @@ export function PypiSettingsSection({
   );
 }
 
+export function pypiUploadUrl(repository: Repository): string {
+  return `/repositories/${repository.name}/legacy/`;
+}
+
+/**
+ * How to publish with twine.
+ *
+ * The token goes in as the password, which is why the username is the literal
+ * `__token__`: that is the convention PyPI's own clients follow.
+ */
+export function pypiUploadCommandText(repository: Repository): string {
+  return [
+    "# A publish token for this repository.",
+    "export TWINE_USERNAME=__token__",
+    "export TWINE_PASSWORD=\"<PUBLISH_TOKEN>\"",
+    "",
+    "# Upload a built wheel and sdist.",
+    "twine upload \\",
+    `  --repository-url "${pypiUploadUrl(repository)}" \\`,
+    "  dist/*",
+  ].join("\n");
+}
+
 export function PypiInstallHintsSection({
   repository,
 }: {
@@ -98,7 +124,131 @@ export function PypiInstallHintsSection({
           {clientInfo.data ? pypiInstallCommandText(repository, clientInfo.data.pipIndexUrl) : "Loading..."}
         </pre>
       </details>
+      <details className="min-w-0">
+        <summary className="cursor-pointer text-sm font-medium">twine upload</summary>
+        <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
+          {pypiUploadCommandText(repository)}
+        </pre>
+      </details>
       {clientInfo.isError && <ErrorState title="PyPI client setup unavailable" error={clientInfo.error} />}
     </>
+  );
+}
+
+/**
+ * The published files of every project, with their yank state.
+ *
+ * Read from the pages clients are actually served, so what an operator sees
+ * here is what pip sees.
+ */
+export function PypiProjectFilesSection({
+  repository,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  const projects = usePypiProjects(repository.name);
+  const setYanked = useSetPypiFileYanked();
+  const [pendingYank, setPendingYank] = useState<{ project: string; filename: string } | null>(null);
+  const [reason, setReason] = useState("");
+
+  if (projects.isError) {
+    return <ErrorState title="PyPI projects unavailable" error={projects.error} />;
+  }
+  if (!projects.data) {
+    return <p className="text-sm text-muted-foreground">Loading...</p>;
+  }
+  if (projects.data.length === 0) {
+    return <EmptyState message="No projects published yet" />;
+  }
+
+  return (
+    <div className="grid gap-4">
+      {projects.data.map((project) => (
+        <div key={project.name} className="grid gap-2">
+          <h4 className="text-sm font-medium">{project.name}</h4>
+          <ul className="grid gap-1">
+            {project.files.map((file) => (
+              <li key={file.filename} className="flex flex-wrap items-center gap-2 text-xs">
+                <span className={file.yanked === undefined ? "" : "text-muted-foreground line-through"}>
+                  {file.filename}
+                </span>
+                {file.yanked !== undefined && (
+                  <Badge variant="warning">
+                    {file.yanked === "" ? "yanked" : `yanked: ${file.yanked}`}
+                  </Badge>
+                )}
+                {file.yanked === undefined ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={setYanked.isPending}
+                    onClick={() => {
+                      setReason("");
+                      setPendingYank({ project: project.name, filename: file.filename });
+                    }}
+                  >
+                    Yank
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={setYanked.isPending}
+                    onClick={() => setYanked.mutate({
+                      repositoryName: repository.name,
+                      project: project.name,
+                      filename: file.filename,
+                      reason: undefined,
+                      yanked: false,
+                    })}
+                  >
+                    Unyank
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      {pendingYank && (
+        <div className="grid gap-2 rounded-md border p-3">
+          <p className="text-sm">
+            Yank <span className="font-mono">{pendingYank.filename}</span>? It stays downloadable, so anything
+            already pinning it keeps working, but pip passes over it.
+          </p>
+          <Input
+            placeholder="Reason (optional)"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              disabled={setYanked.isPending}
+              onClick={() => {
+                setYanked.mutate({
+                  repositoryName: repository.name,
+                  project: pendingYank.project,
+                  filename: pendingYank.filename,
+                  reason,
+                  yanked: true,
+                });
+                setPendingYank(null);
+              }}
+            >
+              Yank
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setPendingYank(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+      {setYanked.isError && <ErrorState title="Could not change yank state" error={setYanked.error} />}
+    </div>
   );
 }
