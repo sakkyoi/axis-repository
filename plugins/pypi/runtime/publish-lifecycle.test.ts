@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { PublishArtifactsInput, Repository } from "@axis-repository/core";
 import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
 import { createPypiPlugin } from "./runtime";
-import { sdistBytes, wheelBytes } from "./dist-fixtures.test-support";
-import { requireDistributionFilename } from "./names";
+import { sdistBytes, wheelBytes } from "../shared/dist-fixtures.test-support";
+import { requireDistributionFilename } from "../shared/names";
 
 const NOW = new Date("2026-07-18T00:00:00.000Z");
 
@@ -77,7 +77,7 @@ function publishInput(sessionId: string, filenames: string[]): PublishArtifactsI
 }
 
 /** Builds the distribution a filename claims to be, so publishing accepts it. */
-function distributionBytes(filename: string): Uint8Array {
+async function distributionBytes(filename: string): Promise<Uint8Array> {
   const distribution = requireDistributionFilename(filename);
   const fixture = { name: distribution.rawName, version: distribution.version };
   return distribution.kind === "wheel" ? wheelBytes(fixture) : sdistBytes(fixture);
@@ -94,7 +94,7 @@ async function harness() {
       for (const [index, filename] of filenames.entries()) {
         await objectStore.putBytes(
           `_staging/uploads/${sessionId}/upl_${index + 1}/${filename}`,
-          distributionBytes(filename),
+          await distributionBytes(filename),
           "application/octet-stream",
         );
       }
@@ -318,7 +318,7 @@ describe("publishing to a PyPI repository", () => {
     const plugin = createPypiPlugin({ objectStoreFor: () => objectStore });
     await objectStore.putBytes(
       "_staging/uploads/pub_1/upl_1/django-5.0.tar.gz",
-      sdistBytes({ name: "django", version: "5.0", metadata: "Name: impostor\nVersion: 5.0\n" }),
+      await sdistBytes({ name: "django", version: "5.0", metadata: "Name: impostor\nVersion: 5.0\n" }),
       "application/octet-stream",
     );
 

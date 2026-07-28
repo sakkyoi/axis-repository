@@ -10,14 +10,15 @@ import {
 import { packageObjectKey } from "./layout";
 import { readDistributionMetadata } from "./distribution-source";
 import { sha256Hex } from "./digest";
+import { inValidationErrors } from "./format";
 import {
   readPublishedProjectFiles,
   writeSimpleIndexes,
   type PypiIndexWrite,
 } from "./index-store";
 import type { SimpleProjectFile } from "./simple-index";
-import { requireMetadataMatchesFilename } from "./metadata";
-import { requireDistributionFilename } from "./names";
+import { requireMetadataMatchesFilename } from "../shared/metadata";
+import { requireDistributionFilename } from "../shared/names";
 
 const DEFAULT_CONTENT_TYPE = "application/octet-stream";
 /** PEP 658 serves core metadata as plain text, the way METADATA is written. */
@@ -50,7 +51,7 @@ export class PypiPublisher implements ArtifactPublisher {
     // checked against the name it was uploaded under. A wheel called
     // django-5.0-...whl that contains something else would otherwise be
     // offered to everyone who asks pip for Django.
-    const copies = await Promise.all(input.artifacts.map(async ({ artifact, verified }) => {
+    const copies = await inValidationErrors(() => Promise.all(input.artifacts.map(async ({ artifact, verified }) => {
       const distribution = requireDistributionFilename(artifact.filename);
       const metadata = await readDistributionMetadata({
         objectStore,
@@ -76,7 +77,7 @@ export class PypiPublisher implements ArtifactPublisher {
           coreMetadataSha256: await sha256Hex(new TextEncoder().encode(metadata.text)),
         },
       };
-    }));
+    })));
 
     // Two files in one session cannot claim the same path: the second copy
     // would silently replace the first and the session would report both as

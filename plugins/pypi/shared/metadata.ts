@@ -1,4 +1,4 @@
-import { ValidationError } from "@axis-repository/core";
+import { PypiFormatError } from "./errors";
 import {
   readTarEntries,
   readZipEntries,
@@ -36,7 +36,7 @@ export async function readWheelMetadata(source: ZipSource): Promise<PypiCoreMeta
   const entries = await readZipEntries(source);
   const entry = entries.find((candidate) => METADATA_PATH.test(candidate.name));
   if (!entry) {
-    throw new ValidationError("wheel does not contain a dist-info/METADATA file");
+    throw new PypiFormatError("wheel does not contain a dist-info/METADATA file");
   }
   return parseCoreMetadata(new TextDecoder().decode(await readZipEntry(source, entry)));
 }
@@ -61,7 +61,7 @@ export async function readSdistMetadata(stream: ByteStream): Promise<PypiCoreMet
     }
   }
 
-  throw new ValidationError("source distribution does not contain a PKG-INFO file");
+  throw new PypiFormatError("source distribution does not contain a PKG-INFO file");
 }
 
 /**
@@ -95,7 +95,7 @@ export function parseCoreMetadata(text: string): PypiCoreMetadata {
   const name = fields.get("name");
   const version = fields.get("version");
   if (!name || !version) {
-    throw new ValidationError("distribution metadata does not name a project and version");
+    throw new PypiFormatError("distribution metadata does not name a project and version");
   }
 
   const requiresPython = fields.get("requires-python");
@@ -119,12 +119,12 @@ export function requireMetadataMatchesFilename(
   filename: PypiDistributionFilename,
 ): void {
   if (normalizeProjectName(metadata.name) !== filename.normalizedName) {
-    throw new ValidationError(
+    throw new PypiFormatError(
       `distribution filename says ${filename.normalizedName} but its metadata says ${normalizeProjectName(metadata.name)}`,
     );
   }
   if (normalizeVersion(metadata.version) !== normalizeVersion(filename.version)) {
-    throw new ValidationError(
+    throw new PypiFormatError(
       `distribution filename says version ${filename.version} but its metadata says ${metadata.version}`,
     );
   }

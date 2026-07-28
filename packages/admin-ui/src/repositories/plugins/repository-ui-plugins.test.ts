@@ -150,8 +150,16 @@ describe("repository UI plugin registry", () => {
     expect(getRepositoryPublishPlugin("apt")?.isAcceptedFile?.(new File(["deb"], "myapp.deb"))).toBe(true);
     expect(getRepositoryPublishPlugin("apt")?.isAcceptedFile?.(new File(["wheel"], "myapp.whl"))).toBe(false);
     expect(getRepositoryPublishPlugin("apt")?.SessionDetailComponent).toBeTypeOf("function");
-    expect(getRepositoryPublishPlugin("pypi")?.PreviewComponent).toBeUndefined();
+    // Without a preview component the workspace offers no way to publish at
+    // all, which is what PyPI repositories had: uploading meant twine or the
+    // session API, and nothing in the admin UI.
+    expect(getRepositoryPublishPlugin("pypi")?.PreviewComponent).toBeTypeOf("function");
+    expect(getRepositoryPublishPlugin("pypi")?.accept).toContain(".whl");
+    expect(getRepositoryPublishPlugin("pypi")?.isAcceptedFile?.(new File(["whl"], "my_project-1.0-py3-none-any.whl"))).toBe(true);
+    expect(getRepositoryPublishPlugin("pypi")?.isAcceptedFile?.(new File(["deb"], "myapp.deb"))).toBe(false);
     expect(getRepositoryPublishPlugin("pypi")?.SessionDetailComponent).toBeTypeOf("function");
+    expect(getRepositoryPublishPlugin("pypi")?.PreviewComponent)
+      .not.toBe(getRepositoryPublishPlugin("apt")?.PreviewComponent);
     // Distinct plugins must not resolve to the same component.
     expect(getRepositoryPublishPlugin("pypi")?.SessionDetailComponent)
       .not.toBe(getRepositoryPublishPlugin("apt")?.SessionDetailComponent);

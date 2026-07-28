@@ -1,8 +1,8 @@
 import { ValidationError, type RepositoryObjectStore } from "@axis-repository/core";
 import type { ByteStream, ZipSource } from "@axis-repository/core/archives";
 import { objectBytes, objectStream } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { readSdistMetadata, readWheelMetadata, type PypiCoreMetadata } from "./metadata";
-import type { PypiDistributionFilename } from "./names";
+import { readSdistMetadata, readWheelMetadata, type PypiCoreMetadata } from "../shared/metadata";
+import type { PypiDistributionFilename } from "../shared/names";
 
 /**
  * Reads a stored distribution's metadata without downloading the distribution.

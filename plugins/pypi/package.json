@@ -6,7 +6,7 @@
   "exports": {
     ".": "./plugin.ts",
     "./manifest": "./manifest.ts",
-    "./test-support": "./runtime/dist-fixtures.test-support.ts",
+    "./test-support": "./shared/dist-fixtures.test-support.ts",
     "./runtime": "./runtime/runtime.ts",
     "./admin-ui": "./admin-ui/index.ts",
     "./admin-ui/detail": "./admin-ui/detail.tsx",

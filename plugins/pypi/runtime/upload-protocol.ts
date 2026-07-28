@@ -3,7 +3,8 @@ import type {
   ParsedProtocolUpload,
   RepositoryUploadProtocol,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { requireDistributionFilename } from "./names";
+import { requireDistributionFilename } from "../shared/names";
+import { inValidationErrors } from "./format";
 
 /**
  * The upload API `twine` speaks.
@@ -30,7 +31,7 @@ export function createPypiUploadProtocol(): RepositoryUploadProtocol {
   return {
     path: "legacy",
 
-    async parseUpload(request: Request): Promise<ParsedProtocolUpload[]> {
+    parseUpload: (request: Request): Promise<ParsedProtocolUpload[]> => inValidationErrors(async () => {
       requireAcceptableSize(request);
       const form = await readForm(request);
 
@@ -63,7 +64,7 @@ export function createPypiUploadProtocol(): RepositoryUploadProtocol {
         metadata: {},
       };
       return [{ artifact, body }];
-    },
+    }),
 
     // twine treats any 2xx as success and shows the body on failure.
     successResponse: () => new Response(null, { status: 200 }),

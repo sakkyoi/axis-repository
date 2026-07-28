@@ -3,7 +3,7 @@ import type { RepositoryAdminResources } from "@axis-repository/runtime-cloudfla
 import { pluginJsonResponse, readJsonObject } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { pypiPluginManifest } from "../manifest";
 import { listProjects, readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
-import { normalizeProjectName } from "./names";
+import { normalizeProjectName } from "../shared/names";
 
 function pypiAdminResourceRoute(name: string) {
   const route = pypiPluginManifest.adminResources.routes.find((candidate) => candidate.name === name);

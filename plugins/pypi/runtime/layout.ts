@@ -1,4 +1,4 @@
-import type { PypiDistributionFilename } from "./names";
+import type { PypiDistributionFilename } from "../shared/names";
 import {
   HTML_CONTENT_TYPE,
   SIMPLE_HTML_CONTENT_TYPE,

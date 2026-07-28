@@ -10,7 +10,8 @@ import {
   PypiProjectFilesSection,
   PypiSettingsSection,
 } from "./detail";
-import { PypiPublishSessionDetail, pypiPublishSessionArtifactSummary } from "./publish";
+import { PypiPublishArtifactPreview, PypiPublishSessionDetail, pypiPublishSessionArtifactSummary } from "./publish";
+import { pypiIsAcceptedFile } from "./publish-model";
 
 export const pypiRepositoryDetailPlugin: RepositoryDetailPlugin = {
   ecosystem: pypiPluginManifest.ecosystem,
@@ -28,6 +29,11 @@ export const pypiRepositoryUiPlugin: RepositoryUiPlugin = {
   detail: pypiRepositoryDetailPlugin,
   publish: {
     ecosystem: pypiPluginManifest.ecosystem,
+    title: "Publish Python distribution",
+    accept: ".whl,.tar.gz",
+    acceptedFileDescription: "Wheels (.whl) and source distributions (.tar.gz)",
+    isAcceptedFile: pypiIsAcceptedFile,
+    PreviewComponent: PypiPublishArtifactPreview,
     SessionDetailComponent: PypiPublishSessionDetail,
     artifactSummary: pypiPublishSessionArtifactSummary,
   },

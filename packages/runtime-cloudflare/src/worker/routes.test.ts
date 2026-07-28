@@ -5244,7 +5244,7 @@ describe("concurrent publishes to one PyPI repository", () => {
     });
 
     async function prepare(version: string) {
-      const bytes = sdistBytes({ name: "alpha", version });
+      const bytes = await sdistBytes({ name: "alpha", version });
       const filename = `alpha-${version}.tar.gz`;
       const created = await app.fetch(new Request("https://axis.example/api/publish-sessions", {
         method: "POST",
@@ -5344,7 +5344,7 @@ describe("publishing a PyPI package the way twine does", () => {
 
   it("publishes a distribution from one request", async () => {
     const { harness, app, token } = await pypiUploadHarness();
-    const bytes = sdistBytes({ name: "alpha", version: "1.0" });
+    const bytes = await sdistBytes({ name: "alpha", version: "1.0" });
 
     const response = await app.fetch(new Request(
       "https://axis.example/repositories/python-internal/legacy/",
@@ -5367,7 +5367,7 @@ describe("publishing a PyPI package the way twine does", () => {
 
   it("refuses an upload with no credentials", async () => {
     const { app } = await pypiUploadHarness();
-    const bytes = sdistBytes({ name: "alpha", version: "1.0" });
+    const bytes = await sdistBytes({ name: "alpha", version: "1.0" });
 
     const response = await app.fetch(new Request(
       "https://axis.example/repositories/python-internal/legacy/",
@@ -5385,7 +5385,7 @@ describe("publishing a PyPI package the way twine does", () => {
       permissions: ["publish"],
       ecosystemScopes: {},
     });
-    const bytes = sdistBytes({ name: "alpha", version: "1.0" });
+    const bytes = await sdistBytes({ name: "alpha", version: "1.0" });
 
     const response = await app.fetch(new Request(
       "https://axis.example/repositories/python-internal/legacy/",
@@ -5404,7 +5404,7 @@ describe("publishing a PyPI package the way twine does", () => {
     // twine hashes before sending, so a mismatch means the bytes changed on
     // the way and must not be stored.
     const { app, token } = await pypiUploadHarness();
-    const bytes = sdistBytes({ name: "alpha", version: "1.0" });
+    const bytes = await sdistBytes({ name: "alpha", version: "1.0" });
 
     const response = await app.fetch(new Request(
       "https://axis.example/repositories/python-internal/legacy/",

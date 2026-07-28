@@ -1,4 +1,4 @@
-import { ValidationError } from "@axis-repository/core";
+import { PypiFormatError } from "./errors";
 
 /**
  * Project and file naming, as the packaging standards define them.
@@ -100,7 +100,7 @@ function distribution(
 export function requireDistributionFilename(filename: string): PypiDistributionFilename {
   const parsed = parseDistributionFilename(filename);
   if (!parsed) {
-    throw new ValidationError(
+    throw new PypiFormatError(
       `PyPI artifact filename is not a wheel or source distribution: ${filename}`,
     );
   }

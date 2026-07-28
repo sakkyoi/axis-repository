@@ -12,7 +12,8 @@ import { createPypiAdminResources } from "./admin-resources";
 import { createPypiClientHelpers } from "./client-helpers";
 import { validatePypiRepositoryConfig } from "./config";
 import { SERVED_PREFIXES, packageRelativePath, parsePackageRelativePath, resolveSimplePath } from "./layout";
-import { parseDistributionFilename, requireDistributionFilename } from "./names";
+import { parseDistributionFilename, requireDistributionFilename } from "../shared/names";
+import { inValidationErrorsSync } from "./format";
 import { PypiPublisher } from "./publisher";
 import { createPypiUploadProtocol } from "./upload-protocol";
 
@@ -61,9 +62,11 @@ export function createPypiPlugin(input?: {
  * an unusable path segment would produce a page nothing can address.
  */
 function validatePypiArtifacts(input: ValidatePublishArtifactsInput): void {
-  for (const artifact of input.artifacts) {
-    requireDistributionFilename(artifact.filename);
-  }
+  inValidationErrorsSync(() => {
+    for (const artifact of input.artifacts) {
+      requireDistributionFilename(artifact.filename);
+    }
+  });
 }
 
 function artifactRecord(input: {

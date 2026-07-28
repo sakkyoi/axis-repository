@@ -1,5 +1,3 @@
-import { gzipSync } from "node:zlib";
-
 /**
  * Builds real distributions for tests, without needing Python installed.
  *
@@ -40,7 +38,7 @@ export interface SdistFixture {
   version: string;
 }
 
-export function sdistBytes(input: SdistFixture): Uint8Array {
+export async function sdistBytes(input: SdistFixture): Promise<Uint8Array> {
   const metadata = input.metadata ?? [
     "Metadata-Version: 2.1",
     `Name: ${input.name}`,
@@ -50,10 +48,18 @@ export function sdistBytes(input: SdistFixture): Uint8Array {
   ].join("\n");
   const root = `${input.name}-${input.version}`;
 
-  return new Uint8Array(gzipSync(tarArchive([
+  return gzip(tarArchive([
     { name: `${root}/PKG-INFO`, bytes: textEncoder.encode(metadata) },
     { name: `${root}/setup.py`, bytes: textEncoder.encode("# setup\n") },
-  ])));
+  ]));
+}
+
+/** Uses the platform's own compression, so this runs in a browser too. */
+async function gzip(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer])
+    .stream()
+    .pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream as ReadableStream).arrayBuffer());
 }
 
 const STORED = 0;
