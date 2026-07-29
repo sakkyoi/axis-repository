@@ -163,23 +163,16 @@ nothing outside the machine.
 Testing `UPLOAD_BACKEND=r2` needs a bucket a signed URL can reach, because one
 always addresses R2 itself: a binding answered from local state never sees what
 was uploaded, and publishing reports a file that plainly arrived as missing.
-`wrangler.jsonc` describes a deployment and says nothing about development, so
-this goes in a configuration of your own. Wrangler substitutes nothing and
-inherits no bindings, so it is a whole file rather than an overlay:
+`pnpm dev:worker` arranges that from what you have already said. It reads
+`UPLOAD_BACKEND`, and under `r2` takes `wrangler.jsonc`, points its bucket at
+`R2_BUCKET_NAME` from `.dev.vars`, marks the binding `remote`, and runs Wrangler
+against the result. Anything else runs fully offline with `--local`, which means
+remote bindings disabled — a consequence of the backend rather than a choice, so
+it is not one you make.
 
-```bash
-cp wrangler.jsonc wrangler.dev.jsonc
-```
-
-Name the bucket you develop against, matching `R2_BUCKET_NAME` in `.dev.vars`,
-and add `"remote": true` beside it. Keep `wrangler.dev.jsonc` out of version
-control: it names a bucket only you develop against.
-
-`pnpm dev:worker` reads `UPLOAD_BACKEND` and starts Wrangler accordingly, since
-`--local` means "remote bindings disabled" and is a consequence of the backend
-rather than a choice: `r2` uses that configuration, anything else runs fully
-offline. Under `r2` it refuses to start without it, rather than letting the
-mismatch surface an upload later.
+Nothing about developing is kept in the repository, and there is no second
+configuration to hold in step with the first: what differs is derived each time
+it runs.
 
 The Worker still runs locally; only the binding is answered by the real bucket,
 which means real objects and real storage charges. Wrangler prints `remote`
