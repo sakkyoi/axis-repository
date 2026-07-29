@@ -25,6 +25,8 @@ export interface R2PresignedUploadBrokerOptions {
   secretAccessKey: string;
   uploadUrlTtlSeconds?: number;
   now?: () => Date;
+  /** Used to ask the bucket the signed URLs address whether it holds an object. */
+  fetchImpl?: typeof fetch;
 }
 
 export class R2PresignedUploadBroker implements UploadBroker {
@@ -34,6 +36,7 @@ export class R2PresignedUploadBroker implements UploadBroker {
   private readonly uploadUrlTtlSeconds: number | undefined;
   private readonly now: () => Date;
   private readonly aws: AwsClient;
+  private readonly fetchImpl: typeof fetch;
 
   constructor(options: R2PresignedUploadBrokerOptions) {
     this.bucket = options.bucket;
@@ -41,6 +44,7 @@ export class R2PresignedUploadBroker implements UploadBroker {
     this.bucketName = options.bucketName;
     this.uploadUrlTtlSeconds = options.uploadUrlTtlSeconds;
     this.now = options.now ?? (() => new Date());
+    this.fetchImpl = options.fetchImpl ?? ((input, init) => fetch(input, init));
     this.aws = new AwsClient({
       accessKeyId: options.accessKeyId,
       secretAccessKey: options.secretAccessKey,
@@ -106,7 +110,7 @@ export class R2PresignedUploadBroker implements UploadBroker {
   async verifyUpload(input: { target: UploadTarget; expected: PublishArtifactRequest }): Promise<UploadedObject> {
     const object = await this.bucket.head(input.target.objectKey);
     if (!object) {
-      throw new ValidationError(`Uploaded object is missing: ${input.target.objectKey}`);
+      throw new ValidationError(await this.missingObjectMessage(input.target.objectKey));
     }
     if (object.size !== input.expected.size) {
       throw new ValidationError(`Uploaded object size mismatch: ${input.target.objectKey}`);
@@ -140,6 +144,49 @@ export class R2PresignedUploadBroker implements UploadBroker {
    * Worker. They are read from R2 rather than over the network and hashed as
    * they stream, so it costs a read and holds nothing.
    */
+  /**
+   * Explains an object the binding cannot find.
+   *
+   * Two buckets are in play and nothing makes them agree: the binding the
+   * Worker reads through, and the name `R2_BUCKET_NAME` gives, which is what
+   * signed URLs address. A binding does not report the bucket it points at, so
+   * a mismatch cannot be caught when it is configured — only here, where an
+   * upload that plainly succeeded is nowhere to be found.
+   *
+   * Asking the signed side settles which it is. Finding the object there means
+   * the two names differ, and saying so is the difference between fixing one
+   * line and searching for an upload that was never lost. Failing to ask
+   * changes nothing about what went wrong, so it falls back to the plain
+   * account of it.
+   */
+  private async missingObjectMessage(objectKey: string): Promise<string> {
+    const missing = `Uploaded object is missing: ${objectKey}`;
+    try {
+      if (!await this.signedBucketHasObject(objectKey)) {
+        return missing;
+      }
+    } catch {
+      return missing;
+    }
+    return `${missing}. It is in ${this.bucketName}, which R2_BUCKET_NAME names,`
+      + " but not in the bucket AXIS_OBJECTS is bound to. Both have to name the"
+      + " same bucket: uploads and downloads address the first, and everything"
+      + " else reads through the second.";
+  }
+
+  private async signedBucketHasObject(objectKey: string): Promise<boolean> {
+    const signedPath = [this.bucketName, ...objectKey.split("/")]
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+    const url = new URL(`https://${this.accountId}.r2.cloudflarestorage.com/${signedPath}`);
+    url.searchParams.set("X-Amz-Expires", "60");
+    const signed = await this.aws.sign(url, {
+      method: "HEAD",
+      aws: { datetime: toAwsDatetime(this.now()), signQuery: true },
+    });
+    return (await this.fetchImpl(signed.url, { method: "HEAD" })).ok;
+  }
+
   private async requireStoredBytesMatch(objectKey: string, expectedSha256: string): Promise<void> {
     const stored = await this.bucket.get(objectKey);
     if (!stored?.body) {

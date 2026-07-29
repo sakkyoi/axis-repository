@@ -40,7 +40,13 @@ class FakeR2Bucket implements R2BucketLike {
   }
 }
 
-function createBroker(bucket = new FakeR2Bucket(), uploadUrlTtlSeconds?: number) {
+function createBroker(
+  bucket = new FakeR2Bucket(),
+  uploadUrlTtlSeconds?: number,
+  // What the bucket the signed URLs address says when asked for an object the
+  // binding could not find. Absent by default, which is the ordinary case.
+  signedBucketHoldsIt = false,
+) {
   const options = {
     bucket,
     accountId: "account123",
@@ -48,6 +54,8 @@ function createBroker(bucket = new FakeR2Bucket(), uploadUrlTtlSeconds?: number)
     accessKeyId: "access",
     secretAccessKey: "secret",
     now: () => new Date("2026-07-14T00:00:00.000Z"),
+    fetchImpl: (async () =>
+      new Response(null, { status: signedBucketHoldsIt ? 200 : 404 })) as unknown as typeof fetch,
   };
 
   return {
@@ -244,6 +252,29 @@ describe("R2PresignedUploadBroker", () => {
     ).resolves.toMatchObject({ sha256: artifactSha256 });
   });
 
+  it("names the two buckets when they turn out to be different ones", async () => {
+    // The upload succeeded and the object is there; the binding is reading a
+    // different bucket. Reported as a missing object, that sends whoever hit
+    // it looking at CORS and upload URLs for something that is one line of
+    // configuration.
+    const { broker } = createBroker(new FakeR2Bucket(), undefined, true);
+
+    await expect(
+      broker.verifyUpload({
+        target: {
+          uploadId: "upl_1",
+          filename: artifact.filename,
+          objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+          method: "PUT",
+          url: "https://example",
+          headers: {},
+          expiresAt: "2026-07-14T00:15:00.000Z",
+        },
+        expected: artifact,
+      }),
+    ).rejects.toThrow(/R2_BUCKET_NAME.*AXIS_OBJECTS is bound to/s);
+  });
+
   it("rejects bytes that are not what the upload said they were", async () => {
     // The digest is signed into the upload URL, so it cannot be altered — but
     // nothing binds it to the body, and R2 validates no full-object SHA-256 on
@@ -292,6 +323,32 @@ describe("R2PresignedUploadBroker", () => {
         expected: artifact,
       }),
     ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("says only that an object is missing when it is missing everywhere", async () => {
+    // The bucket names being different is one explanation for an object the
+    // binding cannot find, and offering it when the upload simply did not
+    // happen would send the reader after configuration that is already right.
+    const { broker } = createBroker();
+
+    await expect(
+      broker.verifyUpload({
+        target: {
+          uploadId: "upl_1",
+          filename: artifact.filename,
+          objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+          method: "PUT",
+          url: "https://example",
+          headers: {},
+          expiresAt: "2026-07-14T00:15:00.000Z",
+        },
+        expected: artifact,
+      }),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        message: expect.not.stringContaining("R2_BUCKET_NAME") as unknown as string,
+      }),
+    );
   });
 
   it("rejects size or metadata mismatches", async () => {
