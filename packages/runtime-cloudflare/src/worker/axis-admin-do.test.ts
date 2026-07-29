@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AxisAdminDO, type AxisEnv } from "./axis-admin-do";
 import { debArchive } from "@axis-repository/plugin-apt/test-support";
 import { FakeDurableObjectStorage, fakeDurableObjectState } from "./durable-object.test-support";
+import { digestHex } from "../storage/digest";
 
 class FakeR2Bucket {
   readonly objects = new Map<string, {
@@ -50,6 +51,7 @@ class FakeR2Bucket {
     etag?: string;
     httpEtag?: string;
     size?: number;
+    body: ReadableStream<Uint8Array>;
     arrayBuffer(): Promise<ArrayBuffer>;
   } | null> {
     const object = this.objects.get(key);
@@ -65,6 +67,9 @@ class FakeR2Bucket {
       etag: `fake-${bytes.byteLength}`,
       httpEtag: `"fake-${bytes.byteLength}"`,
       size: bytes.byteLength,
+      // A real R2 object offers both; verification streams rather than
+      // buffering, so the fake has to offer both too.
+      body: new Response(bodyBytes).body as ReadableStream<Uint8Array>,
       arrayBuffer: async () => toArrayBuffer(bodyBytes),
     };
   }
@@ -541,6 +546,9 @@ describe("AxisAdminDO", () => {
     });
     const bucket = new FakeR2Bucket();
     const debBytes = aptDebFixture();
+    // Verification hashes what was stored, so the declared digest has to be the
+    // one those bytes actually have.
+    const debSha256 = await digestHex("SHA-256", debBytes);
     const object = createObject({
       AXIS_OBJECTS: bucket as unknown as R2Bucket,
     });
@@ -619,7 +627,7 @@ describe("AxisAdminDO", () => {
             {
               filename: "myapp_1.2.3_amd64.deb",
               size: debBytes.byteLength,
-              sha256: "a".repeat(64),
+              sha256: debSha256,
               contentType: "application/vnd.debian.binary-package",
               metadata: {
                 package: "myapp",
@@ -649,7 +657,7 @@ describe("AxisAdminDO", () => {
       {
         contentType: "application/vnd.debian.binary-package",
         size: debBytes.byteLength,
-        sha256: "a".repeat(64),
+        sha256: debSha256,
         uploadId: upload.uploadId,
       },
     );
@@ -705,6 +713,10 @@ describe("AxisAdminDO", () => {
     });
     expect(readBucketBytes(bucket, "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb"))
       .toHaveLength(debBytes.byteLength);
+    // Publishing copies the upload into the repository, and the staged copy is
+    // then nobody's: reachable by nothing, removed by no other path, and
+    // charged for. Deleting the repository clears its own prefix, not this one.
+    expect(bucket.objects.has(upload.objectKey)).toBe(false);
     expect(readBucketText(bucket, "repositories/debian-internal/dists/noble/main/binary-amd64/Packages"))
       .toContain("Filename: pool/main/myapp/myapp_1.2.3_amd64.deb");
     expect(readBucketText(bucket, "repositories/debian-internal/dists/noble/Release"))

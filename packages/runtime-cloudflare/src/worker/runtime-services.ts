@@ -122,6 +122,8 @@ export class PluginPublishSessionService {
       pluginPolicyService: PluginPolicyService;
       repositoryActivityService?: RepositoryActivityService;
       repositoryArtifactStore?: RepositoryArtifactStore;
+      /** Used to drop staged uploads once publishing has copied them out. */
+      repositoryObjectStore?: RepositoryObjectStore;
       writeLock: RepositoryWriteLock;
     },
   ) {}
@@ -227,8 +229,35 @@ export class PluginPublishSessionService {
     return this.options.writeLock.run(session.repositoryName, () => this.finalizeUnlocked(input));
   }
 
+  /**
+   * Drops the staged copies once publishing has taken what it needed.
+   *
+   * An upload lands in staging and is copied into the repository, leaving a
+   * second copy of every artifact ever published — billed for, reachable by
+   * nothing, and removed by no other path: deleting the repository clears its
+   * own prefix and does not touch this one.
+   *
+   * A publish that has already succeeded is not failed for a delete that did
+   * not. The bytes are stale either way, and the alternative is reporting a
+   * publish as failed after it has been served.
+   */
+  private async discardStagedUploads(session: PublishSession): Promise<void> {
+    const objectStore = this.options.repositoryObjectStore;
+    if (!objectStore) {
+      return;
+    }
+    await Promise.all(session.uploads.map(async (upload) => {
+      try {
+        await objectStore.deleteObject(upload.objectKey);
+      } catch (error) {
+        console.error("failed to discard staged upload", upload.objectKey, error);
+      }
+    }));
+  }
+
   private async finalizeUnlocked(input: FinalizePublishSessionInput): Promise<FinalizePublishSessionResult> {
     const result = await this.options.publishSessionService.finalize(input);
+    await this.discardStagedUploads(result.session);
     const repository = await this.options.repositoryService.getByName(result.session.repositoryName);
     const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
     const repositoryArtifactStore = this.options.repositoryArtifactStore;

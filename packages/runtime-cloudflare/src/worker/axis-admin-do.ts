@@ -226,6 +226,7 @@ export function createDurableObjectDependencies(
       pluginPolicyService,
       repositoryActivityService,
       repositoryArtifactStore: state.repositoryArtifacts,
+      repositoryObjectStore: objectStore,
       writeLock,
     }),
     repositoryActivityService,
