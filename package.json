@@ -23,6 +23,9 @@
       "SIGNING_KEY_ENCRYPTION_SECRET": {
         "description": "Encrypts repository signing keys before they are stored, so the keys apt clients trust are never at rest in the clear. Generate with `openssl rand -hex 32`. Lose it and the stored keys cannot be read back, which means re-signing every repository under a new key that clients have to be told about."
       },
+      "R2_BUCKET_NAME": {
+        "description": "The bucket this Worker is deployed with, named again here because signed URLs address it by name and a binding does not report the bucket it points at. If you renamed the bucket while setting this up, use that name: a mismatch leaves reads working through the binding while every upload and download addresses a bucket that is not yours."
+      },
       "R2_ACCOUNT_ID": {
         "description": "Your Cloudflare account ID, which is the host presigned upload URLs are signed for. Found on the right of the dashboard overview, or in the URL after `dash.cloudflare.com/`."
       },

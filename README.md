@@ -470,3 +470,8 @@ described in `package.json` under `cloudflare.bindings`, which is the text shown
 beside the field during setup. A secret added to the worker belongs in both:
 without the example entry nobody is asked for it, and without the description
 they are asked for a name with no indication of what to put there.
+
+`R2_BUCKET_NAME` is among them rather than set in `wrangler.jsonc`, because
+deploying may rename the bucket: the binding would follow the new name while a
+constant went on naming the old one, leaving reads working and every signed
+upload and download addressing a bucket that is not yours.

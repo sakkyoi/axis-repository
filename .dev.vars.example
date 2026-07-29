@@ -18,10 +18,15 @@ TOKEN_HASH_PEPPER=
 # Encrypts stored repository signing keys.
 SIGNING_KEY_ENCRYPTION_SECRET=
 
-# Signs the upload URLs a publishing client PUTs to, so artifact bytes go
-# straight to R2 rather than through the Worker. Create an R2 API token in the
-# dashboard under R2 > Manage API tokens, with object read and write on the
-# bucket this Worker is deployed with.
+# Signs the upload and download URLs clients use, so artifact bytes go straight
+# to R2 rather than through the Worker. Create an R2 API token in the dashboard
+# under R2 > Manage API tokens, with object read and write on the bucket this
+# Worker is deployed with.
+#
+# R2_BUCKET_NAME must be that same bucket: it is what the signed URLs address,
+# and a binding does not report the bucket it points at, so it cannot be
+# derived. Name a different one and every signed URL addresses somewhere else.
+R2_BUCKET_NAME=axis-repository
 R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=

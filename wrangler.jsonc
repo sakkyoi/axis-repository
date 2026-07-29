@@ -2,15 +2,13 @@
   "name": "axis-repository",
   "main": "packages/runtime-cloudflare/src/index.ts",
   "compatibility_date": "2026-07-12",
-  "vars": {
-    // The bucket presigned upload URLs are signed against. It names the same
-    // bucket as the AXIS_OBJECTS binding below and has to keep naming it: the
-    // binding is how the Worker reads objects, this is how a client is sent
-    // to write them.
-    "R2_BUCKET_NAME": "axis-repository"
-  },
   "r2_buckets": [
     {
+      // Signed upload and download URLs name this bucket too, as
+      // R2_BUCKET_NAME. A binding does not report the bucket it points at, so
+      // the name has to be given twice; it is asked for rather than set here,
+      // because renaming the bucket while deploying would leave a constant
+      // here naming a bucket that is not the one bound.
       "binding": "AXIS_OBJECTS",
       "bucket_name": "axis-repository"
     }

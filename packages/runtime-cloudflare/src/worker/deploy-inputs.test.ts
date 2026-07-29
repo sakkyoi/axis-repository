@@ -51,8 +51,26 @@ describe("what a deploy is asked to supply", () => {
     // bytes go straight to R2. Without these it cannot sign one, and refuses
     // every request rather than only the uploads.
     expect(exampleSecretNames()).toEqual(
-      expect.arrayContaining(["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]),
+      expect.arrayContaining([
+        "R2_ACCOUNT_ID",
+        "R2_ACCESS_KEY_ID",
+        "R2_SECRET_ACCESS_KEY",
+        // Asked for rather than configured: deploying may rename the bucket,
+        // and a constant in the Wrangler config would go on naming the old one
+        // while the binding followed the new.
+        "R2_BUCKET_NAME",
+      ]),
     );
+  });
+
+  it("does not also set a name it asks for", () => {
+    // A value given in both places is a value that can disagree with itself.
+    const wrangler = readFileSync(`${repositoryRoot}wrangler.jsonc`, "utf8");
+    const declaredVars = /"vars"\s*:\s*\{([^}]*)\}/.exec(wrangler)?.[1] ?? "";
+
+    for (const name of exampleSecretNames()) {
+      expect(declaredVars).not.toContain(`"${name}"`);
+    }
   });
 
   it("asks for a first account, there being no other way to make one", () => {
