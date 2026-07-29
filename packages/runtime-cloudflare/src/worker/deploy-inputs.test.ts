@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
 
 /**
  * What a deployment is asked for, and what it is told about each answer.
@@ -60,6 +61,40 @@ describe("what a deploy is asked to supply", () => {
     expect(exampleSecretNames()).toEqual(
       expect.arrayContaining(["AXIS_ADMIN_USERNAME", "AXIS_ADMIN_PASSWORD"]),
     );
+  });
+
+  it("documents a bucket policy that allows what an upload URL signs", async () => {
+    // The admin UI PUTs straight to the bucket, and a browser may not send
+    // these cross-origin unless CORS names them: the preflight is refused with
+    // 403, which says nothing about which header was the problem.
+    const target = await new R2PresignedUploadBroker({
+      bucket: { head: async () => null, get: async () => null },
+      accountId: "account123",
+      bucketName: "axis-repository",
+      accessKeyId: "access",
+      secretAccessKey: "secret",
+    }).createUploadTarget({
+      repositoryName: "debian-internal",
+      sessionId: "pub_1",
+      uploadId: "upl_1",
+      artifact: {
+        filename: "myapp_1.2.3_amd64.deb",
+        size: 1,
+        sha256: "a".repeat(64),
+        contentType: "application/vnd.debian.binary-package",
+        metadata: {},
+      },
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const policy = JSON.parse(readFileSync(`${repositoryRoot}docs/r2-cors.example.json`, "utf8")) as {
+      rules: Array<{ allowed: { headers?: string[]; methods: string[] } }>;
+    };
+    const allowed = policy.rules.flatMap((rule) => rule.allowed.headers ?? []);
+
+    expect(policy.rules.flatMap((rule) => rule.allowed.methods)).toContain(target.method);
+    expect(allowed.map((header) => header.toLowerCase()).sort())
+      .toEqual(Object.keys(target.headers).map((header) => header.toLowerCase()).sort());
   });
 
   it("says what each answer is for", () => {

@@ -1,0 +1,16 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": ["https://axis.example"],
+        "methods": ["PUT"],
+        "headers": [
+          "content-type",
+          "x-amz-meta-axis-sha256",
+          "x-amz-meta-axis-upload-id"
+        ]
+      },
+      "maxAgeSeconds": 3600
+    }
+  ]
+}

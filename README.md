@@ -97,6 +97,21 @@ endpoint, which `wrangler dev --local` does not serve. It is the local answer,
 not a smaller deployment: both modes store through the same `AXIS_OBJECTS`
 bucket and both serve reads through it. They differ in how bytes get in.
 
+Publishing from the admin UI needs one more thing under `r2`: the browser PUTs
+straight to the bucket, so the bucket has to allow it. The upload URL signs a
+content type and two `x-amz-meta-` headers, none of which a browser may send
+cross-origin unless CORS names them, and a preflight asking for them is refused
+with 403 until it does. [docs/r2-cors.example.json](docs/r2-cors.example.json)
+is that policy; put your admin origin in it and apply it:
+
+```bash
+wrangler r2 bucket cors set <bucket> --file docs/r2-cors.example.json
+```
+
+Nothing else needs it. apt, pip and twine are not browsers and no CORS applies
+to them, and downloads are redirects a client follows rather than cross-origin
+reads.
+
 Under `r2`, a client asking for an artifact is answered with a 302 to a signed
 URL and fetches the bytes from R2 itself. Every request this Worker answers is
 routed through one Durable Object, so serving the bytes meant streaming them
