@@ -63,6 +63,24 @@ describe("Pbkdf2PasswordHasher", () => {
     await expect(new Pbkdf2PasswordHasher("pepper", 1_000).verify(password, stored)).resolves.toBe(true);
   });
 
+  it("asks for no more work than the deployed runtime will do", async () => {
+    // Workers refuses above 100,000 and local development does not, so a
+    // higher count passes every check here and then stops a deployment from
+    // ever being signed in to: the refusal lands while the first password is
+    // being hashed, before any username has been looked at.
+    const stored = await new Pbkdf2PasswordHasher("pepper").hash("password");
+
+    expect(Number(stored.split("$")[1])).toBeLessThanOrEqual(100_000);
+  });
+
+  it("says so when a stored hash asks for more work than that", async () => {
+    // `AXIS_ADMIN_PASSWORD_HASH` is generated wherever its operator chose, and
+    // one made with today's recommended count would be refused by the runtime
+    // in terms that name neither the value nor the setting it came from.
+    await expect(hasher.verify("password", "pbkdf2-sha256$600000$c2FsdA$aGFzaA"))
+      .rejects.toThrow(/600000 PBKDF2 iterations.*at most 100000/);
+  });
+
   it("rejects malformed stored hashes instead of throwing", async () => {
     for (const malformed of [
       "pbkdf2-sha256$",
