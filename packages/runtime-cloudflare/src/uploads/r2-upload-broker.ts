@@ -1,14 +1,20 @@
 import { ValidationError, type PublishArtifactRequest, type UploadedObject, type UploadBroker, type UploadTarget } from "@axis-repository/core";
 import { AwsClient } from "aws4fetch";
 import { stagingObjectKey } from "./same-origin-upload-broker";
+import { digestStreamHex } from "../storage/digest";
 
 export interface R2ObjectLike {
   size: number;
   customMetadata?: Record<string, string>;
 }
 
+export interface R2ObjectBodyLike extends R2ObjectLike {
+  body: ReadableStream<Uint8Array> | null;
+}
+
 export interface R2BucketLike {
   head(key: string): Promise<R2ObjectLike | null>;
+  get(key: string): Promise<R2ObjectBodyLike | null>;
 }
 
 export interface R2PresignedUploadBrokerOptions {
@@ -111,6 +117,7 @@ export class R2PresignedUploadBroker implements UploadBroker {
     if (object.customMetadata?.["axis-upload-id"] !== input.target.uploadId) {
       throw new ValidationError(`Uploaded object upload id metadata mismatch: ${input.target.objectKey}`);
     }
+    await this.requireStoredBytesMatch(input.target.objectKey, input.expected.sha256);
 
     return {
       uploadId: input.target.uploadId,
@@ -118,6 +125,30 @@ export class R2PresignedUploadBroker implements UploadBroker {
       size: object.size,
       sha256: input.expected.sha256,
     };
+  }
+
+  /**
+   * Hashes what was stored, rather than trusting what the upload said.
+   *
+   * The metadata carrying the digest is signed into the upload URL, so it
+   * cannot be altered — but nothing binds it to the bytes. R2 validates no
+   * full-object SHA-256 on PutObject, so whoever holds the URL can write any
+   * body of the declared length and it would be published under a digest it
+   * does not have. A client checking the digest then refuses the download; one
+   * that does not check installs whatever arrived.
+   *
+   * This is the one point where a presigned upload's bytes pass through the
+   * Worker. They are read from R2 rather than over the network and hashed as
+   * they stream, so it costs a read and holds nothing.
+   */
+  private async requireStoredBytesMatch(objectKey: string, expectedSha256: string): Promise<void> {
+    const stored = await this.bucket.get(objectKey);
+    if (!stored?.body) {
+      throw new ValidationError(`Uploaded object is missing: ${objectKey}`);
+    }
+    if (await digestStreamHex("SHA-256", stored.body) !== expectedSha256) {
+      throw new ValidationError(`Uploaded object sha256 mismatch: ${objectKey}`);
+    }
   }
 
 

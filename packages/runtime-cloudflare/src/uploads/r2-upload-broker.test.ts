@@ -1,20 +1,42 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "@axis-repository/core";
 import { R2PresignedUploadBroker, type R2BucketLike } from "./r2-upload-broker";
+import { digestHex } from "../storage/digest";
+
+// Real bytes and their real digest: verification hashes what was stored, so a
+// fixture naming a digest nothing hashes to would only ever describe a failure.
+const artifactBytes = new Uint8Array(1234).fill(7);
+const artifactSha256 = await digestHex("SHA-256", artifactBytes);
 
 const artifact = {
   filename: "myapp_1.2.3_amd64.deb",
-  size: 1234,
-  sha256: "a".repeat(64),
+  size: artifactBytes.byteLength,
+  sha256: artifactSha256,
   contentType: "application/vnd.debian.binary-package",
   metadata: {},
 };
 
 class FakeR2Bucket implements R2BucketLike {
-  objects = new Map<string, { size: number; customMetadata: Record<string, string> }>();
+  objects = new Map<string, { size: number; customMetadata: Record<string, string>; bytes?: Uint8Array }>();
 
   async head(key: string) {
-    return this.objects.get(key) ?? null;
+    const stored = this.objects.get(key);
+    return stored ? { size: stored.size, customMetadata: stored.customMetadata } : null;
+  }
+
+  async get(key: string) {
+    const stored = this.objects.get(key);
+    if (!stored) {
+      return null;
+    }
+    // Bytes the fake was not given cannot be hashed, so a test that stores
+    // none is stating that the body is beside the point for what it checks.
+    const bytes = stored.bytes ?? new Uint8Array(0);
+    return {
+      size: stored.size,
+      customMetadata: stored.customMetadata,
+      body: new Response(bytes).body as ReadableStream<Uint8Array>,
+    };
   }
 }
 
@@ -56,7 +78,7 @@ describe("R2PresignedUploadBroker", () => {
       method: "PUT",
       headers: {
         "content-type": "application/vnd.debian.binary-package",
-        "x-amz-meta-axis-sha256": "a".repeat(64),
+        "x-amz-meta-axis-sha256": artifactSha256,
         "x-amz-meta-axis-upload-id": "upl_1",
       },
       expiresAt: "2026-07-14T00:15:00.000Z",
@@ -165,11 +187,12 @@ describe("R2PresignedUploadBroker", () => {
   it("verifies an uploaded R2 object", async () => {
     const { bucket, broker } = createBroker();
     bucket.objects.set("_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb", {
-      size: 1234,
+      size: artifactBytes.byteLength,
       customMetadata: {
-        "axis-sha256": "a".repeat(64),
+        "axis-sha256": artifactSha256,
         "axis-upload-id": "upl_1",
       },
+      bytes: artifactBytes,
     });
 
     await expect(
@@ -189,8 +212,39 @@ describe("R2PresignedUploadBroker", () => {
       uploadId: "upl_1",
       objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
       size: 1234,
-      sha256: "a".repeat(64),
+      sha256: artifactSha256,
     });
+  });
+
+  it("rejects bytes that are not what the upload said they were", async () => {
+    // The digest is signed into the upload URL, so it cannot be altered — but
+    // nothing binds it to the body, and R2 validates no full-object SHA-256 on
+    // PutObject. Whoever holds the URL can write any body of the declared
+    // length, and it used to be published under a digest it does not have.
+    const { bucket, broker } = createBroker();
+    bucket.objects.set("_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb", {
+      size: artifactBytes.byteLength,
+      customMetadata: {
+        "axis-sha256": artifactSha256,
+        "axis-upload-id": "upl_1",
+      },
+      bytes: new Uint8Array(artifactBytes.byteLength).fill(9),
+    });
+
+    await expect(
+      broker.verifyUpload({
+        target: {
+          uploadId: "upl_1",
+          filename: artifact.filename,
+          objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+          method: "PUT",
+          url: "https://example",
+          headers: {},
+          expiresAt: "2026-07-14T00:15:00.000Z",
+        },
+        expected: artifact,
+      }),
+    ).rejects.toThrow(/sha256 mismatch/);
   });
 
   it("rejects missing uploaded objects", async () => {
@@ -227,7 +281,7 @@ describe("R2PresignedUploadBroker", () => {
     bucket.objects.set(target.objectKey, {
       size: 999,
       customMetadata: {
-        "axis-sha256": "a".repeat(64),
+        "axis-sha256": artifactSha256,
         "axis-upload-id": "upl_1",
       },
     });
@@ -245,7 +299,7 @@ describe("R2PresignedUploadBroker", () => {
     bucket.objects.set(target.objectKey, {
       size: 1234,
       customMetadata: {
-        "axis-sha256": "a".repeat(64),
+        "axis-sha256": artifactSha256,
         "axis-upload-id": "other",
       },
     });
