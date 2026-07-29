@@ -199,6 +199,7 @@ type TestAxisEnv = {
   R2_ACCESS_KEY_ID?: string | undefined;
   R2_SECRET_ACCESS_KEY?: string | undefined;
   UPLOAD_URL_TTL_SECONDS?: string | undefined;
+  DOWNLOAD_URL_TTL_SECONDS?: string | undefined;
   UPLOAD_BACKEND?: string | undefined;
   AXIS_ARTIFACT_ORIGIN?: string | undefined;
 };
@@ -490,7 +491,7 @@ describe("AxisAdminDO", () => {
         body: JSON.stringify({
           name: "github-actions",
           repositories: ["debian-internal"],
-          permissions: ["publish"],
+          permissions: ["publish", "read"],
           ecosystemScopes: {},
           signingKeyIds: [signingKey.id],
         }),
@@ -726,15 +727,26 @@ describe("AxisAdminDO", () => {
     expect(readBucketText(bucket, "repositories/debian-internal/dists/noble/Release.gpg"))
       .toContain("-----BEGIN PGP SIGNATURE-----");
 
+    // Where uploads are presigned, reads are too: the request is answered, the
+    // transfer is not. Otherwise every byte a client downloads crosses this
+    // Durable Object, which bills for holding it and is the one place every
+    // download in the deployment passes through.
     const read = await object.fetch(
       new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease", {
         headers: { authorization: `Bearer ${tokenBody.secret}` },
       }),
     );
 
-    expect(read.status).toBe(200);
-    expect(read.headers.get("content-type")).toBe("text/plain; charset=utf-8");
-    await expect(read.text()).resolves.toContain("-----BEGIN PGP SIGNED MESSAGE-----");
+    expect(read.status).toBe(302);
+    const signed = new URL(read.headers.get("location") ?? "");
+    expect(signed.origin).toBe("https://account123.r2.cloudflarestorage.com");
+    expect(signed.pathname).toBe(
+      "/axis-repository/repositories/debian-internal/dists/noble/InRelease",
+    );
+    expect(signed.searchParams.get("X-Amz-Algorithm")).toBe("AWS4-HMAC-SHA256");
+    // A private repository's redirect names a URL that reads the object
+    // without the token that just authorized it, so it is not stored anywhere.
+    expect(read.headers.get("cache-control")).toBe("private, no-store");
 
     const basicRead = await object.fetch(
       new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease", {
@@ -742,23 +754,27 @@ describe("AxisAdminDO", () => {
       }),
     );
 
-    expect(basicRead.status).toBe(200);
-    await expect(basicRead.text()).resolves.toContain("-----BEGIN PGP SIGNED MESSAGE-----");
+    expect(basicRead.status).toBe(302);
 
-    const rangedRead = await object.fetch(
+    const unauthorizedRead = await object.fetch(
+      new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease"),
+    );
+
+    // The signed URL is a capability, so it is handed out only to a reader the
+    // repository would have served.
+    expect(unauthorizedRead.status).toBe(401);
+
+    // HEAD is answered from metadata and never carried the bytes, so sending
+    // it away would only add a round trip.
+    const head = await object.fetch(
       new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease", {
-        headers: {
-          authorization: `Bearer ${tokenBody.secret}`,
-          range: "bytes=0-9",
-        },
+        method: "HEAD",
+        headers: { authorization: `Bearer ${tokenBody.secret}` },
       }),
     );
 
-    expect(rangedRead.status).toBe(206);
-    expect(rangedRead.headers.get("content-range")).toMatch(/^bytes 0-9\/\d+$/);
-    expect(rangedRead.headers.get("content-length")).toBe("10");
-    expect(rangedRead.headers.get("etag")).toBeTruthy();
-    await expect(rangedRead.text()).resolves.toBe("-----BEGIN");
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toBe("text/plain; charset=utf-8");
   });
 
   it("fails closed when finalizing an unregistered ecosystem with memory backend", async () => {
@@ -957,7 +973,7 @@ describe("AxisAdminDO", () => {
         body: JSON.stringify({
           name: "github-actions",
           repositories: ["debian-internal"],
-          permissions: ["publish"],
+          permissions: ["publish", "read"],
           ecosystemScopes: { apt: { allowedPackages: ["myapp"] } },
           signingKeyIds: ["signing_key_prod"],
         }),
@@ -1023,6 +1039,37 @@ describe("AxisAdminDO", () => {
     );
 
     expect(verify.status).toBe(200);
+
+    // Nothing to sign a URL against here, so the Worker still carries the
+    // bytes — including the ranged reads apt makes of an index.
+    bucket.objects.set("repositories/debian-internal/dists/noble/InRelease", {
+      value: "-----BEGIN PGP SIGNED MESSAGE-----\nrest",
+      contentType: "text/plain; charset=utf-8",
+    });
+
+    const read = await object.fetch(
+      new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease", {
+        headers: { authorization: `Bearer ${tokenBody.secret}` },
+      }),
+    );
+
+    expect(read.status).toBe(200);
+    expect(read.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    await expect(read.text()).resolves.toContain("-----BEGIN PGP SIGNED MESSAGE-----");
+
+    const rangedRead = await object.fetch(
+      new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease", {
+        headers: {
+          authorization: `Bearer ${tokenBody.secret}`,
+          range: "bytes=0-9",
+        },
+      }),
+    );
+
+    expect(rangedRead.status).toBe(206);
+    expect(rangedRead.headers.get("content-range")).toMatch(/^bytes 0-9\/\d+$/);
+    expect(rangedRead.headers.get("content-length")).toBe("10");
+    await expect(rangedRead.text()).resolves.toBe("-----BEGIN");
   });
 });
 

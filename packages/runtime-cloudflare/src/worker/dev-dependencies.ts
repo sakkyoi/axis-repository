@@ -23,6 +23,7 @@ import { MemoryRepositoryObjectStore } from "../storage/repository-object-store"
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
+import type { RepositoryObjectDownloadSigner } from "../storage/object-download-url";
 
 export interface AppDependencies {
   adminAuthService: AdminAuthService;
@@ -41,6 +42,12 @@ export interface AppDependencies {
   pluginPolicyService: PluginPolicyService;
   repositorySecrets: RepositorySecretService;
   repositoryObjectStore: RepositoryObjectStore;
+  /**
+   * Signs URLs clients fetch stored objects from directly. Unset where there
+   * is nothing to sign against — a local bucket or an in-memory one — and the
+   * Worker serves the bytes itself.
+   */
+  repositoryObjectDownloadSigner?: RepositoryObjectDownloadSigner;
   localUploadBroker?: SameOriginUploadBroker;
   repositoryRuntimePlugins: RepositoryRuntimePluginRegistry;
   repositoryWriteLock: RepositoryWriteLock;

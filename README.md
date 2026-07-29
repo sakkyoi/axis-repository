@@ -97,6 +97,21 @@ endpoint, which `wrangler dev --local` does not serve. It is the local answer,
 not a smaller deployment: both modes store through the same `AXIS_OBJECTS`
 bucket and both serve reads through it. They differ in how bytes get in.
 
+Under `r2`, a client asking for an artifact is answered with a 302 to a signed
+URL and fetches the bytes from R2 itself. Every request this Worker answers is
+routed through one Durable Object, so serving the bytes meant streaming them
+through it — billed for the whole transfer, and the one place every download in
+the deployment passes through. The request is still answered here: the path is
+resolved, the reader is authorized, and only the transfer moves. `DOWNLOAD_URL_TTL_SECONDS`
+sets how long a signed URL lasts, defaulting to 300.
+
+A public repository's redirect may be cached, but never past the URL it names;
+a private one's is never stored, the URL being a capability that outlives the
+token that produced it. Directory listings are generated rather than stored, so
+they have nothing to redirect to and are served here. So is `HEAD`, which reads
+metadata and never carried the bytes. Under `local-r2` and `memory` there is
+nothing to sign against and the Worker serves everything.
+
 Both hash what was stored and refuse a mismatch. Under `r2` that is the one
 point where a presigned upload's bytes pass through the Worker, and it is not
 optional: the digest is signed into the upload URL but nothing binds it to the

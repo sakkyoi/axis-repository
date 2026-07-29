@@ -243,6 +243,34 @@ function repositoryCacheControl(repository: Repository): string {
   return repository.visibility === "public" ? "public, max-age=300" : "private, no-store";
 }
 
+/**
+ * Sends a client to fetch the object for itself.
+ *
+ * The redirect may be cached, but never for longer than the URL it names stays
+ * valid: a cache holding it past that would send readers to a signature R2 has
+ * stopped accepting. A private repository's redirect is not stored at all,
+ * since the URL is a capability to read the object and outlives the
+ * authorization that produced it.
+ */
+function signedObjectRedirect(input: {
+  url: string;
+  ttlSeconds: number;
+  repository: Repository;
+  varyOnAccept: boolean;
+}): Response {
+  const headers = new Headers({ location: input.url });
+  headers.set(
+    "cache-control",
+    input.repository.visibility === "public"
+      ? `public, max-age=${Math.max(0, Math.floor(input.ttlSeconds / 2))}`
+      : "private, no-store",
+  );
+  if (input.varyOnAccept) {
+    headers.set("vary", "Accept");
+  }
+  return new Response(null, { status: 302, headers });
+}
+
 function parseRangeHeader(rangeHeader: string | null, contentLength: number | undefined): ParsedRange | null {
   if (!rangeHeader) {
     return null;
@@ -1818,6 +1846,26 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       throw new NotFoundError();
     }
     const cacheControl = repositoryCacheControl(repository);
+    // A signed URL is handed back rather than the bytes: every request here is
+    // routed through one Durable Object, and streaming an artifact through it
+    // bills for the whole transfer and makes that object the point every
+    // download in the deployment passes through. The request itself still
+    // resolves the path and decides who may read it — only the transfer moves.
+    //
+    // HEAD is answered from metadata and never touched the bytes, so it stays;
+    // redirecting it would add a round trip and take nothing off the Worker.
+    const downloadSigner = dependencies.repositoryObjectDownloadSigner;
+    if (downloadSigner && request.method === "GET") {
+      return signedObjectRedirect({
+        url: await downloadSigner.sign(objectKey),
+        ttlSeconds: downloadSigner.ttlSeconds,
+        repository,
+        // The Simple API answers one path with either page depending on what
+        // was asked for, so a cache must not hand a JSON reader the redirect
+        // signed for the HTML one.
+        varyOnAccept: served.contentType !== undefined,
+      });
+    }
     const rangeHeader = request.method === "GET" ? request.headers.get("range") : null;
     const parsedRange = parseRangeHeader(rangeHeader, metadata.contentLength);
     if (rangeHeader && !parsedRange) {

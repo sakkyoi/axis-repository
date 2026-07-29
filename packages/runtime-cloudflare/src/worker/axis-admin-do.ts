@@ -15,6 +15,7 @@ import { DurableStateStore, type DurableStorage } from "../storage/durable-state
 import type { AppDependencies } from "./dev-dependencies";
 import { SameOriginUploadBroker } from "../uploads/same-origin-upload-broker";
 import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
+import { R2PresignedDownloadSigner } from "../storage/object-download-url";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
 import { SecretEncryption } from "../storage/secret-encryption";
@@ -40,6 +41,7 @@ export interface AxisEnv {
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
   UPLOAD_URL_TTL_SECONDS?: string;
+  DOWNLOAD_URL_TTL_SECONDS?: string;
   UPLOAD_BACKEND?: string;
   ADMIN_UI_API_BASE_URL?: string;
   AXIS_ARTIFACT_ORIGIN?: string;
@@ -165,6 +167,7 @@ export function createDurableObjectDependencies(
     encryption,
   });
   const uploadUrlTtlSeconds = optionalPositiveInteger(env.UPLOAD_URL_TTL_SECONDS, "UPLOAD_URL_TTL_SECONDS");
+  const downloadUrlTtlSeconds = optionalPositiveInteger(env.DOWNLOAD_URL_TTL_SECONDS, "DOWNLOAD_URL_TTL_SECONDS");
   const uploadBackend = parseUploadBackend(env.UPLOAD_BACKEND);
   const objectStore = uploadBackend === "memory"
     ? new MemoryRepositoryObjectStore()
@@ -179,6 +182,18 @@ export function createDurableObjectDependencies(
       secretAccessKey: requiredEnv(env.R2_SECRET_ACCESS_KEY, "R2_SECRET_ACCESS_KEY"),
       ...(uploadUrlTtlSeconds === undefined ? {} : { uploadUrlTtlSeconds }),
     });
+  // Downloads are signed with the same credentials as uploads, so they are
+  // handed out wherever those exist. A local or in-memory bucket has nothing
+  // to sign against, and the Worker serves those bytes itself.
+  const downloadSigner = uploadBackend === "r2"
+    ? new R2PresignedDownloadSigner({
+      accountId: requiredEnv(env.R2_ACCOUNT_ID, "R2_ACCOUNT_ID"),
+      bucketName: requiredEnv(env.R2_BUCKET_NAME, "R2_BUCKET_NAME"),
+      accessKeyId: requiredEnv(env.R2_ACCESS_KEY_ID, "R2_ACCESS_KEY_ID"),
+      secretAccessKey: requiredEnv(env.R2_SECRET_ACCESS_KEY, "R2_SECRET_ACCESS_KEY"),
+      ...(downloadUrlTtlSeconds === undefined ? {} : { ttlSeconds: downloadUrlTtlSeconds }),
+    })
+    : undefined;
   const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, secrets: repositorySecrets });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const pluginPolicyService = new PluginPolicyService({ state });
@@ -235,6 +250,7 @@ export function createDurableObjectDependencies(
     pluginPolicyService,
     repositorySecrets,
     repositoryObjectStore: objectStore,
+    ...(downloadSigner ? { repositoryObjectDownloadSigner: downloadSigner } : {}),
     ...(uploadBroker instanceof SameOriginUploadBroker ? { localUploadBroker: uploadBroker } : {}),
     repositoryRuntimePlugins,
     repositoryWriteLock: writeLock,
