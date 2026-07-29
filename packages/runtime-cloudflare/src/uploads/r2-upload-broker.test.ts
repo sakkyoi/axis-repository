@@ -272,7 +272,7 @@ describe("R2PresignedUploadBroker", () => {
         },
         expected: artifact,
       }),
-    ).rejects.toThrow(/R2_BUCKET_NAME.*AXIS_OBJECTS is bound to/s);
+    ).rejects.toThrow(/R2_BUCKET_NAME.*remote: true/s);
   });
 
   it("rejects bytes that are not what the upload said they were", async () => {

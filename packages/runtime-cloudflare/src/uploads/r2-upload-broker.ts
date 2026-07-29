@@ -153,10 +153,12 @@ export class R2PresignedUploadBroker implements UploadBroker {
    * a mismatch cannot be caught when it is configured — only here, where an
    * upload that plainly succeeded is nowhere to be found.
    *
-   * Asking the signed side settles which it is. Finding the object there means
-   * the two names differ, and saying so is the difference between fixing one
-   * line and searching for an upload that was never lost. Failing to ask
-   * changes nothing about what went wrong, so it falls back to the plain
+   * Asking the signed side is what separates an upload that never arrived from
+   * one the binding cannot see, which is the difference between searching for
+   * a lost file and fixing a line of configuration. Which line, it does not
+   * claim to know: a binding reading local state under `wrangler dev` looks
+   * exactly like one bound to another bucket, and both are named. Failing to
+   * ask changes nothing about what went wrong, so it falls back to the plain
    * account of it.
    */
   private async missingObjectMessage(objectKey: string): Promise<string> {
@@ -168,10 +170,12 @@ export class R2PresignedUploadBroker implements UploadBroker {
     } catch {
       return missing;
     }
-    return `${missing}. It is in ${this.bucketName}, which R2_BUCKET_NAME names,`
-      + " but not in the bucket AXIS_OBJECTS is bound to. Both have to name the"
-      + " same bucket: uploads and downloads address the first, and everything"
-      + " else reads through the second.";
+    return `${missing}. The upload reached ${this.bucketName}, which`
+      + " R2_BUCKET_NAME names, and the AXIS_OBJECTS binding does not see it"
+      + " there. Either the binding is bound to a differently named bucket, or"
+      + " it is not reading the real one — `wrangler dev` answers a binding"
+      + " from local state unless the bucket is marked `remote: true`, while a"
+      + " signed URL always addresses R2 itself.";
   }
 
   private async signedBucketHasObject(objectKey: string): Promise<boolean> {
