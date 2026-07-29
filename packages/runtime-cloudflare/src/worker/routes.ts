@@ -53,10 +53,15 @@ export function jsonResponse(value: unknown, init?: ResponseInit): Response {
 }
 
 export function errorResponse(error: unknown): Response {
-
   if (error instanceof AxisError) {
     return jsonResponse({ error: { code: error.code, message: error.message } }, { status: error.status });
   }
+  // An error nothing here anticipated is the one worth being able to read. The
+  // response cannot carry it — it may say more about the deployment than a
+  // caller should learn — so it is logged, where `wrangler tail` will show it.
+  // Caught and answered, it raises no exception the runtime would report, so
+  // without this a 500 leaves no account of itself anywhere.
+  console.error("unhandled error while answering request:", error);
   return jsonResponse(
     { error: { code: "internal_error", message: "Internal Server Error" } },
     { status: 500 },
