@@ -3,7 +3,7 @@ import { createApp } from "./app";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { createDevDependencies, createDevDependencyHarness } from "./dev-dependencies";
 import { debArchive } from "@axis-repository/plugin-apt/test-support";
-import { sdistBytes } from "@axis-repository/plugin-pypi/test-support";
+import { sdistBytes, wheelBytes } from "@axis-repository/plugin-pypi/test-support";
 import type { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 
 afterEach(() => {
@@ -770,7 +770,7 @@ describe("Cloudflare runtime routes", () => {
           enabled: true,
           catalogEnabled: true,
           enabledOverride: null,
-          experimental: true,
+          experimental: false,
           runtime: true,
           adminUi: true,
           capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
@@ -1051,7 +1051,7 @@ describe("Cloudflare runtime routes", () => {
         {
           ecosystem: "pypi",
           enabled: true,
-          experimental: true,
+          experimental: false,
           runtime: true,
           adminUi: true,
           name: "pypi-simple",
@@ -5375,6 +5375,36 @@ describe("publishing a PyPI package the way twine does", () => {
       harness.repositoryObjectStore,
       "repositories/python-internal/simple/alpha/index.html",
     )).toContain("alpha-1.0.tar.gz");
+  });
+
+  it("publishes a wheel, whose metadata is read a different way", async () => {
+    // An sdist is walked from the front as a gzip stream; a wheel is a zip,
+    // read through its directory at the end. Uploading only ever exercised the
+    // first, so nothing pinned that a streamed wheel could be read at all.
+    const { harness, app, token } = await pypiUploadHarness();
+    const bytes = wheelBytes({ name: "alpha", version: "1.0" });
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/legacy/",
+      {
+        method: "POST",
+        headers: { authorization: basic(token) },
+        body: await uploadForm({ filename: "alpha-1.0-py3-none-any.whl", bytes }),
+      },
+    ));
+
+    expect(response.status).toBe(200);
+    const page = readStoredText(
+      harness.repositoryObjectStore,
+      "repositories/python-internal/simple/alpha/index.html",
+    );
+    expect(page).toContain("alpha-1.0-py3-none-any.whl");
+    // Read out of the wheel rather than off the request, so a page carrying it
+    // means the zip was opened and its METADATA entry found.
+    expect(page).toContain("data-core-metadata=");
+    await expect(harness.repositoryObjectStore.headObject(
+      "repositories/python-internal/packages/alpha/alpha-1.0-py3-none-any.whl.metadata",
+    )).resolves.not.toBeNull();
   });
 
   it("refuses an upload with no credentials", async () => {
