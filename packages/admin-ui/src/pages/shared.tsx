@@ -7,14 +7,15 @@ export function PageHeader({
   action,
 }: {
   title: string;
-  description: string;
+  /** Omitted when the page has nothing to describe, as on a page that 404s. */
+  description?: string;
   action?: React.ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
         <h1 className="text-xl font-semibold">{title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
       </div>
       {action}
     </div>
@@ -47,7 +48,7 @@ export function PageShell({
   children,
 }: {
   title: string;
-  description: string;
+  description?: string;
   action?: React.ReactNode;
   className?: string;
   bodyClassName?: string;
@@ -55,7 +56,7 @@ export function PageShell({
 }) {
   return (
     <section className={cn("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5", className)}>
-      <PageHeader title={title} description={description} action={action} />
+      <PageHeader title={title} {...(description ? { description } : {})} action={action} />
       <div className={cn("grid min-h-0 content-start gap-5 overflow-y-auto pr-1", bodyClassName)}>
         {children}
       </div>
@@ -65,6 +66,34 @@ export function PageShell({
 
 export function EmptyState({ message }: { message: string }) {
   return <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{message}</div>;
+}
+
+/**
+ * What a page shows when the thing it is about does not exist.
+ *
+ * Distinct from an empty state, which says a place is ready and nothing has
+ * been put in it yet. This says the address was wrong, so it carries a way
+ * back — a page reached by a stale link or a typo otherwise strands whoever
+ * followed it.
+ */
+export function NotFoundState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="grid min-h-0 place-items-center rounded-lg border border-dashed border-border bg-panel p-8">
+      <div className="grid max-w-sm justify-items-center gap-3 text-center">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <p className="text-sm text-muted-foreground">{description}</p>
+        {action}
+      </div>
+    </div>
+  );
 }
 
 export function formatDate(value: string | null | undefined): string {

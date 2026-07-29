@@ -17,7 +17,7 @@ import { repositorySettingsSectionsFor, repositoryWorkspaceSectionsFor } from ".
 import { PublishSessionsSection, RepositoryDetailSections } from "../repositories/detail/repository-detail-shared";
 import type { RepositoryDetailSection } from "../repositories/plugins/repository-ui-plugin-types";
 import { repositoryDeleteDialogContent, repositoryDetailBodyClass } from "../repositories/detail/repository-page-model";
-import { EmptyState, ErrorState, PageShell } from "./shared";
+import { EmptyState, ErrorState, NotFoundState, PageShell } from "./shared";
 import { getRepositoryPublishPlugin } from "../repositories/plugins/repository-ui-plugins";
 import {
   filesFromFileList,
@@ -317,6 +317,18 @@ function useRepositoryByName(repositories: Repository[] | undefined, name: strin
   );
 }
 
+/** The way out of a page whose repository does not exist. */
+function RepositoriesLinkButton() {
+  const navigate = useNavigate();
+
+  return (
+    <Button type="button" variant="outline" onClick={() => navigate(ADMIN_UI_PATHS.repositories)}>
+      <ArrowLeft className="mr-2 h-4 w-4" />
+      Repositories
+    </Button>
+  );
+}
+
 function RepositoryPageShell({
   repositoryName,
   repository,
@@ -342,19 +354,29 @@ function RepositoryPageShell({
   onPublishFiles?: (files: File[]) => void;
   afterSections?: React.ReactNode;
 }) {
+  const missing = !isLoading && !error && !repository;
+
   return (
     <PageShell
       title={title}
-      description={description}
+      // A page about a repository that is not there has nothing to describe,
+      // and the description promises what the page cannot show.
+      {...(missing ? {} : { description })}
       action={action}
-      bodyClassName="min-h-0 overflow-hidden rounded-lg border border-border bg-panel p-0"
+      // The panel is the repository's frame. Every other state brings its own,
+      // and nesting the two draws a box inside a box.
+      {...(repository ? { bodyClassName: "min-h-0 overflow-hidden rounded-lg border border-border bg-panel p-0" } : {})}
     >
-        {error ? <div className="p-4"><ErrorState error={error} /></div> : null}
-        {isLoading && <div className="p-4 text-sm text-muted-foreground">Loading repository...</div>}
-        {!isLoading && !error && !repository && (
-          <div className="p-4">
-            <EmptyState message={`Repository not found${repositoryName ? `: ${repositoryName}` : "."}`} />
-          </div>
+        {error ? <ErrorState error={error} /> : null}
+        {isLoading && <div className="text-sm text-muted-foreground">Loading repository...</div>}
+        {missing && (
+          <NotFoundState
+            title="Repository not found"
+            description={repositoryName
+              ? `Nothing here is named ${repositoryName}. It may have been deleted, or renamed since this link was made.`
+              : "This address does not name a repository."}
+            action={<RepositoriesLinkButton />}
+          />
         )}
         {repository && (
           <div className={repositoryDetailBodyClass()}>
