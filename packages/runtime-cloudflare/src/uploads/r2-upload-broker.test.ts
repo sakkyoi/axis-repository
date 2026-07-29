@@ -216,6 +216,34 @@ describe("R2PresignedUploadBroker", () => {
     });
   });
 
+  it("accepts an object the Worker put there itself", async () => {
+    // A twine upload is received by the Worker and copied into the session's
+    // staging slot, so it carries none of the metadata a presigned PUT would
+    // have set. That used to be refused, which meant twine worked only on the
+    // backend a deployment does not use.
+    const { bucket, broker } = createBroker();
+    bucket.objects.set("_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb", {
+      size: artifactBytes.byteLength,
+      customMetadata: {},
+      bytes: artifactBytes,
+    });
+
+    await expect(
+      broker.verifyUpload({
+        target: {
+          uploadId: "upl_1",
+          filename: artifact.filename,
+          objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
+          method: "PUT",
+          url: "https://example",
+          headers: {},
+          expiresAt: "2026-07-14T00:15:00.000Z",
+        },
+        expected: artifact,
+      }),
+    ).resolves.toMatchObject({ sha256: artifactSha256 });
+  });
+
   it("rejects bytes that are not what the upload said they were", async () => {
     // The digest is signed into the upload URL, so it cannot be altered — but
     // nothing binds it to the body, and R2 validates no full-object SHA-256 on

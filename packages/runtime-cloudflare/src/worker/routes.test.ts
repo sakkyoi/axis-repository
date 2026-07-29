@@ -5517,6 +5517,42 @@ describe("negotiating the PyPI Simple API", () => {
     return { harness, app };
   }
 
+  it("answers a Simple page itself even where objects are handed off", async () => {
+    // pip resolves the links in a page against wherever that page came from.
+    // Sent to storage, `../../packages/x.whl` resolves against the signed URL
+    // and becomes an unsigned one the bucket refuses with a 400 — which is
+    // what real pip hit. Only the files the page names are redirected.
+    const { harness } = await published();
+    const dependencies = {
+      ...harness.dependencies,
+      repositoryObjectDownloadSigner: {
+        ttlSeconds: 300,
+        sign: async (key: string) => `https://storage.example/${key}?signed=1`,
+      },
+    };
+    const signing = createApp(dependencies);
+
+    const page = await signing.fetch(
+      new Request("https://axis.example/repositories/python-public/simple/"),
+    );
+
+    expect(page.status).toBe(200);
+    await expect(page.text()).resolves.toContain("alpha");
+
+    // The distribution itself is addressed directly and is handed off.
+    await harness.repositoryObjectStore.putBytes(
+      "repositories/python-public/packages/alpha/alpha-1.0.tar.gz",
+      new TextEncoder().encode("sdist"),
+      "application/octet-stream",
+    );
+    const file = await signing.fetch(
+      new Request("https://axis.example/repositories/python-public/packages/alpha/alpha-1.0.tar.gz"),
+    );
+
+    expect(file.status).toBe(302);
+    expect(file.headers.get("location")).toContain("signed=1");
+  });
+
   it("answers with JSON when the client prefers it", async () => {
     // The Accept header pip actually sends.
     const { app } = await published();

@@ -256,7 +256,6 @@ function signedObjectRedirect(input: {
   url: string;
   ttlSeconds: number;
   repository: Repository;
-  varyOnAccept: boolean;
 }): Response {
   const headers = new Headers({ location: input.url });
   headers.set(
@@ -265,9 +264,6 @@ function signedObjectRedirect(input: {
       ? `public, max-age=${Math.max(0, Math.floor(input.ttlSeconds / 2))}`
       : "private, no-store",
   );
-  if (input.varyOnAccept) {
-    headers.set("vary", "Accept");
-  }
   return new Response(null, { status: 302, headers });
 }
 
@@ -1854,16 +1850,19 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     //
     // HEAD is answered from metadata and never touched the bytes, so it stays;
     // redirecting it would add a round trip and take nothing off the Worker.
+    // A request the plugin resolved to some other path is a generated index
+    // addressed as a directory, and a client reads links out of it relative to
+    // wherever it ended up. Sent to storage, `../../packages/x.whl` resolves
+    // against the signed URL and becomes an unsigned one the bucket refuses.
+    // Those are answered here so the links keep pointing at this origin; they
+    // are small, and every file they name is redirected.
+    const isGeneratedIndex = served.objectPath !== relativePath;
     const downloadSigner = dependencies.repositoryObjectDownloadSigner;
-    if (downloadSigner && request.method === "GET") {
+    if (downloadSigner && request.method === "GET" && !isGeneratedIndex) {
       return signedObjectRedirect({
         url: await downloadSigner.sign(objectKey),
         ttlSeconds: downloadSigner.ttlSeconds,
         repository,
-        // The Simple API answers one path with either page depending on what
-        // was asked for, so a cache must not hand a JSON reader the redirect
-        // signed for the HTML one.
-        varyOnAccept: served.contentType !== undefined,
       });
     }
     const rangeHeader = request.method === "GET" ? request.headers.get("range") : null;

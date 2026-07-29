@@ -111,12 +111,11 @@ export class R2PresignedUploadBroker implements UploadBroker {
     if (object.size !== input.expected.size) {
       throw new ValidationError(`Uploaded object size mismatch: ${input.target.objectKey}`);
     }
-    if (object.customMetadata?.["axis-sha256"] !== input.expected.sha256) {
-      throw new ValidationError(`Uploaded object sha256 metadata mismatch: ${input.target.objectKey}`);
-    }
-    if (object.customMetadata?.["axis-upload-id"] !== input.target.uploadId) {
-      throw new ValidationError(`Uploaded object upload id metadata mismatch: ${input.target.objectKey}`);
-    }
+    // The digest and upload id signed into the upload URL are stored as
+    // metadata, and were once checked here. Hashing the bytes says the same
+    // thing and more, and unlike the metadata it holds however the object got
+    // there: a protocol upload the Worker received and copied into place
+    // carries no metadata from a PUT that never happened, and was refused.
     await this.requireStoredBytesMatch(input.target.objectKey, input.expected.sha256);
 
     return {
