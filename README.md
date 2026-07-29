@@ -97,11 +97,12 @@ endpoint, which `wrangler dev --local` does not serve. It is the local answer,
 not a smaller deployment: both modes store through the same `AXIS_OBJECTS`
 bucket and both serve reads through it. They differ in how bytes get in.
 
-One consequence is worth knowing before choosing it deliberately: `local-r2`
-re-hashes what it stored and rejects a mismatch, while `r2` checks the size and
-the digest signed into the upload URL without ever hashing the bytes. Uploads
-that arrive over `/legacy/` are hashed as they stream either way, being handled
-before any of this.
+Both hash what was stored and refuse a mismatch. Under `r2` that is the one
+point where a presigned upload's bytes pass through the Worker, and it is not
+optional: the digest is signed into the upload URL but nothing binds it to the
+body, and R2 validates no full-object SHA-256 on `PutObject`, so an unhashed
+upload would be published under a digest it does not have. The read is from R2
+rather than over the network and is hashed as it streams.
 
 For pure local development without Wrangler R2, use memory upload mode:
 
@@ -127,10 +128,28 @@ pnpm dev:worker
 
 The `--local` flag keeps Worker bindings local. With `UPLOAD_BACKEND=local-r2`,
 uploads go through the Worker and land in Wrangler's local `AXIS_OBJECTS` R2
-state. With `UPLOAD_BACKEND=r2`, Axis signs presigned `PUT` URLs for real R2
-using the `R2_*` credentials above, so end-to-end verification requires the
-Worker `AXIS_OBJECTS` binding to read the same R2 bucket that receives the
-upload.
+state.
+
+Testing `UPLOAD_BACKEND=r2` needs more, because a presigned URL is signed
+against the real R2 endpoint: the upload lands in the real bucket, while a
+`--local` binding reads Wrangler's own state, and verification finds nothing.
+Mark the binding remote so both halves address the same bucket, and drop
+`--local`, which turns every remote binding back off:
+
+```jsonc
+// wrangler.jsonc
+"r2_buckets": [
+  { "binding": "AXIS_OBJECTS", "bucket_name": "axis-repository", "remote": true }
+]
+```
+
+```bash
+wrangler dev
+```
+
+The Worker still runs locally; only that binding is answered by the deployed
+bucket, which means real objects and real storage charges. Wrangler prints
+`remote` beside the binding when this is in effect.
 
 Log in to get a short-lived admin access token:
 
