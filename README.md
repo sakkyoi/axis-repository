@@ -156,30 +156,34 @@ Start the local worker after choosing one of the `.dev.vars` blocks above:
 pnpm dev:worker
 ```
 
-The `--local` flag keeps Worker bindings local. With `UPLOAD_BACKEND=local-r2`,
-uploads go through the Worker and land in Wrangler's local `AXIS_OBJECTS` R2
-state.
+With `UPLOAD_BACKEND=local-r2` the Worker runs with bindings kept local, and
+uploads go through it into Wrangler's own `AXIS_OBJECTS` R2 state, reaching
+nothing outside the machine.
 
-Testing `UPLOAD_BACKEND=r2` needs more, because a presigned URL is signed
-against the real R2 endpoint: the upload lands in the real bucket, while a
-`--local` binding reads Wrangler's own state, and verification finds nothing.
-Mark the binding remote so both halves address the same bucket, and drop
-`--local`, which turns every remote binding back off:
-
-```jsonc
-// wrangler.jsonc
-"r2_buckets": [
-  { "binding": "AXIS_OBJECTS", "bucket_name": "axis-repository", "remote": true }
-]
-```
+Testing `UPLOAD_BACKEND=r2` needs a bucket a signed URL can reach, because one
+always addresses R2 itself: a binding answered from local state never sees what
+was uploaded, and publishing reports a file that plainly arrived as missing.
+`wrangler.jsonc` describes a deployment and says nothing about development, so
+this goes in a configuration of your own. Wrangler substitutes nothing and
+inherits no bindings, so it is a whole file rather than an overlay:
 
 ```bash
-wrangler dev
+cp wrangler.jsonc wrangler.dev.jsonc
 ```
 
-The Worker still runs locally; only that binding is answered by the deployed
-bucket, which means real objects and real storage charges. Wrangler prints
-`remote` beside the binding when this is in effect.
+Name the bucket you develop against, matching `R2_BUCKET_NAME` in `.dev.vars`,
+and add `"remote": true` beside it. Keep `wrangler.dev.jsonc` out of version
+control: it names a bucket only you develop against.
+
+`pnpm dev:worker` reads `UPLOAD_BACKEND` and starts Wrangler accordingly, since
+`--local` means "remote bindings disabled" and is a consequence of the backend
+rather than a choice: `r2` uses that configuration, anything else runs fully
+offline. Under `r2` it refuses to start without it, rather than letting the
+mismatch surface an upload later.
+
+The Worker still runs locally; only the binding is answered by the real bucket,
+which means real objects and real storage charges. Wrangler prints `remote`
+beside the binding when this is in effect.
 
 Log in to get a short-lived admin access token:
 
