@@ -19,7 +19,7 @@ describe("repository plugin catalog", () => {
       expect.objectContaining({
         manifest: expect.objectContaining({ ecosystem: "pypi" }),
         enabled: true,
-        experimental: true,
+        experimental: false,
         runtime: true,
         adminUi: true,
       }),
@@ -32,7 +32,7 @@ describe("repository plugin catalog", () => {
     expect(getRepositoryPluginCatalogEntry("npm")).toBeUndefined();
     expect(repositoryPluginCatalogMetadata()).toEqual([
       { ecosystem: "apt", enabled: true, experimental: false, runtime: true, adminUi: true },
-      { ecosystem: "pypi", enabled: true, experimental: true, runtime: true, adminUi: true },
+      { ecosystem: "pypi", enabled: true, experimental: false, runtime: true, adminUi: true },
     ]);
   });
 

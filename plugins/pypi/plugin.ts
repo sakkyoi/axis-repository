@@ -5,7 +5,7 @@ export const pypiRepositoryPluginBundle = {
   manifest: pypiPluginManifest,
   catalog: {
     enabled: true,
-    experimental: true,
+    experimental: false,
   },
   runtime: true,
   adminUi: true,
