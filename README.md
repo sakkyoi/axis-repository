@@ -86,7 +86,22 @@ R2_SECRET_ACCESS_KEY=<r2-secret-access-key>
 UPLOAD_URL_TTL_SECONDS=900
 ```
 
-When `UPLOAD_BACKEND` is unset, Axis uses `r2`.
+When `UPLOAD_BACKEND` is unset, Axis uses `r2`, which is what a deployment
+wants: a presigned URL sends artifact bytes straight to the bucket. Everything
+else goes through a single Durable Object, which is billed for as long as it
+holds the request and caps an artifact at what fits in memory, so routing
+uploads through it costs the most on exactly the largest files.
+
+`local-r2` exists because presigned URLs are signed against the real R2
+endpoint, which `wrangler dev --local` does not serve. It is the local answer,
+not a smaller deployment: both modes store through the same `AXIS_OBJECTS`
+bucket and both serve reads through it. They differ in how bytes get in.
+
+One consequence is worth knowing before choosing it deliberately: `local-r2`
+re-hashes what it stored and rejects a mismatch, while `r2` checks the size and
+the digest signed into the upload URL without ever hashing the bytes. Uploads
+that arrive over `/legacy/` are hashed as they stream either way, being handled
+before any of this.
 
 For pure local development without Wrangler R2, use memory upload mode:
 
@@ -399,3 +414,10 @@ allowing `'self'` would let an uploaded artifact be loaded as a script.
 
 Cloudflare deploy configuration lives in root `wrangler.jsonc`. Keep local
 secrets in root `.dev.vars`.
+
+`.dev.vars.example` lists the secrets a deployment cannot run without, and is
+what the Deploy to Cloudflare button reads to know what to ask for. Each one is
+described in `package.json` under `cloudflare.bindings`, which is the text shown
+beside the field during setup. A secret added to the worker belongs in both:
+without the example entry nobody is asked for it, and without the description
+they are asked for a name with no indication of what to put there.

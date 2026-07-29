@@ -1,0 +1,74 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+/**
+ * What a deployment is asked for, and what it is told about each answer.
+ *
+ * Deploy to Cloudflare reads `.dev.vars.example` to know which secrets to
+ * prompt for, and `cloudflare.bindings` in `package.json` for the text shown
+ * beside each field. Neither is reachable from the worker's own code, so a
+ * secret added to the runtime rots them silently: nobody is asked for it, and
+ * the deploy fails on a value its operator was never told existed.
+ */
+
+const repositoryRoot = fileURLToPath(new URL("../../../../", import.meta.url));
+
+function exampleSecretNames(): string[] {
+  const text = readFileSync(`${repositoryRoot}.dev.vars.example`, "utf8");
+  return text
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== "" && !line.trimStart().startsWith("#"))
+    .map((line) => line.split("=")[0]?.trim() ?? "");
+}
+
+function describedBindingNames(): string[] {
+  const manifest = JSON.parse(readFileSync(`${repositoryRoot}package.json`, "utf8")) as {
+    cloudflare?: { bindings?: Record<string, { description?: string }> };
+  };
+  return Object.entries(manifest.cloudflare?.bindings ?? {})
+    .filter(([, binding]) => (binding.description ?? "").trim() !== "")
+    .map(([name]) => name);
+}
+
+describe("what a deploy is asked to supply", () => {
+  it("asks for everything the worker refuses to start without", () => {
+    // Each of these throws out of createDurableObjectDependencies or the admin
+    // auth service, so a deployment missing one answers 500 to its own login
+    // page.
+    const required = [
+      "AXIS_SESSION_SECRET",
+      "TOKEN_HASH_PEPPER",
+      "SIGNING_KEY_ENCRYPTION_SECRET",
+    ];
+
+    expect(exampleSecretNames()).toEqual(expect.arrayContaining(required));
+  });
+
+  it("asks for what it takes to sign an upload URL", () => {
+    // The default backend hands publishing clients a presigned URL so artifact
+    // bytes go straight to R2. Without these it cannot sign one, and refuses
+    // every request rather than only the uploads.
+    expect(exampleSecretNames()).toEqual(
+      expect.arrayContaining(["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]),
+    );
+  });
+
+  it("asks for a first account, there being no other way to make one", () => {
+    // Without a bootstrap owner nothing seeds an admin, and the deployment
+    // comes up with no credentials that work.
+    expect(exampleSecretNames()).toEqual(
+      expect.arrayContaining(["AXIS_ADMIN_USERNAME", "AXIS_ADMIN_PASSWORD"]),
+    );
+  });
+
+  it("says what each answer is for", () => {
+    // A prompt showing only a name leaves an operator guessing at a value that
+    // cannot be changed later without cost.
+    const undescribed = exampleSecretNames().filter(
+      (name) => !describedBindingNames().includes(name),
+    );
+
+    expect(undescribed).toEqual([]);
+  });
+});

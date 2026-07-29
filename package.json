@@ -3,6 +3,37 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.4",
+  "cloudflare": {
+    "bindings": {
+      "AXIS_OBJECTS": {
+        "description": "Where published artifacts and the generated indexes are stored. This is the repository: losing the bucket loses everything served from it."
+      },
+      "AXIS_ADMIN_USERNAME": {
+        "description": "Username for the first admin account, created on first run. Nothing else creates an account, so a deployment without this has no way in."
+      },
+      "AXIS_ADMIN_PASSWORD": {
+        "description": "Password for that first account, at least 8 characters. A shorter one fails the first sign-in rather than seeding an account nobody can use. It is only read until the account exists and can be removed afterwards; set `AXIS_ADMIN_PASSWORD_HASH` instead to avoid handing over a plaintext password at all."
+      },
+      "AXIS_SESSION_SECRET": {
+        "description": "Signs admin session cookies. Generate with `openssl rand -hex 32`. Changing it signs everyone out; unlike the bootstrap password it is needed for as long as the deployment runs."
+      },
+      "TOKEN_HASH_PEPPER": {
+        "description": "Salts publish token hashes, so a copy of the stored hashes cannot be cracked offline. Generate with `openssl rand -hex 32`. Changing it invalidates every publish token already issued — CI using one stops being able to publish."
+      },
+      "SIGNING_KEY_ENCRYPTION_SECRET": {
+        "description": "Encrypts repository signing keys before they are stored, so the keys apt clients trust are never at rest in the clear. Generate with `openssl rand -hex 32`. Lose it and the stored keys cannot be read back, which means re-signing every repository under a new key that clients have to be told about."
+      },
+      "R2_ACCOUNT_ID": {
+        "description": "Your Cloudflare account ID, which is the host presigned upload URLs are signed for. Found on the right of the dashboard overview, or in the URL after `dash.cloudflare.com/`."
+      },
+      "R2_ACCESS_KEY_ID": {
+        "description": "Access key ID of an R2 API token with object read and write on this Worker's bucket. Create one under [R2 > Manage API tokens](https://dash.cloudflare.com/?to=/:account/r2/api-tokens). This is not the same thing as the bucket binding: the binding is how the Worker reads objects, this is what lets it hand a client a URL to write one."
+      },
+      "R2_SECRET_ACCESS_KEY": {
+        "description": "Secret access key of that same R2 API token, shown once when the token is created. Without it, and the two values above, artifact uploads are refused: every request is answered by a single Durable Object, so a Worker that cannot sign upload URLs fails at sign-in rather than at the first publish. Set `UPLOAD_BACKEND=local-r2` to run without them, which sends artifact bytes through that Durable Object instead — simpler to stand up, but billed for the whole transfer and capped by the Worker's memory."
+      }
+    }
+  },
   "scripts": {
     "build": "pnpm --filter @axis-repository/core build && pnpm --filter @axis-repository/admin-ui build && pnpm --filter @axis-repository/publish-client build && pnpm --filter @axis-repository/runtime-cloudflare build:worker",
     "dev:ui": "pnpm --filter @axis-repository/admin-ui dev",
