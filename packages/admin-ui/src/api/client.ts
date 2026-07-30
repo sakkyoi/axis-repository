@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance } from "axios";
-import { createHttpClient, withSessionCookie, type HttpOptions } from "./http";
+import { bulkRequest, createHttpClient, withSessionCookie, type HttpOptions } from "./http";
 import {
   adminSessionSchema,
   adminAuthResponseSchema,
@@ -183,7 +183,7 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       return repositorySchema.parse(response.data);
     },
     async deleteRepository(name: string) {
-      await http.delete(`/admin/repositories/${encodeURIComponent(name)}`);
+      await http.delete(`/admin/repositories/${encodeURIComponent(name)}`, bulkRequest);
     },
     async listRepositoryObjects(name: string, prefix: string) {
       const response = await http.get(
@@ -196,12 +196,17 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       return repositoryArtifactsResponseSchema.parse(response.data);
     },
     async rebuildRepositoryArtifactIndex(name: string) {
-      const response = await http.post(`/admin/repositories/${encodeURIComponent(name)}/artifacts/rebuild-index`);
+      const response = await http.post(
+        `/admin/repositories/${encodeURIComponent(name)}/artifacts/rebuild-index`,
+        undefined,
+        bulkRequest,
+      );
       return repositoryArtifactsResponseSchema.parse(response.data);
     },
     async deleteRepositoryArtifact(name: string, artifactId: string) {
       const response = await http.delete(
         `/admin/repositories/${encodeURIComponent(name)}/artifacts/${encodeURIComponent(artifactId)}`,
+        bulkRequest,
       );
       return repositoryArtifactDeleteResponseSchema.parse(response.data);
     },
@@ -214,6 +219,7 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async deleteRepositoryObject(name: string, path: string) {
       const response = await http.delete(
         `/admin/repositories/${encodeURIComponent(name)}/objects?path=${encodeURIComponent(path)}`,
+        bulkRequest,
       );
       return repositoryObjectDeleteResponseSchema.parse(response.data).activity;
     },
@@ -249,6 +255,12 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       return createdPublishSessionSchema.parse(response.data);
     },
     async uploadPublishArtifact(target: UploadTarget, body: Blob) {
+      // Deliberately not `http`: the target is a presigned URL to R2, which
+      // wants neither this client's base URL nor its Authorization header. It
+      // gets no timeout either, and should not -- how long a PUT takes is the
+      // artifact's size over the uploader's link, and no fixed number is right
+      // for both a small package on an office connection and a large one on a
+      // slow link.
       await axios.request({
         method: target.method,
         url: target.url,
@@ -260,12 +272,16 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async verifyAdminPublishUpload(sessionId: string, uploadId: string) {
       const response = await http.post<{ session: unknown }>(
         `/admin/publish-sessions/${encodeURIComponent(sessionId)}/uploads/${encodeURIComponent(uploadId)}/verify`,
+        undefined,
+        bulkRequest,
       );
       return publishSessionSchema.parse(response.data.session);
     },
     async finalizeAdminPublishSession(sessionId: string) {
       const response = await http.post<{ session: unknown }>(
         `/admin/publish-sessions/${encodeURIComponent(sessionId)}/finalize`,
+        undefined,
+        bulkRequest,
       );
       return publishSessionSchema.parse(response.data.session);
     },

@@ -1,7 +1,7 @@
 import { AxiosError } from "axios";
 import { describe, expect, it } from "vitest";
 import { createAxisClient } from "./client";
-import { serverErrorMessage } from "./http";
+import { BULK_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, serverErrorMessage } from "./http";
 import {
   publishSessionsResponseSchema,
   publishTokenCreateResponseSchema,
@@ -1124,6 +1124,38 @@ describe("createAxisClient", () => {
       "POST /admin/publish-tokens/github%20actions/rotate",
       "DELETE /admin/publish-tokens/github%20actions",
     ]);
+  });
+
+  it("waits longer on requests whose work scales with the repository", async () => {
+    // Nothing on the server side cuts these short, so this timeout is the only
+    // limit they meet, and the default one abandoned publishes that were going
+    // to finish.
+    const client = createAxisClient({ baseUrl: "https://axis.example" });
+    const timeouts = new Map<string, number | undefined>();
+    client.http.defaults.adapter = async (config) => {
+      timeouts.set(`${config.method?.toUpperCase()} ${config.url?.split("?")[0]}`, config.timeout);
+      return { data: {}, status: 200, statusText: "OK", headers: {}, config };
+    };
+
+    await Promise.allSettled([
+      client.deleteRepository("debian-internal"),
+      client.rebuildRepositoryArtifactIndex("debian-internal"),
+      client.deleteRepositoryArtifact("debian-internal", "art_1"),
+      client.deleteRepositoryObject("debian-internal", "pool/main/a/app.deb"),
+      client.verifyAdminPublishUpload("pub_1", "upl_1"),
+      client.finalizeAdminPublishSession("pub_1"),
+      client.listRepositoryArtifacts("debian-internal"),
+    ]);
+
+    expect(timeouts.get("DELETE /admin/repositories/debian-internal")).toBe(BULK_REQUEST_TIMEOUT_MS);
+    expect(timeouts.get("POST /admin/repositories/debian-internal/artifacts/rebuild-index")).toBe(BULK_REQUEST_TIMEOUT_MS);
+    expect(timeouts.get("DELETE /admin/repositories/debian-internal/artifacts/art_1")).toBe(BULK_REQUEST_TIMEOUT_MS);
+    expect(timeouts.get("DELETE /admin/repositories/debian-internal/objects")).toBe(BULK_REQUEST_TIMEOUT_MS);
+    expect(timeouts.get("POST /admin/publish-sessions/pub_1/uploads/upl_1/verify")).toBe(BULK_REQUEST_TIMEOUT_MS);
+    expect(timeouts.get("POST /admin/publish-sessions/pub_1/finalize")).toBe(BULK_REQUEST_TIMEOUT_MS);
+    // Everything else keeps the shorter one, or a dead server looks like a
+    // slow one for five minutes.
+    expect(timeouts.get("GET /admin/repositories/debian-internal/artifacts")).toBe(REQUEST_TIMEOUT_MS);
   });
 });
 
