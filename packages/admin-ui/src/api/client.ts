@@ -128,6 +128,31 @@ function repositoryActivityUrl(name: string, options: ListRepositoryActivitiesOp
   return `/admin/repositories/${encodeURIComponent(name)}/activity${query ? `?${query}` : ""}`;
 }
 
+/**
+ * Says what a refused upload was refused for, when the deployment cannot.
+ *
+ * An upload the worker relays meets Cloudflare's limit on a request body
+ * before it reaches the worker at all, so it is rejected at the edge and
+ * nothing on the server side is in a position to describe it. What gets back
+ * here is a bare 413, which as an error message names neither the cause nor
+ * anything to do about it -- and the person who picked the file is the one who
+ * can act on both.
+ *
+ * Returns undefined for anything else, which the caller rethrows untouched.
+ */
+function uploadTooLargeError(caught: unknown, size: number): Error | undefined {
+  if (!axios.isAxiosError(caught) || caught.response?.status !== 413) {
+    return undefined;
+  }
+  return new Error(
+    `The upload was refused as too large (${(size / 1024 / 1024).toFixed(0)} MB).`
+    + " This deployment sends uploads through the worker, and Cloudflare caps the"
+    + " size of a request body before one arrives — 100 MB on the free plan, more"
+    + " on the paid ones. Publishing a smaller file works, and so does configuring"
+    + " uploads to be signed straight to R2, which the cap does not apply to.",
+  );
+}
+
 export function createAxisClient(options: HttpOptions): AxisClient {
   const http = createHttpClient(options);
   return {
@@ -261,13 +286,17 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       // artifact's size over the uploader's link, and no fixed number is right
       // for both a small package on an office connection and a large one on a
       // slow link.
-      await axios.request({
-        method: target.method,
-        url: target.url,
-        data: body,
-        headers: target.headers,
-        ...(http.defaults.adapter ? { adapter: http.defaults.adapter } : {}),
-      });
+      try {
+        await axios.request({
+          method: target.method,
+          url: target.url,
+          data: body,
+          headers: target.headers,
+          ...(http.defaults.adapter ? { adapter: http.defaults.adapter } : {}),
+        });
+      } catch (caught) {
+        throw uploadTooLargeError(caught, body.size) ?? caught;
+      }
     },
     async verifyAdminPublishUpload(sessionId: string, uploadId: string) {
       const response = await http.post<{ session: unknown }>(

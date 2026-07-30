@@ -1126,6 +1126,39 @@ describe("createAxisClient", () => {
     ]);
   });
 
+  it("says what a refused upload was refused for", async () => {
+    // The edge rejects it before the worker sees it, so nothing server-side can
+    // explain a 413 -- and on its own it names neither the cause nor a way out.
+    const client = createAxisClient({ baseUrl: "https://axis.example" });
+    client.http.defaults.adapter = async (config) => {
+      throw new AxiosError("Request failed with status code 413", "413", config as never, null, {
+        data: "",
+        status: 413,
+        statusText: "Payload Too Large",
+        headers: {},
+        config: config as never,
+      });
+    };
+
+    const failure = await client.uploadPublishArtifact(
+      {
+        uploadId: "upl_1",
+        filename: "big.deb",
+        objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/big.deb",
+        method: "PUT",
+        url: "/api/uploads/pub_1/upl_1",
+        headers: {},
+        expiresAt: "2026-07-31T00:15:00.000Z",
+      },
+      new Blob([new Uint8Array(300)]),
+    ).catch((error: unknown) => error);
+    const message = failure instanceof Error ? failure.message : String(failure);
+
+    expect(message).toContain("refused as too large");
+    expect(message).toContain("100 MB on the free plan");
+    expect(message).not.toContain("status code 413");
+  });
+
   it("waits longer on requests whose work scales with the repository", async () => {
     // Nothing on the server side cuts these short, so this timeout is the only
     // limit they meet, and the default one abandoned publishes that were going
