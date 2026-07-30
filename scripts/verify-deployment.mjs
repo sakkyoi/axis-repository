@@ -108,6 +108,14 @@ async function verifyApt(admin) {
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const filename = "verify-large_1.0.0_amd64.deb";
   console.log(`  publishing ${filename} (${(bytes.length / 1024 / 1024).toFixed(0)} MiB)…`);
+  // Everything below this asks whether a package too big to hold in a worker
+  // survives the round trip. A package that turned out not to be big answers
+  // none of it, and answers it in the shape of a pass.
+  check(
+    "the verification package is as large as it was asked to be",
+    bytes.length >= options.sizeMb * 1024 * 1024,
+    `${(bytes.length / 1024 / 1024).toFixed(1)} MiB of ${options.sizeMb}`,
+  );
 
   await publishSession({
     token,
@@ -269,6 +277,13 @@ async function publishSession({ token, repositoryName, ecosystem, artifact, body
   const session = await created.json();
   const upload = session.uploads[0];
 
+  // Which of the two upload paths this deployment uses, because they share
+  // nothing: a presigned URL goes straight to R2 and never meets the worker,
+  // while a relative one is relayed by it. A result that does not say which
+  // was exercised leaves the other one unverified without saying so.
+  const relayed = new URL(upload.url, options.baseUrl).origin === new URL(options.baseUrl).origin;
+  console.log(`  upload path: ${relayed ? "relayed through the worker" : "presigned, direct to R2"}`);
+
   const put = await fetch(new URL(upload.url, options.baseUrl), {
     method: upload.method,
     headers: upload.headers,
@@ -346,7 +361,16 @@ function buildDeb({ name, version, padding }) {
   ].join("\n");
 
   const controlTar = gzipSync(tar([{ name: "./control", bytes: Buffer.from(control) }]));
-  const dataTar = gzipSync(tar([{ name: "./usr/share/axis-verify/payload", bytes: Buffer.alloc(padding) }]));
+  // Stored, not compressed. The padding is zeroes and gzip turns two hundred
+  // megabytes of them into a few hundred kilobytes -- which is how the checks
+  // that exist to exceed a worker's heap came to run against a package of no
+  // size at all, and pass. Nothing decompresses this member: the worker reads
+  // the control archive beside it, so the only property asked of it is that it
+  // weighs what it says.
+  const dataTar = gzipSync(
+    tar([{ name: "./usr/share/axis-verify/payload", bytes: Buffer.alloc(padding) }]),
+    { level: 0 },
+  );
 
   return ar([
     { name: "debian-binary", bytes: Buffer.from("2.0\n") },
