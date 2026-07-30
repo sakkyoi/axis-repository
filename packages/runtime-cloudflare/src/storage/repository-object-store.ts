@@ -29,7 +29,7 @@ export interface R2ObjectBucket {
   head(key: string): Promise<R2HeadObject | null>;
   get(key: string, options?: RepositoryObjectReadOptions): Promise<R2ReadableObject | null>;
   list(options?: { prefix?: string; delimiter?: string; cursor?: string; limit?: number }): Promise<R2ObjectsList>;
-  delete(key: string): Promise<unknown>;
+  delete(keys: string | string[]): Promise<unknown>;
   put(
     key: string,
     value: string | Uint8Array | ReadableStream,
@@ -206,6 +206,16 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
     }
     return previousLength !== this.objects.length;
   }
+
+  async deleteObjects(keys: string[]): Promise<void> {
+    const removing = new Set(keys);
+    // In place, because a part writer in flight holds this same array.
+    for (let index = this.objects.length - 1; index >= 0; index -= 1) {
+      if (removing.has(this.objects[index]!.key)) {
+        this.objects.splice(index, 1);
+      }
+    }
+  }
 }
 
 export class R2RepositoryObjectStore implements RepositoryObjectStore {
@@ -318,6 +328,12 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
     await this.bucket.delete(key);
     return true;
   }
+
+  async deleteObjects(keys: string[]): Promise<void> {
+    for (let index = 0; index < keys.length; index += R2_DELETE_KEYS) {
+      await this.bucket.delete(keys.slice(index, index + R2_DELETE_KEYS));
+    }
+  }
 }
 
 type MemoryObject = { key: string; value: unknown; contentType?: string; uploadedAt?: Date };
@@ -397,6 +413,9 @@ async function etagForBytes(bytes: Uint8Array): Promise<string> {
  * whatever the object's eventual size.
  */
 const R2_PART_BYTES = 5 * 1024 * 1024;
+
+/** How many keys R2 takes in one delete; more than this is refused outright. */
+const R2_DELETE_KEYS = 1000;
 
 class R2PartWriter implements RepositoryObjectPartWriter {
   private readonly parts: R2UploadedPart[] = [];

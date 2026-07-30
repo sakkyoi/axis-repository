@@ -78,6 +78,11 @@ function memoryObjectStore(existingKeys: string[] = []): RepositoryObjectStore {
     headObject: async (key) => keys.has(key) ? {} : null,
     getObject: async (key) => keys.has(key) ? { body: new Uint8Array() } : null,
     deleteObject: async (key) => keys.delete(key),
+    deleteObjects: async (removing) => {
+      for (const key of removing) {
+        keys.delete(key);
+      }
+    },
   };
 }
 

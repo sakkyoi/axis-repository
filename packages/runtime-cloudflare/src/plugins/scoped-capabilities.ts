@@ -109,6 +109,9 @@ export function scopeObjectStoreToRepository(
     listObjects: async (input): Promise<RepositoryObjectList> =>
       objectStore.listObjects({ ...input, prefix: requireReadable(input.prefix) }),
     deleteObject: async (key) => objectStore.deleteObject(requireWritable(key)),
+    // Every key, before any of them: one key outside the repository must not
+    // be reached by having passed the others in first.
+    deleteObjects: async (keys) => objectStore.deleteObjects(keys.map(requireWritable)),
   };
 }
 

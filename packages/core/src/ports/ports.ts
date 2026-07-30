@@ -148,6 +148,15 @@ export interface RepositoryObjectStore {
   headObject(key: string): Promise<RepositoryObjectMetadata | null>;
   getObject(key: string, options?: RepositoryObjectReadOptions): Promise<RepositoryObject | null>;
   deleteObject(key: string): Promise<boolean>;
+  /**
+   * Removes many objects, without saying which of them were there.
+   *
+   * Storage takes a page of keys in a single call. Asked one at a time it is a
+   * round trip each -- two, where telling whether an object existed means
+   * asking before removing it -- and a repository being emptied is as many
+   * objects as it ever held.
+   */
+  deleteObjects(keys: string[]): Promise<void>;
 }
 
 export interface RepositoryStore {

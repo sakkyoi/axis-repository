@@ -459,6 +459,91 @@ describe("Cloudflare runtime routes", () => {
     ]));
   });
 
+  it("empties a repository a page at a time rather than an object at a time", async () => {
+    // One round trip each and the caller waits for all of them, which on a
+    // repository of a few thousand objects is minutes of it.
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
+    });
+    for (const name of ["a", "b", "c"]) {
+      await harness.repositoryObjectStore.putText(
+        `repositories/python-internal/simple/${name}/index.html`,
+        name,
+        "text/html",
+      );
+    }
+    const store = harness.repositoryObjectStore;
+    const deleteObjects = store.deleteObjects.bind(store);
+    let batches = 0;
+    let singles = 0;
+    store.deleteObjects = async (keys) => {
+      batches += 1;
+      await deleteObjects(keys);
+    };
+    store.deleteObject = async () => {
+      singles += 1;
+      return false;
+    };
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-internal", {
+        method: "DELETE",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(batches).toBe(1);
+    expect(singles).toBe(0);
+    expect(store.objects).toHaveLength(0);
+  });
+
+  it("gives up emptying a repository when a round removes nothing", async () => {
+    // Each round lists from the start, so a page naming the same object as the
+    // one before it is a page nothing removed. Asking again would ask forever,
+    // and a durable object's wall clock does not stop it.
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "private",
+      config: {},
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-internal/simple/demo/index.html",
+      "demo",
+      "text/html",
+    );
+    const store = harness.repositoryObjectStore;
+    const listObjects = store.listObjects.bind(store);
+    let lists = 0;
+    store.listObjects = async (input) => {
+      lists += 1;
+      if (lists > 8) {
+        throw new Error("listed the same objects over and over");
+      }
+      // Truncated, so the loop is invited back, and nothing is ever removed.
+      return { ...await listObjects(input), truncated: true };
+    };
+    store.deleteObjects = async () => {};
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-internal", {
+        method: "DELETE",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(lists).toBe(2);
+  });
+
   it("rejects admin repository routes without an access token", async () => {
     const app = createApp(createDevDependencies());
     const response = await app.fetch(new Request("https://axis.example/admin/repositories"));
