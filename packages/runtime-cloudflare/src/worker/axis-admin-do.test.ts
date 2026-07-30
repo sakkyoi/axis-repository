@@ -120,6 +120,40 @@ class FakeR2Bucket {
       ...(options?.httpMetadata?.contentType ? { contentType: options.httpMetadata.contentType } : {}),
     });
   }
+
+  /**
+   * An upload that arrives in pieces, as R2 takes one.
+   *
+   * Nothing appears under the key until the upload completes, and an aborted
+   * one leaves nothing at all -- what the runtime relies on to abandon an
+   * upload that turns out to be too big.
+   */
+  async createMultipartUpload(key: string, options?: { httpMetadata?: { contentType?: string } }) {
+    const parts = new Map<number, Uint8Array>();
+    const objects = this.objects;
+    return {
+      async uploadPart(partNumber: number, value: Uint8Array) {
+        parts.set(partNumber, new Uint8Array(value));
+        return { partNumber, etag: `fake-part-${partNumber}` };
+      },
+      async complete(completed: Array<{ partNumber: number }>) {
+        const ordered = completed.map(({ partNumber }) => parts.get(partNumber) ?? new Uint8Array(0));
+        const value = new Uint8Array(ordered.reduce((total, part) => total + part.byteLength, 0));
+        let offset = 0;
+        for (const part of ordered) {
+          value.set(part, offset);
+          offset += part.byteLength;
+        }
+        objects.set(key, {
+          value,
+          ...(options?.httpMetadata?.contentType ? { contentType: options.httpMetadata.contentType } : {}),
+        });
+      },
+      async abort() {
+        parts.clear();
+      },
+    };
+  }
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

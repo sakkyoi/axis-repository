@@ -6,6 +6,7 @@ import {
   type UploadBroker,
   type UploadTarget,
 } from "@axis-repository/core";
+import { digestStreamHex } from "../storage/digest";
 
 /**
  * Staging keys include the repository so a repository-scoped object store can
@@ -45,12 +46,54 @@ export class SameOriginUploadBroker implements UploadBroker {
     };
   }
 
-  async putUpload(input: { target: UploadTarget; body: Uint8Array; contentType?: string }): Promise<void> {
-    await this.objectStore.putBytes(
-      input.target.objectKey,
-      input.body,
-      input.contentType ?? input.target.headers["content-type"] ?? "application/octet-stream",
-    );
+  /**
+   * Takes an upload the Worker is relaying itself.
+   *
+   * The bytes go to storage as they arrive rather than being gathered first.
+   * A declared artifact size may be gigabytes and a Worker has 128 MB of heap,
+   * so anything that holds the whole body decides the real ceiling by running
+   * out of memory -- and does it at whatever size the heap happens to give out
+   * at, which is neither a number anyone chose nor an error anyone can read.
+   *
+   * `maxBytes` is counted as the stream is consumed, not checked against what
+   * the request declared: a chunked request declares nothing, so a body that
+   * kept arriving would otherwise be written in full before anything objected.
+   * Exceeding it abandons the write, which leaves no object behind.
+   */
+  async putUpload(input: {
+    target: UploadTarget;
+    body: ReadableStream<Uint8Array> | null;
+    contentType?: string;
+    maxBytes: number;
+  }): Promise<void> {
+    const contentType = input.contentType
+      ?? input.target.headers["content-type"]
+      ?? "application/octet-stream";
+    if (!input.body) {
+      await this.objectStore.putBytes(input.target.objectKey, new Uint8Array(0), contentType);
+      return;
+    }
+
+    const writer = await this.objectStore.createPartWriter(input.target.objectKey, contentType);
+    const reader = input.body.getReader();
+    let received = 0;
+    try {
+      for (;;) {
+        const next = await reader.read();
+        if (next.done) {
+          break;
+        }
+        received += next.value.byteLength;
+        if (received > input.maxBytes) {
+          throw new ValidationError("Uploaded object is larger than the declared artifact size");
+        }
+        await writer.write(next.value);
+      }
+      await writer.complete();
+    } catch (error) {
+      await writer.abort().catch(() => undefined);
+      throw error;
+    }
   }
 
   async verifyUpload(input: { target: UploadTarget; expected: PublishArtifactRequest }): Promise<UploadedObject> {
@@ -79,20 +122,21 @@ export class SameOriginUploadBroker implements UploadBroker {
 
 }
 
+/**
+ * Hashes a stored object without holding it.
+ *
+ * A store that answers with a stream is read as one -- reading it into an
+ * array first would put the whole artifact back in memory, which is what
+ * storing it in parts was for. A store that answers with bytes has already
+ * spent that memory and nothing is saved by pretending otherwise.
+ */
 async function sha256Hex(body: string | Uint8Array | ReadableStream): Promise<string> {
-  const bytes = await bodyBytes(body);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  if (body instanceof ReadableStream) {
+    return digestStreamHex("SHA-256", body as ReadableStream<Uint8Array>);
+  }
+  const bytes = typeof body === "string" ? new TextEncoder().encode(body) : body;
+  const digest = await crypto.subtle.digest("SHA-256", bytes as unknown as BufferSource);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function bodyBytes(body: string | Uint8Array | ReadableStream): Promise<Uint8Array> {
-  if (typeof body === "string") {
-    return new TextEncoder().encode(body);
-  }
-  if (body instanceof Uint8Array) {
-    return body;
-  }
-  return new Uint8Array(await new Response(body).arrayBuffer());
 }
 
 export default SameOriginUploadBroker;

@@ -1159,53 +1159,24 @@ function ensureUploadTargetIsWritable(session: PublishSession, target: UploadTar
 }
 
 /**
- * Reads at most `expectedSize` bytes, incrementally.
+ * Refuses an upload that says up front it is too big.
  *
- * A declared content-length is only a hint: a chunked request omits it
- * entirely. Buffering the whole body first and checking afterwards would let
- * any caller stream unbounded data into the Durable Object, so the limit is
- * enforced as the stream is consumed.
+ * Only a hint, and cheap: a chunked request declares no length at all, so this
+ * cannot be the limit -- it saves reading a body already known to be doomed,
+ * and the real check counts the bytes as they arrive.
  */
-async function readUploadBody(request: Request, expectedSize: number): Promise<Uint8Array> {
+function ensureDeclaredUploadLengthFits(request: Request, expectedSize: number): void {
   const declaredLength = request.headers.get("content-length");
-  if (declaredLength !== null) {
-    const length = Number(declaredLength);
-    if (!Number.isSafeInteger(length) || length < 0) {
-      throw new ValidationError("content-length must be a non-negative integer");
-    }
-    if (length > expectedSize) {
-      throw new ValidationError("Uploaded object is larger than the declared artifact size");
-    }
+  if (declaredLength === null) {
+    return;
   }
-
-  const body = request.body;
-  if (!body) {
-    return new Uint8Array(0);
+  const length = Number(declaredLength);
+  if (!Number.isSafeInteger(length) || length < 0) {
+    throw new ValidationError("content-length must be a non-negative integer");
   }
-  const reader = (body as ReadableStream<Uint8Array>).getReader();
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  try {
-    for (;;) {
-      const next = await reader.read();
-      if (next.done) break;
-      received += next.value.byteLength;
-      if (received > expectedSize) {
-        throw new ValidationError("Uploaded object is larger than the declared artifact size");
-      }
-      chunks.push(next.value);
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
+  if (length > expectedSize) {
+    throw new ValidationError("Uploaded object is larger than the declared artifact size");
   }
-
-  const bytes = new Uint8Array(received);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
 }
 
 /**
@@ -1709,9 +1680,11 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     ensureUploadTargetIsWritable(session, target);
     const contentType = request.headers.get("content-type");
+    ensureDeclaredUploadLengthFits(request, expected.size);
     await localUploadBroker.putUpload({
       target,
-      body: await readUploadBody(request, expected.size),
+      body: request.body as ReadableStream<Uint8Array> | null,
+      maxBytes: expected.size,
       ...(contentType ? { contentType } : {}),
     });
     return new Response(null, { status: 204 });
