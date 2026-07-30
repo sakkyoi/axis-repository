@@ -41,18 +41,24 @@ export class AptPublisher implements ArtifactPublisher {
     if (!input.session.requestedBy.signingKeyIds.includes(config.signingKeyId)) {
       throw new ValidationError("Publish token is not scoped to the repository signing key");
     }
-    const enrichedInput = await this.enrichArtifactsWithDebControlMetadata(input, config, objectStore);
-    const published = await readAptSuiteStates({
-      objectStore,
-      repositoryName: input.repository.name,
-      suites: config.suites ?? [config.codename],
-    });
+    // Three reads of different things: the uploads being published, the
+    // indexes already published, and what the pool holds. Each is several
+    // round trips to storage and none needs the others, so they go together.
+    const [enrichedInput, published, pool] = await Promise.all([
+      this.enrichArtifactsWithDebControlMetadata(input, config, objectStore),
+      readAptSuiteStates({
+        objectStore,
+        repositoryName: input.repository.name,
+        suites: config.suites ?? [config.codename],
+      }),
+      poolFilenames(objectStore, input.repository.name),
+    ]);
     const metadata = await buildAptRepositoryMetadata({
       ...enrichedInput,
       existingIndexes: suitePackageIndexes(published),
       existingContents: suiteContentsIndexes(published),
       existingSources: suiteSourceIndexes(published),
-      poolFilenames: await poolFilenames(objectStore, input.repository.name),
+      poolFilenames: pool,
     });
     const key = await this.options.signingKeys.getActivePrivateKey(
       metadata.config.signingKeyId,

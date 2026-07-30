@@ -199,7 +199,7 @@ export async function writeAptRepositoryIndexes(input: {
   // to be written are already there, so nothing is skipped on the strength of
   // a Release entry alone.
   const existingKeys = new Map<PreparedSuiteWrite, Set<string>>();
-  for (const suite of prepared) {
+  await Promise.all(prepared.map(async (suite) => {
     const existing = await listAllObjects(input.objectStore, suite.prefix);
     existingKeys.set(suite, new Set(existing.map((object) => object.key)));
     removedObjectKeys.push(...await removeStaleIndexObjects({
@@ -211,14 +211,13 @@ export async function writeAptRepositoryIndexes(input: {
         ...suite.byHash.retainedKeys,
       ]),
     }));
-  }
+  }));
 
-  for (const copy of poolCopies) {
-    await input.objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType);
-  }
-  for (const suite of prepared) {
-    await suite.commit(existingKeys.get(suite) ?? new Set());
-  }
+  // Before the indexes, which name these files: an index describing a package
+  // not yet in the pool would send a client after something that is not there.
+  await Promise.all(poolCopies.map((copy) =>
+    input.objectStore.copyObject(copy.sourceKey, copy.destinationKey, copy.contentType)));
+  await Promise.all(prepared.map((suite) => suite.commit(existingKeys.get(suite) ?? new Set())));
 
   return {
     objects: objects.map((object) => withPreviousMetadata(object, previous.get(object.key) ?? null)),
@@ -290,30 +289,34 @@ async function prepareSuiteWrite(input: {
           || !existingKeys.has(`${prefix}${entry.file.relativePath}`))
         .map((entry) => entry.file.relativePath));
 
-      for (const file of indexFiles) {
-        if (!rewritten.has(file.relativePath)) {
-          continue;
-        }
-        const key = `${prefix}${file.relativePath}`;
-        if (file.text === undefined) {
-          await input.objectStore.putBytes(key, file.bytes, file.contentType);
-        } else {
-          await input.objectStore.putText(key, file.text, file.contentType);
-        }
-      }
-      for (const object of byHash.objects) {
-        // A by-hash copy is named by its own digest, so an unchanged index
-        // already has one under exactly this key.
-        if (!rewritten.has(object.relativePath) && existingKeys.has(object.key)) {
-          continue;
-        }
-        await input.objectStore.putBytes(object.key, object.bytes, object.contentType);
-      }
+      // Two rounds, because `Release` names the indexes by digest: written
+      // first, it would for a moment describe content not yet stored, and a
+      // client that read it in between would reject what it then fetched.
+      // Within a round nothing depends on anything else, and each write is a
+      // round trip to storage, so they go together — serially they were most
+      // of what a publish spent its time on.
+      await Promise.all([
+        ...indexFiles
+          .filter((file) => rewritten.has(file.relativePath))
+          .map((file) => {
+            const key = `${prefix}${file.relativePath}`;
+            return file.text === undefined
+              ? input.objectStore.putBytes(key, file.bytes, file.contentType)
+              : input.objectStore.putText(key, file.text, file.contentType);
+          }),
+        ...byHash.objects
+          // A by-hash copy is named by its own digest, so an unchanged index
+          // already has one under exactly this key.
+          .filter((object) => rewritten.has(object.relativePath) || !existingKeys.has(object.key))
+          .map((object) => input.objectStore.putBytes(object.key, object.bytes, object.contentType)),
+      ]);
       // Release carries the publish date and a fresh signature, so all three
       // are written every time even when no index moved.
-      await input.objectStore.putText(releasePath, release, TEXT_CONTENT_TYPE);
-      await input.objectStore.putText(inReleasePath, inRelease, TEXT_CONTENT_TYPE);
-      await input.objectStore.putText(releaseGpgPath, releaseGpg, PGP_SIGNATURE_CONTENT_TYPE);
+      await Promise.all([
+        input.objectStore.putText(releasePath, release, TEXT_CONTENT_TYPE),
+        input.objectStore.putText(inReleasePath, inRelease, TEXT_CONTENT_TYPE),
+        input.objectStore.putText(releaseGpgPath, releaseGpg, PGP_SIGNATURE_CONTENT_TYPE),
+      ]);
     },
   };
 }
@@ -484,16 +487,10 @@ async function removeStaleIndexObjects(input: {
   existing: RepositoryObjectListItem[];
   keptKeys: Set<string>;
 }): Promise<string[]> {
-  const removed: string[] = [];
+  const stale = input.existing.filter((object) => !input.keptKeys.has(object.key));
+  const deleted = await Promise.all(
+    stale.map(async (object) => await input.objectStore.deleteObject(object.key)),
+  );
 
-  for (const object of input.existing) {
-    if (input.keptKeys.has(object.key)) {
-      continue;
-    }
-    if (await input.objectStore.deleteObject(object.key)) {
-      removed.push(object.key);
-    }
-  }
-
-  return removed;
+  return stale.filter((_, index) => deleted[index]).map((object) => object.key);
 }

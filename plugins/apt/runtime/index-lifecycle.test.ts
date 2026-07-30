@@ -237,10 +237,36 @@ function packagesKey(suite: string, architecture = "amd64"): string {
   return `repositories/debian-internal/dists/${suite}/main/binary-${architecture}/Packages`;
 }
 
-async function createHarness() {
+/**
+ * Records when each write finished, optionally making some slower than others.
+ *
+ * The memory store completes a write before yielding, so writes started
+ * together also finish in the order they were started — which is exactly what
+ * a test about ordering must not assume.
+ */
+function recordCompletions(
+  store: MemoryRepositoryObjectStore,
+  writeDelayMs?: (key: string) => number,
+): string[] {
+  const completions: string[] = [];
+  for (const name of ["putText", "putBytes", "putJson", "copyObject"] as const) {
+    const original = store[name].bind(store) as (...args: unknown[]) => Promise<unknown>;
+    (store as unknown as Record<string, unknown>)[name] = async (...args: unknown[]) => {
+      const key = String(name === "copyObject" ? args[1] : args[0]);
+      const result = await original(...args);
+      await new Promise((resolve) => setTimeout(resolve, writeDelayMs?.(key) ?? 0));
+      completions.push(key);
+      return result;
+    };
+  }
+  return completions;
+}
+
+async function createHarness(options: { writeDelayMs?: (key: string) => number } = {}) {
   const state = new MemoryStateStore();
   const { service: signingKeys, publicKeyArmored } = await createSigningKeys(state);
   const objectStore = new MemoryRepositoryObjectStore();
+  const completions = recordCompletions(objectStore, options.writeDelayMs);
   const publisher = new AptPublisher({
     objectStoreFor: () => objectStore,
     signingKeys,
@@ -249,6 +275,7 @@ async function createHarness() {
 
   return {
     objectStore,
+    completions,
     signingKeys,
     publicKeyArmored,
     async publish(sessionId: string, packages: FixturePackage[], repositoryOverrides = {}) {
@@ -301,6 +328,39 @@ async function createHarness() {
 }
 
 describe("APT index lifecycle", () => {
+  it("stores everything Release names before Release itself", async () => {
+    // Release describes the indexes by digest, and the indexes name the pool
+    // files. Written in any other order there is a moment when a client can
+    // read a Release, fetch what it points at, and be handed either nothing or
+    // content whose digest does not match — which apt refuses outright. The
+    // writes within each of those rounds are independent and run together, so
+    // the rounds are the only thing keeping this true.
+    //
+    // Release is made the quickest write, so putting it in the same round as
+    // the indexes would finish it first. Storage that completed writes in the
+    // order they were started could not tell the two apart.
+    const harness = await createHarness({
+      writeDelayMs: (key) => (/\/(InRelease|Release|Release\.gpg)$/.test(key) ? 0 : 5),
+    });
+
+    await harness.publish("pub_1", [{ name: "alpha", version: "1.0.0" }]);
+
+    const order = harness.completions;
+    const lastIndexOf = (matches: (key: string) => boolean): number =>
+      order.reduce((last, key, index) => (matches(key) ? index : last), -1);
+
+    const lastPool = lastIndexOf((key) => key.includes("/pool/"));
+    const lastIndexOrByHash = lastIndexOf((key) =>
+      key.includes("/binary-amd64/") || key.includes("/i18n/") || key.includes("/Contents-"));
+    const firstRelease = order.findIndex((key) => /\/(InRelease|Release|Release\.gpg)$/.test(key));
+
+    expect(lastPool).toBeGreaterThanOrEqual(0);
+    expect(lastIndexOrByHash).toBeGreaterThanOrEqual(0);
+    expect(firstRelease).toBeGreaterThanOrEqual(0);
+    expect(lastPool).toBeLessThan(firstRelease);
+    expect(lastIndexOrByHash).toBeLessThan(firstRelease);
+  });
+
   it("keeps packages from earlier publishes when publishing again", async () => {
     const harness = await createHarness();
 
