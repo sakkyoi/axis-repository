@@ -195,7 +195,16 @@ function optionalStringArrayField(body: Record<string, unknown>, key: string): s
   return [...value];
 }
 
-/** Upper bound on a declared artifact size; also the same-origin upload ceiling. */
+/**
+ * Upper bound on a declared artifact size.
+ *
+ * Reachable only where the upload is presigned and goes to R2 directly. An
+ * upload relayed by the worker meets Cloudflare's limit on a request body
+ * first -- 100 MB on the free plan, more on the paid ones -- and is refused at
+ * the edge with a bare 413 the worker never sees, so nothing here can explain
+ * it or count it. Measured on a free-plan deployment: 90 MiB relayed through,
+ * 110 MiB did not.
+ */
 const MAX_ARTIFACT_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
 
 function parseArtifact(value: unknown, index: number): PublishArtifactRequest {
