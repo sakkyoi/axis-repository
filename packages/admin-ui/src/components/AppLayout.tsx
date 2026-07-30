@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Monitor, Moon, Package, Settings, ShieldCheck, Sun, Users } from "lucide-react";
-import { AxisBrand } from "./brand/axis-brand";
+import { Monitor, Moon, Package, PanelLeftClose, Settings, ShieldCheck, Sun, Users } from "lucide-react";
+import { AxisBrand, AxisLogoMark } from "./brand/axis-brand";
 import { cn } from "../lib/utils";
 import { ADMIN_UI_NAV_ITEMS } from "../navigation";
 import { ProfileMenu } from "../profile/profile-menu";
+import { SIDEBAR_LABELS_NEED_PX, sidebarCollapsed, sidebarToggleLabel, sidebarWidthPx } from "./sidebar-model";
 import { useTheme, type ThemePreference } from "../theme";
 
 const navIcons = {
@@ -21,12 +23,51 @@ const themeOptions: Array<{ value: ThemePreference; label: string; icon: typeof 
 
 export function AppLayout() {
   const theme = useTheme();
+  const [chosen, setChosen] = useState<boolean>();
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window === "undefined" ? SIDEBAR_LABELS_NEED_PX : window.innerWidth);
+  const collapsed = sidebarCollapsed({ ...(chosen === undefined ? {} : { chosen }), viewportWidth });
+  const toggleLabel = sidebarToggleLabel(collapsed);
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   return (
-    <div className="grid h-screen overflow-hidden grid-cols-[240px_minmax(0,1fr)] bg-background text-foreground">
-      <aside className="h-screen overflow-y-auto border-r border-border bg-panel">
-        <div className="flex h-14 items-center border-b border-border px-5">
-          <AxisBrand subtitle="Admin Console" markClassName="h-8 w-8" />
+    <div
+      className="grid h-screen overflow-hidden bg-background text-foreground"
+      style={{ gridTemplateColumns: `${sidebarWidthPx(collapsed)}px minmax(0,1fr)` }}
+    >
+      <aside className="h-screen overflow-y-auto overflow-x-hidden border-r border-border bg-panel">
+        <div className={cn("flex h-14 items-center border-b border-border", collapsed ? "justify-center px-2" : "gap-2 px-5")}>
+          {collapsed ? (
+            // Only the mark, which is also what expands it again: at this width
+            // there is no room for a control beside the thing it acts on.
+            <button
+              type="button"
+              onClick={() => setChosen(false)}
+              aria-label={toggleLabel}
+              title={toggleLabel}
+              className="rounded-md p-1 transition-colors hover:bg-muted"
+            >
+              <AxisLogoMark className="h-8 w-8" />
+            </button>
+          ) : (
+            <>
+              <AxisBrand subtitle="Admin Console" markClassName="h-8 w-8" className="min-w-0 flex-1" />
+              <button
+                type="button"
+                onClick={() => setChosen(true)}
+                aria-label={toggleLabel}
+                title={toggleLabel}
+                className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+            </>
+          )}
         </div>
         <nav className="grid gap-1 p-3">
           {ADMIN_UI_NAV_ITEMS.map((item) => {
@@ -35,15 +76,21 @@ export function AppLayout() {
               <NavLink
                 key={item.to}
                 to={item.to}
+                // Collapsed, the name is gone from the page but not from the
+                // link: it is what a screen reader reads and what a pointer
+                // hovering the icon is told.
+                aria-label={item.label}
+                {...(collapsed ? { title: item.label } : {})}
                 className={({ isActive }) =>
                   cn(
-                    "flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                    "flex h-9 items-center rounded-md text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                    collapsed ? "justify-center px-0" : "gap-2 px-3",
                     isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
                   )
                 }
               >
-                <Icon className="h-4 w-4" />
-                {item.label}
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && item.label}
               </NavLink>
             );
           })}
