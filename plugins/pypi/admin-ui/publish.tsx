@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { PackagePlus, X } from "lucide-react";
 import {
   Button,
-  ErrorState,
+  useErrorToast,
   PublishSessionDetailList,
   publishSessionArtifactSummary,
   useRepositoryArtifactPublisher,
@@ -72,6 +72,7 @@ export function PypiPublishArtifactPreview({
     error,
     isPublishing: publisher.isPublishing,
   });
+  useErrorToast("Publish failed", error || publisher.error);
 
   useEffect(() => {
     const droppedFile = droppedFiles[0];
@@ -133,7 +134,6 @@ export function PypiPublishArtifactPreview({
         </Button>
       </div>
       {publisher.status && <p className="text-sm text-muted-foreground">{publisher.status}</p>}
-      {(error || publisher.error) && <ErrorState title="Publish failed" error={error || publisher.error} />}
     </div>
   );
 }

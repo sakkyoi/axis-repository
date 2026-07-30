@@ -4,6 +4,7 @@ import {
   Button,
   EmptyState,
   ErrorState,
+  useErrorToast,
   Input,
   Select,
   SelectContent,
@@ -34,6 +35,7 @@ export function AptSettingsSection({
   const [aptValues, setAptValues] = useState<AptRepositoryFormValues>(() => buildAptRepositoryFormValues(repository));
   const [aptError, setAptError] = useState("");
   const updateRepository = useUpdateRepository();
+  useErrorToast("Repository not saved", updateRepository.error);
   const signingKeysQuery = useAptSigningKeys(repository.name, true);
   const signingKeys = signingKeysQuery.data ?? [];
   const signingKeyState = aptSigningKeySettingsState({
@@ -75,7 +77,6 @@ export function AptSettingsSection({
         <Save className="mr-2 h-4 w-4" />
         Save repository
       </Button>
-      {updateRepository.isError && <ErrorState error={updateRepository.error} />}
       {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
     </div>
   );
@@ -90,6 +91,7 @@ export function AptSigningKeysSection({
   const signingKeysQuery = useAptSigningKeys(repository.name, true);
   const signingKeys = signingKeysQuery.data ?? [];
   const updateRepository = useUpdateRepository();
+  useErrorToast("Signing key could not be set as primary", updateRepository.error);
   const currentSigningKeyId = buildAptRepositoryFormValues(repository).signingKeyId;
 
   async function setPrimarySigningKey(signingKey: SigningKey) {
@@ -113,7 +115,6 @@ export function AptSigningKeysSection({
         signingKeys={signingKeys}
         currentSigningKeyId={currentSigningKeyId}
       />
-      {updateRepository.isError && <ErrorState title="Signing key could not be set as primary" error={updateRepository.error} />}
       {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
     </div>
   );

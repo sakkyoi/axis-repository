@@ -6,7 +6,7 @@ import type { RepositoryArtifact } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
 import { CopyToClipboardButton } from "../../components/ui/copy-to-clipboard-button";
 import { DestructiveActionDialog } from "../../components/ui/destructive-action-dialog";
-import { useToast } from "../../components/ui/toast";
+import { useErrorToast, useToast } from "../../components/ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,8 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
   const rebuildIndex = useRebuildRepositoryArtifactIndex(repository.name);
   const deleteArtifact = useDeleteRepositoryArtifact(repository.name);
   const toast = useToast();
+  useErrorToast("Artifact index rebuild failed", rebuildIndex.error);
+  useErrorToast("Artifact not deleted", deleteArtifact.error);
   const [, setSearchParams] = useSearchParams();
   const [selectedArtifact, setSelectedArtifact] = useState<RepositoryArtifact>();
   const [pendingDeleteArtifact, setPendingDeleteArtifact] = useState<RepositoryArtifact>();
@@ -96,7 +98,6 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
           </Button>
         </div>
       </div>
-      {rebuildIndex.isError && <ErrorState title="Artifact index rebuild failed" error={rebuildIndex.error} />}
       <div className="min-h-0 overflow-hidden rounded-md border border-border bg-background/40">
         {artifacts.isLoading && <div className="p-3 text-sm text-muted-foreground">Loading artifacts...</div>}
         {artifacts.isError && <div className="p-3"><ErrorState title="Repository artifacts unavailable" error={artifacts.error} /></div>}

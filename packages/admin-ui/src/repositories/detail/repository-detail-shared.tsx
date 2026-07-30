@@ -11,6 +11,7 @@ import { Button } from "../../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
 import { asJson, ErrorState } from "../../pages/shared";
+import { useErrorToast } from "../../components/ui/toast";
 import {
   publishSessionArtifactSummary,
   repositoryActivityActionLabel,
@@ -63,6 +64,7 @@ export function RepositoryDetailSections({
 export function RepositorySettingsSection({ repository }: { repository: Repository }) {
   const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
   const updateRepository = useUpdateRepository();
+  useErrorToast("Repository not saved", updateRepository.error);
 
   useEffect(() => {
     setVisibility(repository.visibility);
@@ -81,7 +83,6 @@ export function RepositorySettingsSection({ repository }: { repository: Reposito
         <Save className="mr-2 h-4 w-4" />
         Save repository
       </Button>
-      {updateRepository.isError && <ErrorState error={updateRepository.error} />}
     </div>
   );
 }
@@ -319,6 +320,7 @@ export function RepositoryJsonConfigEditor({ repository }: { repository: Reposit
   const [config, setConfig] = useState(asJson(repository.config));
   const [configError, setConfigError] = useState("");
   const updateRepository = useUpdateRepository();
+  useErrorToast("Repository not saved", updateRepository.error);
 
   useEffect(() => {
     setConfig(asJson(repository.config));
@@ -355,7 +357,6 @@ export function RepositoryJsonConfigEditor({ repository }: { repository: Reposit
         <Save className="mr-2 h-4 w-4" />
         Save repository
       </Button>
-      {updateRepository.isError && <ErrorState error={updateRepository.error} />}
     </>
   );
 }

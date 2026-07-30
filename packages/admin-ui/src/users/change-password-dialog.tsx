@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
+import { useErrorToast } from "../components/ui/toast";
 import { ErrorState } from "../pages/shared";
 import {
   changePasswordDialogDescription,
@@ -15,6 +16,7 @@ import {
 export function ChangePasswordDialog() {
   const auth = useAuth();
   const changePassword = useChangeOwnPassword();
+  useErrorToast("Password not changed", changePassword.error);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<ChangePasswordFormState>({
     currentPassword: "",
@@ -100,9 +102,7 @@ export function ChangePasswordDialog() {
               onChange={(event) => updateField("confirmPassword", event.target.value)}
             />
           </label>
-          {(validationError || changePassword.isError) && (
-            <ErrorState error={validationError || changePassword.error} />
-          )}
+          {Boolean(validationError) && <ErrorState error={validationError} />}
           <div className="flex justify-end gap-2">
             <Button
               type="button"

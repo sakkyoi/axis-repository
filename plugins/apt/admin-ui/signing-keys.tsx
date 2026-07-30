@@ -13,6 +13,7 @@ import {
   DialogTrigger,
   EmptyState,
   ErrorState,
+  useErrorToast,
   formatDate,
   Input,
   Select,
@@ -45,6 +46,7 @@ export function AptSigningKeyDialog({
 }) {
   const generateKey = useGenerateAptSigningKey();
   const importKey = useImportAptSigningKey();
+  useErrorToast("Signing key not added", generateKey.error || importKey.error);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<AptSigningKeyCreateMode>("generate");
   const [useAsPrimary, setUseAsPrimary] = useState(true);
@@ -129,10 +131,8 @@ export function AptSigningKeyDialog({
             <Plus className="mr-2 h-4 w-4" />
             {mode === "generate" ? "Generate key" : "Import key"}
           </Button>
+          {Boolean(error) && <ErrorState error={error} />}
         </form>
-        {(error || generateKey.isError || importKey.isError) && (
-          <ErrorState error={error || generateKey.error || importKey.error} />
-        )}
       </DialogContent>
     </Dialog>
   );

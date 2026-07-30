@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { AlertTriangle, Check, Copy } from "lucide-react";
-import { ErrorState } from "../../pages/shared";
 import { Button } from "./button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./dialog";
 import { Input } from "./input";
@@ -10,6 +9,7 @@ import {
   destructiveConfirmationMatches,
 } from "./destructive-action-dialog-model";
 import type { DestructiveActionDialogContent } from "./destructive-action-dialog-model";
+import { useErrorToast } from "./toast";
 import { useClipboardCopyFeedback } from "./use-clipboard-copy-feedback";
 
 export interface DestructiveActionDialogProps extends DestructiveActionDialogContent {
@@ -36,6 +36,7 @@ export function DestructiveActionDialog({
   const { copied, copyText, clearCopiedFeedback } = useClipboardCopyFeedback();
   const confirmed = destructiveConfirmationMatches(confirmationInput, confirmationText);
   const confirmationLayout = destructiveConfirmationLayoutClasses();
+  useErrorToast("Action failed", error);
 
   function changeOpen(nextOpen: boolean) {
     if (pending && !nextOpen) return;
@@ -91,7 +92,6 @@ export function DestructiveActionDialog({
             />
           </div>
         )}
-        {error !== undefined && error !== null && <ErrorState title="Action failed" error={error} />}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" disabled={pending} onClick={() => changeOpen(false)}>
             Cancel

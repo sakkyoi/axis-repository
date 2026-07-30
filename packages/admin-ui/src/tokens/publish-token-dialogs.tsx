@@ -22,6 +22,7 @@ import {
 } from "./publish-token-form-model";
 import { getPublishTokenScopeExtension } from "../repositories/plugins/repository-ui-plugins";
 import { ErrorState, formatDate } from "../pages/shared";
+import { useErrorToast } from "../components/ui/toast";
 
 export function CreateTokenDialog({
   repositories,
@@ -38,6 +39,7 @@ export function CreateTokenDialog({
   const [expiration, setExpiration] = useState<PublishTokenExpirationState>({ mode: "never", customDateTime: "" });
   const [scopeError, setScopeError] = useState("");
   const createToken = useCreatePublishToken();
+  useErrorToast("Publish token not created", createToken.error);
   const publishTokenScopeExtensions = [
     ...new Map(
       repositories
@@ -198,7 +200,6 @@ export function CreateTokenDialog({
             <Button type="submit" disabled={createToken.isPending}>Create</Button>
           </form>
           {scopeError && <ErrorState error={scopeError} />}
-          {createToken.isError && <ErrorState error={createToken.error} />}
         </DialogContent>
       </Dialog>
       <TokenCreatedDialog

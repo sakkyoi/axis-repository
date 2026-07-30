@@ -7,12 +7,14 @@ import { Button } from "../components/ui/button";
 import { HelpTrigger } from "../components/ui/help-trigger";
 import { repositoryPluginStatusRows } from "../repositories/plugins/plugin-lifecycle";
 import { ErrorState, PageShell } from "./shared";
+import { useErrorToast } from "../components/ui/toast";
 
 export function SettingsPage() {
   const runtimeConfig = getRuntimeConfig();
   const apiTarget = runtimeConfig.apiBaseUrl || "same-origin";
   const repositoryPlugins = useRepositoryPlugins();
   const updatePluginPolicy = useUpdateRepositoryPluginPolicy();
+  useErrorToast("Plugin policy update failed", updatePluginPolicy.error);
   const pluginRows = repositoryPluginStatusRows(repositoryPlugins.data ?? []);
   const [confirmDisableEcosystem, setConfirmDisableEcosystem] = useState<string | null>(null);
 
@@ -51,9 +53,6 @@ export function SettingsPage() {
           </div>
         )}
         {repositoryPlugins.error && <ErrorState title="Repository plugins unavailable" error={repositoryPlugins.error} />}
-        {updatePluginPolicy.error && (
-          <ErrorState title="Plugin policy update failed" error={updatePluginPolicy.error} />
-        )}
         {!repositoryPlugins.isLoading && !repositoryPlugins.error && pluginRows.length === 0 && (
           <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
             No repository plugins are reported by this server.

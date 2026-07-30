@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { PackagePlus, X } from "lucide-react";
 import {
   Button,
-  ErrorState,
+  useErrorToast,
   PublishSessionDetailList,
   useRepositoryArtifactPublisher,
   type PublishSessionDetailComponentProps,
@@ -38,6 +38,7 @@ export function AptPublishArtifactPreview({
     error,
     isPublishing: publisher.isPublishing,
   });
+  useErrorToast("Publish failed", error || publisher.error);
 
   useEffect(() => {
     const droppedFile = droppedFiles[0];
@@ -100,7 +101,6 @@ export function AptPublishArtifactPreview({
         </Button>
       </div>
       {publisher.status && <p className="text-sm text-muted-foreground">{publisher.status}</p>}
-      {(error || publisher.error) && <ErrorState title="Publish failed" error={error || publisher.error} />}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   Button,
   EmptyState,
   ErrorState,
+  useErrorToast,
   Input,
   useUpdateRepository,
   VisibilitySelect,
@@ -55,6 +56,7 @@ export function PypiSettingsSection({
 }) {
   const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
   const updateRepository = useUpdateRepository();
+  useErrorToast("Repository not saved", updateRepository.error);
 
   useEffect(() => {
     setVisibility(repository.visibility);
@@ -80,7 +82,6 @@ export function PypiSettingsSection({
         <Save className="mr-2 h-4 w-4" />
         Save repository
       </Button>
-      {updateRepository.isError && <ErrorState error={updateRepository.error} />}
     </div>
   );
 }
@@ -149,6 +150,7 @@ export function PypiProjectFilesSection({
 }) {
   const projects = usePypiProjects(repository.name);
   const setYanked = useSetPypiFileYanked();
+  useErrorToast("Could not change yank state", setYanked.error);
   const [pendingYank, setPendingYank] = useState<{ project: string; filename: string } | null>(null);
   const [reason, setReason] = useState("");
 
@@ -248,7 +250,6 @@ export function PypiProjectFilesSection({
           </div>
         </div>
       )}
-      {setYanked.isError && <ErrorState title="Could not change yank state" error={setYanked.error} />}
     </div>
   );
 }

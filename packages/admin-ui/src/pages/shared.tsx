@@ -1,4 +1,6 @@
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
+import { useErrorToast } from "../components/ui/toast";
+import { toastErrorMessage } from "../components/ui/toast-model";
 import { cn } from "../lib/utils";
 
 export function PageHeader({
@@ -22,12 +24,16 @@ export function PageHeader({
   );
 }
 
+/**
+ * A failure in the place that has nothing to show because of it.
+ *
+ * Also raised in the corner, like every other message: the card explains why a
+ * region is empty and stays as long as it is, and the message is what gets
+ * noticed when the region is somewhere the eye is not.
+ */
 export function ErrorState({ title = "Request failed", error }: { title?: string; error: unknown }) {
-  const message = typeof error === "string"
-    ? error
-    : error instanceof Error
-      ? error.message
-      : "Unexpected error";
+  const message = toastErrorMessage(error);
+  useErrorToast(title, error);
 
   return (
     <Alert className="border-destructive/35 bg-destructive/10 text-destructive">

@@ -37,6 +37,7 @@ import {
 import { repositoryConfigFieldsForStep } from "../repositories/create/repository-create-field-model";
 import { RepositoryConfigFields } from "../repositories/create/repository-create-field-renderer";
 import { asJson, ErrorState, PageShell } from "./shared";
+import { useErrorToast } from "../components/ui/toast";
 
 const stepLabels: Record<RepositoryCreateStep, string> = {
   plugin: "Plugin",
@@ -49,6 +50,7 @@ const stepLabels: Record<RepositoryCreateStep, string> = {
 export function NewRepositoryPage() {
   const navigate = useNavigate();
   const createRepository = useCreateRepository();
+  useErrorToast("Repository not created", createRepository.error);
   const repositories = useRepositories();
   const repositoryPlugins = useRepositoryPlugins();
   const pluginOptions = useMemo(
@@ -201,9 +203,11 @@ export function NewRepositoryPage() {
           {currentStep === "review" && (
             <ReviewStep payload={payload} />
           )}
-          {(error || createRepository.isError) && (
+          {/* What the form itself objects to stays with the form; what the
+              server refused is raised in the corner like every other failure. */}
+          {Boolean(error) && (
             <div className="mt-4">
-              <ErrorState error={error || createRepository.error} />
+              <ErrorState error={error} />
             </div>
           )}
         </div>
