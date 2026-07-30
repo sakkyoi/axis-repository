@@ -143,7 +143,7 @@ describe("GenericManifestPublisher", () => {
         },
       ],
     });
-    expect(objectStore.objects).toEqual([
+    expect(objectStore.objects).toMatchObject([
       {
         key: "repositories/debian-internal/publishes/pub_1.json",
         value: manifest,
@@ -301,7 +301,7 @@ describe("GenericManifestPublisher", () => {
         contentType: JSON_CONTENT_TYPE,
       },
     });
-    expect(objectStore.objects).toEqual([
+    expect(objectStore.objects).toMatchObject([
       {
         key: "repositories/debian-internal/publishes/pub_1.json",
         value: {

@@ -101,7 +101,8 @@ function isExpired(session: PublishSession, now: Date): boolean {
 }
 
 export class PublishSessionService {
-  private readonly ttlSeconds: number;
+  /** How long a session lives, so callers can reason about what outlives one. */
+  readonly ttlSeconds: number;
   private readonly finalizingRetryAfterSeconds: number;
 
   constructor(private readonly options: PublishSessionServiceOptions) {

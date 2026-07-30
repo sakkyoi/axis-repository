@@ -49,6 +49,7 @@ describe("runRepositoryMaintenance", () => {
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
+      sessionTtlMs: 15 * 60 * 1000,
     });
 
     expect(run.nextRunAt.getTime()).toBe(NOW.getTime() + 60 * 60 * 1000);
@@ -61,6 +62,7 @@ describe("runRepositoryMaintenance", () => {
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
+      sessionTtlMs: 15 * 60 * 1000,
     });
 
     expect(run.nextRunAt.getTime()).toBe(NOW.getTime() + MAINTENANCE_MAX_INTERVAL_MS);
@@ -78,6 +80,7 @@ describe("runRepositoryMaintenance", () => {
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
+      sessionTtlMs: 15 * 60 * 1000,
     });
 
     expect(run.nextRunAt.getTime()).toBe(NOW.getTime() + MAINTENANCE_MIN_INTERVAL_MS);
@@ -98,6 +101,7 @@ describe("runRepositoryMaintenance", () => {
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
+      sessionTtlMs: 15 * 60 * 1000,
     });
 
     expect(run.failures).toEqual([{ repositoryName: "broken", message: "signing key revoked" }]);
@@ -112,6 +116,7 @@ describe("runRepositoryMaintenance", () => {
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
+      sessionTtlMs: 15 * 60 * 1000,
     });
 
     expect(run.refreshed).toEqual([]);

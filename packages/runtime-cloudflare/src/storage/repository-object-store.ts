@@ -62,6 +62,7 @@ export interface R2ListedObject {
   httpMetadata?: { contentType?: string };
   httpEtag?: string;
   size?: number;
+  uploaded?: Date;
 }
 
 export interface R2ObjectsList {
@@ -72,18 +73,20 @@ export interface R2ObjectsList {
 }
 
 export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
-  readonly objects: Array<{ key: string; value: unknown; contentType?: string }> = [];
+  readonly objects: Array<{ key: string; value: unknown; contentType?: string; uploadedAt?: Date }> = [];
+  /** Overrides the timestamp the next writes are recorded with, for tests. */
+  now: () => Date = () => new Date();
 
   async putJson(key: string, value: unknown): Promise<void> {
-    this.objects.push({ key, value: JSON.parse(JSON.stringify(value)) });
+    this.objects.push({ key, value: JSON.parse(JSON.stringify(value)), uploadedAt: this.now() });
   }
 
   async putText(key: string, value: string, contentType: string): Promise<void> {
-    this.objects.push({ key, value, contentType });
+    this.objects.push({ key, value, contentType, uploadedAt: this.now() });
   }
 
   async putBytes(key: string, value: Uint8Array, contentType: string): Promise<void> {
-    this.objects.push({ key, value: new Uint8Array(value), contentType });
+    this.objects.push({ key, value: new Uint8Array(value), contentType, uploadedAt: this.now() });
   }
 
   async createPartWriter(key: string, contentType: string): Promise<RepositoryObjectPartWriter> {
@@ -92,6 +95,7 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
     const chunks: Uint8Array[] = [];
     let size = 0;
     const objects = this.objects;
+    const now = this.now;
     return {
       write: async (chunk) => {
         chunks.push(new Uint8Array(chunk));
@@ -104,7 +108,7 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
           value.set(chunk, offset);
           offset += chunk.byteLength;
         }
-        objects.push({ key, value, contentType });
+        objects.push({ key, value, contentType, uploadedAt: now() });
         return { size };
       },
       abort: async () => {
@@ -126,6 +130,7 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
     this.objects.push({
       key: destinationKey,
       value: cloneObjectValue(source.value),
+      uploadedAt: this.now(),
       ...(contentType ?? source.contentType
         ? { contentType: contentType ?? source.contentType }
       : {}),
@@ -180,6 +185,7 @@ export class MemoryRepositoryObjectStore implements RepositoryObjectStore {
       objects.push({
         key: object.key,
         ...await memoryObjectMetadata(object.value, object.contentType),
+        ...(object.uploadedAt ? { uploadedAt: object.uploadedAt } : {}),
       });
     }
 
@@ -296,6 +302,7 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
           ...(object.httpMetadata?.contentType !== undefined ? { contentType: object.httpMetadata.contentType } : {}),
           ...(object.size !== undefined ? { contentLength: object.size } : {}),
           ...(object.httpEtag !== undefined ? { etag: object.httpEtag } : {}),
+          ...(object.uploaded !== undefined ? { uploadedAt: object.uploaded } : {}),
         }))
         .sort((left, right) => left.key.localeCompare(right.key)),
       ...(result.cursor !== undefined ? { cursor: result.cursor } : {}),
@@ -313,8 +320,10 @@ export class R2RepositoryObjectStore implements RepositoryObjectStore {
   }
 }
 
-function latestMemoryObjects(objects: Array<{ key: string; value: unknown; contentType?: string }>): Array<{ key: string; value: unknown; contentType?: string }> {
-  const byKey = new Map<string, { key: string; value: unknown; contentType?: string }>();
+type MemoryObject = { key: string; value: unknown; contentType?: string; uploadedAt?: Date };
+
+function latestMemoryObjects(objects: MemoryObject[]): MemoryObject[] {
+  const byKey = new Map<string, MemoryObject>();
   for (const object of objects) {
     byKey.set(object.key, object);
   }

@@ -51,6 +51,8 @@ export interface AppDependencies {
   localUploadBroker?: SameOriginUploadBroker;
   repositoryRuntimePlugins: RepositoryRuntimePluginRegistry;
   repositoryWriteLock: RepositoryWriteLock;
+  /** How long a publish session lives; what outlives one is nobody's. */
+  publishSessionTtlMs: number;
 }
 
 export interface DevDependencyHarness {
@@ -215,6 +217,7 @@ export function createDevDependencyHarness(
       localUploadBroker: uploadBroker,
       repositoryRuntimePlugins,
       repositoryWriteLock: writeLock,
+      publishSessionTtlMs: publishSessionService.ttlSeconds * 1000,
     },
     repositoryObjectStore: objectStore,
   };

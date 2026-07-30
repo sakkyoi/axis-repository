@@ -549,5 +549,10 @@ function findStoredString(objectStore: MemoryRepositoryObjectStore, key: string)
 }
 
 function repositoryObjects(objectStore: MemoryRepositoryObjectStore) {
-  return objectStore.objects.filter((object) => object.key.startsWith("repositories/"));
+  // When each object was stored is the store's own bookkeeping, not part of
+  // what was published, and two runs of the same publish are never at the
+  // same instant.
+  return objectStore.objects
+    .filter((object) => object.key.startsWith("repositories/"))
+    .map(({ uploadedAt, ...object }) => object);
 }

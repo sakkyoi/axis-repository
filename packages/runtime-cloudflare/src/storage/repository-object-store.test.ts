@@ -208,7 +208,7 @@ describe("MemoryRepositoryObjectStore", () => {
 
     await store.putJson("repositories/debian-internal/latest.json", value);
 
-    expect(store.objects).toEqual([
+    expect(store.objects).toMatchObject([
       {
         key: "repositories/debian-internal/latest.json",
         value,
@@ -264,7 +264,7 @@ describe("MemoryRepositoryObjectStore", () => {
 
     await store.putText("dists/noble/Release", "Origin: Axis\n", "text/plain");
 
-    expect(store.objects).toEqual([
+    expect(store.objects).toMatchObject([
       {
         key: "dists/noble/Release",
         value: "Origin: Axis\n",
@@ -280,7 +280,7 @@ describe("MemoryRepositoryObjectStore", () => {
     await store.putBytes("pool/pkg.deb", bytes, "application/vnd.debian.binary-package");
     bytes[0] = 9;
 
-    expect(store.objects).toEqual([
+    expect(store.objects).toMatchObject([
       {
         key: "pool/pkg.deb",
         value: new Uint8Array([1, 2, 3]),
@@ -297,12 +297,12 @@ describe("MemoryRepositoryObjectStore", () => {
     await store.copyObject("staging/pkg.deb", "pool/pkg.deb");
     bytes[1] = 9;
 
-    expect(store.objects[0]).toEqual({
+    expect(store.objects[0]).toMatchObject({
       key: "staging/pkg.deb",
       value: new Uint8Array([4, 5, 6]),
       contentType: "application/octet-stream",
     });
-    expect(store.objects[1]).toEqual({
+    expect(store.objects[1]).toMatchObject({
       key: "pool/pkg.deb",
       value: new Uint8Array([4, 5, 6]),
       contentType: "application/octet-stream",
@@ -315,7 +315,7 @@ describe("MemoryRepositoryObjectStore", () => {
 
     await store.copyObject("staging/Release", "dists/noble/Release", "text/x-debian-control");
 
-    expect(store.objects[1]).toEqual({
+    expect(store.objects[1]).toMatchObject({
       key: "dists/noble/Release",
       value: "Origin: Axis\n",
       contentType: "text/x-debian-control",

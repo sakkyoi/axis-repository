@@ -2,6 +2,7 @@ import type { Clock, Repository, RepositoryObjectStore } from "@axis-repository/
 import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { scopeObjectStoreToRepository } from "../plugins/scoped-capabilities";
 import type { RepositoryWriteLock } from "./repository-write-lock";
+import { discardExpiredStagedUploads } from "./staging-sweep";
 
 /**
  * Runs whatever every repository needs on a timer, and says when to come back.
@@ -20,6 +21,8 @@ export const MAINTENANCE_MIN_INTERVAL_MS = 60 * 1000;
 export interface RepositoryMaintenanceRun {
   refreshed: Array<{ repositoryName: string; details: string[] }>;
   failures: Array<{ repositoryName: string; message: string }>;
+  /** Staged uploads discarded because no session could still finish them. */
+  staged: string[];
   /** When the caller should run maintenance again. */
   nextRunAt: Date;
 }
@@ -30,10 +33,13 @@ export async function runRepositoryMaintenance(input: {
   repositoryObjectStore: RepositoryObjectStore;
   writeLock: RepositoryWriteLock;
   clock: Clock;
+  /** How long a publish session lives, which bounds how long its uploads matter. */
+  sessionTtlMs: number;
 }): Promise<RepositoryMaintenanceRun> {
   const now = input.clock.now();
   const refreshed: RepositoryMaintenanceRun["refreshed"] = [];
   const failures: RepositoryMaintenanceRun["failures"] = [];
+  const staged: string[] = [];
   const dueTimes: number[] = [];
 
   for (const repository of input.repositories) {
@@ -66,7 +72,26 @@ export async function runRepositoryMaintenance(input: {
     }
   }
 
-  return { refreshed, failures, nextRunAt: nextRunAt(dueTimes, now) };
+  // Outside the loop above, and not behind a plugin: a staged upload belongs
+  // to the runtime rather than to any format, and half the repositories here
+  // have no maintenance of their own to hang it on.
+  try {
+    const discarded = await discardExpiredStagedUploads({
+      objectStore: input.repositoryObjectStore,
+      now,
+      sessionTtlMs: input.sessionTtlMs,
+    });
+    if (discarded.length > 0) {
+      staged.push(...discarded);
+    }
+  } catch (error) {
+    failures.push({
+      repositoryName: "_staging",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return { refreshed, failures, staged, nextRunAt: nextRunAt(dueTimes, now) };
 }
 
 function nextRunAt(dueTimes: number[], now: Date): Date {

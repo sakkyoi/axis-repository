@@ -98,6 +98,12 @@ export interface RepositoryObjectListDirectory {
 
 export interface RepositoryObjectListItem extends RepositoryObjectMetadata {
   key: string;
+  /**
+   * When the object was stored, where the store knows. Age is the only thing
+   * that distinguishes a staged upload nobody will finish from one still in
+   * progress, so sweeping them apart needs it.
+   */
+  uploadedAt?: Date;
 }
 
 export interface RepositoryObjectList {

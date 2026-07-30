@@ -254,6 +254,7 @@ export function createDurableObjectDependencies(
     ...(uploadBroker instanceof SameOriginUploadBroker ? { localUploadBroker: uploadBroker } : {}),
     repositoryRuntimePlugins,
     repositoryWriteLock: writeLock,
+    publishSessionTtlMs: publishSessionService.ttlSeconds * 1000,
   };
 }
 
@@ -291,6 +292,7 @@ export class AxisAdminDO {
         repositoryObjectStore: this.dependencies.repositoryObjectStore,
         writeLock: this.dependencies.repositoryWriteLock,
         clock: { now: () => new Date() },
+        sessionTtlMs: this.dependencies.publishSessionTtlMs,
       });
       nextRunAt = run.nextRunAt;
       for (const failure of run.failures) {
