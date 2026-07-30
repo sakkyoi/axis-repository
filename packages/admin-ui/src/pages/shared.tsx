@@ -14,12 +14,25 @@ export function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <div>
+    // Room for both and they sit side by side, the actions against the right
+    // edge. Not enough, and the actions take a line of their own rather than
+    // folding into a ragged block beside the title: they are held at their
+    // natural width (`shrink-0`) so the row breaks before they do, and the
+    // title gives way instead (`min-w-0`). Which happens is decided by whether
+    // it fits, so a long title or another button changes it without anyone
+    // choosing a width at which it should.
+    //
+    // A screen too narrow to hold the actions even on their own line is not
+    // addressed here, and is not a header problem: at that width the tables
+    // and the fixed sidebar overflow too.
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+      <div className="min-w-0">
         <h1 className="text-xl font-semibold">{title}</h1>
         {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
       </div>
-      {action}
+      {action ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>
+      ) : null}
     </div>
   );
 }

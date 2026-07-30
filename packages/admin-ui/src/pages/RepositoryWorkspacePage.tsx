@@ -117,7 +117,7 @@ export function RepositoryWorkspacePage() {
         title={repository?.name ?? "Repository"}
         description="Publish artifacts and inspect client setup for this repository."
         action={repository ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <>
             <Button type="button" variant="outline" onClick={() => navigate(ADMIN_UI_PATHS.repositories)}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Repositories
@@ -154,7 +154,7 @@ export function RepositoryWorkspacePage() {
                 }}
               />
             )}
-          </div>
+          </>
         ) : undefined}
         sections={repository ? repositoryWorkspaceSectionsFor(repository.ecosystem) : []}
         {...(repository && PreviewComponent ? { onPublishFiles: handlePublishFiles } : {})}
