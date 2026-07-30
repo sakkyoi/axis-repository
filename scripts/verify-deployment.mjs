@@ -308,14 +308,23 @@ async function publishSession({ token, repositoryName, ecosystem, artifact, body
 }
 
 async function cleanUp(admin) {
+  // Both, and the tokens too: deleting a repository does not take the publish
+  // token that was made to write to it, so every run used to leave one behind
+  // -- credentials accumulating on a deployment, from a script whose whole
+  // contract is that it borrows one and gives it back.
   for (const name of [APT_REPOSITORY, PYPI_REPOSITORY]) {
-    const response = await fetch(`${options.baseUrl}/admin/repositories/${name}`, {
-      method: "DELETE",
-      headers: { authorization: `Bearer ${admin}` },
-    });
-    if (!response.ok && response.status !== 404) {
-      console.warn(`  could not remove ${name}: HTTP ${response.status}`);
-    }
+    await remove(admin, `/admin/repositories/${name}`, name);
+    await remove(admin, `/admin/publish-tokens/verify-${name}`, `token for ${name}`);
+  }
+}
+
+async function remove(admin, path, what) {
+  const response = await fetch(`${options.baseUrl}${path}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${admin}` },
+  });
+  if (!response.ok && response.status !== 404) {
+    console.warn(`  could not remove ${what}: HTTP ${response.status}`);
   }
 }
 
