@@ -8,20 +8,15 @@ class FakeR2Bucket {
   readonly objects = new Map<string, {
     value: string | Uint8Array;
     contentType?: string;
-    customMetadata?: Record<string, string>;
   }>();
 
-  seedUpload(key: string, value: Uint8Array, options: { contentType: string; size: number; sha256: string; uploadId: string }) {
+  seedUpload(key: string, value: Uint8Array, options: { contentType: string; size: number }) {
     if (value.byteLength !== options.size) {
       throw new Error(`Seeded upload size mismatch for ${key}`);
     }
     this.objects.set(key, {
       value: new Uint8Array(value),
       contentType: options.contentType,
-      customMetadata: {
-        "axis-sha256": options.sha256,
-        "axis-upload-id": options.uploadId,
-      },
     });
   }
 
@@ -30,7 +25,6 @@ class FakeR2Bucket {
     etag?: string;
     httpEtag?: string;
     size: number;
-    customMetadata?: Record<string, string>;
   } | null> {
     const object = this.objects.get(key);
     if (!object) {
@@ -42,7 +36,6 @@ class FakeR2Bucket {
       etag: `fake-${bytes.byteLength}`,
       httpEtag: `"fake-${bytes.byteLength}"`,
       size: bytes.byteLength,
-      ...(object.customMetadata ? { customMetadata: object.customMetadata } : {}),
     };
   }
 
@@ -658,8 +651,6 @@ describe("AxisAdminDO", () => {
       {
         contentType: "application/vnd.debian.binary-package",
         size: debBytes.byteLength,
-        sha256: debSha256,
-        uploadId: upload.uploadId,
       },
     );
 

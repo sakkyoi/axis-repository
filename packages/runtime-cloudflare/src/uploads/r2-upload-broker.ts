@@ -5,7 +5,6 @@ import { digestStreamHex } from "../storage/digest";
 
 export interface R2ObjectLike {
   size: number;
-  customMetadata?: Record<string, string>;
 }
 
 export interface R2ObjectBodyLike extends R2ObjectLike {
@@ -131,20 +130,6 @@ export class R2PresignedUploadBroker implements UploadBroker {
   }
 
   /**
-   * Hashes what was stored, rather than trusting what the upload said.
-   *
-   * The metadata carrying the digest is signed into the upload URL, so it
-   * cannot be altered — but nothing binds it to the bytes. R2 validates no
-   * full-object SHA-256 on PutObject, so whoever holds the URL can write any
-   * body of the declared length and it would be published under a digest it
-   * does not have. A client checking the digest then refuses the download; one
-   * that does not check installs whatever arrived.
-   *
-   * This is the one point where a presigned upload's bytes pass through the
-   * Worker. They are read from R2 rather than over the network and hashed as
-   * they stream, so it costs a read and holds nothing.
-   */
-  /**
    * Explains an object the binding cannot find.
    *
    * Two buckets are in play and nothing makes them agree: the binding the
@@ -191,6 +176,20 @@ export class R2PresignedUploadBroker implements UploadBroker {
     return (await this.fetchImpl(signed.url, { method: "HEAD" })).ok;
   }
 
+  /**
+   * Hashes what was stored, rather than trusting what the upload said.
+   *
+   * The metadata carrying the digest is signed into the upload URL, so it
+   * cannot be altered — but nothing binds it to the bytes. R2 validates no
+   * full-object SHA-256 on PutObject, so whoever holds the URL can write any
+   * body of the declared length and it would be published under a digest it
+   * does not have. A client checking the digest then refuses the download; one
+   * that does not check installs whatever arrived.
+   *
+   * This is the one point where a presigned upload's bytes pass through the
+   * Worker. They are read from R2 rather than over the network and hashed as
+   * they stream, so it costs a read and holds nothing.
+   */
   private async requireStoredBytesMatch(objectKey: string, expectedSha256: string): Promise<void> {
     const stored = await this.bucket.get(objectKey);
     if (!stored?.body) {

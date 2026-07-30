@@ -17,11 +17,11 @@ const artifact = {
 };
 
 class FakeR2Bucket implements R2BucketLike {
-  objects = new Map<string, { size: number; customMetadata: Record<string, string>; bytes?: Uint8Array }>();
+  objects = new Map<string, { size: number; bytes?: Uint8Array }>();
 
   async head(key: string) {
     const stored = this.objects.get(key);
-    return stored ? { size: stored.size, customMetadata: stored.customMetadata } : null;
+    return stored ? { size: stored.size } : null;
   }
 
   async get(key: string) {
@@ -34,7 +34,6 @@ class FakeR2Bucket implements R2BucketLike {
     const bytes = stored.bytes ?? new Uint8Array(0);
     return {
       size: stored.size,
-      customMetadata: stored.customMetadata,
       body: new Response(bytes).body as ReadableStream<Uint8Array>,
     };
   }
@@ -196,10 +195,6 @@ describe("R2PresignedUploadBroker", () => {
     const { bucket, broker } = createBroker();
     bucket.objects.set("_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb", {
       size: artifactBytes.byteLength,
-      customMetadata: {
-        "axis-sha256": artifactSha256,
-        "axis-upload-id": "upl_1",
-      },
       bytes: artifactBytes,
     });
 
@@ -222,34 +217,6 @@ describe("R2PresignedUploadBroker", () => {
       size: 1234,
       sha256: artifactSha256,
     });
-  });
-
-  it("accepts an object the Worker put there itself", async () => {
-    // A twine upload is received by the Worker and copied into the session's
-    // staging slot, so it carries none of the metadata a presigned PUT would
-    // have set. That used to be refused, which meant twine worked only on the
-    // backend a deployment does not use.
-    const { bucket, broker } = createBroker();
-    bucket.objects.set("_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb", {
-      size: artifactBytes.byteLength,
-      customMetadata: {},
-      bytes: artifactBytes,
-    });
-
-    await expect(
-      broker.verifyUpload({
-        target: {
-          uploadId: "upl_1",
-          filename: artifact.filename,
-          objectKey: "_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb",
-          method: "PUT",
-          url: "https://example",
-          headers: {},
-          expiresAt: "2026-07-14T00:15:00.000Z",
-        },
-        expected: artifact,
-      }),
-    ).resolves.toMatchObject({ sha256: artifactSha256 });
   });
 
   it("names the two buckets when they turn out to be different ones", async () => {
@@ -283,10 +250,6 @@ describe("R2PresignedUploadBroker", () => {
     const { bucket, broker } = createBroker();
     bucket.objects.set("_staging/uploads/debian-internal/pub_1/upl_1/myapp_1.2.3_amd64.deb", {
       size: artifactBytes.byteLength,
-      customMetadata: {
-        "axis-sha256": artifactSha256,
-        "axis-upload-id": "upl_1",
-      },
       bytes: new Uint8Array(artifactBytes.byteLength).fill(9),
     });
 
@@ -351,7 +314,9 @@ describe("R2PresignedUploadBroker", () => {
     );
   });
 
-  it("rejects size or metadata mismatches", async () => {
+  it("rejects an object that is not the size the upload declared", async () => {
+    // Cheap and first: a size that disagrees settles it without reading the
+    // body, and the digest check behind it never sees the object.
     const { bucket, broker } = createBroker();
     const target = {
       uploadId: "upl_1",
@@ -363,31 +328,10 @@ describe("R2PresignedUploadBroker", () => {
       expiresAt: "2026-07-14T00:15:00.000Z",
     };
 
-    bucket.objects.set(target.objectKey, {
-      size: 999,
-      customMetadata: {
-        "axis-sha256": artifactSha256,
-        "axis-upload-id": "upl_1",
-      },
-    });
-    await expect(broker.verifyUpload({ target, expected: artifact })).rejects.toBeInstanceOf(ValidationError);
+    bucket.objects.set(target.objectKey, { size: 999, bytes: artifactBytes });
 
-    bucket.objects.set(target.objectKey, {
-      size: 1234,
-      customMetadata: {
-        "axis-sha256": "b".repeat(64),
-        "axis-upload-id": "upl_1",
-      },
-    });
-    await expect(broker.verifyUpload({ target, expected: artifact })).rejects.toBeInstanceOf(ValidationError);
-
-    bucket.objects.set(target.objectKey, {
-      size: 1234,
-      customMetadata: {
-        "axis-sha256": artifactSha256,
-        "axis-upload-id": "other",
-      },
-    });
-    await expect(broker.verifyUpload({ target, expected: artifact })).rejects.toBeInstanceOf(ValidationError);
+    await expect(broker.verifyUpload({ target, expected: artifact })).rejects.toThrow(
+      new ValidationError(`Uploaded object size mismatch: ${target.objectKey}`),
+    );
   });
 });
