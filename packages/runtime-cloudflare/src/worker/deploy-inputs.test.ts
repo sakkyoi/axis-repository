@@ -63,6 +63,16 @@ describe("what a deploy is asked to supply", () => {
     );
   });
 
+  it("suggests no value for the one that has to match a bucket", () => {
+    // A default that looks plausible is a default nobody edits, and this one
+    // names a resource rather than expressing a preference: filled in with the
+    // wrong bucket, reads keep working through the binding while every upload
+    // and download addresses somewhere else. A deployment did exactly that.
+    const text = readFileSync(`${repositoryRoot}.dev.vars.example`, "utf8");
+
+    expect(text).toMatch(/^R2_BUCKET_NAME=\s*$/m);
+  });
+
   it("does not also set a name it asks for", () => {
     // A value given in both places is a value that can disagree with itself.
     const wrangler = readFileSync(`${repositoryRoot}wrangler.jsonc`, "utf8");
