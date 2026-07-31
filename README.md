@@ -1,14 +1,37 @@
-# Axis Repository
-
-[![Status: Experimental](https://img.shields.io/badge/status-experimental-orange)](#)
-[![Development: Active](https://img.shields.io/badge/development-active-blue)](#)
-[![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)
-
 <p align="center">
-  <img src="assets/logo-mark.svg" alt="Axis Repository" width="96" height="96" />
+  <picture>
+    <!-- The mark takes its deer from `currentColor`, and an <img> has nothing
+         to inherit it from -- so each file states the colour it is for, and
+         GitHub picks by the reader's own theme. -->
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-mark-dark.svg">
+    <img src="assets/logo-mark-light.svg" alt="" width="140" height="140">
+  </picture>
 </p>
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sakkyoi/axis-repository)
+<h1 align="center">Axis Repository</h1>
+
+<p align="center">
+  An artifact repository for apt and PyPI, served from one Cloudflare Worker.
+</p>
+
+<p align="center">
+  <a href="#"><img alt="Status: experimental" src="https://img.shields.io/badge/status-experimental-orange"></a>
+  <a href="#"><img alt="Development: active" src="https://img.shields.io/badge/development-active-blue"></a>
+  <a href="LICENSE"><img alt="License: AGPL-3.0-only" src="https://img.shields.io/badge/license-AGPL--3.0--only-blue"></a>
+</p>
+
+<p align="center">
+  <a href="docs/plugin-authoring.md">Plugin authoring</a> ·
+  <a href="LICENSE">License</a>
+</p>
+
+<p align="center">
+  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/sakkyoi/axis-repository">
+    <img alt="Deploy to Cloudflare" src="https://deploy.workers.cloudflare.com/button" height="32">
+  </a>
+</p>
+
+---
 
 Axis Repository is a multi-format artifact repository. The current implementation includes a Cloudflare Worker API spine and Durable Object-backed state.
 
@@ -249,7 +272,8 @@ are future publishers.
 
 An apt repository is configured under `config.apt`. Creating one through the
 admin UI asks for the codename, the suites, and the signing key; the rest are
-optional and editable in the repository's APT settings section, or through
+optional and
+ editable in the repository's APT settings section, or through
 `PATCH /admin/repositories/<name>` with a `config` object.
 
 | Field | Type | Effect |
