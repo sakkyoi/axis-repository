@@ -6,7 +6,13 @@ export default defineConfig({
     alias: workspaceAliases(new URL(".", import.meta.url)),
   },
   test: {
-    include: ["packages/**/*.test.ts", "packages/**/*.test.tsx", "plugins/**/*.test.ts", "plugins/**/*.test.tsx"],
+    include: [
+      "packages/**/*.test.ts",
+      "packages/**/*.test.tsx",
+      "plugins/**/*.test.ts",
+      "plugins/**/*.test.tsx",
+      "scripts/**/*.test.ts",
+    ],
     globals: false,
     passWithNoTests: true,
   },

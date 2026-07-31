@@ -57,6 +57,38 @@ Labels are grouped by purpose. Pull requests should carry at least one `type/*`
 label and usually one `area/*` label. Add `impact/*` labels when a change has a
 deployment, storage, authentication, security, or migration consequence.
 
+Pull request titles must follow Conventional Commits:
+
+```text
+<type>[optional-scope][!]: <description>
+```
+
+Examples:
+
+```text
+feat(admin-ui): add repository browser
+fix(plugin-apt): rebuild index after object deletion
+ci(release): draft stable and rc releases separately
+feat(core)!: change plugin contract
+```
+
+The scope is optional. The allowed types are `feat`, `fix`, `docs`, `chore`,
+`ci`, `build`, `refactor`, `test`, `perf`, `style`, and `revert`.
+
+Automation derives initial labels from the Conventional Commit title:
+
+- `feat` becomes `type/feature` and `release/minor`.
+- `fix` becomes `type/bug` and `release/patch`.
+- `docs` becomes `type/documentation` and `release/patch`.
+- `ci` becomes `type/maintenance` and `release/patch`.
+- `chore(deps)` and `build(deps)` become `type/dependencies` and
+  `release/patch`.
+- Other maintenance types become `type/maintenance` and `release/skip`.
+- `!` marks a breaking change with `impact/breaking` and `release/major`.
+
+Maintainers must review the generated `release/*` and `impact/*` labels before
+merge. Use `release/skip` when the change should not appear in release notes.
+
 ### Type
 
 - `type/feature` - new user-visible capability.

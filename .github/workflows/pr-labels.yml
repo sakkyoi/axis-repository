@@ -21,7 +21,10 @@ jobs:
           script: |
             const labels = context.payload.pull_request.labels.map((label) => label.name);
             const hasType = labels.some((label) => label.startsWith("type/"));
-            const skipped = labels.includes("release/skip");
-            if (!hasType && !skipped) {
-              core.setFailed("Pull requests need one type/* label, or release/skip when the change should not appear in release notes.");
+            const hasReleaseDecision = labels.some((label) => label.startsWith("release/"));
+            if (!hasType) {
+              core.setFailed("Pull requests need one type/* label. Conventional PR labeling should add this automatically from the PR title.");
+            }
+            if (!hasReleaseDecision) {
+              core.setFailed("Pull requests need one release/* label. Automation adds an initial release label, and maintainers should review it before merge.");
             }

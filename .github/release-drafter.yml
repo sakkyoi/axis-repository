@@ -1,13 +1,12 @@
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 tag-prefix: "v"
-version-template: "$MAJOR.$MINOR.$PATCH"
+version-template: "$MAJOR.$MINOR.$PATCH$PRERELEASE"
 category-template: "## $TITLE"
 change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
 change-title-escapes: "\\<*_&`#@"
 sort-by: merged_at
 sort-direction: descending
-prerelease: true
 
 categories:
   - type: pre-exclude

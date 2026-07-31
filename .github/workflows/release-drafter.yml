@@ -13,11 +13,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  update-release-draft:
+  update-stable-release-draft:
     runs-on: ubuntu-latest
     steps:
       - uses: release-drafter/release-drafter@v7.6.0
         with:
           config-name: release-drafter.yml
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-rc-release-draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v7
+        with:
+          config-name: release-drafter.yml
+          prerelease: true
+          prerelease-identifier: rc
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

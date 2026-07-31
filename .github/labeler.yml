@@ -1,0 +1,55 @@
+area/admin-ui:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/admin-ui/**
+
+area/ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/actions/**
+          - .github/workflows/**
+          - scripts/**
+
+area/core:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/core/**
+
+area/docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - docs/**
+          - README.md
+
+area/plugin-apt:
+  - changed-files:
+      - any-glob-to-any-file:
+          - plugins/apt/**
+
+area/plugin-pypi:
+  - changed-files:
+      - any-glob-to-any-file:
+          - plugins/pypi/**
+
+area/plugins:
+  - changed-files:
+      - any-glob-to-any-file:
+          - plugins/**
+
+area/publish-client:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/publish-client/**
+
+area/release:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/release-drafter.yml
+          - .github/workflows/release-*.yml
+          - docs/release.md
+
+area/runtime-cloudflare:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/runtime-cloudflare/**
+          - wrangler.jsonc
