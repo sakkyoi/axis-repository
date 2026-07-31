@@ -7,6 +7,7 @@ import {
   useVerifyAdminPublishUpload,
 } from "../../api/hooks";
 import type { CreatedPublishSession, PublishArtifact, Repository } from "../../api/schemas";
+import { publishSteps, type UploadProgress } from "./publish-progress-model";
 
 export interface RepositoryPublishFlowInput {
   repositoryName: string;
@@ -18,11 +19,16 @@ export interface RepositoryPublishFlowInput {
     ecosystem: string;
     artifacts: PublishArtifact[];
   }): Promise<CreatedPublishSession>;
-  uploadArtifact(upload: CreatedPublishSession["uploads"][number], file: File): Promise<void>;
+  uploadArtifact(
+    upload: CreatedPublishSession["uploads"][number],
+    file: File,
+    onProgress: (sent: { loaded: number; total?: number }) => void,
+  ): Promise<void>;
   verifyUpload(input: { sessionId: string; uploadId: string }): Promise<unknown>;
   finalizeSession(sessionId: string): Promise<unknown>;
   refresh(): Promise<unknown>;
   onPhase(phase: RepositoryPublishPhase): void;
+  onUploadProgress?(progress: UploadProgress): void;
 }
 
 /**
@@ -65,7 +71,17 @@ export async function publishRepositoryArtifacts(input: RepositoryPublishFlowInp
   for (const [index, file] of input.files.entries()) {
     const upload = session.uploads[index];
     if (!upload) throw new Error("Publish session did not return enough upload targets.");
-    await input.uploadArtifact(upload, file);
+    // Reported before the first byte as well as during, so a file that has not
+    // started yet still shows which of several it is.
+    input.onUploadProgress?.({ loaded: 0, total: file.size, fileNumber: index + 1, fileCount: input.files.length });
+    await input.uploadArtifact(upload, file, (sent) => {
+      input.onUploadProgress?.({
+        loaded: sent.loaded,
+        total: sent.total ?? file.size,
+        fileNumber: index + 1,
+        fileCount: input.files.length,
+      });
+    });
   }
 
   input.onPhase("verifying");
@@ -86,6 +102,10 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
   const verifyUpload = useVerifyAdminPublishUpload();
   const finalizeSession = useFinalizeAdminPublishSession();
   const [phase, setPhase] = useState<RepositoryPublishPhase>("idle");
+  // Where it got to, kept separately: a publish that throws goes back to idle,
+  // and the phase alone can then no longer say which step stopped it.
+  const [failedAt, setFailedAt] = useState<RepositoryPublishPhase>();
+  const [upload, setUpload] = useState<UploadProgress>();
   const [error, setError] = useState("");
   const status = repositoryPublishStatusLabel(phase);
   const isPublishing =
@@ -96,6 +116,9 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
 
   async function publish(input: { files: File[]; artifacts: PublishArtifact[] }) {
     setError("");
+    setFailedAt(undefined);
+    setUpload(undefined);
+    let reached: RepositoryPublishPhase = "preparing";
     try {
       await publishRepositoryArtifacts({
         repositoryName: repository.name,
@@ -103,7 +126,7 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
         files: input.files,
         artifacts: input.artifacts,
         createSession: (sessionInput) => createSession.mutateAsync(sessionInput),
-        uploadArtifact: (upload, file) => client.uploadPublishArtifact(upload, file),
+        uploadArtifact: (target, file, onProgress) => client.uploadPublishArtifact(target, file, onProgress),
         verifyUpload: (verifyInput) => verifyUpload.mutateAsync(verifyInput),
         finalizeSession: (sessionId) => finalizeSession.mutateAsync(sessionId),
         refresh: async () => {
@@ -112,10 +135,15 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
             queryClient.invalidateQueries({ queryKey: ["repository-objects", repository.name] }),
           ]);
         },
-        onPhase: setPhase,
+        onPhase: (next) => {
+          reached = next;
+          setPhase(next);
+        },
+        onUploadProgress: setUpload,
       });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
+      setFailedAt(reached);
       setPhase("idle");
     }
   }
@@ -123,6 +151,11 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
   return {
     publish,
     status,
+    phase,
+    steps: publishSteps({ phase, ...(failedAt === undefined ? {} : { failedAt }) }),
+    upload,
+    /** True once a publish has begun, whether it is still running or not. */
+    hasStarted: phase !== "idle" || failedAt !== undefined,
     error,
     isPublishing,
   };

@@ -99,7 +99,11 @@ export interface AxisClient {
   postRepositoryPluginResource(name: string, namespace: string, path: readonly string[], input?: unknown): Promise<unknown>;
   listPublishSessions(): Promise<PublishSession[]>;
   createAdminPublishSession(input: CreateAdminPublishSessionInput): Promise<CreatedPublishSession>;
-  uploadPublishArtifact(target: UploadTarget, body: Blob): Promise<void>;
+  uploadPublishArtifact(
+    target: UploadTarget,
+    body: Blob,
+    onProgress?: (sent: { loaded: number; total?: number }) => void,
+  ): Promise<void>;
   verifyAdminPublishUpload(sessionId: string, uploadId: string): Promise<PublishSession>;
   finalizeAdminPublishSession(sessionId: string): Promise<PublishSession>;
   listPublishTokens(): Promise<ReturnType<typeof publishTokensResponseSchema.parse>["publishTokens"]>;
@@ -279,7 +283,11 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.post("/admin/publish-sessions", input);
       return createdPublishSessionSchema.parse(response.data);
     },
-    async uploadPublishArtifact(target: UploadTarget, body: Blob) {
+    async uploadPublishArtifact(
+      target: UploadTarget,
+      body: Blob,
+      onProgress?: (sent: { loaded: number; total?: number }) => void,
+    ) {
       // Deliberately not `http`: the target is a presigned URL to R2, which
       // wants neither this client's base URL nor its Authorization header. It
       // gets no timeout either, and should not -- how long a PUT takes is the
@@ -292,6 +300,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
           url: target.url,
           data: body,
           headers: target.headers,
+          // The one request here that is worth watching go by: it is the
+          // artifact itself, over the uploader's own link, and the only part
+          // of a publish whose length anyone can feel.
+          ...(onProgress ? { onUploadProgress: (event) => onProgress({ loaded: event.loaded, ...(event.total === undefined ? {} : { total: event.total }) }) } : {}),
           ...(http.defaults.adapter ? { adapter: http.defaults.adapter } : {}),
         });
       } catch (caught) {

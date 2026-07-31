@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { PackagePlus, X } from "lucide-react";
 import {
   Button,
+  PublishArtifactProgress,
   useErrorToast,
   PublishSessionDetailList,
   useRepositoryArtifactPublisher,
@@ -70,10 +71,24 @@ export function AptPublishArtifactPreview({
     try {
       const artifact = await buildAptPublishArtifact(file);
       await publisher.publish({ files: [file], artifacts: [artifact] });
-      onPublished();
     } catch (publishError) {
       setError(publishError instanceof Error ? publishError.message : String(publishError));
     }
+  }
+
+  if (publisher.hasStarted) {
+    // The form has been sent; leaving it up only invites editing what is
+    // already in flight, and the steps get the whole panel to sit in.
+    return (
+      <PublishArtifactProgress
+        filename={file?.name ?? ""}
+        {...(file ? { size: file.size } : {})}
+        steps={publisher.steps}
+        {...(publisher.upload ? { upload: publisher.upload } : {})}
+        published={publisher.phase === "published"}
+        onClose={publisher.phase === "published" ? onPublished : onCancel}
+      />
+    );
   }
 
   return (
@@ -100,7 +115,6 @@ export function AptPublishArtifactPreview({
           Publish
         </Button>
       </div>
-      {publisher.status && <p className="text-sm text-muted-foreground">{publisher.status}</p>}
     </div>
   );
 }

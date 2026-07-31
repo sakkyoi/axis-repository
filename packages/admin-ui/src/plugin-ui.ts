@@ -32,6 +32,8 @@ export { repositoryCreateStepsForConfig } from "./repositories/create/repository
 export { sha256Hex } from "./repositories/publish/admin-publish-form-model";
 export { publishSessionArtifactSummary } from "./repositories/publish/repository-publish-sessions-model";
 export { useRepositoryArtifactPublisher } from "./repositories/publish/repository-publish-flow";
+export { PublishArtifactProgress } from "./repositories/publish/publish-artifact-progress";
+export { PublishProgress } from "./repositories/publish/publish-progress";
 export { asJson, EmptyState, ErrorState, formatDate } from "./pages/shared";
 export { useErrorToast, useToast } from "./components/ui/toast";
 export type {
