@@ -59,9 +59,22 @@ export function injectAdminUiRuntimeConfig(
   nonce?: string,
 ): string {
   const nonceAttribute = nonce ? ` nonce="${nonce}"` : "";
-  const configScript = `<script${nonceAttribute}>window.__AXIS_ADMIN_CONFIG__=${jsonForInlineScript({
-    apiBaseUrl: config.apiBaseUrl ?? "",
-  })};</script>`;
+  // Zod compiles a faster validator for each schema with the `Function`
+  // constructor, and works out whether it may by calling it once. The policy
+  // this page is served under refuses that -- no `'unsafe-eval'`, and no
+  // `'self'` either, because repository objects come from this same origin
+  // under a content type their publisher chose. The refusal is caught and
+  // costs nothing but a violation reported on every load, which reads as a
+  // fault and is not one.
+  //
+  // Zod reads its configuration off `globalThis`, and the decision is made as
+  // each schema is defined -- which is while the bundle is being evaluated,
+  // before anything in it can set the flag. Answering here is what makes it
+  // early enough.
+  const configScript = `<script${nonceAttribute}>globalThis.__zod_globalConfig={jitless:true};`
+    + `window.__AXIS_ADMIN_CONFIG__=${jsonForInlineScript({
+      apiBaseUrl: config.apiBaseUrl ?? "",
+    })};</script>`;
   const htmlText = nonce
     ? bytesToText(html).replace(MODULE_SCRIPT_TAG, `<script nonce="${nonce}"$1>`)
     : bytesToText(html);

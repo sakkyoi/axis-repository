@@ -27,4 +27,17 @@ describe("admin UI assets", () => {
       injected.indexOf('type="module"'),
     );
   });
+
+  it("answers Zod's question about eval before the bundle can ask it", () => {
+    // Zod decides whether to compile each schema as the schema is defined,
+    // which happens while the bundle is being evaluated -- so nothing inside
+    // the bundle can set the flag in time. Refused, the call costs a policy
+    // violation reported on every load and nothing else.
+    const html = "<html><head></head><body><script type=\"module\" src=\"/assets/app.js\"></script></body></html>";
+
+    const injected = injectAdminUiRuntimeConfig(html, { apiBaseUrl: "" }, "n0nce");
+
+    expect(injected).toContain("globalThis.__zod_globalConfig={jitless:true}");
+    expect(injected.indexOf("__zod_globalConfig")).toBeLessThan(injected.indexOf("/assets/app.js"));
+  });
 });

@@ -1980,7 +1980,10 @@ describe("Cloudflare runtime routes", () => {
 
     expect(response.status).toBe(200);
     expect(nonce).toMatch(/^[a-f0-9]{32}$/);
-    expect(body).toContain(`<script nonce="${nonce}">window.__AXIS_ADMIN_CONFIG__`);
+    // The nonce is what the policy trusts; what the script says beyond that is
+    // the injection's business, not this test's.
+    expect(body).toContain(`<script nonce="${nonce}">`);
+    expect(body).toContain("window.__AXIS_ADMIN_CONFIG__");
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("frame-ancestors 'none'");
     expect(policy).toContain("base-uri 'none'");
