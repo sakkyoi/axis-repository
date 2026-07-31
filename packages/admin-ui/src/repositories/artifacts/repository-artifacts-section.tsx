@@ -322,7 +322,7 @@ function ArtifactChoice({
               className={cn(
                 "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
                 active
-                  ? "border-primary bg-primary text-primary-foreground"
+                  ? "border-primary bg-primary-ink/10 text-primary-ink"
                   : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >

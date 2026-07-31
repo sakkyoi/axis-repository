@@ -17,8 +17,15 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
-          // For `text-primary-ink`: the accent where it has to be read rather
-          // than looked at. `bg-primary text-primary-foreground` stays as it is.
+          // For `text-primary-ink` and `bg-primary-ink/10`: the accent where it
+          // has to be read rather than looked at, and the faint wash of it that
+          // marks a chosen row. `bg-primary text-primary-foreground` stays as
+          // it is.
+          //
+          // Opacities on a nested shade come from the theme's own scale: `/10`
+          // is generated, an off-scale `/12` is not generated at all, and the
+          // class then lands on the element and paints nothing -- no build
+          // warning, and nothing in the markup to say so.
           ink: "hsl(var(--primary-ink))",
         },
         destructive: {

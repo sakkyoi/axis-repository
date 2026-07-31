@@ -66,6 +66,21 @@
   --warning-ink: 42 96% 58%;
 }
 
+/**
+ * A tinted surface that is not see-through.
+ *
+ * `bg-destructive/10` is right for a card sitting on a page, where the ten per
+ * cent falls onto a panel and makes a colour. A toast floats over whatever
+ * happens to be underneath it, so the same class puts the page itself behind
+ * the message -- and the error toast was the only floating thing in the
+ * application drawn that way, which is to say the one notice you most need to
+ * read was the one you could see through.
+ */
+.surface-destructive {
+  background-color: hsl(var(--panel));
+  background-image: linear-gradient(hsl(var(--destructive) / 0.1), hsl(var(--destructive) / 0.1));
+}
+
 body {
   margin: 0;
   background: hsl(var(--background));

@@ -279,7 +279,9 @@ function StepIndicator({ steps, currentStep }: { steps: RepositoryCreateStep[]; 
             key={step}
             className={cn(
               "flex min-h-12 items-center gap-2 border-r border-border px-3 text-sm last:border-r-0",
-              isCurrent && "bg-primary text-primary-foreground",
+              // Tinted rather than filled, like every other chosen thing: this
+              // says where you are, it is not a button.
+              isCurrent && "bg-primary-ink/10 text-primary-ink",
               isDone && "bg-muted text-foreground",
               !isCurrent && !isDone && "text-muted-foreground",
             )}
@@ -331,7 +333,7 @@ function PluginStep({
               disabled={!plugin.supported}
               className={cn(
                 "grid gap-2 rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-primary hover:bg-muted",
-                selectedEcosystem === plugin.ecosystem && "border-primary bg-primary/10",
+                selectedEcosystem === plugin.ecosystem && "border-primary bg-primary-ink/10",
                 !plugin.supported && "cursor-not-allowed opacity-60 hover:border-border hover:bg-background",
               )}
               onClick={() => {

@@ -52,7 +52,9 @@ function ThemeChoice({ collapsed }: { collapsed: boolean }) {
             className={cn(
               "inline-flex items-center rounded text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
               collapsed ? "h-7 justify-center" : "h-7 flex-1 justify-center gap-1.5 px-2",
-              isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+              // No marker here: a segment of a control this small is already
+              // read as one of a set, and a bar inside it is clutter.
+              isActive && SELECTED_SURFACE,
             )}
             onClick={() => theme.setPreference(option.value)}
             aria-pressed={isActive}
@@ -67,6 +69,36 @@ function ThemeChoice({ collapsed }: { collapsed: boolean }) {
     </div>
   );
 }
+
+/**
+ * How a chosen thing is marked, without the accent taking over the page.
+ *
+ * The accent used to fill the whole row. It is the same brightness in both
+ * themes while the page behind it inverts, so one token was a 1.1x step from
+ * its surroundings in light and a 16.7x step in dark -- a colour in one and a
+ * light source in the other, which is why it read as too much to some people
+ * and not to others.
+ *
+ * Filled sparingly instead: the accent stays solid on a primary action, where
+ * it is small and means "press this". A chosen row is tinted with the ink
+ * rather than the accent, which is what makes it behave the same in both
+ * themes -- the ink is dark on a light page and bright on a dark one, so the
+ * row moves away from its surroundings either way, measured at 1.14x and
+ * 1.29x, instead of 1.15x in one and 16.71x in the other.
+ *
+ * The `/10` is not a free choice: an opacity on a nested shade has to be one
+ * the theme defines, and an off-scale `/12` is not generated at all.
+ */
+const SELECTED_SURFACE = "bg-primary-ink/10 text-primary-ink hover:bg-primary-ink/10 hover:text-primary-ink";
+
+/**
+ * The solid accent, kept but spent on a sliver.
+ *
+ * Drawn as a pseudo-element so that marking a row does not move its contents,
+ * and inset from the ends so it reads as a marker rather than as a border.
+ */
+const SELECTED_MARKER = "relative before:absolute before:inset-y-1.5 before:left-0 before:w-0.5"
+  + " before:rounded-full before:bg-primary";
 
 export function AppLayout() {
   const storage = typeof window === "undefined" ? undefined : window.localStorage;
@@ -143,7 +175,7 @@ export function AppLayout() {
                   cn(
                     "flex h-9 items-center rounded-md text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
                     collapsed ? "justify-center px-0" : "gap-2 px-3",
-                    isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                    isActive && cn(SELECTED_SURFACE, SELECTED_MARKER),
                   )
                 }
               >
