@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Monitor, Moon, Package, PanelLeftClose, Settings, ShieldCheck, Sun, Users } from "lucide-react";
 import { AxisBrand, AxisLogoMark } from "./brand/axis-brand";
+import { GithubMark } from "./brand/github-mark";
 import { cn } from "../lib/utils";
-import { ADMIN_UI_NAV_ITEMS } from "../navigation";
+import { ADMIN_UI_NAV_ITEMS, AXIS_SOURCE_URL } from "../navigation";
 import { ProfileMenu } from "../profile/profile-menu";
 import { SIDEBAR_LABELS_NEED_PX, sidebarCollapsed, sidebarToggleLabel, sidebarWidthPx } from "./sidebar-model";
 import { useTheme, type ThemePreference } from "../theme";
@@ -21,8 +22,45 @@ const themeOptions: Array<{ value: ThemePreference; label: string; icon: typeof 
   { value: "dark", label: "Dark", icon: Moon },
 ];
 
-export function AppLayout() {
+/** The theme, as the three states it can be asked for. */
+function ThemeChoice({ collapsed }: { collapsed: boolean }) {
   const theme = useTheme();
+  return (
+    <div
+      className={cn(
+        "rounded-md border border-border bg-background p-0.5",
+        collapsed ? "grid gap-0.5" : "flex h-9 items-center",
+      )}
+      role="group"
+      aria-label="Theme"
+    >
+      {themeOptions.map((option) => {
+        const Icon = option.icon;
+        const isActive = theme.preference === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            className={cn(
+              "inline-flex items-center rounded text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              collapsed ? "h-7 justify-center" : "h-7 flex-1 justify-center gap-1.5 px-2",
+              isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+            )}
+            onClick={() => theme.setPreference(option.value)}
+            aria-pressed={isActive}
+            aria-label={collapsed ? `${option.label} theme` : undefined}
+            title={`${option.label} theme`}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            {!collapsed && option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function AppLayout() {
   const [chosen, setChosen] = useState<boolean>();
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === "undefined" ? SIDEBAR_LABELS_NEED_PX : window.innerWidth);
@@ -40,7 +78,11 @@ export function AppLayout() {
       className="grid h-screen overflow-hidden bg-background text-foreground"
       style={{ gridTemplateColumns: `${sidebarWidthPx(collapsed)}px minmax(0,1fr)` }}
     >
-      <aside className="h-screen overflow-y-auto overflow-x-hidden border-r border-border bg-panel">
+      {/* The panel itself does not scroll: a scrolling box clips what escapes
+          it, and the account menu at the foot is wider than the panel is when
+          it is collapsed. The list of destinations scrolls instead, which is
+          the only part that can outgrow the screen. */}
+      <aside className="flex h-screen flex-col border-r border-border bg-panel">
         <div className={cn("flex h-14 items-center border-b border-border", collapsed ? "justify-center px-2" : "gap-2 px-5")}>
           {collapsed ? (
             // Only the mark, which is also what expands it again: at this width
@@ -69,7 +111,7 @@ export function AppLayout() {
             </>
           )}
         </div>
-        <nav className="grid gap-1 p-3">
+        <nav className="grid min-h-0 flex-1 auto-rows-min gap-1 overflow-y-auto overflow-x-hidden p-3">
           {ADMIN_UI_NAV_ITEMS.map((item) => {
             const Icon = navIcons[item.id];
             return (
@@ -95,34 +137,26 @@ export function AppLayout() {
             );
           })}
         </nav>
+        {/* Pushed to the foot of the panel. These belong to whoever is signed
+            in rather than to the page, and on a narrow screen the top bar had
+            no room for them beside anything else. */}
+        <div className={cn("grid gap-2 border-t border-border", collapsed ? "p-2" : "p-3")}>
+          <ThemeChoice collapsed={collapsed} />
+          <ProfileMenu collapsed={collapsed} />
+        </div>
       </aside>
       <div className="grid min-h-0 min-w-0 grid-rows-[56px_minmax(0,1fr)]">
         <header className="flex min-w-0 items-center justify-end border-b border-border bg-panel/95 px-5">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 items-center rounded-md border border-border bg-background p-0.5">
-              {themeOptions.map((option) => {
-                const Icon = option.icon;
-                const isActive = theme.preference === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={cn(
-                      "inline-flex h-7 items-center gap-1.5 rounded px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-                      isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-                    )}
-                    onClick={() => theme.setPreference(option.value)}
-                    aria-pressed={isActive}
-                    title={`${option.label} theme`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-            <ProfileMenu />
-          </div>
+          <a
+            href={AXIS_SOURCE_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Axis Repository on GitHub"
+            title="Axis Repository on GitHub"
+            className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <GithubMark className="h-5 w-5" />
+          </a>
         </header>
         <main className="min-h-0 overflow-hidden p-5">
           <Outlet />

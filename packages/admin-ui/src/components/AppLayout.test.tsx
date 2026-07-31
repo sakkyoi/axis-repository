@@ -7,6 +7,7 @@ import { AppLayout } from "./AppLayout";
 import { AuthProvider } from "../auth";
 import { ThemeProvider } from "../theme";
 import { SIDEBAR_LABELS_NEED_PX } from "./sidebar-model";
+import { AXIS_SOURCE_URL } from "../navigation";
 
 function renderAt(viewportWidth: number) {
   window.innerWidth = viewportWidth;
@@ -58,5 +59,32 @@ describe("AppLayout navigation", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
     expect(navLabelShown("Repositories")).toBe(true);
+  });
+
+  it("keeps the theme and the account with the navigation", () => {
+    // They belong to whoever is signed in rather than to the page, and the top
+    // bar had no room for them beside anything else on a narrow screen.
+    renderAt(SIDEBAR_LABELS_NEED_PX + 400);
+
+    const aside = document.querySelector("aside")!;
+    expect(aside.contains(screen.getByRole("group", { name: "Theme" }))).toBe(true);
+    expect(aside.contains(screen.getByRole("button", { name: /Profile|admin/ }))).toBe(true);
+  });
+
+  it("still offers the theme when there is no room for its names", () => {
+    renderAt(SIDEBAR_LABELS_NEED_PX - 200);
+
+    const dark = screen.getByRole("button", { name: "Dark theme" });
+    expect(dark.textContent).toBe("");
+  });
+
+  it("links out to where it is built", () => {
+    renderAt(SIDEBAR_LABELS_NEED_PX + 400);
+
+    const link = screen.getByRole("link", { name: "Axis Repository on GitHub" });
+    expect(link.getAttribute("href")).toBe(AXIS_SOURCE_URL);
+    // A link that leaves the console opens beside it, and says nothing about
+    // this page to wherever it lands.
+    expect(link.getAttribute("rel")).toContain("noreferrer");
   });
 });

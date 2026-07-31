@@ -11,6 +11,9 @@ export const ADMIN_UI_PATHS = {
   settings: "/ui/settings",
 } as const;
 
+/** Where this is built, for the link out of the console. */
+export const AXIS_SOURCE_URL = "https://github.com/sakkyoi/axis-repository";
+
 export const ADMIN_UI_NAV_ITEMS = [
   { id: "repositories", to: ADMIN_UI_PATHS.repositories, label: "Repositories" },
   { id: "tokens", to: ADMIN_UI_PATHS.tokens, label: "Tokens" },
