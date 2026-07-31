@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet } from "react-router";
 import { Monitor, Moon, Package, PanelLeftClose, Settings, ShieldCheck, Sun, Users } from "lucide-react";
 import { AxisBrand, AxisLogoMark } from "./brand/axis-brand";
 import { BootstrapCredentialsBanner } from "./bootstrap-credentials";
