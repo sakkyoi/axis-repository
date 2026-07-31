@@ -12,9 +12,12 @@ import type { Repository } from "../../api/schemas";
 describe("repository page model", () => {
 
   it("highlights only the selected repository row", () => {
-    expect(repositoryRowStateClass("debian-internal", "debian-internal")).toContain("border-l-primary");
+    // The accent, however it is drawn: what matters is that the selected row
+    // wears the primary colour and an unselected one does not, and that the
+    // row does not take the foreground colour that goes with a filled surface.
+    expect(repositoryRowStateClass("debian-internal", "debian-internal")).toContain("primary");
     expect(repositoryRowStateClass("debian-internal", "debian-internal")).not.toContain("text-primary-foreground");
-    expect(repositoryRowStateClass("debian-internal", undefined)).not.toContain("border-l-primary");
+    expect(repositoryRowStateClass("debian-internal", undefined)).not.toContain("primary");
   });
 
   it("keeps short repository details packed at the top of the scroll area", () => {

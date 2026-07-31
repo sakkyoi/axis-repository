@@ -4,8 +4,14 @@ import type { DestructiveActionDialogContent } from "../../components/ui/destruc
 
 export function repositoryRowStateClass(repositoryName: string, selectedName: string | undefined): string {
   return repositoryName === selectedName
-    ? "border-l-4 border-l-primary bg-primary/10 hover:bg-primary/15"
-    : "border-l-4 border-l-transparent hover:bg-muted/60";
+    // Drawn as an inset shadow rather than a left border. A border on a row of
+    // a collapsed table widens the table's own edge, and a row group's
+    // background does not paint that strip -- which left the header's colour
+    // starting a couple of pixels in from the left while reaching the right.
+    // A shadow takes part in no layout at all, so nothing has to be reserved
+    // for it either.
+    ? "shadow-[inset_4px_0_0_0_hsl(var(--primary))] bg-primary/10 hover:bg-primary/15"
+    : "hover:bg-muted/60";
 }
 
 export function repositoryDetailBodyClass(): string {

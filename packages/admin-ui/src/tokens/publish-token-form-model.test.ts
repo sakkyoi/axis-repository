@@ -154,9 +154,12 @@ describe("publish token form model", () => {
   });
 
   it("highlights only the selected publish token row", () => {
-    expect(publishTokenRowStateClass("github-actions", "github-actions")).toContain("border-l-primary");
+    // The accent, however it is drawn: what matters is that the selected row
+    // wears the primary colour and an unselected one does not, and that the
+    // row does not take the foreground colour that goes with a filled surface.
+    expect(publishTokenRowStateClass("github-actions", "github-actions")).toContain("primary");
     expect(publishTokenRowStateClass("github-actions", "github-actions")).not.toContain("text-primary-foreground");
-    expect(publishTokenRowStateClass("github-actions", undefined)).not.toContain("border-l-primary");
+    expect(publishTokenRowStateClass("github-actions", undefined)).not.toContain("primary");
   });
 
   it("formats readonly publish token summary items", () => {
