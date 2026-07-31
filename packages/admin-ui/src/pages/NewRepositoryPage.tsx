@@ -36,6 +36,7 @@ import {
 } from "../repositories/plugins/repository-ui-plugins";
 import { repositoryConfigFieldsForStep } from "../repositories/create/repository-create-field-model";
 import { RepositoryConfigFields } from "../repositories/create/repository-create-field-renderer";
+import { CodeBlock } from "../components/ui/code-block";
 import { asJson, ErrorState, PageShell } from "./shared";
 import { SkeletonRows } from "../components/ui/skeleton";
 import { useErrorToast } from "../components/ui/toast";
@@ -477,7 +478,7 @@ function ReviewStep({ payload }: { payload: unknown }) {
         <h2 className="text-base font-semibold">Review</h2>
         <p className="mt-1 text-sm text-muted-foreground">Confirm the request before creating the repository.</p>
       </div>
-      <pre className="max-h-[520px] overflow-auto rounded-md bg-muted p-4 text-xs">{asJson(payload)}</pre>
+      <CodeBlock className="max-h-[520px] p-4" language="json" code={asJson(payload)} />
     </div>
   );
 }

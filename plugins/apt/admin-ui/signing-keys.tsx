@@ -2,6 +2,7 @@ import { type FormEvent, useState } from "react";
 import { KeyRound, Plus, RotateCcw } from "lucide-react";
 import {
   asJson,
+  CodeBlock,
   Badge,
   Button,
   DestructiveActionDialog,
@@ -216,7 +217,7 @@ export function AptSigningKeyList({
             <h3 className="text-sm font-semibold">{selected.name}</h3>
             <p className="text-xs text-muted-foreground">{selected.fingerprint}</p>
           </div>
-          <pre className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">{asJson(selected)}</pre>
+          <CodeBlock className="max-h-64" language="json" code={asJson(selected)} />
           <Button
             variant="destructive"
             disabled={Boolean(selected.revokedAt) || revoke.isPending}

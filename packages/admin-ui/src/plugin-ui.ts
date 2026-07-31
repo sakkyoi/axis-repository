@@ -36,6 +36,7 @@ export { PublishArtifactProgress } from "./repositories/publish/publish-artifact
 export { PublishProgress } from "./repositories/publish/publish-progress";
 export { asJson, EmptyState, ErrorState, formatDate } from "./pages/shared";
 export { useErrorToast, useToast } from "./components/ui/toast";
+export { CodeBlock } from "./components/ui/code-block";
 export type {
   PublishTokenScopeInput,
   PublishSessionDetailComponentProps,

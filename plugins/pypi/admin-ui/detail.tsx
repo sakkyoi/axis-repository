@@ -3,6 +3,7 @@ import { Save } from "lucide-react";
 import {
   Badge,
   Button,
+  CodeBlock,
   EmptyState,
   ErrorState,
   useErrorToast,
@@ -121,15 +122,19 @@ export function PypiInstallHintsSection({
     <>
       <details className="min-w-0" open>
         <summary className="cursor-pointer text-sm font-medium">pip install</summary>
-        <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
-          {clientInfo.data ? pypiInstallCommandText(repository, clientInfo.data.pipIndexUrl) : "Loading..."}
-        </pre>
+        <CodeBlock
+          className="mt-2 max-h-64 max-w-full whitespace-pre-wrap break-words"
+          language="shell"
+          code={clientInfo.data ? pypiInstallCommandText(repository, clientInfo.data.pipIndexUrl) : "Loading..."}
+        />
       </details>
       <details className="min-w-0">
         <summary className="cursor-pointer text-sm font-medium">twine upload</summary>
-        <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
-          {pypiUploadCommandText(repository)}
-        </pre>
+        <CodeBlock
+          className="mt-2 max-h-64 max-w-full whitespace-pre-wrap break-words"
+          language="shell"
+          code={pypiUploadCommandText(repository)}
+        />
       </details>
       {clientInfo.isError && <ErrorState title="PyPI client setup unavailable" error={clientInfo.error} />}
     </>

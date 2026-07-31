@@ -31,6 +31,7 @@ import {
 import { CreateTokenDialog, TokenCreatedDialog } from "../tokens/publish-token-dialogs";
 import { asJson, ErrorState, PageShell, formatDate } from "./shared";
 import { SkeletonRows } from "../components/ui/skeleton";
+import { CodeBlock } from "../components/ui/code-block";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { useViewportWidth } from "../components/use-viewport-width";
 import { DETAIL_PANE_NEEDS_PX, detailPaneFitsBeside, listDetailGridClass } from "./list-detail-model";
@@ -360,7 +361,7 @@ function PublishTokenDetail({
         </div>
         <details className={publishTokenRawMetadataContainerClass()}>
           <summary className="cursor-pointer text-sm font-medium">Raw token metadata</summary>
-          <pre className={publishTokenRawMetadataClass()}>{asJson(token)}</pre>
+          <CodeBlock className={publishTokenRawMetadataClass()} language="json" code={asJson(token)} />
         </details>
       </div>
   );

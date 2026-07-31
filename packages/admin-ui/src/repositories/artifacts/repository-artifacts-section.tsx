@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { ErrorState } from "../../pages/shared";
+import { CodeBlock } from "../../components/ui/code-block";
 import { SkeletonRows } from "../../components/ui/skeleton";
 import { cn } from "../../lib/utils";
 import { moreChoicesLabel, visibleChoices } from "./artifact-choice-model";
@@ -413,9 +414,11 @@ function RepositoryArtifactDetail({
       </div>
       <div className="grid gap-2">
         <div className="text-xs font-medium text-muted-foreground">Metadata</div>
-        <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
-          {JSON.stringify(artifact.metadata, null, 2)}
-        </pre>
+        <CodeBlock
+          className="max-h-64 whitespace-pre-wrap break-words"
+          language="json"
+          code={JSON.stringify(artifact.metadata, null, 2)}
+        />
       </div>
     </div>
   );

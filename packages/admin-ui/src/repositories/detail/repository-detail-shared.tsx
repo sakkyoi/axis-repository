@@ -11,6 +11,7 @@ import { Button } from "../../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
 import { asJson, ErrorState } from "../../pages/shared";
+import { CodeBlock } from "../../components/ui/code-block";
 import { useErrorToast } from "../../components/ui/toast";
 import { SkeletonRows } from "../../components/ui/skeleton";
 import {
@@ -448,9 +449,12 @@ export function RepositoryClientHelperItem({
   return (
     <details className="min-w-0" open={action.defaultOpen}>
       <summary className="cursor-pointer text-sm font-medium">{action.label}</summary>
-      <pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
-        {helper.data !== undefined ? repositoryClientHelperDisplayText(action, helper.data) : "Loading..."}
-      </pre>
+      <CodeBlock
+        className="mt-2 max-h-64 max-w-full whitespace-pre-wrap break-words"
+        // What the plugin said it was returning; nothing here has to guess.
+        language={action.responseKind}
+        code={helper.data !== undefined ? repositoryClientHelperDisplayText(action, helper.data) : "Loading..."}
+      />
       {helper.isError && <ErrorState title={`${action.label} unavailable`} error={helper.error} />}
     </details>
   );
