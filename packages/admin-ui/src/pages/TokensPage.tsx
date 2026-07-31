@@ -31,11 +31,16 @@ import {
 import { CreateTokenDialog, TokenCreatedDialog } from "../tokens/publish-token-dialogs";
 import { asJson, ErrorState, PageShell, formatDate } from "./shared";
 import { SkeletonRows } from "../components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { useViewportWidth } from "../components/use-viewport-width";
+import { DETAIL_PANE_NEEDS_PX, detailPaneFitsBeside, listDetailGridClass } from "./list-detail-model";
+import { sideDrawerBodyClass, sideDrawerContentClass } from "../components/ui/side-drawer";
 
 export function TokensPage() {
   const tokens = usePublishTokens();
   const repositories = useRepositories();
   const [selectedName, setSelectedName] = useState<string>();
+  const beside = detailPaneFitsBeside(useViewportWidth(DETAIL_PANE_NEEDS_PX));
   const [pendingRevokeName, setPendingRevokeName] = useState<string>();
   const [pendingRotateName, setPendingRotateName] = useState<string>();
   const [pendingDeleteName, setPendingDeleteName] = useState<string>();
@@ -44,6 +49,17 @@ export function TokensPage() {
   const revoke = useRevokePublishToken();
   const rotate = useRotatePublishToken();
   const deleteToken = useDeletePublishToken();
+  // The same detail beside the list or over it, described once.
+  const selectedDetail = (token: NonNullable<typeof selected>, framed = true) => (
+    <PublishTokenDetail
+      token={token}
+      actionPending={revoke.isPending || rotate.isPending || deleteToken.isPending}
+      onRevoke={() => setPendingRevokeName(token.name)}
+      onRotate={() => setPendingRotateName(token.name)}
+      onDelete={() => setPendingDeleteName(token.name)}
+      framed={framed}
+    />
+  );
   const revokeDialogContent = pendingRevokeName ? revokePublishTokenDialogContent(pendingRevokeName) : undefined;
   const rotateDialogContent = pendingRotateName ? rotatePublishTokenDialogContent(pendingRotateName) : undefined;
   const pendingDeleteToken = tokens.data?.find((token) => token.name === pendingDeleteName);
@@ -115,7 +131,7 @@ export function TokensPage() {
         </div>
       )}
       {tokens.data && (
-        <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+        <div className={listDetailGridClass(beside)}>
           <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
             {tokens.data.length === 0 ? (
               <div className={publishTokenListEmptyClass()}>
@@ -146,17 +162,36 @@ export function TokensPage() {
               </table>
             )}
           </div>
-          {selected ? (
-            <PublishTokenDetail
-              token={selected}
-              actionPending={revoke.isPending || rotate.isPending || deleteToken.isPending}
-              onRevoke={() => setPendingRevokeName(selected.name)}
-              onRotate={() => setPendingRotateName(selected.name)}
-              onDelete={() => setPendingDeleteName(selected.name)}
-            />
-          ) : <PublishTokenDetailEmptyState />}
+          {beside && (selected ? selectedDetail(selected) : <PublishTokenDetailEmptyState />)}
         </div>
       )}
+      {/* Too narrow to sit beside the list, so it comes over it instead --
+          which is how everything else in this console shows one of many. */}
+      <Dialog open={!beside && Boolean(selected)} onOpenChange={(open) => {
+        if (!open) setSelectedName(undefined);
+      }}>
+        <DialogContent className={sideDrawerContentClass()}>
+          {/* Everything the framed header carried, said once. */}
+          <DialogHeader>
+            <div className="flex min-w-0 items-start justify-between gap-3 pr-6">
+              <div className="min-w-0">
+                <DialogTitle className="truncate">{selected?.name ?? "Publish token"}</DialogTitle>
+                {selected && (
+                  <p className="text-sm text-muted-foreground">Created {formatDate(selected.createdAt)}</p>
+                )}
+              </div>
+              {selected && (
+                <Badge className="shrink-0" variant={publishTokenLifecycle(selected).variant}>
+                  {publishTokenLifecycle(selected).label}
+                </Badge>
+              )}
+            </div>
+          </DialogHeader>
+          <div className={sideDrawerBodyClass()}>
+            {selected && selectedDetail(selected, false)}
+          </div>
+        </DialogContent>
+      </Dialog>
       {revokeDialogContent && (
         <DestructiveActionDialog
           open={Boolean(pendingRevokeName)}
@@ -265,29 +300,20 @@ function PublishTokenDetail({
   onRevoke,
   onRotate,
   onDelete,
+  framed = true,
 }: {
   token: PublishToken;
   actionPending: boolean;
   onRevoke: () => void;
   onRotate: () => void;
   onDelete: () => void;
+  /** False in a drawer, which is already the frame and already says the name. */
+  framed?: boolean;
 }) {
   const summaryItems = publishTokenSummaryItems(token);
   const lifecycle = publishTokenLifecycle(token);
-  return (
-    <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
-      <div className="sticky top-0 z-10 border-b border-border bg-panel p-4">
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold">{token.name}</h2>
-            <p className="text-sm text-muted-foreground">Created {formatDate(token.createdAt)}</p>
-          </div>
-          <Badge className="shrink-0" variant={lifecycle.variant}>
-            {lifecycle.label}
-          </Badge>
-        </div>
-      </div>
-      <div className={publishTokenDetailBodyClass()}>
+  const body = (
+      <div className={publishTokenDetailBodyClass(framed)}>
         <div className={publishTokenDetailActionRowClass()}>
           <Button
             variant="destructive"
@@ -337,6 +363,26 @@ function PublishTokenDetail({
           <pre className={publishTokenRawMetadataClass()}>{asJson(token)}</pre>
         </details>
       </div>
+  );
+
+  if (!framed) {
+    return body;
+  }
+
+  return (
+    <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
+      <div className="sticky top-0 z-10 border-b border-border bg-panel p-4">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold">{token.name}</h2>
+            <p className="text-sm text-muted-foreground">Created {formatDate(token.createdAt)}</p>
+          </div>
+          <Badge className="shrink-0" variant={lifecycle.variant}>
+            {lifecycle.label}
+          </Badge>
+        </div>
+      </div>
+      {body}
     </aside>
   );
 }

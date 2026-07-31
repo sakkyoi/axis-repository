@@ -16,9 +16,18 @@ import { ADMIN_UI_PATHS, repositorySettingsPath, repositoryWorkspacePath } from 
 import { repositorySettingsSectionsFor, repositoryWorkspaceSectionsFor } from "../repositories/plugins/repository-detail-plugins";
 import { PublishSessionsSection, RepositoryDetailSections } from "../repositories/detail/repository-detail-shared";
 import type { RepositoryDetailSection } from "../repositories/plugins/repository-ui-plugin-types";
-import { repositoryDeleteDialogContent, repositoryDetailBodyClass } from "../repositories/detail/repository-page-model";
-import { EmptyState, ErrorState, NotFoundState, PageShell } from "./shared";
+import { repositoryDeleteDialogContent, repositorySummaryItems } from "../repositories/detail/repository-page-model";
+import { EmptyState, ErrorState, formatDate, NotFoundState, PageShell } from "./shared";
 import { SkeletonText } from "../components/ui/skeleton";
+import { useViewportWidth } from "../components/use-viewport-width";
+import {
+  DETAIL_PANE_NEEDS_PX,
+  detailPaneFitsBeside,
+  workspaceAsideColumnClass,
+  workspaceAsideGridClass,
+  workspaceBodyClass,
+  workspaceColumnClass,
+} from "./list-detail-model";
 import { getRepositoryPublishPlugin } from "../repositories/plugins/repository-ui-plugins";
 import {
   filesFromFileList,
@@ -356,6 +365,12 @@ function RepositoryPageShell({
   afterSections?: React.ReactNode;
 }) {
   const missing = !isLoading && !error && !repository;
+  const beside = detailPaneFitsBeside(useViewportWidth(DETAIL_PANE_NEEDS_PX));
+  // What the plugin already calls a summary goes to the side; what lists the
+  // repository's contents stays where the width is.
+  const asideSections = sections.filter((section) => section.summary === true);
+  const mainSections = sections.filter((section) => section.summary !== true);
+  const twoColumns = beside && asideSections.length > 0;
 
   return (
     <PageShell
@@ -380,9 +395,28 @@ function RepositoryPageShell({
           />
         )}
         {repository && (
-          <div className={repositoryDetailBodyClass()}>
+          <div className={workspaceBodyClass(twoColumns)}>
             {sections.length === 0 ? (
               <EmptyState message="This repository does not expose sections for this page." />
+            ) : asideSections.length > 0 ? (
+              <div className={workspaceAsideGridClass(beside)}>
+                <div className={workspaceColumnClass(beside)}>
+                  <RepositoryDetailSections
+                    repository={repository}
+                    pluginMetadata={pluginMetadata}
+                    sections={mainSections}
+                    {...(onPublishFiles ? { onPublishFiles } : {})}
+                  />
+                </div>
+                <aside className={workspaceAsideColumnClass(beside)}>
+                  <RepositorySummaryCard repository={repository} />
+                  <RepositoryDetailSections
+                    repository={repository}
+                    pluginMetadata={pluginMetadata}
+                    sections={asideSections}
+                  />
+                </aside>
+              </div>
             ) : (
               <RepositoryDetailSections
                 repository={repository}
@@ -397,3 +431,20 @@ function RepositoryPageShell({
     </PageShell>
   );
 }
+
+/** What the repository is, which no selection on the page changes. */
+function RepositorySummaryCard({ repository }: { repository: Repository }) {
+  return (
+    <section className="grid gap-2 rounded-md border border-border bg-background/40 p-3">
+      {repositorySummaryItems(repository).map(([label, value]) => (
+        <div key={label} className="grid gap-0.5">
+          <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
+          <span className="break-all text-sm">
+            {label === "Created" || label === "Updated" ? formatDate(value) : value}
+          </span>
+        </div>
+      ))}
+    </section>
+  );
+}
+

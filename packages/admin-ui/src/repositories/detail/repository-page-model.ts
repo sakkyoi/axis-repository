@@ -14,8 +14,18 @@ export function repositoryRowStateClass(repositoryName: string, selectedName: st
     : "hover:bg-muted/60";
 }
 
-export function repositoryDetailBodyClass(): string {
-  return "grid h-full min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4";
+/**
+ * The body of a detail panel.
+ *
+ * Framed, it is a card of its own and scrolls inside itself. In a drawer it is
+ * neither: the drawer is already the frame, already padded, and already the
+ * thing that scrolls -- a second scroller inside it traps the wheel over half
+ * the panel.
+ */
+export function repositoryDetailBodyClass(framed = true): string {
+  return framed
+    ? "grid h-full min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4"
+    : "grid content-start gap-4";
 }
 
 export function repositoryListEmptyClass(): string {

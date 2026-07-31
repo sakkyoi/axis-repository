@@ -18,16 +18,25 @@ import {
 } from "../repositories/detail/repository-page-model";
 import { ErrorState, PageShell, formatDate } from "./shared";
 import { SkeletonRows } from "../components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { useViewportWidth } from "../components/use-viewport-width";
+import { DETAIL_PANE_NEEDS_PX, detailPaneFitsBeside, listDetailGridClass } from "./list-detail-model";
+import { sideDrawerBodyClass, sideDrawerContentClass } from "../components/ui/side-drawer";
 
 export function RepositoriesPage() {
   const navigate = useNavigate();
   const repositories = useRepositories();
   const repositoryPlugins = useRepositoryPlugins();
   const [selectedName, setSelectedName] = useState<string>();
+  const beside = detailPaneFitsBeside(useViewportWidth(DETAIL_PANE_NEEDS_PX));
+  const pluginFor = (repository: Repository) =>
+    repositoryPlugins.data?.find((plugin) => plugin.ecosystem === repository.ecosystem);
   const selected = useMemo(
     () => repositories.data?.find((repository) => repository.name === selectedName),
     [repositories.data, selectedName],
   );
+  const selectedPlugin = selected ? pluginFor(selected) : undefined;
+  const selectedLifecycle = selectedPlugin ? pluginLifecycleSummary(selectedPlugin) : undefined;
 
   return (
     <PageShell
@@ -50,7 +59,7 @@ export function RepositoriesPage() {
         </div>
       )}
       {repositories.data && (
-        <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+        <div className={listDetailGridClass(beside)}>
           <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
             {repositories.data.length === 0 ? (
               <div className={repositoryListEmptyClass()}>
@@ -89,14 +98,34 @@ export function RepositoriesPage() {
               </table>
             )}
           </div>
-          {selected ? (
-            <RepositoryDetail
-              repository={selected}
-              pluginMetadata={repositoryPlugins.data?.find((plugin) => plugin.ecosystem === selected.ecosystem)}
-            />
-          ) : <RepositoryDetailEmptyState />}
+          {beside && (selected
+            ? <RepositoryDetail repository={selected} pluginMetadata={pluginFor(selected)} />
+            : <RepositoryDetailEmptyState />)}
         </div>
       )}
+      {/* Too narrow to sit beside the list, so it comes over it instead --
+          which is how everything else in this console shows one of many. */}
+      <Dialog open={!beside && Boolean(selected)} onOpenChange={(open) => {
+        if (!open) setSelectedName(undefined);
+      }}>
+        <DialogContent className={sideDrawerContentClass()}>
+          {/* Everything the framed header carried, said once. */}
+          <DialogHeader>
+            <div className="flex min-w-0 items-start justify-between gap-3 pr-6">
+              <div className="min-w-0">
+                <DialogTitle className="truncate">{selected?.name ?? "Repository"}</DialogTitle>
+                {selected && <p className="text-sm text-muted-foreground">{selected.ecosystem}</p>}
+              </div>
+              {selectedLifecycle && (
+                <Badge className="shrink-0" variant={selectedLifecycle.variant}>{selectedLifecycle.label}</Badge>
+              )}
+            </div>
+          </DialogHeader>
+          <div className={sideDrawerBodyClass()}>
+            {selected && <RepositoryDetail repository={selected} pluginMetadata={pluginFor(selected)} framed={false} />}
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }
@@ -117,27 +146,20 @@ function RepositoryDetailEmptyState() {
 function RepositoryDetail({
   repository,
   pluginMetadata,
+  framed = true,
 }: {
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
+  /** False in a drawer, which is already the frame and already says the name. */
+  framed?: boolean;
 }) {
   const navigate = useNavigate();
   const lifecycle = pluginMetadata ? pluginLifecycleSummary(pluginMetadata) : undefined;
   const summaryItems = repositorySummaryItems(repository);
   const summarySections = repositorySummarySectionsFor(repository.ecosystem);
 
-  return (
-    <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
-      <div className="sticky top-0 z-10 border-b border-border bg-panel p-4">
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold">{repository.name}</h2>
-            <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
-          </div>
-          {lifecycle && <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>}
-        </div>
-      </div>
-      <div className={repositoryDetailBodyClass()}>
+  const body = (
+      <div className={repositoryDetailBodyClass(framed)}>
         <div className="grid gap-3">
           <Button type="button" onClick={() => navigate(repositoryWorkspacePath(repository.name))}>
             <ArrowRight className="mr-2 h-4 w-4" />
@@ -169,6 +191,24 @@ function RepositoryDetail({
           {lifecycle && <p className="text-sm text-muted-foreground">{lifecycle.description}</p>}
         </div>
       </div>
+  );
+
+  if (!framed) {
+    return body;
+  }
+
+  return (
+    <aside className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
+      <div className="sticky top-0 z-10 border-b border-border bg-panel p-4">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold">{repository.name}</h2>
+            <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
+          </div>
+          {lifecycle && <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>}
+        </div>
+      </div>
+      {body}
     </aside>
   );
 }
