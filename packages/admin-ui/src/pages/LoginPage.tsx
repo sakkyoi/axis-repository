@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { LogIn } from "lucide-react";
 import { useAuth } from "../auth";
 import { createAxisClient } from "../api/client";
+import { AppBootScreen } from "../components/app-boot";
 import { AxisBrand } from "../components/brand/axis-brand";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
@@ -27,11 +28,7 @@ export function LoginPage() {
   const from = safeAdminRedirectPath((location.state as LoginLocationState | null)?.from);
 
   if (auth.isInitializing) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
-        Loading...
-      </main>
-    );
+    return <AppBootScreen />;
   }
 
   if (auth.isAuthenticated) {

@@ -1,17 +1,14 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
 import { adminLoginPathFor } from "../navigation";
+import { AppBootScreen } from "./app-boot";
 
 export function ProtectedRoute() {
   const auth = useAuth();
   const location = useLocation();
 
   if (auth.isInitializing) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
-        Loading...
-      </main>
-    );
+    return <AppBootScreen />;
   }
 
   if (!auth.isAuthenticated) {

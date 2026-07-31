@@ -29,7 +29,9 @@ describe("ProtectedRoute", () => {
     // page on every page load, before the refresh cookie has been exchanged.
     renderAt("/ui/tokens", { isInitializing: true, isAuthenticated: false });
 
-    expect(screen.getByText("Loading...")).toBeDefined();
+    // What it shows while it waits is the boot screen's business; what this
+    // is about is that it has gone nowhere.
+    expect(screen.getByRole("status", { name: "Starting" })).toBeDefined();
     expect(screen.queryByText("Login page")).toBeNull();
     expect(screen.queryByText("Tokens page")).toBeNull();
   });
