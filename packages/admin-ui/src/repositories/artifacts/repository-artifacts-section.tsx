@@ -15,6 +15,15 @@ import {
 } from "../../components/ui/dialog";
 import { ErrorState } from "../../pages/shared";
 import { SkeletonRows } from "../../components/ui/skeleton";
+import { cn } from "../../lib/utils";
+import { moreChoicesLabel, visibleChoices } from "./artifact-choice-model";
+import {
+  artifactVariantLabel,
+  artifactVersionCountLabel,
+  artifactsForVersion,
+  groupArtifactsByFamily,
+  type ArtifactGroup,
+} from "./artifact-groups-model";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
   repositoryArtifactDeleteDialogContent,
@@ -29,9 +38,42 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
   useErrorToast("Artifact index rebuild failed", rebuildIndex.error);
   useErrorToast("Artifact not deleted", deleteArtifact.error);
   const [, setSearchParams] = useSearchParams();
+  const [openGroupKey, setOpenGroupKey] = useState<string>();
   const [selectedArtifact, setSelectedArtifact] = useState<RepositoryArtifact>();
   const [pendingDeleteArtifact, setPendingDeleteArtifact] = useState<RepositoryArtifact>();
   const rows = artifacts.data?.artifacts ?? [];
+  const groups = groupArtifactsByFamily(rows);
+  // Re-read from the current grouping rather than held: a rebuild replaces
+  // every artifact, and a version kept in state would go on describing one
+  // that is no longer there.
+  const openGroup = groups.find((group) => group.key === openGroupKey);
+
+  function openArtifactGroup(group: ArtifactGroup) {
+    setOpenGroupKey(group.key);
+    setSelectedArtifact(group.latest);
+  }
+
+  // The chosen version, and within it the chosen build. Choosing a version
+  // keeps the build where one of the same name exists -- looking at arm64 and
+  // stepping back a version should not land on amd64.
+  function selectVersion(version: string) {
+    if (!openGroup) return;
+    const variants = artifactsForVersion(openGroup, version);
+    const sameVariant = variants.find((variant) =>
+      artifactVariantLabel(variant) === artifactVariantLabel(selectedArtifact ?? variant));
+    setSelectedArtifact(sameVariant ?? variants[0]);
+  }
+
+  function selectVariant(label: string) {
+    if (!openGroup || !selectedArtifact) return;
+    const variants = artifactsForVersion(openGroup, selectedArtifact.version ?? "");
+    setSelectedArtifact(variants.find((variant) => artifactVariantLabel(variant) === label) ?? selectedArtifact);
+  }
+
+  function closeArtifactGroup() {
+    setOpenGroupKey(undefined);
+    setSelectedArtifact(undefined);
+  }
 
   function closeDeleteDialog() {
     if (deleteArtifact.isPending) return;
@@ -43,7 +85,7 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
     if (!pendingDeleteArtifact) return;
     deleteArtifact.mutate(pendingDeleteArtifact.id, {
       onSuccess: (result) => {
-        setSelectedArtifact(undefined);
+        closeArtifactGroup();
         setPendingDeleteArtifact(undefined);
         toast.notify({
           title: "Artifact delete finished",
@@ -110,25 +152,46 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
           </div>
         )}
         {!artifacts.isLoading && !artifacts.isError && rows.length > 0 && (
-          <RepositoryArtifactsTable artifacts={rows} onOpenArtifact={setSelectedArtifact} />
+          <RepositoryArtifactsTable groups={groups} onOpenGroup={openArtifactGroup} />
         )}
       </div>
-      <Dialog open={Boolean(selectedArtifact)} onOpenChange={(open) => {
-        if (!open) setSelectedArtifact(undefined);
+      <Dialog open={Boolean(openGroup)} onOpenChange={(open) => {
+        if (!open) closeArtifactGroup();
       }}>
         <DialogContent className="content-start grid-rows-[auto_minmax(0,1fr)] bottom-0 left-0 top-auto max-h-[88dvh] w-full translate-x-0 translate-y-0 overflow-hidden rounded-b-none sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-dvh sm:max-h-none sm:w-[min(92vw,460px)] sm:translate-x-0 sm:translate-y-0 sm:rounded-l-lg sm:rounded-r-none">
           <DialogHeader>
-            <DialogTitle>Artifact detail</DialogTitle>
+            <DialogTitle>
+              {openGroup ? openGroup.name : "Artifact detail"}
+            </DialogTitle>
           </DialogHeader>
           <div className="min-h-0 overflow-y-auto pr-1">
-            {selectedArtifact && (
-              <RepositoryArtifactDetail
-                artifact={selectedArtifact}
-                repositoryName={repository.name}
-                deleting={deleteArtifact.variables === selectedArtifact.id && deleteArtifact.isPending}
-                onOpenObject={openArtifactObject}
-                onDelete={() => setPendingDeleteArtifact(selectedArtifact)}
-              />
+            {openGroup && (
+              <div className="grid gap-4">
+                <ArtifactChoice
+                  label="Version"
+                  options={openGroup.versions.map((version) => ({ value: version, label: version || "-" }))}
+                  selected={selectedArtifact?.version ?? ""}
+                  onSelect={selectVersion}
+                />
+                <ArtifactChoice
+                  label="Architecture"
+                  options={artifactsForVersion(openGroup, selectedArtifact?.version ?? "")
+                    .map((variant) => artifactVariantLabel(variant))
+                    .filter((label): label is string => label !== undefined)
+                    .map((label) => ({ value: label, label }))}
+                  selected={selectedArtifact ? artifactVariantLabel(selectedArtifact) : undefined}
+                  onSelect={selectVariant}
+                />
+                {selectedArtifact && (
+                  <RepositoryArtifactDetail
+                    artifact={selectedArtifact}
+                    repositoryName={repository.name}
+                    deleting={deleteArtifact.variables === selectedArtifact.id && deleteArtifact.isPending}
+                    onOpenObject={openArtifactObject}
+                    onDelete={() => setPendingDeleteArtifact(selectedArtifact)}
+                  />
+                )}
+              </div>
             )}
           </div>
         </DialogContent>
@@ -150,52 +213,50 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
 }
 
 function RepositoryArtifactsTable({
-  artifacts,
-  onOpenArtifact,
+  groups,
+  onOpenGroup,
 }: {
-  artifacts: RepositoryArtifact[];
-  onOpenArtifact: (artifact: RepositoryArtifact) => void;
+  groups: ArtifactGroup[];
+  onOpenGroup: (group: ArtifactGroup) => void;
 }) {
   return (
     <div className="max-h-80 overflow-auto">
       <table className="w-full min-w-[42rem] table-fixed text-sm">
         <thead className="sticky top-0 bg-panel text-left text-xs text-muted-foreground">
           <tr>
-            <th className="w-[34%] px-3 py-2 font-medium">Artifact</th>
-            <th className="w-[14%] px-3 py-2 font-medium">Version</th>
-            <th className="w-[16%] px-3 py-2 font-medium">Ecosystem</th>
-            <th className="w-[20%] px-3 py-2 font-medium">Published</th>
-            <th className="w-[12%] px-3 py-2 font-medium">Objects</th>
+            <th className="w-[40%] px-3 py-2 font-medium">Artifact</th>
+            <th className="w-[14%] px-3 py-2 font-medium">Latest</th>
+            <th className="w-[16%] px-3 py-2 font-medium">Versions</th>
+            <th className="w-[22%] px-3 py-2 font-medium">Updated</th>
             <th className="w-[4rem] px-3 py-2 font-medium" aria-label="Actions" />
           </tr>
         </thead>
         <tbody>
-          {artifacts.map((artifact) => (
-            <tr key={artifact.id} className="border-t border-border">
+          {groups.map((group) => (
+            <tr key={group.key} className="border-t border-border">
               <td className="min-w-0 px-3 py-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <Package className="h-4 w-4 shrink-0 text-primary" />
                   <div className="min-w-0">
-                    <div className="truncate font-medium">{artifact.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">{artifact.summary}</div>
+                    <div className="truncate font-medium">{group.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">{group.latest.summary}</div>
                   </div>
                 </div>
               </td>
-              <td className="truncate px-3 py-2 text-muted-foreground">{artifact.version ?? "-"}</td>
-              <td className="truncate px-3 py-2 text-muted-foreground">{artifact.ecosystem}</td>
-              <td className="truncate px-3 py-2 text-xs text-muted-foreground">{artifact.publishedAt}</td>
+              <td className="truncate px-3 py-2 text-muted-foreground">{group.latest.version ?? "-"}</td>
               <td className="truncate px-3 py-2 text-xs text-muted-foreground">
-                {artifact.objectKeys.length === 1 ? "1 object" : `${artifact.objectKeys.length} objects`}
+                {artifactVersionCountLabel(group) ?? "1 version"}
               </td>
+              <td className="truncate px-3 py-2 text-xs text-muted-foreground">{group.latest.publishedAt}</td>
               <td className="px-3 py-2 text-right">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-muted-foreground"
-                  aria-label={`Open ${artifact.name}`}
-                  title={`Open ${artifact.name}`}
-                  onClick={() => onOpenArtifact(artifact)}
+                  aria-label={`Open ${group.name}`}
+                  title={`Open ${group.name}`}
+                  onClick={() => onOpenGroup(group)}
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
@@ -204,6 +265,81 @@ function RepositoryArtifactsTable({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * One choice among short ones, which is what a version or an architecture is.
+ *
+ * All of them at once for as long as that reads as a row; past that the newest
+ * few, and the rest behind a count that says how many were left out. What is
+ * selected is always among those shown, or the row would look like nothing had
+ * been chosen.
+ */
+function ArtifactChoice({
+  label,
+  options,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  options: Array<{ value: string; label: string }>;
+  selected: string | undefined;
+  onSelect: (value: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const { shown, hidden } = visibleChoices({
+    options,
+    isSelected: (option) => option.value === selected,
+    expanded,
+  });
+
+  // One option is not a choice, and a row of buttons offering it says there is
+  // something to decide where there is not.
+  if (options.length < 2) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="text-xs font-medium text-muted-foreground">{label}</div>
+        {expanded && options.length > shown.length + hidden && (
+          <span className="text-xs text-muted-foreground">{options.length}</span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
+        {shown.map((option) => {
+          const active = option.value === selected;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onSelect(option.value)}
+              aria-pressed={active}
+              className={cn(
+                "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                active
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+        {(hidden > 0 || expanded) && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            className="rounded-md border border-dashed border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {expanded ? "Show fewer" : moreChoicesLabel(hidden)}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

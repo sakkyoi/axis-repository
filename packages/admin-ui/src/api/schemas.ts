@@ -99,6 +99,8 @@ export const repositoryArtifactSchema = z.object({
   repositoryName: z.string(),
   ecosystem: z.string(),
   identity: z.string(),
+  /** What this is a version of; only the ecosystem knows what that means. */
+  family: z.string().optional(),
   name: z.string(),
   version: z.string().optional(),
   summary: z.string(),

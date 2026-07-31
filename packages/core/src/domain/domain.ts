@@ -185,6 +185,16 @@ export interface RepositoryArtifactRecord {
   repositoryName: string;
   ecosystem: Ecosystem;
   identity: string;
+  /**
+   * What this artifact is a version of.
+   *
+   * Two records sharing it are the same thing at different versions, which is
+   * a question only the ecosystem can answer: apt tells its architectures and
+   * components apart and pypi does not, so a name alone is the right answer
+   * for one and the wrong answer for the other. Absent where a plugin has not
+   * said, and then each artifact stands alone.
+   */
+  family?: string;
   name: string;
   version?: string;
   summary: string;

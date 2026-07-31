@@ -112,6 +112,9 @@ function artifactRecord(input: {
     repositoryName: input.repositoryName,
     ecosystem: input.ecosystem,
     identity: `pypi:${input.normalizedName}:${input.filename}`,
+    // The project, not the file: a wheel and a source distribution of one
+    // release are the same thing, and so are two releases of it.
+    family: `pypi:${input.normalizedName}`,
     name: input.normalizedName,
     summary: `${input.normalizedName} ${input.version}`,
     primaryObjectKey: input.objectKey,

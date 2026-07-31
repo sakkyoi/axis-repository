@@ -342,6 +342,7 @@ function artifactRecord(
     repositoryName: repository.name,
     ecosystem: repository.ecosystem,
     identity: identityParts.join(":"),
+    family: ["apt", entry.component, packageName].join(":"),
     name: packageName,
     version,
     summary: `${packageName} ${version} ${architecture}`,

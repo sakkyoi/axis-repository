@@ -207,6 +207,10 @@ function describeAptArtifacts(input: DescribePublishedArtifactsInput): Repositor
       repositoryName: input.repository.name,
       ecosystem: input.repository.ecosystem,
       identity: identityParts.join(":"),
+      // The package, without the version or the architecture it was built
+      // for: a package is one thing that exists for several architectures,
+      // the way `apt show` describes it, rather than one package per target.
+      family: ["apt", component, packageName].filter((part): part is string => Boolean(part)).join(":"),
       name: packageName,
       ...(version ? { version } : {}),
       summary: summaryParts.join(" "),
