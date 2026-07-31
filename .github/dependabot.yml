@@ -1,0 +1,65 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 5
+    labels:
+      - type/dependencies
+      - area/ci
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:30"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 5
+    labels:
+      - type/dependencies
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      cloudflare-runtime:
+        patterns:
+          - wrangler
+          - "@cloudflare/workers-types"
+      dev-tooling:
+        patterns:
+          - "@eslint/js"
+          - "@vitejs/plugin-react"
+          - "@vitest/*"
+          - eslint
+          - happy-dom
+          - tsup
+          - typescript
+          - typescript-eslint
+          - vite
+      admin-ui:
+        patterns:
+          - "@radix-ui/*"
+          - "@tanstack/react-query"
+          - "@testing-library/*"
+          - "@types/react"
+          - "@types/react-dom"
+          - axios
+          - class-variance-authority
+          - clsx
+          - lucide-react
+          - react
+          - react-dom
+          - react-router
+          - tailwind-merge
+          - zod

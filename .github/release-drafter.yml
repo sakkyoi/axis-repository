@@ -1,0 +1,118 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+tag-prefix: "v"
+version-template: "$MAJOR.$MINOR.$PATCH"
+category-template: "## $TITLE"
+change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
+change-title-escapes: "\\<*_&`#@"
+sort-by: merged_at
+sort-direction: descending
+prerelease: true
+
+categories:
+  - type: pre-exclude
+    when:
+      label: "release/skip"
+
+  - title: "Breaking Changes"
+    semver-increment: minor
+    exclusive: true
+    when:
+      labels:
+        - "impact/breaking"
+
+  - title: "Security"
+    semver-increment: patch
+    exclusive: true
+    when:
+      labels:
+        - "type/security"
+        - "impact/security"
+
+  - title: "Features"
+    semver-increment: minor
+    exclusive: true
+    when:
+      labels:
+        - "type/feature"
+
+  - title: "Fixes"
+    semver-increment: patch
+    exclusive: true
+    when:
+      labels:
+        - "type/bug"
+
+  - title: "Documentation"
+    semver-increment: patch
+    exclusive: true
+    when:
+      labels:
+        - "type/documentation"
+
+  - title: "Dependencies"
+    semver-increment: patch
+    exclusive: true
+    when:
+      labels:
+        - "type/dependencies"
+
+  - title: "Maintenance"
+    semver-increment: patch
+    exclusive: true
+    when:
+      labels:
+        - "type/maintenance"
+
+  - title: "Uncategorized"
+    semver-increment: patch
+
+  - type: version-resolver
+    semver-increment: major
+    when:
+      label: "release/major"
+
+  - type: version-resolver
+    semver-increment: minor
+    when:
+      labels:
+        - "release/minor"
+        - "impact/breaking"
+        - "type/feature"
+
+  - type: version-resolver
+    semver-increment: patch
+    when:
+      labels:
+        - "release/patch"
+        - "type/bug"
+        - "type/documentation"
+        - "type/dependencies"
+        - "type/maintenance"
+        - "type/security"
+
+  - type: version-resolver
+    semver-increment: patch
+
+template: |
+  > Axis Repository is still in active development. Treat this release as a deployable preview, not a production-ready artifact source.
+
+  $CHANGES
+
+  ## Release checklist
+
+  - [ ] CI is green on `main`.
+  - [ ] `pnpm verify` passes locally or in an equivalent CI run.
+  - [ ] Release candidates use `vX.Y.Z-rc.N` and remain marked as prerelease.
+  - [ ] Deployment notes and migration notes below are accurate.
+  - [ ] Final releases use `vX.Y.Z` and are not marked as prerelease.
+  - [ ] Known limitations are called out.
+
+  ## Deployment notes
+
+  - Review required Cloudflare secrets before upgrading.
+  - Back up repository state before using this release with important artifacts.
+
+  ## Contributors
+
+  $CONTRIBUTORS

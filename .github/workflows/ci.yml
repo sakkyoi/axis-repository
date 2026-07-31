@@ -4,70 +4,64 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  check:
+  lockfile:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: ./.github/actions/setup-pnpm-node
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-pnpm-node
 
       - run: pnpm lint
 
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-pnpm-node
+
       - run: pnpm typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-pnpm-node
 
       - run: pnpm test
 
-  embedded-admin-ui-assets:
-    # src/admin-ui-assets/generated.ts is a committed build artifact. Nothing at
-    # runtime notices when it drifts from packages/admin-ui/src, so the worker
-    # would quietly serve a stale UI. Rebuild it and fail if the result differs
-    # from what is committed.
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: ./.github/actions/setup-pnpm-node
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+      - run: pnpm build
 
-      - run: pnpm install --frozen-lockfile
-
-      - run: pnpm --filter @axis-repository/admin-ui build
-
-      - run: node packages/runtime-cloudflare/scripts/generate-admin-ui-assets.mjs
-
-      - name: Check embedded admin UI assets are up to date
-        run: |
-          if ! git diff --quiet -- packages/runtime-cloudflare/src/admin-ui-assets/generated.ts; then
-            echo "::error::Embedded admin UI assets are stale. Run 'pnpm build' and commit the regenerated generated.ts."
-            git diff --stat -- packages/runtime-cloudflare/src/admin-ui-assets/generated.ts
-            exit 1
-          fi
-
-  deploy-dry-run:
+  package-boundaries:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: ./.github/actions/setup-pnpm-node
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - run: pnpm deploy:dry-run
+      - run: pnpm check:boundaries

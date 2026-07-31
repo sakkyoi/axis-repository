@@ -2,6 +2,7 @@
 .worktrees/
 .wrangler/
 node_modules/
+coverage/
 packages/*/dist/
 *.tsbuildinfo
 .dev.vars

@@ -54,8 +54,14 @@
     "lint": "eslint .",
     "deploy": "pnpm build && wrangler deploy",
     "deploy:dry-run": "pnpm build && wrangler deploy --dry-run",
+    "deploy:dry-run:worker": "wrangler deploy --dry-run",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && pnpm -r typecheck"
+    "typecheck": "tsc --noEmit && pnpm -r typecheck",
+    "coverage": "vitest run --coverage",
+    "check:audit": "node scripts/audit-ci.mjs",
+    "check:boundaries": "vitest run packages/core/src/package-boundaries.test.ts",
+    "check:release-docs": "node scripts/check-release-docs.mjs",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check:boundaries && pnpm coverage && pnpm check:audit && pnpm deploy:dry-run:worker && pnpm check:release-docs"
   },
   "devDependencies": {
     "@axis-repository/admin-ui": "workspace:^",
@@ -74,6 +80,7 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "@vitest/coverage-v8": "^4.1.10",
     "axios": "^1.19.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

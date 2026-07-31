@@ -1,0 +1,27 @@
+name: PR Labels
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-note-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check release-note labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map((label) => label.name);
+            const hasType = labels.some((label) => label.startsWith("type/"));
+            const skipped = labels.includes("release/skip");
+            if (!hasType && !skipped) {
+              core.setFailed("Pull requests need one type/* label, or release/skip when the change should not appear in release notes.");
+            }

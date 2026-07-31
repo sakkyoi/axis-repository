@@ -22,6 +22,7 @@
 
 <p align="center">
   <a href="docs/plugin-authoring.md">Plugin authoring</a> ·
+  <a href="docs/release.md">Release process</a> ·
   <a href="LICENSE">License</a>
 </p>
 
