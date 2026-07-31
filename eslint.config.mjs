@@ -90,7 +90,7 @@ export default tseslint.config(
     // Plain JS build tooling is outside the lint type project. Last so it wins
     // over the type-aware settings above. TypeScript configs and scripts are in
     // the project, so they keep type-aware rules.
-    files: ["**/*.mjs", "**/*.js"],
+    files: ["**/*.mjs", "**/*.js", "**/*.cjs"],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       ...tseslint.configs.disableTypeChecked.languageOptions,
@@ -101,6 +101,7 @@ export default tseslint.config(
         URL: "readonly",
         console: "readonly",
         fetch: "readonly",
+        module: "readonly",
         process: "readonly",
       },
     },

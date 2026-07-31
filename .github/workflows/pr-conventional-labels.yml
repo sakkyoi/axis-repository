@@ -1,0 +1,121 @@
+name: PR Conventional Labels
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply Conventional Commit labels
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const managedTypeLabels = [
+              "type/feature",
+              "type/bug",
+              "type/documentation",
+              "type/maintenance",
+              "type/dependencies",
+              "type/security",
+            ];
+            const managedReleaseLabels = [
+              "release/skip",
+              "release/major",
+              "release/minor",
+              "release/patch",
+            ];
+            const managedImpactLabels = ["impact/breaking"];
+            const typeLabels = {
+              feat: "type/feature",
+              fix: "type/bug",
+              docs: "type/documentation",
+              chore: "type/maintenance",
+              ci: "type/maintenance",
+              build: "type/maintenance",
+              refactor: "type/maintenance",
+              test: "type/maintenance",
+              perf: "type/maintenance",
+              style: "type/maintenance",
+              revert: "type/maintenance",
+            };
+            const releaseLabels = {
+              feat: "release/minor",
+              fix: "release/patch",
+              docs: "release/patch",
+              ci: "release/patch",
+              perf: "release/patch",
+              chore: "release/skip",
+              build: "release/skip",
+              refactor: "release/skip",
+              test: "release/skip",
+              style: "release/skip",
+              revert: "release/skip",
+            };
+            const allowedTypes = new Set(Object.keys(typeLabels));
+            const title = context.payload.pull_request.title.trim();
+            const match = /^(?<type>[a-z]+)(?:\((?<scope>[a-z0-9][a-z0-9-]*)\))?(?<breaking>!)?: (?<description>.+)$/.exec(title);
+
+            if (!match?.groups || !allowedTypes.has(match.groups.type)) {
+              core.info("PR title is not Conventional Commit compliant. The PR Conventions workflow will report the required format.");
+              return;
+            }
+
+            const labels = context.payload.pull_request.labels.map((label) => label.name);
+            const labelsToRemove = labels.filter((label) => {
+              if (managedTypeLabels.includes(label)) return true;
+              if (managedImpactLabels.includes(label) && label === "impact/breaking" && match.groups.breaking !== "!") return true;
+              return false;
+            });
+
+            const dependencyChange =
+              (match.groups.type === "chore" || match.groups.type === "build") &&
+              match.groups.scope === "deps";
+            const labelsToAdd = [
+              dependencyChange ? "type/dependencies" : typeLabels[match.groups.type],
+            ];
+
+            const hasReleaseDecision = labels.some((label) => managedReleaseLabels.includes(label));
+            if (!hasReleaseDecision) {
+              labelsToAdd.push(
+                match.groups.breaking === "!"
+                  ? "release/major"
+                  : dependencyChange
+                    ? "release/patch"
+                    : releaseLabels[match.groups.type],
+              );
+            }
+            if (match.groups.breaking === "!") {
+              labelsToAdd.push("impact/breaking");
+            }
+
+            for (const label of labelsToRemove) {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                name: label,
+              }).catch((error) => {
+                if (error.status !== 404) throw error;
+              });
+            }
+
+            const uniqueLabelsToAdd = [...new Set(labelsToAdd)].filter((label) => !labels.includes(label));
+            if (uniqueLabelsToAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: uniqueLabelsToAdd,
+              });
+            }
