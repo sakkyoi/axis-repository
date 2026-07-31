@@ -10,10 +10,13 @@
         "description": "Where published artifacts and the generated indexes are stored. This is the repository: losing the bucket loses everything served from it."
       },
       "AXIS_ADMIN_USERNAME": {
-        "description": "Username for the first admin account, created on first run. Nothing else creates an account, so a deployment without this has no way in."
+        "description": "Username for the first admin account, created on first run. Nothing else creates an account, so a deployment without this has no way in. Once that account exists this is no longer read, and can be dropped from `vars` at your convenience — renaming it here does not rename the account."
       },
       "AXIS_ADMIN_PASSWORD": {
-        "description": "Password for that first account, at least 8 characters. A shorter one fails the first sign-in rather than seeding an account nobody can use. It is only read until the account exists and can be removed afterwards; set `AXIS_ADMIN_PASSWORD_HASH` instead to avoid handing over a plaintext password at all."
+        "description": "Password for that first account, at least 8 characters. A shorter one fails the first sign-in rather than seeding an account nobody can use. Delete it once you have signed in: it is not read again, and until it is gone the account's original password is sitting in the deployment. Set `AXIS_ADMIN_PASSWORD_HASH` instead to avoid handing over a plaintext password at all."
+      },
+      "UPLOAD_BACKEND": {
+        "description": "How artifact bytes reach the bucket. `r2`, the default, hands publishing clients a presigned URL so the bytes go straight to R2 — this needs the three R2 credentials below, and a deployment that leaves them blank fails at sign-in rather than at the first publish. `local-r2` sends the bytes through the Worker instead: nothing else to supply, but billed for the whole transfer and capped by the Worker's memory."
       },
       "AXIS_SESSION_SECRET": {
         "description": "Signs admin session cookies. Generate with `openssl rand -hex 32`. Changing it signs everyone out; unlike the bootstrap password it is needed for as long as the deployment runs."
@@ -34,7 +37,7 @@
         "description": "Access key ID of an R2 API token with object read and write on this Worker's bucket. Create one under [R2 > Manage API tokens](https://dash.cloudflare.com/?to=/:account/r2/api-tokens). This is not the same thing as the bucket binding: the binding is how the Worker reads objects, this is what lets it hand a client a URL to write one."
       },
       "R2_SECRET_ACCESS_KEY": {
-        "description": "Secret access key of that same R2 API token, shown once when the token is created. Without it, and the two values above, artifact uploads are refused: every request is answered by a single Durable Object, so a Worker that cannot sign upload URLs fails at sign-in rather than at the first publish. Set `UPLOAD_BACKEND=local-r2` to run without them, which sends artifact bytes through that Durable Object instead — simpler to stand up, but billed for the whole transfer and capped by the Worker's memory."
+        "description": "Secret access key of that same R2 API token, shown once when the token is created. Without it, the access key ID, and the account ID, artifact uploads are refused: every request is answered by a single Durable Object, so a Worker that cannot sign upload URLs fails at sign-in rather than at the first publish. Set `UPLOAD_BACKEND=local-r2` to run without any of them."
       }
     }
   },

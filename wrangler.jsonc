@@ -13,6 +13,23 @@
       "bucket_name": "axis-repository"
     }
   ],
+  // Values a deployment supplies that are not credentials.
+  //
+  // Deploy to Cloudflare asks for these the same way it asks for the secrets in
+  // `.dev.vars.example`, but shows what is typed instead of masking it. Which
+  // matters most for the bucket name: it is checked against a resource that
+  // already exists, and a masked field is one nobody proofreads.
+  //
+  // Blank on purpose where a value names something. A plausible default is one
+  // nobody edits, and a bucket name that is not the bound bucket leaves reads
+  // working through the binding while every upload and download addresses
+  // somewhere else.
+  "vars": {
+    "AXIS_ADMIN_USERNAME": "admin",
+    "UPLOAD_BACKEND": "r2",
+    "R2_BUCKET_NAME": "",
+    "R2_ACCOUNT_ID": ""
+  },
   "durable_objects": {
     "bindings": [
       {

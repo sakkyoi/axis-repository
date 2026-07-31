@@ -1,12 +1,19 @@
 # Secrets a deployment cannot run without. Deploy to Cloudflare reads this file
-# to know what to ask for; locally, copy it to .dev.vars and fill it in.
+# to know what to ask for and masks every answer; locally, copy it to .dev.vars
+# and fill it in.
+#
+# Only what is genuinely a credential belongs here. The rest of what a
+# deployment supplies — the bootstrap username, the upload backend, the bucket
+# name, the account ID — is declared under `vars` in wrangler.jsonc, which is
+# asked for the same way but shown rather than hidden.
 #
 # What each value holds together, and what it costs to change, is described in
 # package.json under cloudflare.bindings — the text shown beside each field.
 
-# The first admin account, seeded on first run. Nothing else creates an account,
-# so a deployment without these has no way in.
-AXIS_ADMIN_USERNAME=admin
+# Password for the first admin account, seeded on first run beside the username
+# in wrangler.jsonc. Nothing else creates an account, so a deployment without it
+# has no way in. It is read only until that account exists, and should be
+# removed once it does.
 AXIS_ADMIN_PASSWORD=
 
 # Signs admin session cookies.
@@ -18,22 +25,15 @@ TOKEN_HASH_PEPPER=
 # Encrypts stored repository signing keys.
 SIGNING_KEY_ENCRYPTION_SECRET=
 
-# Signs the upload and download URLs clients use, so artifact bytes go straight
-# to R2 rather than through the Worker. Create an R2 API token in the dashboard
-# under R2 > Manage API tokens, with object read and write on the bucket this
-# Worker is deployed with.
-#
-# R2_BUCKET_NAME must be that same bucket: it is what the signed URLs address,
-# and a binding does not report the bucket it points at, so it cannot be
-# derived. Left blank on purpose — a plausible-looking default here is one
-# nobody edits, and naming a bucket that is not the one bound leaves reads
-# working while every upload and download addresses somewhere else.
-R2_BUCKET_NAME=
-R2_ACCOUNT_ID=
+# The R2 API token that signs the upload and download URLs clients use, so
+# artifact bytes go straight to R2 rather than through the Worker. Create one in
+# the dashboard under R2 > Manage API tokens, with object read and write on the
+# bucket this Worker is deployed with — which is the bucket R2_BUCKET_NAME
+# names in wrangler.jsonc.
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 
-# Local development cannot use the three above: presigned URLs are signed
-# against the real R2 endpoint, which `wrangler dev --local` does not serve. Set
+# Local development cannot use these two: presigned URLs are signed against the
+# real R2 endpoint, which `wrangler dev --local` does not serve. Set
 # UPLOAD_BACKEND=local-r2 in .dev.vars instead and leave them blank — uploads
 # then go through the Worker and into Wrangler's local bucket state.

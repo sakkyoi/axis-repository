@@ -99,11 +99,28 @@ function generateDevConfig(bucketName) {
   return GENERATED;
 }
 
-const backend = devVar("UPLOAD_BACKEND") ?? "r2";
+/**
+ * A value a deployment supplies, wherever it was declared.
+ *
+ * Only what is a credential lives in `.dev.vars`; the rest is declared under
+ * `vars` in `wrangler.jsonc`, so that a deploy shows it rather than masking it.
+ * Both are read here in the order the Worker itself resolves them, `.dev.vars`
+ * first, so that developing against a different bucket stays a local edit.
+ */
+function deployValue(name) {
+  const local = devVar(name);
+  if (local) {
+    return local;
+  }
+  const declared = parseJsonc(readFileSync(`${root}wrangler.jsonc`, "utf8")).vars ?? {};
+  return declared[name] || undefined;
+}
+
+const backend = deployValue("UPLOAD_BACKEND") ?? "r2";
 const args = ["dev"];
 
 if (backend === "r2") {
-  const bucketName = devVar("R2_BUCKET_NAME");
+  const bucketName = deployValue("R2_BUCKET_NAME");
   if (!bucketName) {
     console.error(
       "UPLOAD_BACKEND=r2 signs upload URLs that address R2 itself, so the"
