@@ -37,6 +37,7 @@ import {
 import { repositoryConfigFieldsForStep } from "../repositories/create/repository-create-field-model";
 import { RepositoryConfigFields } from "../repositories/create/repository-create-field-renderer";
 import { asJson, ErrorState, PageShell } from "./shared";
+import { SkeletonRows } from "../components/ui/skeleton";
 import { useErrorToast } from "../components/ui/toast";
 
 const stepLabels: Record<RepositoryCreateStep, string> = {
@@ -312,7 +313,7 @@ function PluginStep({
         <h2 className="text-base font-semibold">Repository plugin</h2>
         <p className="mt-1 text-sm text-muted-foreground">Start by choosing the repository type this instance can provide.</p>
       </div>
-      {isLoading && <div className="text-sm text-muted-foreground">Loading repository plugins...</div>}
+      {isLoading && <SkeletonRows rows={3} columns={["w-24", "w-40"]} className="p-0" />}
       {Boolean(error) && <ErrorState title="Repository plugins unavailable" error={error} />}
       {!isLoading && !error && options.length === 0 && (
         <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">

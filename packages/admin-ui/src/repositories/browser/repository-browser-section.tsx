@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { ErrorState } from "../../pages/shared";
+import { SkeletonRows, SkeletonText } from "../../components/ui/skeleton";
 import { getRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
@@ -129,7 +130,7 @@ export function RepositoryBrowserSection({
             <DialogTitle>Object detail</DialogTitle>
           </div>
           <div className={drawerBodyClass}>
-            {objectDetail.isLoading && <p className="text-sm text-muted-foreground">Loading object detail...</p>}
+            {objectDetail.isLoading && <SkeletonText lines={4} />}
             {objectDetail.isError && <ErrorState title="Object detail unavailable" error={objectDetail.error} />}
             {objectDetail.data && (
               <RepositoryObjectDetailPanel
@@ -163,7 +164,7 @@ export function RepositoryBrowserSection({
       )}
 
       <div className={layout.frame}>
-        {objects.isLoading && <div className={layout.loading}>Loading objects...</div>}
+        {objects.isLoading && <SkeletonRows rows={5} columns={["w-44", "w-16", "w-20", "w-32"]} />}
         {objects.isError && <div className={layout.error}><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
         {!objects.isLoading && !objects.isError && rows.length === 0 && (
           <div className={layout.empty}>

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../../components/ui/textarea";
 import { asJson, ErrorState } from "../../pages/shared";
 import { useErrorToast } from "../../components/ui/toast";
+import { SkeletonRows } from "../../components/ui/skeleton";
 import {
   publishSessionArtifactSummary,
   repositoryActivityActionLabel,
@@ -112,7 +113,7 @@ export function PublishSessionsSection({
           </span>
         )}
       </div>
-      {repositoryActivities.isLoading && <p className="text-sm text-muted-foreground">Loading activity...</p>}
+      {repositoryActivities.isLoading && <SkeletonRows rows={3} columns={["w-28", "w-52"]} className="p-0" />}
       {repositoryActivities.isError && <ErrorState title="Activity unavailable" error={repositoryActivities.error} />}
       {!repositoryActivities.isLoading && !repositoryActivities.isError && activities.length === 0 && (
         <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">

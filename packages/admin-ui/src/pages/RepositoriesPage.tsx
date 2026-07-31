@@ -17,6 +17,7 @@ import {
   repositorySummaryItems,
 } from "../repositories/detail/repository-page-model";
 import { ErrorState, PageShell, formatDate } from "./shared";
+import { SkeletonRows } from "../components/ui/skeleton";
 
 export function RepositoriesPage() {
   const navigate = useNavigate();
@@ -43,7 +44,11 @@ export function RepositoriesPage() {
       )}
     >
       {repositories.isError && <ErrorState error={repositories.error} />}
-      {repositories.isLoading && <div className="text-sm text-muted-foreground">Loading repositories...</div>}
+      {repositories.isLoading && (
+        <div className="rounded-lg border border-border bg-panel">
+          <SkeletonRows rows={5} columns={["w-48", "w-20", "w-24", "w-32"]} />
+        </div>
+      )}
       {repositories.data && (
         <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
           <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">

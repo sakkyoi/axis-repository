@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { ErrorState } from "../../pages/shared";
+import { SkeletonRows } from "../../components/ui/skeleton";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
   repositoryArtifactDeleteDialogContent,
@@ -99,7 +100,7 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
         </div>
       </div>
       <div className="min-h-0 overflow-hidden rounded-md border border-border bg-background/40">
-        {artifacts.isLoading && <div className="p-3 text-sm text-muted-foreground">Loading artifacts...</div>}
+        {artifacts.isLoading && <SkeletonRows rows={4} columns={["w-40", "w-14", "w-16", "w-44", "w-20"]} />}
         {artifacts.isError && <div className="p-3"><ErrorState title="Repository artifacts unavailable" error={artifacts.error} /></div>}
         {!artifacts.isLoading && !artifacts.isError && rows.length === 0 && (
           <div className="grid min-h-64 p-3">

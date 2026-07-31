@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { HelpTrigger } from "../components/ui/help-trigger";
 import { repositoryPluginStatusRows } from "../repositories/plugins/plugin-lifecycle";
 import { ErrorState, PageShell } from "./shared";
+import { SkeletonRows } from "../components/ui/skeleton";
 import { useErrorToast } from "../components/ui/toast";
 
 export function SettingsPage() {
@@ -48,8 +49,8 @@ export function SettingsPage() {
           </p>
         </div>
         {repositoryPlugins.isLoading && (
-          <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-            Loading repository plugins...
+          <div className="rounded-md border border-border">
+            <SkeletonRows rows={3} columns={["w-28", "w-44", "w-24"]} />
           </div>
         )}
         {repositoryPlugins.error && <ErrorState title="Repository plugins unavailable" error={repositoryPlugins.error} />}

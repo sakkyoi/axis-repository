@@ -23,6 +23,7 @@ import {
 import { getPublishTokenScopeExtension } from "../repositories/plugins/repository-ui-plugins";
 import { ErrorState, formatDate } from "../pages/shared";
 import { useErrorToast } from "../components/ui/toast";
+import { SkeletonRows } from "../components/ui/skeleton";
 
 export function CreateTokenDialog({
   repositories,
@@ -125,7 +126,7 @@ export function CreateTokenDialog({
             </label>
             <div className="grid gap-2">
               <span className="text-sm font-medium">Repositories</span>
-              {repositoriesLoading && <div className="text-sm text-muted-foreground">Loading repositories...</div>}
+              {repositoriesLoading && <SkeletonRows rows={3} columns={["w-40"]} className="p-0" />}
               {!repositoriesLoading && repositories.length === 0 && (
                 <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
                   No repositories are available.

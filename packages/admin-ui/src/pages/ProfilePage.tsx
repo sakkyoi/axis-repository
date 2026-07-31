@@ -4,6 +4,7 @@ import { Badge } from "../components/ui/badge";
 import { ChangePasswordDialog } from "../users/change-password-dialog";
 import { profileSummaryItems } from "../profile/profile-page-model";
 import { ErrorState, PageShell } from "./shared";
+import { SkeletonText } from "../components/ui/skeleton";
 
 export function ProfilePage() {
   const session = useAdminSession();
@@ -14,7 +15,11 @@ export function ProfilePage() {
       title="Profile"
       description="Your admin identity and account security settings."
     >
-      {session.isLoading && <div className="text-sm text-muted-foreground">Loading profile...</div>}
+      {session.isLoading && (
+        <div className="rounded-lg border border-border bg-panel p-5">
+          <SkeletonText lines={4} />
+        </div>
+      )}
       {session.error && <ErrorState title="Profile unavailable" error={session.error} />}
       {principal && (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">

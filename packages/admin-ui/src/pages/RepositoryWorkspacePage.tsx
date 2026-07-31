@@ -18,6 +18,7 @@ import { PublishSessionsSection, RepositoryDetailSections } from "../repositorie
 import type { RepositoryDetailSection } from "../repositories/plugins/repository-ui-plugin-types";
 import { repositoryDeleteDialogContent, repositoryDetailBodyClass } from "../repositories/detail/repository-page-model";
 import { EmptyState, ErrorState, NotFoundState, PageShell } from "./shared";
+import { SkeletonText } from "../components/ui/skeleton";
 import { getRepositoryPublishPlugin } from "../repositories/plugins/repository-ui-plugins";
 import {
   filesFromFileList,
@@ -368,7 +369,7 @@ function RepositoryPageShell({
       {...(repository ? { bodyClassName: "min-h-0 overflow-hidden rounded-lg border border-border bg-panel p-0" } : {})}
     >
         {error ? <ErrorState error={error} /> : null}
-        {isLoading && <div className="text-sm text-muted-foreground">Loading repository...</div>}
+        {isLoading && <SkeletonText lines={3} className="max-w-lg" />}
         {missing && (
           <NotFoundState
             title="Repository not found"

@@ -3,6 +3,7 @@ import { useAdminUsers } from "../api/hooks";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { ErrorState, PageShell, formatDate } from "./shared";
+import { SkeletonRows } from "../components/ui/skeleton";
 
 export function UsersPage() {
   const adminUsers = useAdminUsers();
@@ -31,8 +32,8 @@ export function UsersPage() {
         </div>
 
         {adminUsers.isLoading && (
-          <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-            Loading admin users...
+          <div className="rounded-md border border-border">
+            <SkeletonRows rows={3} columns={["w-36", "w-20", "w-28"]} />
           </div>
         )}
         {adminUsers.error && <ErrorState title="Admin users unavailable" error={adminUsers.error} />}

@@ -35,6 +35,17 @@ export default {
           foreground: "hsl(var(--panel-foreground))",
         },
       },
+      keyframes: {
+        // Travels the full width of whatever it is placed on, so a wide cell
+        // and a narrow one are swept at the same speed rather than in the same
+        // time -- a row of them reads as one movement instead of several.
+        shimmer: {
+          "100%": { transform: "translateX(100%)" },
+        },
+      },
+      animation: {
+        shimmer: "shimmer 1.6s infinite",
+      },
     },
   },
   plugins: [],

@@ -30,6 +30,7 @@ import {
 } from "../tokens/publish-token-form-model";
 import { CreateTokenDialog, TokenCreatedDialog } from "../tokens/publish-token-dialogs";
 import { asJson, ErrorState, PageShell, formatDate } from "./shared";
+import { SkeletonRows } from "../components/ui/skeleton";
 
 export function TokensPage() {
   const tokens = usePublishTokens();
@@ -108,7 +109,11 @@ export function TokensPage() {
     >
       {repositories.isError && <ErrorState title="Repositories unavailable" error={repositories.error} />}
       {tokens.isError && <ErrorState error={tokens.error} />}
-      {tokens.isLoading && <div className="text-sm text-muted-foreground">Loading publish tokens...</div>}
+      {tokens.isLoading && (
+        <div className="rounded-lg border border-border bg-panel">
+          <SkeletonRows rows={4} columns={["w-40", "w-28", "w-24", "w-32"]} />
+        </div>
+      )}
       {tokens.data && (
         <div className="grid h-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
           <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
