@@ -31,7 +31,12 @@ function navLabelShown(label: string): boolean {
 }
 
 describe("AppLayout navigation", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    // The panel remembers what it was told, and one test telling it something
+    // would otherwise decide for the next.
+    window.localStorage.clear();
+  });
 
   it("shows the names on a screen with room for them", () => {
     renderAt(SIDEBAR_LABELS_NEED_PX + 400);
@@ -87,4 +92,29 @@ describe("AppLayout navigation", () => {
     // this page to wherever it lands.
     expect(link.getAttribute("rel")).toContain("noreferrer");
   });
+
+  it("opens the way it was left, on a screen that would have opened it", async () => {
+    // The choice outlives the visit, not just the resize. Closed on a wide
+    // screen and then reopened on one just as wide, it stays closed -- which
+    // only the stored answer can produce, since the width says otherwise.
+    renderAt(SIDEBAR_LABELS_NEED_PX + 400);
+    await userEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
+    expect(navLabelShown("Repositories")).toBe(false);
+    cleanup();
+
+    renderAt(SIDEBAR_LABELS_NEED_PX + 400);
+
+    expect(navLabelShown("Repositories")).toBe(false);
+  });
+
+  it("lets the screen decide again for someone who has never chosen", () => {
+    renderAt(SIDEBAR_LABELS_NEED_PX - 200);
+    expect(navLabelShown("Repositories")).toBe(false);
+    cleanup();
+
+    renderAt(SIDEBAR_LABELS_NEED_PX + 400);
+
+    expect(navLabelShown("Repositories")).toBe(true);
+  });
+
 });

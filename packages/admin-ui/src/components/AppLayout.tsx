@@ -6,7 +6,14 @@ import { GithubMark } from "./brand/github-mark";
 import { cn } from "../lib/utils";
 import { ADMIN_UI_NAV_ITEMS, AXIS_SOURCE_URL } from "../navigation";
 import { ProfileMenu } from "../profile/profile-menu";
-import { SIDEBAR_LABELS_NEED_PX, sidebarCollapsed, sidebarToggleLabel, sidebarWidthPx } from "./sidebar-model";
+import {
+  SIDEBAR_LABELS_NEED_PX,
+  readStoredSidebarChoice,
+  sidebarCollapsed,
+  sidebarToggleLabel,
+  sidebarWidthPx,
+  storeSidebarChoice,
+} from "./sidebar-model";
 import { useTheme, type ThemePreference } from "../theme";
 
 const navIcons = {
@@ -61,7 +68,15 @@ function ThemeChoice({ collapsed }: { collapsed: boolean }) {
 }
 
 export function AppLayout() {
-  const [chosen, setChosen] = useState<boolean>();
+  const storage = typeof window === "undefined" ? undefined : window.localStorage;
+  const [chosen, setChosenState] = useState<boolean | undefined>(() => readStoredSidebarChoice(storage));
+
+  function setChosen(collapsed: boolean) {
+    setChosenState(collapsed);
+    storeSidebarChoice(storage, collapsed);
+
+  }
+
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === "undefined" ? SIDEBAR_LABELS_NEED_PX : window.innerWidth);
   const collapsed = sidebarCollapsed({ ...(chosen === undefined ? {} : { chosen }), viewportWidth });
