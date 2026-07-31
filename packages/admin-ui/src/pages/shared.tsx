@@ -49,9 +49,9 @@ export function ErrorState({ title = "Request failed", error }: { title?: string
   useErrorToast(title, error);
 
   return (
-    <Alert className="border-destructive/35 bg-destructive/10 text-destructive">
+    <Alert className="border-destructive/35 bg-destructive/10 text-destructive-ink">
       <AlertTitle>{title}</AlertTitle>
-      <AlertDescription className="text-destructive">
+      <AlertDescription className="text-destructive-ink">
         {message}
       </AlertDescription>
     </Alert>

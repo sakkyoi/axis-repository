@@ -66,9 +66,9 @@ export function LoginPage() {
           subtitleClassName="mt-1 text-sm"
         />
         {error && (
-          <Alert className="border-destructive/35 bg-destructive/10 text-destructive">
+          <Alert className="border-destructive/35 bg-destructive/10 text-destructive-ink">
             <AlertTitle>Sign in failed</AlertTitle>
-            <AlertDescription className="text-destructive">{error}</AlertDescription>
+            <AlertDescription className="text-destructive-ink">{error}</AlertDescription>
           </Alert>
         )}
         <form className="grid gap-3" onSubmit={submit}>

@@ -18,7 +18,7 @@ const stepIcons: Record<PublishStepState, typeof Check> = {
 const stepClasses: Record<PublishStepState, string> = {
   done: "text-muted-foreground",
   active: "text-foreground",
-  failed: "text-destructive",
+  failed: "text-destructive-ink",
   pending: "text-muted-foreground/50",
 };
 

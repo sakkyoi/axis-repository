@@ -12,15 +12,29 @@
   --muted-foreground: 45 6% 36%;
   --primary: 72 100% 52%;
   --primary-foreground: 70 65% 6%;
+  /* The accent as ink rather than as a surface.
+   *
+   * `--primary` is a light that carries dark text on top of it; set as text on
+   * a light surface it measures 1.15:1 against the panel, which is not dim, it
+   * is invisible. This is the same hue taken down until it reads: 5.6:1 on the
+   * panel, 5.3:1 on the background, 4.9:1 on muted, which is what a code block
+   * is drawn on. Dark mode has no such problem and keeps the accent itself. */
+  --primary-ink: 72 80% 24%;
   --destructive: 0 74% 48%;
   --destructive-foreground: 0 0% 100%;
+  --destructive-ink: 0 74% 44%;
   --border: 42 14% 78%;
   --input: 42 14% 72%;
   --ring: 72 100% 42%;
   --success: 164 76% 28%;
   --success-foreground: 0 0% 100%;
+  --success-ink: 164 76% 24%;
   --warning: 39 92% 48%;
   --warning-foreground: 36 90% 8%;
+  /* Same story as `--primary-ink`, and worse: the warning orange measures
+   * 1.8:1 on muted and 2.2:1 on the panel, so a number in a code block and the
+   * icon on a banner both go missing in light mode. */
+  --warning-ink: 39 90% 28%;
 }
 
 :root[data-theme="dark"] {
@@ -33,15 +47,23 @@
   --muted-foreground: 45 6% 66%;
   --primary: 72 100% 63%;
   --primary-foreground: 70 65% 6%;
-  --destructive: 0 74% 58%;
+  --primary-ink: 72 100% 63%;
+  /* Darker than the ink beside it, because this one carries white text: one
+   * value cannot be both a surface white reads on and a red that reads on
+   * near-black, and asking it to be both left the button at 4.0:1 and the
+   * text at 4.4:1. */
+  --destructive: 0 74% 50%;
   --destructive-foreground: 0 0% 100%;
+  --destructive-ink: 0 80% 64%;
   --border: 0 0% 20%;
   --input: 0 0% 26%;
   --ring: 72 100% 63%;
   --success: 164 70% 44%;
   --success-foreground: 164 90% 8%;
+  --success-ink: 164 70% 44%;
   --warning: 42 96% 58%;
   --warning-foreground: 36 90% 8%;
+  --warning-ink: 42 96% 58%;
 }
 
 body {

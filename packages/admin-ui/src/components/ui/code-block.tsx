@@ -14,10 +14,10 @@ import { useErrorToast } from "./toast";
 const tokenClasses: Record<CodeTokenKind, string> = {
   plain: "",
   comment: "text-muted-foreground",
-  string: "text-success",
-  number: "text-warning",
-  keyword: "text-primary",
-  property: "text-primary",
+  string: "text-success-ink",
+  number: "text-warning-ink",
+  keyword: "text-primary-ink",
+  property: "text-primary-ink",
   punctuation: "text-muted-foreground",
 };
 
@@ -80,7 +80,7 @@ function CopyCodeButton({ code }: { code: string }) {
       title={copied ? "Copied" : "Copy"}
       className={cn(
         "absolute right-1.5 top-1.5 rounded-md border border-border bg-panel p-1.5 transition-colors",
-        copied ? "text-success" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        copied ? "text-success-ink" : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}

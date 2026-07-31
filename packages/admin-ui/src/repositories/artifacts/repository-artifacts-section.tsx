@@ -237,7 +237,7 @@ function RepositoryArtifactsTable({
             <tr key={group.key} className="border-t border-border">
               <td className="min-w-0 px-3 py-2">
                 <div className="flex min-w-0 items-center gap-2">
-                  <Package className="h-4 w-4 shrink-0 text-primary" />
+                  <Package className="h-4 w-4 shrink-0 text-primary-ink" />
                   <div className="min-w-0">
                     <div className="truncate font-medium">{group.name}</div>
                     <div className="truncate text-xs text-muted-foreground">{group.latest.summary}</div>

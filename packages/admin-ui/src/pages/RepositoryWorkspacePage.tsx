@@ -278,7 +278,7 @@ export function RepositorySettingsPage() {
         afterSections={repository ? (
           <section className="grid gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
             <div>
-              <h2 className="text-sm font-semibold text-destructive">Danger zone</h2>
+              <h2 className="text-sm font-semibold text-destructive-ink">Danger zone</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Delete this repository and all repository-owned content.
               </p>

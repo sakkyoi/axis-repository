@@ -51,7 +51,7 @@ export function AptSigningKeySetupField({
       </div>
       <div className={signingKeySetupPanelClass()}>
         <div className="flex items-center gap-2">
-          <KeyRound className="h-4 w-4 text-primary" />
+          <KeyRound className="h-4 w-4 text-primary-ink" />
           <h3 className="text-sm font-semibold">Signing key setup</h3>
         </div>
         <Tabs value={mode} onValueChange={(nextMode) => update({ signingKeyMode: nextMode })}>

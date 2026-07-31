@@ -35,7 +35,7 @@ export function BootstrapCredentialsBanner() {
       role="status"
       className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-none border-x-0 border-t-0 border-b-warning/40 bg-warning/10"
     >
-      <ShieldAlert className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+      <ShieldAlert className="h-4 w-4 shrink-0 text-warning-ink" aria-hidden="true" />
       <span className="min-w-0">
         <span className="font-medium">{leftoverBannerText(leftover)}</span>{" "}
         <span className="text-muted-foreground">
@@ -44,7 +44,7 @@ export function BootstrapCredentialsBanner() {
       </span>
       <Link
         to={{ pathname: ADMIN_UI_PATHS.settings, hash: `#${BOOTSTRAP_CREDENTIALS_ANCHOR}` }}
-        className="ml-auto shrink-0 font-medium text-primary underline-offset-4 hover:underline"
+        className="ml-auto shrink-0 font-medium text-primary-ink underline-offset-4 hover:underline"
       >
         How to remove it
       </Link>
@@ -100,7 +100,7 @@ export function BootstrapCredentialsCard() {
               <code className="font-mono text-sm">{credential.name}</code>
               {credential.sensitive
                 ? (
-                  <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
+                  <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning-ink">
                     Still readable from this deployment
                   </span>
                 )

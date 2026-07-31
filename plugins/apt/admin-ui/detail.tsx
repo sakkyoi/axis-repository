@@ -159,7 +159,7 @@ function AptRepositoryFields({
       <label className="grid gap-2">
         <span className="text-sm font-medium">Signing key</span>
         {signingKeyState.currentKeyRevoked && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-ink">
             Current signing key has been revoked. Select an active signing key before publishing.
           </div>
         )}

@@ -278,7 +278,7 @@ function RepositoryBrowserTable({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive-ink"
                     aria-label={`Delete ${row.path}`}
                     title={`Delete ${row.path}`}
                     disabled={deletingPath === row.path}
@@ -306,7 +306,7 @@ function RepositoryBrowserNameCell({
   onOpenObject: (path: string) => void;
 }) {
   const icon = row.kind === "directory"
-    ? <Folder className="h-4 w-4 text-primary" />
+    ? <Folder className="h-4 w-4 text-primary-ink" />
     : <File className="h-4 w-4 text-muted-foreground" />;
   if (row.kind === "directory") {
     return (

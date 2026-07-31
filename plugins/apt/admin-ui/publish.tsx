@@ -167,7 +167,7 @@ export function AptPublishSessionDetail({
         <PublishSessionDetailList title="Published repository objects" items={session.publishResult.objects.map((object) => object.key)} />
       )}
       {session.failure && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive">
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive-ink">
           {session.failure.message}
         </div>
       )}

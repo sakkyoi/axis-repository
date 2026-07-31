@@ -57,7 +57,7 @@ export function DestructiveActionDialog({
       <DialogContent className="w-[min(92vw,440px)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <AlertTriangle className="h-4 w-4 text-destructive-ink" />
             {title}
           </DialogTitle>
           <DialogDescription className="whitespace-pre-line">{description}</DialogDescription>

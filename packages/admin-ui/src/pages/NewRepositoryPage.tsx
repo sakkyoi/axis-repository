@@ -215,7 +215,7 @@ export function NewRepositoryPage() {
         </div>
         <aside className="min-h-0 overflow-y-auto rounded-lg border border-border bg-panel p-4">
           <div className="flex items-center gap-2">
-            <Package className="h-4 w-4 text-primary" />
+            <Package className="h-4 w-4 text-primary-ink" />
             <h2 className="text-sm font-semibold">{summaryTitle}</h2>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">{summaryDescription}</p>
@@ -344,7 +344,7 @@ function PluginStep({
               </span>
               <span className="text-sm text-muted-foreground">{plugin.description}</span>
               {!plugin.supported && plugin.disabledReason && (
-                <span className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
+                <span className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive-ink">
                   {plugin.disabledReason}
                 </span>
               )}
@@ -385,7 +385,7 @@ function BasicsStep({
       <label className="grid gap-2">
         <span className="text-sm font-medium">Repository name</span>
         <Input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder="debian-internal" required />
-        {nameError && <span className="text-xs font-medium text-destructive">{nameError}</span>}
+        {nameError && <span className="text-xs font-medium text-destructive-ink">{nameError}</span>}
       </label>
       <label className="grid gap-2">
         <span className="text-sm font-medium">Visibility</span>

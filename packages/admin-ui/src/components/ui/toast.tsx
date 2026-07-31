@@ -48,7 +48,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={toast.id}
             className={toast.tone === "error"
-              ? "rounded-md border border-destructive/35 bg-destructive/10 p-3 text-sm text-destructive shadow-lg"
+              ? "rounded-md border border-destructive/35 bg-destructive/10 p-3 text-sm text-destructive-ink shadow-lg"
               : "rounded-md border border-border bg-panel p-3 text-sm shadow-lg"}
           >
             <div className="flex items-start gap-2">
