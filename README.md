@@ -2,6 +2,7 @@
 
 [![Status: Experimental](https://img.shields.io/badge/status-experimental-orange)](#)
 [![Development: Active](https://img.shields.io/badge/development-active-blue)](#)
+[![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)
 
 <p align="center">
   <img src="assets/logo-mark.svg" alt="Axis Repository" width="96" height="96" />
