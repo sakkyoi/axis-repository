@@ -40,6 +40,7 @@
   },
   "scripts": {
     "build": "pnpm --filter @axis-repository/core build && pnpm --filter @axis-repository/admin-ui build && pnpm --filter @axis-repository/publish-client build && pnpm --filter @axis-repository/runtime-cloudflare build:worker",
+    "dev": "node scripts/dev.mjs",
     "dev:ui": "pnpm --filter @axis-repository/admin-ui dev",
     "dev:worker": "node scripts/dev-worker.mjs",
     "lint": "eslint .",

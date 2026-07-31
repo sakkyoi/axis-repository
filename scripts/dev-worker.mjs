@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /**
  * Starts the local Worker with the configuration its upload backend requires.
@@ -116,6 +117,13 @@ if (backend === "r2") {
   // directory, and this one does not sit in the project root, so `.dev.vars`
   // would be looked for beside it and quietly not found.
   args.push("--config", generateDevConfig(bucketName), "--env-file", `${root}.dev.vars`);
+  // Wrangler keeps its local state beside the configuration it was given, and
+  // this configuration does not sit in the project root -- so without saying
+  // where, the two backends end up with a state directory each, one of them
+  // nested inside `.wrangler` where nobody looks for it. Then an account
+  // seeded under one backend does not exist under the other, and clearing
+  // "the" state clears whichever one you happened to mean.
+  args.push("--persist-to", `${root}.wrangler/state`);
   console.error(`UPLOAD_BACKEND=r2 → ${bucketName}, bound remotely`);
 } else {
   args.push("--local");
@@ -127,5 +135,23 @@ if (backend === "r2") {
 const forwarded = process.argv.slice(2);
 args.push(...(forwarded[0] === "--" ? forwarded.slice(1) : forwarded));
 
-spawn("wrangler", args, { stdio: "inherit", shell: true })
+/**
+ * Where wrangler's own entry point is, as its package declares it.
+ *
+ * Started directly rather than through the `wrangler` wrapper, because on
+ * Windows that wrapper is a batch file and reaching it needs a shell -- and an
+ * argument list handed to a shell is concatenated rather than escaped, which
+ * node warns about (DEP0190) and is right to. Forwarded arguments make that a
+ * real question rather than a formality.
+ *
+ * The `bin` field is asked rather than the layout guessed; the package's
+ * `exports` will not resolve the file by path in any case.
+ */
+function wranglerEntry() {
+  const manifest = createRequire(import.meta.url).resolve("wrangler/package.json");
+  const { bin } = JSON.parse(readFileSync(manifest, "utf8"));
+  return fileURLToPath(new URL(bin.wrangler, pathToFileURL(manifest)));
+}
+
+spawn(process.execPath, [wranglerEntry(), ...args], { stdio: "inherit" })
   .on("exit", (code) => process.exit(code ?? 1));
