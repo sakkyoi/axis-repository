@@ -1,7 +1,7 @@
 import { ArrowLeft, History, PackagePlus, Settings, Trash2 } from "lucide-react";
 import type { DragEvent } from "react";
 import { useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { useDeleteRepository, useRepositories, useRepositoryPlugins } from "../api/hooks";
 import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { Button } from "../components/ui/button";
@@ -447,4 +447,3 @@ function RepositorySummaryCard({ repository }: { repository: Repository }) {
     </section>
   );
 }
-

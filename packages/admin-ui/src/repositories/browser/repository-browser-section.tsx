@@ -1,6 +1,6 @@
 import { ExternalLink, File, Folder, Trash2, UploadCloud } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { useDeleteRepositoryObject, useRepositoryArtifacts, useRepositoryObjectDetail, useRepositoryObjects } from "../../api/hooks";
 import type { RepositoryArtifact, RepositoryObjectDetail } from "../../api/schemas";
 import { Button } from "../../components/ui/button";

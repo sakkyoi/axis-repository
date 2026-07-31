@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router";
 import { ShieldAlert } from "lucide-react";
 import { useDeployment } from "../api/hooks";
 import { ADMIN_UI_PATHS } from "../navigation";

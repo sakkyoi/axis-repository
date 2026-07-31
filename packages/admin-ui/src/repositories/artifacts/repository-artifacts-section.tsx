@@ -1,6 +1,6 @@
 import { Eye, Package, RefreshCcw, RotateCw, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { useDeleteRepositoryArtifact, useRebuildRepositoryArtifactIndex, useRepositoryArtifacts } from "../../api/hooks";
 import type { RepositoryArtifact } from "../../api/schemas";
 import { Button } from "../../components/ui/button";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { ChevronDown, LogOut, UserCircle } from "lucide-react";
 import { createAxisClient } from "../api/client";
 import { useAdminSession } from "../api/hooks";

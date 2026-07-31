@@ -1,24 +1,35 @@
+// @vitest-environment happy-dom
+
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { MemoryRouter } from "react-router";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppLayout } from "./AppLayout";
-import { AuthProvider } from "../auth";
+import { AuthTestProvider } from "../auth-test-support";
 import { ThemeProvider } from "../theme";
 import { SIDEBAR_LABELS_NEED_PX } from "./sidebar-model";
 import { AXIS_SOURCE_URL } from "../navigation";
+
+vi.mock("../api/hooks", () => ({
+  useAdminSession: () => ({
+    data: { principal: { username: "admin" } },
+  }),
+  useDeployment: () => ({
+    data: { leftoverBootstrapCredentials: [] },
+  }),
+}));
 
 function renderAt(viewportWidth: number) {
   window.innerWidth = viewportWidth;
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <ThemeProvider>
-        <AuthProvider>
+        <AuthTestProvider value={{ accessToken: "test-token", isAuthenticated: true }}>
           <MemoryRouter>
             <AppLayout />
           </MemoryRouter>
-        </AuthProvider>
+        </AuthTestProvider>
       </ThemeProvider>
     </QueryClientProvider>,
   );

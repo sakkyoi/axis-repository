@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router";
 import { LogIn } from "lucide-react";
 import { useAuth } from "../auth";
 import { createAxisClient } from "../api/client";

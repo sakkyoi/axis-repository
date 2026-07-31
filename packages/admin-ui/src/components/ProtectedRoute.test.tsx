@@ -1,6 +1,8 @@
+// @vitest-environment happy-dom
+
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { ProtectedRoute } from "./ProtectedRoute";
 import type { AuthContextValue } from "../auth";
 import { AuthTestProvider } from "../auth-test-support";

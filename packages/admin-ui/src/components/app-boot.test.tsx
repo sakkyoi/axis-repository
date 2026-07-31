@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { AppBootScreen } from "./app-boot";

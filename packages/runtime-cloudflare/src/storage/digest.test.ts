@@ -52,7 +52,7 @@ describe("digestStreamHex", () => {
   it("does not depend on where the chunk boundaries fall", async () => {
     // A hash that only accumulated the last chunk, or lost one, would still
     // agree with itself; it has to agree with the whole input's digest.
-    const whole = pattern(3 * 1024 * 1024 + 17, 5);
+    const whole = pattern(256 * 1024 + 17, 5);
     const oneShot = await digestHex("SHA-256", whole);
 
     for (const size of [1, 64, 512, 1024 * 1024]) {

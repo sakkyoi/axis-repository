@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { workspaceAliases } from "./scripts/workspace-aliases";
+import { workspaceAliases } from "./scripts/workspace-aliases.js";
 
 export default defineConfig({
   resolve: {
@@ -9,8 +9,5 @@ export default defineConfig({
     include: ["packages/**/*.test.ts", "packages/**/*.test.tsx", "plugins/**/*.test.ts", "plugins/**/*.test.tsx"],
     globals: false,
     passWithNoTests: true,
-    // Only component tests need a DOM; everything else stays on the faster
-    // default environment.
-    environmentMatchGlobs: [["**/*.test.tsx", "happy-dom"]],
   },
 });

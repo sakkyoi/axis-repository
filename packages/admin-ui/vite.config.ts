@@ -1,6 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { workspaceAliases } from "../../scripts/workspace-aliases";
+import { workspaceAliases } from "../../scripts/workspace-aliases.js";
 
 /**
  * Where the dev server sends what it does not serve itself.
