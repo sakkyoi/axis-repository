@@ -19,6 +19,7 @@ import {
 } from "@axis-repository/core";
 import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "@axis-repository/plugin-catalog";
 import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "../admin-ui-assets";
+import { leftoverBootstrapCredentials, leftoverBootstrapWarning } from "./bootstrap-credentials";
 import type { AppDependencies } from "./dev-dependencies";
 import { isStringArray, optionalObjectField, readJsonObject, requireAdmin, requireBasicAuthSecret, requireBearer, stringArrayField, stringField } from "../http";
 import {
@@ -1222,6 +1223,26 @@ function publicArtifactOrigin(url: URL, dependencies: AppDependencies): string {
   return dependencies.artifactOrigin ?? url.origin;
 }
 
+/**
+ * Puts what a deployment is still carrying into its own log.
+ *
+ * Never allowed to fail the request that noticed it. This is a remark about
+ * configuration, and a sign-in that has already succeeded should not be turned
+ * into an error by the attempt to mention it.
+ */
+async function warnAboutLeftoverBootstrapCredentials(dependencies: AppDependencies): Promise<void> {
+  try {
+    const warning = leftoverBootstrapWarning(
+      leftoverBootstrapCredentials(await dependencies.adminAuthService.unusedBootstrapCredentials()),
+    );
+    if (warning) {
+      console.warn(warning);
+    }
+  } catch {
+    // Nothing to do about it, and nothing worth failing a sign-in over.
+  }
+}
+
 export async function dispatch(request: Request, dependencies: AppDependencies): Promise<Response> {
   const url = new URL(request.url);
   const { servesArtifacts, servesAdmin } = originRoles(url, dependencies);
@@ -1240,6 +1261,9 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       username: stringField(body, "username"),
       password: stringField(body, "password"),
     });
+    // Said at sign-in rather than on every request: an operator is here, and
+    // the deployment has just proved it no longer needs what seeded it.
+    await warnAboutLeftoverBootstrapCredentials(dependencies);
     return jsonResponse(
       {
         accessToken: result.accessToken,
@@ -1313,6 +1337,19 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       return jsonResponse({
         ok: true,
         principal: await dependencies.adminAuthService.verifyAccessToken(token),
+      });
+    }
+    throw new NotFoundError();
+  }
+  if (url.pathname === "/admin/deployment") {
+    // Behind admin auth: that a bootstrap password is still set is a thing to
+    // tell an operator, not something to publish to anyone who asks.
+    await requireAdmin(request, dependencies.adminAuthService);
+    if (request.method === "GET") {
+      return jsonResponse({
+        leftoverBootstrapCredentials: leftoverBootstrapCredentials(
+          await dependencies.adminAuthService.unusedBootstrapCredentials(),
+        ),
       });
     }
     throw new NotFoundError();

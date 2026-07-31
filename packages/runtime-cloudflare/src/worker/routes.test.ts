@@ -734,6 +734,55 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("reports the bootstrap credentials the deployment no longer needs", async () => {
+    const app = createApp(createDevDependencies());
+    // Signing in is what creates the account, and so what makes the values
+    // that seeded it redundant.
+    await app.fetch(new Request("https://axis.example/admin/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "admin-local-password" }),
+    }));
+
+    const response = await app.fetch(new Request("https://axis.example/admin/deployment", {
+      headers: { authorization: "Bearer dev-admin-token" },
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      leftoverBootstrapCredentials: [
+        expect.objectContaining({ name: "AXIS_ADMIN_PASSWORD", sensitive: true }),
+        expect.objectContaining({ name: "AXIS_ADMIN_USERNAME", sensitive: false }),
+      ],
+    });
+  });
+
+  it("does not tell an unauthenticated caller what this deployment still holds", async () => {
+    const app = createApp(createDevDependencies());
+
+    const response = await app.fetch(new Request("https://axis.example/admin/deployment"));
+
+    expect(response.status).toBe(401);
+  });
+
+  it("says so in its own log, for an operator who never opens the admin UI", async () => {
+    const warnings: unknown[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation((...args) => void warnings.push(args[0]));
+    const app = createApp(createDevDependencies());
+
+    // The first sign-in creates the account; the second finds it already there.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await app.fetch(new Request("https://axis.example/admin/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: "admin", password: "admin-local-password" }),
+      }));
+    }
+    warn.mockRestore();
+
+    expect(warnings.join("\n")).toContain("AXIS_ADMIN_PASSWORD");
+  });
+
   it("rejects invalid admin access tokens through the admin session route", async () => {
     const app = createApp(createDevDependencies());
     const response = await app.fetch(

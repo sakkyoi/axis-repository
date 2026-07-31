@@ -7,6 +7,7 @@ import {
   publishSessionsResponseSchema,
   createdPublishSessionSchema,
   publishSessionSchema,
+  deploymentResponseSchema,
   publishTokenCreateResponseSchema,
   publishTokenSchema,
   publishTokensResponseSchema,
@@ -80,6 +81,7 @@ export interface AxisClient {
   getAdminSession(): Promise<ReturnType<typeof adminSessionSchema.parse>>;
   verifyAdminSession(): Promise<void>;
   listAdminUsers(): Promise<{ users: AdminUser[]; canCreateUsers: boolean }>;
+  getDeployment(): Promise<ReturnType<typeof deploymentResponseSchema.parse>>;
   listRepositoryPlugins(): Promise<RepositoryPlugin[]>;
   updateRepositoryPluginPolicy(ecosystem: string, input: UpdateRepositoryPluginPolicyInput): Promise<RepositoryPlugin>;
   listRepositories(): Promise<Repository[]>;
@@ -190,6 +192,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async listRepositories() {
       const response = await http.get("/admin/repositories");
       return repositoriesResponseSchema.parse(response.data).repositories;
+    },
+    async getDeployment() {
+      const response = await http.get("/admin/deployment");
+      return deploymentResponseSchema.parse(response.data);
     },
     async listRepositoryPlugins() {
       const response = await http.get("/admin/repository-plugins");

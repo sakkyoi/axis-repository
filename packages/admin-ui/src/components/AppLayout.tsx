@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Monitor, Moon, Package, PanelLeftClose, Settings, ShieldCheck, Sun, Users } from "lucide-react";
 import { AxisBrand, AxisLogoMark } from "./brand/axis-brand";
+import { BootstrapCredentialsBanner } from "./bootstrap-credentials";
 import { GithubMark } from "./brand/github-mark";
 import { cn } from "../lib/utils";
 import { ADMIN_UI_NAV_ITEMS, AXIS_SOURCE_URL } from "../navigation";
@@ -160,7 +161,9 @@ export function AppLayout() {
           <ProfileMenu collapsed={collapsed} />
         </div>
       </aside>
-      <div className="grid min-h-0 min-w-0 grid-rows-[56px_minmax(0,1fr)]">
+      {/* The middle row is `auto` so that it takes no height at all on a
+          deployment with nothing to report, which is most of them. */}
+      <div className="grid min-h-0 min-w-0 grid-rows-[56px_auto_minmax(0,1fr)]">
         <header className="flex min-w-0 items-center justify-end border-b border-border bg-panel/95 px-5">
           <a
             href={AXIS_SOURCE_URL}
@@ -173,6 +176,7 @@ export function AppLayout() {
             <GithubMark className="h-5 w-5" />
           </a>
         </header>
+        <BootstrapCredentialsBanner />
         <main className="min-h-0 overflow-hidden p-5">
           <Outlet />
         </main>

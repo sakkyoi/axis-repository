@@ -2,6 +2,7 @@ import { Ban, Power, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { getRuntimeConfig } from "../runtime-config";
 import { useRepositoryPlugins, useUpdateRepositoryPluginPolicy } from "../api/hooks";
+import { BootstrapCredentialsCard } from "../components/bootstrap-credentials";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { HelpTrigger } from "../components/ui/help-trigger";
@@ -38,6 +39,7 @@ export function SettingsPage() {
           <span className="font-mono text-muted-foreground">window.__AXIS_ADMIN_CONFIG__</span>
         </div>
       </div>
+      <BootstrapCredentialsCard />
       <section className="grid gap-3 rounded-lg border border-border bg-panel p-5">
         <div>
           <div className="flex items-center gap-2">

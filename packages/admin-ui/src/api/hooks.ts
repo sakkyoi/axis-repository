@@ -30,6 +30,21 @@ export function useRepositories() {
   });
 }
 
+/**
+ * What this deployment is still carrying that it no longer needs.
+ *
+ * Read once per session rather than polled: it only changes when someone edits
+ * the deployment, which signs everyone out anyway.
+ */
+export function useDeployment() {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["deployment"],
+    queryFn: () => client.getDeployment(),
+    staleTime: Infinity,
+  });
+}
+
 export function useRepositoryPlugins() {
   const client = useAxisClient();
   return useQuery({

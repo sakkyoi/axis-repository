@@ -51,7 +51,12 @@ export default tseslint.config(
       // DOM), so one lint project cannot judge which assertions the real build
       // needs; it reported casts as redundant that tsc requires.
       "@typescript-eslint/no-unnecessary-type-assertion": "off",
-      "no-console": ["error", { allow: ["error"] }],
+      // `log` and friends stay banned so that debugging left behind is caught.
+      // `warn` is allowed because the level is read by whoever runs a
+      // deployment: something the operator should act on but that has broken
+      // nothing reported as an error pages them for untidiness, and a team that
+      // is paged for untidiness stops reading the errors.
+      "no-console": ["error", { allow: ["error", "warn"] }],
       eqeqeq: ["error", "always", { null: "ignore" }],
       // Context values and hook results are object-literal or useCallback
       // members that never reference `this`, so passing them as callbacks is

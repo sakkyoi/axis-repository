@@ -10,6 +10,14 @@ export interface BootstrapOwnerCredentials {
   passwordHash?: string;
 }
 
+/**
+ * A bootstrap credential, named by what it is rather than where it came from.
+ *
+ * Which environment variable carries it is the runtime's business; this layer
+ * only knows that one was supplied and whether anything still reads it.
+ */
+export type BootstrapCredentialField = "username" | "password" | "passwordHash";
+
 export interface AdminAuthServiceOptions {
   state: StateStore;
   clock: Clock;
@@ -154,6 +162,40 @@ export class AdminAuthService {
     // Deliberately does not seed: this is a read, and seeding here made an
     // empty store surface as UnauthorizedError from a list query.
     return this.options.state.adminUsers.list();
+  }
+
+  /**
+   * Bootstrap credentials that are configured but will never be read again.
+   *
+   * Seeding stops the moment an account exists, so from then on these are held
+   * by the deployment for nothing. That is untidy for a username and worse for
+   * a password: the owner's original password stays readable to anyone who can
+   * see the deployment's configuration, long after the sign-in that made it
+   * unnecessary, and rotating the password in the admin UI does not touch it.
+   *
+   * Reported rather than acted on. Removing them means editing the deployment,
+   * which is not something a running Worker can do for itself, and clearing
+   * them in memory would only hide the evidence until the next start.
+   */
+  async unusedBootstrapCredentials(): Promise<BootstrapCredentialField[]> {
+    const bootstrap = this.options.bootstrapOwner;
+    if (!bootstrap) {
+      return [];
+    }
+    if ((await this.options.state.adminUsers.list()).length === 0) {
+      return [];
+    }
+    const unused: BootstrapCredentialField[] = [];
+    if (bootstrap.username.trim() !== "") {
+      unused.push("username");
+    }
+    if (bootstrap.password) {
+      unused.push("password");
+    }
+    if (bootstrap.passwordHash) {
+      unused.push("passwordHash");
+    }
+    return unused;
   }
 
   private async ensureBootstrapOwner(): Promise<void> {

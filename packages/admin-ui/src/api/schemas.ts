@@ -139,6 +139,17 @@ export const repositoryPluginsResponseSchema = z.object({
   plugins: z.array(repositoryPluginSchema),
 });
 
+export const leftoverBootstrapCredentialSchema = z.object({
+  name: z.string(),
+  sensitive: z.boolean(),
+  removal: z.string(),
+  command: z.string(),
+});
+
+export const deploymentResponseSchema = z.object({
+  leftoverBootstrapCredentials: z.array(leftoverBootstrapCredentialSchema),
+});
+
 export const publishTokenSchema = z.object({
   id: z.string(),
   name: z.string(),

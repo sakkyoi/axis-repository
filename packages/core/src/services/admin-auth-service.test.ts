@@ -419,6 +419,71 @@ describe("AdminAuthService", () => {
   });
 });
 
+describe("bootstrap credentials nobody reads any more", () => {
+  it("reports nothing while they are still the only way in", async () => {
+    // Before the first sign-in they are load-bearing. Told to remove them then,
+    // an operator locks themselves out of a deployment that has no account.
+    const service = createService({ state: new MemoryStateStore() });
+
+    await expect(service.unusedBootstrapCredentials()).resolves.toEqual([]);
+  });
+
+  it("reports them once the account they seeded exists", async () => {
+    const state = new MemoryStateStore();
+    const service = createService({ state });
+
+    await service.login({ username: "admin", password: "correct-password" });
+
+    await expect(service.unusedBootstrapCredentials()).resolves.toEqual(["username", "password"]);
+  });
+
+  it("keeps reporting a password the owner has since changed", async () => {
+    // Changing the password in the admin UI rewrites the stored hash and leaves
+    // the deployment's copy of the original untouched -- which is the case
+    // worth warning about, not the one that fixes itself.
+    const state = new MemoryStateStore();
+    const service = createService({ state });
+    const session = await service.login({ username: "admin", password: "correct-password" });
+    await service.changeOwnPassword(session.principal, {
+      currentPassword: "correct-password",
+      newPassword: "a-longer-password",
+    });
+
+    await expect(service.unusedBootstrapCredentials()).resolves.toContain("password");
+  });
+
+  it("reports a precomputed hash too, it being just as stale", async () => {
+    const state = new MemoryStateStore();
+    const service = createService({
+      state,
+      bootstrapOwner: { username: "admin", passwordHash: "pw:correct-password" },
+    });
+
+    await service.login({ username: "admin", password: "correct-password" });
+
+    await expect(service.unusedBootstrapCredentials()).resolves.toEqual(["username", "passwordHash"]);
+  });
+
+  it("reports nothing where a deployment supplied none", async () => {
+    const state = new MemoryStateStore();
+    // Built without the option rather than with it set to undefined: under
+    // exactOptionalPropertyTypes those are different things, and "never
+    // supplied" is the case being tested.
+    const service = new AdminAuthService({ state, clock, randomId, hasher, passwordHasher, accessTokens });
+    await state.adminUsers.save({
+      id: "admin_user_existing",
+      username: "someone",
+      displayName: "someone",
+      passwordHash: "pw:whatever",
+      role: "owner",
+      createdAt: "2026-07-26T00:00:00.000Z",
+      updatedAt: "2026-07-26T00:00:00.000Z",
+    });
+
+    await expect(service.unusedBootstrapCredentials()).resolves.toEqual([]);
+  });
+});
+
 function createService(overrides: Partial<ConstructorParameters<typeof AdminAuthService>[0]> = {}) {
   return new AdminAuthService({
     state: new MemoryStateStore(),
