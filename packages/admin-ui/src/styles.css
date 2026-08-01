@@ -81,6 +81,11 @@
   background-image: linear-gradient(hsl(var(--destructive) / 0.1), hsl(var(--destructive) / 0.1));
 }
 
+.surface-warning {
+  background-color: hsl(var(--panel));
+  background-image: linear-gradient(hsl(var(--warning) / 0.12), hsl(var(--warning) / 0.12));
+}
+
 body {
   margin: 0;
   background: hsl(var(--background));

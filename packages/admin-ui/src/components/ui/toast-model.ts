@@ -5,8 +5,12 @@
  * Failures carry the only account of what went wrong -- often a sentence or
  * two of it -- and a message that takes itself away while it is still being
  * read is worse than none, so those wait to be dismissed.
+ *
+ * A warning is neither. Nothing has failed, so it is not red, but it describes
+ * something the reader has to go and do -- so like a failure it stays until it
+ * is dealt with rather than expiring while they are reading it.
  */
-export type ToastTone = "info" | "error";
+export type ToastTone = "info" | "warning" | "error";
 
 export function toastAutoDismissMs(): number {
   return 3000;
@@ -14,7 +18,7 @@ export function toastAutoDismissMs(): number {
 
 /** Undefined where the message stays until someone closes it. */
 export function toastDismissAfterMs(tone: ToastTone): number | undefined {
-  return tone === "error" ? undefined : toastAutoDismissMs();
+  return tone === "info" ? toastAutoDismissMs() : undefined;
 }
 
 /**

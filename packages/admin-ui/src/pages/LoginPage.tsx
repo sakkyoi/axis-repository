@@ -5,8 +5,8 @@ import { useAuth } from "../auth";
 import { createAxisClient } from "../api/client";
 import { AppBootScreen } from "../components/app-boot";
 import { AxisBrand } from "../components/brand/axis-brand";
-import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
+import { useToast } from "../components/ui/toast";
 import { Input } from "../components/ui/input";
 import { authenticateAdminLogin } from "../login";
 import { safeAdminRedirectPath } from "../navigation";
@@ -20,9 +20,9 @@ export function LoginPage() {
   const auth = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const toast = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
 
   const from = safeAdminRedirectPath((location.state as LoginLocationState | null)?.from);
@@ -49,10 +49,12 @@ export function LoginPage() {
     });
     setIsVerifying(false);
     if (!result.authenticated) {
-      setError(result.error);
+      // Raised per attempt rather than held as state: the same wrong password
+      // twice is two refusals, and a message deduplicated against the last one
+      // would answer the second attempt with silence.
+      toast.notify({ title: "Sign in failed", description: result.error, tone: "error" });
       return;
     }
-    setError("");
     void navigate(from, { replace: true });
   }
 
@@ -65,12 +67,6 @@ export function LoginPage() {
           titleClassName="text-xl"
           subtitleClassName="mt-1 text-sm"
         />
-        {error && (
-          <Alert className="border-destructive/35 bg-destructive/10 text-destructive-ink">
-            <AlertTitle>Sign in failed</AlertTitle>
-            <AlertDescription className="text-destructive-ink">{error}</AlertDescription>
-          </Alert>
-        )}
         <form className="grid gap-3" onSubmit={submit}>
           <label className="grid gap-2">
             <span className="text-sm font-medium">Username</span>
