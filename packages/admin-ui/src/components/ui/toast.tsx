@@ -68,9 +68,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {/* Above a dialog rather than behind it: a failure raised by something
-          done in a dialog has to be readable without closing the dialog. */}
-      <div className="fixed bottom-4 right-4 z-[60] grid w-[min(92vw,360px)] gap-2" role="status" aria-live="polite">
+      {/* Above even the raised confirmation dialogs: a failure raised by
+          something done in a dialog has to stay readable and dismissible. */}
+      <div
+        className="fixed bottom-4 right-4 z-[80] grid w-[min(92vw,360px)] gap-2"
+        onPointerDown={(event) => event.stopPropagation()}
+        style={{ pointerEvents: "auto" }}
+        role="status"
+        aria-live="polite"
+      >
         {toasts.map((toast) => (
           <div
             key={toast.id}

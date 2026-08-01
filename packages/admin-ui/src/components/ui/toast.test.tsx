@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
-import { StrictMode } from "react";
+import { StrictMode, useEffect } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Dialog, DialogContent, DialogTitle } from "./dialog";
 import { ToastProvider, useErrorToast, useToast } from "./toast";
 
 function Failing({ title, error }: { title: string; error: unknown }) {
@@ -31,6 +32,14 @@ function Pointing() {
 function Confirming() {
   const toast = useToast();
   return <button type="button" onClick={() => toast.notify({ title: "Saved" })}>save</button>;
+}
+
+function Announcing() {
+  const toast = useToast();
+  useEffect(() => {
+    toast.notify({ title: "Upload failed", tone: "error" });
+  }, [toast]);
+  return null;
 }
 
 describe("messages", () => {
@@ -120,6 +129,40 @@ describe("messages", () => {
     await userEvent.click(screen.getByRole("button", { name: "save" }));
 
     expect(await screen.findByText("Saved")).toBeTruthy();
+  });
+
+  it("sits above the highest dialog layer so it can still be dismissed", () => {
+    render(
+      <ToastProvider>
+        <p>content</p>
+      </ToastProvider>,
+    );
+
+    const zIndexClass = screen.getByRole("status").className
+      .split(" ")
+      .find((className) => className.startsWith("z-["));
+
+    expect(Number(zIndexClass?.match(/^z-\[(\d+)\]$/)?.[1])).toBeGreaterThan(70);
+  });
+
+  it("can be dismissed while a modal drawer is open", async () => {
+    const changeOpen = vi.fn();
+    render(
+      <ToastProvider>
+        <Dialog open onOpenChange={changeOpen}>
+          <DialogContent>
+            <DialogTitle>Publish artifact</DialogTitle>
+          </DialogContent>
+        </Dialog>
+        <Announcing />
+      </ToastProvider>,
+    );
+    await screen.findByText("Upload failed");
+
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss Upload failed" }));
+
+    expect(screen.queryByText("Upload failed")).toBeNull();
+    expect(changeOpen).not.toHaveBeenCalled();
   });
 });
 
