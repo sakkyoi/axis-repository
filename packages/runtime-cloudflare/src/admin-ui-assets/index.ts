@@ -1,4 +1,4 @@
-import { adminUiAssetEntries } from "./generated";
+import { adminUiAssetEntries } from "#admin-ui-assets-generated";
 
 export interface AdminUiAsset {
   body: BodyInit;

@@ -15,27 +15,22 @@ concurrency:
 
 jobs:
   generated-files:
-    # src/admin-ui-assets/generated.ts is a committed build artifact. Nothing at
-    # runtime notices when it drifts from packages/admin-ui/src, so the worker
-    # would quietly serve a stale UI. Rebuild it and fail if the result differs
-    # from what is committed.
+    # Admin UI assets are generated for the Worker bundle at build time. This
+    # keeps the generated asset source out of version control while still
+    # proving a clean checkout can produce the module the Worker build embeds.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup-pnpm-node
 
-      - run: pnpm --filter @axis-repository/admin-ui build
+      - run: pnpm --filter @axis-repository/runtime-cloudflare build
 
-      - run: node packages/runtime-cloudflare/scripts/generate-admin-ui-assets.mjs
+      - name: Check embedded admin UI assets were generated
+        run: test -f packages/runtime-cloudflare/generated/admin-ui-assets.ts
 
-      - name: Check embedded admin UI assets are up to date
-        run: |
-          if ! git diff --quiet -- packages/runtime-cloudflare/src/admin-ui-assets/generated.ts; then
-            echo "::error::Embedded admin UI assets are stale. Run 'pnpm build' and commit the regenerated generated.ts."
-            git diff --stat -- packages/runtime-cloudflare/src/admin-ui-assets/generated.ts
-            exit 1
-          fi
+      - name: Check asset generation leaves tracked files clean
+        run: git diff --quiet
 
   cloudflare-package:
     runs-on: ubuntu-latest

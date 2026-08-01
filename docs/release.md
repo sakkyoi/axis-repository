@@ -172,8 +172,8 @@ The `CI` workflow is the fast release-readiness gate for normal code changes.
 The `Quality` workflow holds checks that are important but heavier or more
 specialized than the fast CI loop.
 
-- `generated-files` rebuilds the embedded admin UI assets and fails if the
-  committed generated worker asset map is stale.
+- `generated-files` verifies the Worker build can generate embedded admin UI
+  assets at build time without leaving tracked files dirty.
 - `cloudflare-package` builds the Worker and runs `wrangler deploy --dry-run`
   without deploying anything.
 - `coverage` runs the test suite with coverage enabled. It is a visibility gate

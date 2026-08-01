@@ -1,10 +1,10 @@
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const distRoot = resolve(packageRoot, "../admin-ui/dist");
-const outputFile = resolve(packageRoot, "src/admin-ui-assets/generated.ts");
+const outputFile = resolve(packageRoot, "generated/admin-ui-assets.ts");
 
 const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -89,6 +89,7 @@ async function main() {
     "",
   ].join("\n");
 
+  await mkdir(dirname(outputFile), { recursive: true });
   await writeFile(outputFile, source);
 }
 

@@ -13,7 +13,7 @@ export default tseslint.config(
       "**/dist/**",
       "**/node_modules/**",
       "**/.wrangler/**",
-      "packages/runtime-cloudflare/src/admin-ui-assets/generated.ts",
+      "packages/runtime-cloudflare/generated/**",
     ],
   },
   js.configs.recommended,
