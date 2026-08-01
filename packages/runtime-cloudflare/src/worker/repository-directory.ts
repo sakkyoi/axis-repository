@@ -1,4 +1,5 @@
 import type { RepositoryObjectStore } from "@axis-repository/core";
+import type { ResolvedPluginIconAssets } from "@axis-repository/core/plugin-icons";
 
 /**
  * Browsable listings for the repository tree.
@@ -247,6 +248,19 @@ const DIRECTORY_STYLES = `
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.75rem;
   }
+  .ecosystem {
+    align-items: center;
+    color: hsl(var(--muted-foreground));
+    display: inline-flex;
+    font-size: 0.75rem;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+  }
+  .ecosystem svg {
+    color: hsl(var(--primary));
+    height: 1rem;
+    width: 1rem;
+  }
   .github-link {
     align-items: center;
     color: hsl(var(--muted-foreground));
@@ -386,6 +400,8 @@ const DIRECTORY_STYLES = `
 
 export function renderRepositoryDirectoryHtml(input: {
   repositoryName: string;
+  repositoryEcosystem: string;
+  pluginIcon: ResolvedPluginIconAssets;
   listing: RepositoryDirectoryListing;
 }): string {
   const path = `/${input.repositoryName}/${input.listing.relativePath}`;
@@ -409,7 +425,7 @@ export function renderRepositoryDirectoryHtml(input: {
     "  <head>",
     "    <meta charset=\"utf-8\" />",
     "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
-    "    <link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\" />",
+    `    <link rel=\"icon\" type=\"image/svg+xml\" href=\"${escapeHtml(input.pluginIcon.faviconDataUrl)}\" />`,
     `    <title>${escapeHtml(path)} · Axis Repository</title>`,
     `    <style>${DIRECTORY_STYLES}</style>`,
     "  </head>",
@@ -422,6 +438,7 @@ export function renderRepositoryDirectoryHtml(input: {
     "          <div>",
     "            <div class=\"wordmark\">Axis Repository</div>",
     `            <div class="repository">${escapeHtml(input.repositoryName)}</div>`,
+    `            <div class="ecosystem" data-ecosystem="${escapeHtml(input.repositoryEcosystem)}">${input.pluginIcon.inlineSvg}<span>${escapeHtml(input.pluginIcon.title)}</span></div>`,
     "          </div>",
     "        </div>",
     `        <a class="github-link" href="${GITHUB_URL}" aria-label="Open Axis Repository on GitHub" target="_blank" rel="noreferrer">${GITHUB_ICON}<span>GitHub</span></a>`,

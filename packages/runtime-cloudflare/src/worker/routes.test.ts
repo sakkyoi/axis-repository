@@ -859,7 +859,7 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       plugins: [
-        {
+        expect.objectContaining({
           ecosystem: "apt",
           name: "apt-signed",
           version: "0.1.0",
@@ -870,6 +870,12 @@ describe("Cloudflare runtime routes", () => {
           runtime: true,
           adminUi: true,
           capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
+          icon: expect.objectContaining({
+            title: "APT",
+            accentColor: "#0f766e",
+            inlineSvg: expect.stringContaining("<svg"),
+            faviconDataUrl: expect.stringMatching(/^data:image\/svg\+xml,/),
+          }),
           clientHelpers: {
             namespace: "apt",
             actions: [
@@ -896,8 +902,8 @@ describe("Cloudflare runtime routes", () => {
               },
             ],
           },
-        },
-        {
+        }),
+        expect.objectContaining({
           ecosystem: "pypi",
           name: "pypi-simple",
           version: "0.1.0",
@@ -908,6 +914,12 @@ describe("Cloudflare runtime routes", () => {
           runtime: true,
           adminUi: true,
           capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
+          icon: expect.objectContaining({
+            title: "PyPI",
+            accentColor: "#2563eb",
+            inlineSvg: expect.stringContaining("<svg"),
+            faviconDataUrl: expect.stringMatching(/^data:image\/svg\+xml,/),
+          }),
           clientHelpers: {
             namespace: "pypi",
             actions: [
@@ -929,7 +941,7 @@ describe("Cloudflare runtime routes", () => {
               },
             ],
           },
-        },
+        }),
       ],
     });
   });

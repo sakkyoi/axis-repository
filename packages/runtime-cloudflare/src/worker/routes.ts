@@ -17,6 +17,7 @@ import {
   type RepositoryObjectMetadata,
   type RepositoryObjectRange,
 } from "@axis-repository/core";
+import { resolvePluginIconAssets } from "@axis-repository/core/plugin-icons";
 import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "@axis-repository/plugin-catalog";
 import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "../admin-ui-assets";
 import { formatBootstrapWarningLog, leftoverBootstrapCredentials, leftoverBootstrapWarning } from "./bootstrap-credentials";
@@ -126,6 +127,7 @@ async function repositoryPluginMetadata(dependencies: AppDependencies) {
       ecosystem: catalogEntry.manifest.ecosystem,
       name: catalogEntry.manifest.runtimeName,
       version: catalogEntry.manifest.version,
+      icon: { ...catalogEntry.icon },
       capabilities: [...catalogEntry.manifest.capabilities],
       ...(catalogEntry.manifest.clientHelpers
         ? {
@@ -154,6 +156,7 @@ async function repositoryPluginMetadata(dependencies: AppDependencies) {
       });
       return {
         ...plugin,
+        icon: resolvePluginIconAssets(undefined),
         ...policy,
         experimental: catalogEntry?.experimental ?? false,
         runtime: catalogEntry?.runtime ?? true,
@@ -926,7 +929,13 @@ async function repositoryDirectoryResponse(input: {
     });
   }
 
-  const html = renderRepositoryDirectoryHtml({ repositoryName: input.repository.name, listing });
+  const catalogEntry = getRepositoryPluginCatalogEntry(input.repository.ecosystem);
+  const html = renderRepositoryDirectoryHtml({
+    repositoryName: input.repository.name,
+    repositoryEcosystem: input.repository.ecosystem,
+    pluginIcon: catalogEntry?.icon ?? resolvePluginIconAssets(undefined),
+    listing,
+  });
   return new Response(input.method === "HEAD" ? null : html, {
     headers: {
       "content-type": "text/html; charset=utf-8",

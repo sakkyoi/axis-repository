@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolvePluginIconAssets } from "@axis-repository/core/plugin-icons";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 import {
   directoryNeedsTrailingSlash,
@@ -59,6 +60,7 @@ describe("directoryNeedsTrailingSlash", () => {
 });
 
 describe("renderRepositoryDirectoryHtml", () => {
+  const pluginIcon = resolvePluginIconAssets(undefined);
   const listing = {
     relativePath: "pool/main/",
     entries: [
@@ -80,11 +82,25 @@ describe("renderRepositoryDirectoryHtml", () => {
     return rows.flatMap((row) => [...row.matchAll(/href="([^"]+)"/g)].map((match) => match[1]!));
   }
 
+  function render(input: {
+    repositoryName?: string;
+    repositoryEcosystem?: string;
+    pluginIcon?: typeof pluginIcon;
+    listing?: typeof listing;
+  } = {}) {
+    return renderRepositoryDirectoryHtml({
+      repositoryName: input.repositoryName ?? "a",
+      repositoryEcosystem: input.repositoryEcosystem ?? "apt",
+      pluginIcon: input.pluginIcon ?? pluginIcon,
+      listing: input.listing ?? listing,
+    });
+  }
+
   it("links so every entry resolves inside the directory", () => {
     // Including a name with a colon: a Debian filename carries one whenever
     // the version has an epoch.
     const at = "https://axis.example/repositories/a/pool/main/";
-    const hrefs = entryHrefs(renderRepositoryDirectoryHtml({ repositoryName: "a", listing }));
+    const hrefs = entryHrefs(render());
 
     expect(hrefs.length).toBeGreaterThan(0);
     for (const href of hrefs) {
@@ -94,7 +110,7 @@ describe("renderRepositoryDirectoryHtml", () => {
 
   it("walks back up through the breadcrumb", () => {
     const at = "https://axis.example/repositories/a/pool/main/";
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
     const nav = /<nav[^>]*>(.*?)<\/nav>/s.exec(html)?.[1] ?? "";
     const crumbs = [...nav.matchAll(/<a href="([^"]+)">([^<]*)</g)]
       .map((match) => ({ href: match[1]!, label: match[2]! }));
@@ -108,7 +124,7 @@ describe("renderRepositoryDirectoryHtml", () => {
 
   it("resolves a colon-carrying entry to the object it names", () => {
     const at = "https://axis.example/repositories/a/pool/main/";
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
     const href = [...html.matchAll(/<a href="([^"]+)"/g)]
       .map((match) => match[1]!)
       .find((candidate) => candidate.includes("alpha"))!;
@@ -118,13 +134,13 @@ describe("renderRepositoryDirectoryHtml", () => {
   });
 
   it("shows sizes for files and none for directories", () => {
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
 
     expect(html).toContain("2.0 KiB");
   });
 
   it("uses the Axis logo mark in the directory header", () => {
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
 
     expect(html).toContain("axis-logo-mark");
     expect(html).toContain("fill=\"currentColor\"");
@@ -132,15 +148,29 @@ describe("renderRepositoryDirectoryHtml", () => {
     expect(html).not.toContain("<span class=\"mark\" aria-hidden=\"true\"><span></span></span>");
   });
 
-  it("declares the shared site favicon in the document head", () => {
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+  it("declares the resolved ecosystem favicon in the document head", () => {
+    const html = render();
 
-    expect(html).toContain("<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\" />");
+    expect(html).toContain(`<link rel=\"icon\" type=\"image/svg+xml\" href=\"${pluginIcon.faviconDataUrl}\" />`);
     expect(html.indexOf("<link rel=\"icon\"")).toBeLessThan(html.indexOf("<title>"));
   });
 
+  it("renders repository ecosystem icon metadata", () => {
+    const aptIcon = {
+      title: "APT",
+      accentColor: "#0f766e",
+      inlineSvg: "<svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M7 15.5 12 5l5 10.5\" /></svg>",
+      faviconDataUrl: "data:image/svg+xml,%3Csvg%3Eapt%3C%2Fsvg%3E",
+    };
+    const html = render({ repositoryName: "debian", repositoryEcosystem: "apt", pluginIcon: aptIcon });
+
+    expect(html).toContain("data-ecosystem=\"apt\"");
+    expect(html).toContain(aptIcon.inlineSvg);
+    expect(html).toContain("APT");
+  });
+
   it("links to the project GitHub repository from the directory header", () => {
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
 
     expect(html).toContain("https://github.com/sakkyoi/axis-repository");
     expect(html).toContain("aria-label=\"Open Axis Repository on GitHub\"");
@@ -150,7 +180,7 @@ describe("renderRepositoryDirectoryHtml", () => {
   });
 
   it("credits the project author in the footer", () => {
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
 
     expect(html).toContain("Made by sakkyoi with");
     expect(html).toContain("class=\"love-icon\"");
