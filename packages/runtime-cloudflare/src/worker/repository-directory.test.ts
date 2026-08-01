@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { resolvePluginIconAssets } from "@axis-repository/core/plugin-icons";
+import { aptPluginManifest } from "@axis-repository/plugin-apt/manifest";
+import { pypiPluginManifest } from "@axis-repository/plugin-pypi/manifest";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 import {
   directoryNeedsTrailingSlash,
+  compositeRepositoryFaviconSvg,
+  REPOSITORY_FAVICON_QUERY_PARAM,
   readRepositoryDirectory,
   renderRepositoryDirectoryHtml,
   trailingSlashRedirectLocation,
@@ -90,21 +94,19 @@ describe("renderRepositoryDirectoryHtml", () => {
     repositoryName?: string;
     repositoryEcosystem?: string;
     pluginIcon?: typeof pluginIcon;
-    logoMarks?: typeof logoMarks;
     listing?: typeof listing;
   } = {}) {
     return renderRepositoryDirectoryHtml({
       repositoryName: input.repositoryName ?? "a",
       repositoryEcosystem: input.repositoryEcosystem ?? "apt",
       pluginIcon: input.pluginIcon ?? pluginIcon,
-      logoMarks: input.logoMarks ?? logoMarks,
       listing: input.listing ?? listing,
     });
   }
 
-  function faviconSvgs(html: string): string[] {
-    return [...html.matchAll(/<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml,([^"]+)" media="[^"]+" \/>/g)]
-      .map((match) => decodeURIComponent(match[1]!));
+  function faviconHrefs(html: string): string[] {
+    return [...html.matchAll(/<link rel="icon" type="image\/svg\+xml" href="([^"]+)" media="[^"]+" \/>/g)]
+      .map((match) => match[1]!);
   }
 
   it("links so every entry resolves inside the directory", () => {
@@ -161,37 +163,56 @@ describe("renderRepositoryDirectoryHtml", () => {
     expect(html).not.toContain("<span class=\"mark\" aria-hidden=\"true\"><span></span></span>");
   });
 
-  it("declares light and dark composite favicon assets in the document head", () => {
+  it("declares light and dark repository favicon URLs in the document head", () => {
     const html = render();
-    const favicons = faviconSvgs(html);
+    const favicons = faviconHrefs(html);
 
     expect(favicons).toHaveLength(2);
-    expect(favicons[0]).toContain("M1 1h208v208H1z");
-    expect(favicons[1]).toContain("M2 2h206v206H2z");
-    for (const favicon of favicons) {
-      expect(favicon).toContain("Badge: Package");
-      expect(favicon).toContain(pluginIcon.accentColor);
-    }
+    expect(favicons).toEqual([
+      `?${REPOSITORY_FAVICON_QUERY_PARAM}=light`,
+      `?${REPOSITORY_FAVICON_QUERY_PARAM}=dark`,
+    ]);
     expect(html).toContain("media=\"(prefers-color-scheme: light)\"");
     expect(html).toContain("media=\"(prefers-color-scheme: dark)\"");
-    expect(html.indexOf("data:image/svg+xml")).toBeLessThan(html.indexOf("<title>"));
+    expect(html).not.toContain("data:image/svg+xml");
+  });
+
+  it("composes official plugin SVG icons into browser-safe favicon SVG", () => {
+    const favicon = compositeRepositoryFaviconSvg(
+      logoMarks.light,
+      resolvePluginIconAssets(aptPluginManifest.icon),
+    );
+
+    expect(favicon).toContain("Badge: APT");
+    expect(favicon).toContain("http://www.w3.org/2000/svg");
+    expect(favicon).not.toContain("<circle");
+    expect(favicon).not.toContain("&ns_");
+    expect(favicon).not.toContain("<!DOCTYPE");
+  });
+
+  it("removes sizing attributes from official plugin SVG icons before placing the favicon badge", () => {
+    const favicon = compositeRepositoryFaviconSvg(
+      logoMarks.dark,
+      resolvePluginIconAssets(pypiPluginManifest.icon),
+    );
+    const badgeSvgTag = favicon.match(/<svg x="122"[^>]+>/)?.[0] ?? "";
+
+    expect(badgeSvgTag).toContain("width=\"82\"");
+    expect(badgeSvgTag).toContain("height=\"82\"");
+    expect(badgeSvgTag.match(/\bwidth=/g)).toHaveLength(1);
+    expect(badgeSvgTag.match(/\bheight=/g)).toHaveLength(1);
   });
 
   it("normalizes logo mark dimensions before composing repository favicons", () => {
-    const html = render({
-      logoMarks: {
-        light: "<svg width=\"512\" height=\"512\" viewBox=\"0 0 210 210\"><path d=\"M1 1h208v208H1z\"/></svg>",
-        dark: "<svg width=\"512\" height=\"512\" viewBox=\"0 0 210 210\"><path d=\"M2 2h206v206H2z\"/></svg>",
-      },
-    });
-    const favicons = faviconSvgs(html);
+    const favicon = compositeRepositoryFaviconSvg(
+      "<svg width=\"512\" height=\"512\" viewBox=\"0 0 210 210\"><path d=\"M1 1h208v208H1z\"/></svg>",
+      pluginIcon,
+    );
 
-    for (const favicon of favicons) {
-      expect(favicon).not.toContain("width=\"512\"");
-      expect(favicon).not.toContain("height=\"512\"");
-      expect(favicon).toContain("width=\"210\"");
-      expect(favicon).toContain("height=\"210\"");
-    }
+    expect(favicon).not.toContain("width=\"512\"");
+    expect(favicon).not.toContain("height=\"512\"");
+    expect(favicon).toContain("width=\"210\"");
+    expect(favicon).toContain("height=\"210\"");
   });
 
   it("renders repository ecosystem icon metadata", () => {

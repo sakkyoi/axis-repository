@@ -1,5 +1,6 @@
 import type { RepositoryObjectStore } from "@axis-repository/core";
 import type { ResolvedPluginIconAssets } from "@axis-repository/core/plugin-icons";
+import { parseSync as parseSvgSync, stringify as stringifySvg, type INode as SvgNode } from "svgson";
 
 /**
  * Browsable listings for the repository tree.
@@ -154,6 +155,7 @@ const DIRECTORY_ICONS = `
 const GITHUB_URL = "https://github.com/sakkyoi/axis-repository";
 const GITHUB_ICON = `<svg class="github-icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.24c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.08 1.84 2.82 1.31 3.51 1 .11-.78.42-1.31.76-1.61-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.02 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.21.7.83.58A12 12 0 0 0 12 .5Z"/></svg>`;
 const LOVE_ICON = `<span class="love-icon" aria-label="love" role="img"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-6.9-4.35-9.65-8.15C.11 9.75.87 5.34 4.35 4.08 6.23 3.4 8.36 3.87 9.75 5.5L12 8.13l2.25-2.63c1.39-1.63 3.52-2.1 5.4-1.42 3.48 1.26 4.24 5.67 2 8.77C18.9 16.65 12 21 12 21Z"/></svg></span>`;
+export const REPOSITORY_FAVICON_QUERY_PARAM = "axis-repository-favicon";
 
 /**
  * Which icon a name gets.
@@ -402,10 +404,6 @@ export function renderRepositoryDirectoryHtml(input: {
   repositoryName: string;
   repositoryEcosystem: string;
   pluginIcon: ResolvedPluginIconAssets;
-  logoMarks: {
-    light: string;
-    dark: string;
-  };
   listing: RepositoryDirectoryListing;
 }): string {
   const path = `/${input.repositoryName}/${input.listing.relativePath}`;
@@ -429,8 +427,8 @@ export function renderRepositoryDirectoryHtml(input: {
     "  <head>",
     "    <meta charset=\"utf-8\" />",
     "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
-    `    <link rel="icon" type="image/svg+xml" href="${compositeFaviconDataUrl(input.logoMarks.light, input.pluginIcon)}" media="(prefers-color-scheme: light)" />`,
-    `    <link rel="icon" type="image/svg+xml" href="${compositeFaviconDataUrl(input.logoMarks.dark, input.pluginIcon)}" media="(prefers-color-scheme: dark)" />`,
+    `    <link rel="icon" type="image/svg+xml" href="?${REPOSITORY_FAVICON_QUERY_PARAM}=light" media="(prefers-color-scheme: light)" />`,
+    `    <link rel="icon" type="image/svg+xml" href="?${REPOSITORY_FAVICON_QUERY_PARAM}=dark" media="(prefers-color-scheme: dark)" />`,
     `    <title>${escapeHtml(path)} · Axis Repository</title>`,
     `    <style>${DIRECTORY_STYLES}</style>`,
     "  </head>",
@@ -486,30 +484,84 @@ export function renderRepositoryDirectoryHtml(input: {
   ].join("\n");
 }
 
-function compositeFaviconDataUrl(logoMarkSvg: string, pluginIcon: ResolvedPluginIconAssets): string {
-  const badgeIcon = pluginIcon.inlineSvg
-    .replace("<svg ", "<svg x=\"148\" y=\"148\" width=\"46\" height=\"46\" ")
-    .replace("<title>", "<title>Badge: ");
-  const svg = [
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 210 210\">",
-    normalizeLogoMarkForFavicon(logoMarkSvg),
-    `<circle cx="171" cy="171" r="29" fill="#f8fafc" stroke="${escapeHtml(pluginIcon.accentColor)}" stroke-width="8"/>`,
-    `<g color="${escapeHtml(pluginIcon.accentColor)}">${badgeIcon}</g>`,
-    "</svg>",
-  ].join("");
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+export function compositeRepositoryFaviconSvg(logoMarkSvg: string, pluginIcon: ResolvedPluginIconAssets): string {
+  const logoMark = normalizeLogoMarkForFavicon(parseSvgRoot(logoMarkSvg));
+  const badgeIcon = normalizePluginIconForFavicon(parseSvgRoot(pluginIcon.inlineSvg));
+  prefixFirstTitle(badgeIcon, "Badge: ");
+  const root = svgElement("svg", {
+    xmlns: "http://www.w3.org/2000/svg",
+    viewBox: "0 0 210 210",
+  }, [
+    logoMark,
+    svgElement("g", { color: pluginIcon.accentColor }, [badgeIcon]),
+  ]);
+  return stringifySvg(root);
 }
 
-function normalizeLogoMarkForFavicon(logoMarkSvg: string): string {
-  const trimmed = logoMarkSvg.trim();
-  const match = trimmed.match(/^<svg\b([^>]*)>/);
-  if (!match) {
-    return trimmed;
+function parseSvgRoot(svg: string): SvgNode {
+  const root = parseSvgSync(svg.trim(), { camelcase: false });
+  if (root.name !== "svg") {
+    throw new Error("Expected SVG root element");
   }
-  const attrs = match[1]!
-    .replace(/\swidth="[^"]*"/, "")
-    .replace(/\sheight="[^"]*"/, "");
-  return `<svg${attrs} width="210" height="210">${trimmed.slice(match[0].length)}`;
+  return root;
+}
+
+function normalizePluginIconForFavicon(icon: SvgNode): SvgNode {
+  const { x: _x, y: _y, width: _width, height: _height, ...attrs } = icon.attributes;
+  return {
+    ...icon,
+    attributes: {
+      x: "122",
+      y: "122",
+      width: "82",
+      height: "82",
+      ...attrs,
+    },
+  };
+}
+
+function normalizeLogoMarkForFavicon(logoMark: SvgNode): SvgNode {
+  const { width: _width, height: _height, ...attrs } = logoMark.attributes;
+  return {
+    ...logoMark,
+    attributes: {
+      ...attrs,
+      width: "210",
+      height: "210",
+    },
+  };
+}
+
+function prefixFirstTitle(node: SvgNode, prefix: string): void {
+  const title = node.children.find((child) => child.name === "title");
+  if (!title) {
+    node.children.unshift(svgElement("title", {}, [textNode(`${prefix}${node.name}`)]));
+    return;
+  }
+  const text = title.children.find((child) => child.type === "text");
+  if (text) {
+    text.value = `${prefix}${text.value}`;
+  }
+}
+
+function svgElement(name: string, attributes: Record<string, string>, children: SvgNode[] = []): SvgNode {
+  return {
+    name,
+    type: "element",
+    value: "",
+    attributes,
+    children,
+  };
+}
+
+function textNode(value: string): SvgNode {
+  return {
+    name: "",
+    type: "text",
+    value,
+    attributes: {},
+    children: [],
+  };
 }
 
 function icon(id: string): string {

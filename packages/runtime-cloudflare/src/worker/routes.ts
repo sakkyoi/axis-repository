@@ -34,8 +34,10 @@ import { scopeSecretsToEcosystem } from "../plugins/scoped-capabilities";
 import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
 import { adminRefreshCookie, clearAdminRefreshCookie, refreshTokenFromCookie, requestIsSecure } from "../auth/admin-auth";
 import {
+  compositeRepositoryFaviconSvg,
   directoryNeedsTrailingSlash,
   readRepositoryDirectory,
+  REPOSITORY_FAVICON_QUERY_PARAM,
   renderRepositoryDirectoryHtml,
   trailingSlashRedirectLocation,
 } from "./repository-directory";
@@ -957,14 +959,26 @@ async function repositoryDirectoryResponse(input: {
   }
 
   const catalogEntry = getRepositoryPluginCatalogEntry(input.repository.ecosystem);
+  const pluginIcon = catalogEntry?.icon ?? resolvePluginIconAssets(undefined);
+  const logoMarks = {
+    light: textAsset("/logo-mark-light.svg"),
+    dark: textAsset("/logo-mark-dark.svg"),
+  };
+  const faviconTheme = url.searchParams.get(REPOSITORY_FAVICON_QUERY_PARAM);
+  if (faviconTheme === "light" || faviconTheme === "dark") {
+    const svg = compositeRepositoryFaviconSvg(logoMarks[faviconTheme], pluginIcon);
+    return new Response(input.method === "HEAD" ? null : svg, {
+      headers: {
+        "content-type": "image/svg+xml; charset=utf-8",
+        "cache-control": repositoryCacheControl(input.repository),
+      },
+    });
+  }
+
   const html = renderRepositoryDirectoryHtml({
     repositoryName: input.repository.name,
     repositoryEcosystem: input.repository.ecosystem,
-    pluginIcon: catalogEntry?.icon ?? resolvePluginIconAssets(undefined),
-    logoMarks: {
-      light: textAsset("/logo-mark-light.svg"),
-      dark: textAsset("/logo-mark-dark.svg"),
-    },
+    pluginIcon,
     listing,
   });
   return new Response(input.method === "HEAD" ? null : html, {

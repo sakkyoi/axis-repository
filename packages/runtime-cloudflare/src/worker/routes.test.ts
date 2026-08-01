@@ -5788,6 +5788,52 @@ describe("browsing a repository", () => {
     expect(body).toContain(">pool/<");
   });
 
+  it("serves the repository favicon as a standalone SVG asset", async () => {
+    const { app } = await browsable();
+
+    const pageResponse = await app.fetch(new Request("https://axis.example/repositories/debian-internal/"));
+    const page = await pageResponse.text();
+    expect(page).toContain("href=\"?axis-repository-favicon=light\"");
+    expect(page).not.toContain("data:image/svg+xml");
+
+    const faviconResponse = await app.fetch(
+      new Request("https://axis.example/repositories/debian-internal/?axis-repository-favicon=light"),
+    );
+
+    expect(faviconResponse.status).toBe(200);
+    expect(faviconResponse.headers.get("content-type")).toContain("image/svg+xml");
+    const favicon = await faviconResponse.text();
+    expect(favicon).toContain("Badge: APT");
+    expect(favicon).toContain("viewBox=\"0 0 210 210\"");
+    expect(favicon).not.toContain("<!DOCTYPE");
+    expect(favicon).not.toContain("&ns_");
+  });
+
+  it("serves PyPI repository favicons without duplicate SVG sizing attributes", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, { name: "python-internal", ecosystem: "pypi", visibility: "public" });
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-internal/simple/index.html",
+      "<!doctype html><a href=\"alpha/\">alpha</a>",
+      "application/vnd.pypi.simple.v1+html",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-internal/?axis-repository-favicon=dark"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("image/svg+xml");
+    const favicon = await response.text();
+    const badgeSvgTag = favicon.match(/<svg x="122"[^>]+>/)?.[0] ?? "";
+    expect(badgeSvgTag).toContain("width=\"82\"");
+    expect(badgeSvgTag.match(/\bwidth=/g)).toHaveLength(1);
+    expect(badgeSvgTag.match(/\bheight=/g)).toHaveLength(1);
+    expect(favicon).not.toContain("cx=\"171\"");
+    expect(favicon).not.toContain("#f8fafc");
+  });
+
   it("lists a directory further down", async () => {
     const { app } = await browsable();
 
