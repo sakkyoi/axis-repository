@@ -65,9 +65,15 @@ export type PluginIconShape =
 
 export interface PluginIconManifest {
   title: string;
-  viewBox: string;
   accentColor: string;
-  shapes: PluginIconShape[];
+  viewBox?: string | undefined;
+  shapes?: PluginIconShape[] | undefined;
+  svg?: string | undefined;
+  svgSource?: {
+    name: string;
+    url: string;
+    rights: string;
+  } | undefined;
 }
 
 export interface ResolvedPluginIconAssets {

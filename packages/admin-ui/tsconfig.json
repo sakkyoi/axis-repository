@@ -17,6 +17,7 @@
     "../plugin-catalog/src",
     "../../plugins/*/plugin.ts",
     "../../plugins/*/manifest.ts",
+    "../../plugins/*/assets/**/*.ts",
     "../../plugins/*/shared/**/*.ts",
     "../../plugins/*/admin-ui"
   ]

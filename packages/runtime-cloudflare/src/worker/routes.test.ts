@@ -897,7 +897,7 @@ describe("Cloudflare runtime routes", () => {
           capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
           icon: expect.objectContaining({
             title: "APT",
-            accentColor: "#0f766e",
+            accentColor: "#A80030",
             inlineSvg: expect.stringContaining("<svg"),
           }),
           clientHelpers: {
@@ -940,7 +940,7 @@ describe("Cloudflare runtime routes", () => {
           capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
           icon: expect.objectContaining({
             title: "PyPI",
-            accentColor: "#2563eb",
+            accentColor: "#3775A9",
             inlineSvg: expect.stringContaining("<svg"),
           }),
           clientHelpers: {

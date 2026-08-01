@@ -33,8 +33,19 @@ describe("PyPI plugin manifest", () => {
 
   it("provides a plugin-owned ecosystem icon", () => {
     expect(manifest.icon?.title).toBe("PyPI");
+    expect(manifest.icon?.accentColor).toBe("#3775A9");
+    expect(manifest.icon).toMatchObject({
+      svgSource: {
+        name: "PyPI logo-small.svg",
+        url: "https://pypi.org/static/images/logo-small.0e0855d0.svg",
+        rights: "PyPI warehouse source asset; PyPI and the blocks logos are PSF registered trademarks",
+      },
+    });
+    expect(manifest.icon).not.toHaveProperty("shapes");
     const assets = resolvePluginIconAssets(manifest.icon);
     expect(assets.title).toBe("PyPI");
-    expect(assets.accentColor).not.toBe("#64748b");
+    expect(assets.accentColor).toBe("#3775A9");
+    expect(assets.inlineSvg).toContain("viewBox=\"0 0 65.812 58\"");
+    expect(assets.inlineSvg).toContain("#ffd242");
   });
 });

@@ -493,8 +493,8 @@ function compositeFaviconDataUrl(logoMarkSvg: string, pluginIcon: ResolvedPlugin
   const svg = [
     "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 210 210\">",
     normalizeLogoMarkForFavicon(logoMarkSvg),
-    `<circle cx="171" cy="171" r="29" fill="${escapeHtml(pluginIcon.accentColor)}" stroke="#f8fafc" stroke-width="8"/>`,
-    `<g color="#f8fafc">${badgeIcon}</g>`,
+    `<circle cx="171" cy="171" r="29" fill="#f8fafc" stroke="${escapeHtml(pluginIcon.accentColor)}" stroke-width="8"/>`,
+    `<g color="${escapeHtml(pluginIcon.accentColor)}">${badgeIcon}</g>`,
     "</svg>",
   ].join("");
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
