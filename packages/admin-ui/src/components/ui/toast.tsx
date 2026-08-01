@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { Link, type To } from "react-router";
 import { cn } from "../../lib/utils";
-import { toastDismissAfterMs, toastErrorMessage, type ToastTone } from "./toast-model";
+import { toastDismissAfterMs, toastErrorMessage, toastSubdueAfterMs, type ToastTone } from "./toast-model";
 
 /**
  * Where to go about it.
@@ -26,6 +26,7 @@ export interface ToastMessage {
 
 interface ToastRecord extends ToastMessage {
   id: number;
+  subdued: boolean;
   tone: ToastTone;
 }
 
@@ -49,32 +50,84 @@ const toneClasses: Record<ToastTone, string> = {
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastRecord[]>([]);
+  const subdueTimers = useRef(new Map<number, number>());
   const dismiss = useCallback((id: number) => {
+    const timer = subdueTimers.current.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      subdueTimers.current.delete(id);
+    }
     setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  const scheduleSubdue = useCallback((id: number, tone: ToastTone) => {
+    const subdueAfter = toastSubdueAfterMs(tone);
+    if (subdueAfter === undefined) return;
+    const existing = subdueTimers.current.get(id);
+    if (existing !== undefined) {
+      window.clearTimeout(existing);
+    }
+    const timer = window.setTimeout(() => {
+      subdueTimers.current.delete(id);
+      setToasts((current) => current.map((toast) => toast.id === id ? { ...toast, subdued: true } : toast));
+    }, subdueAfter);
+    subdueTimers.current.set(id, timer);
+  }, []);
+
+  const brighten = useCallback((id: number) => {
+    const timer = subdueTimers.current.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      subdueTimers.current.delete(id);
+    }
+    setToasts((current) => current.map((toast) => toast.id === id ? { ...toast, subdued: false } : toast));
   }, []);
 
   const value = useMemo<ToastContextValue>(() => ({
     notify(message) {
       const id = Date.now() + Math.random();
       const tone = message.tone ?? "info";
-      setToasts((current) => [...current, { ...message, tone, id }]);
+      setToasts((current) => [...current, { ...message, tone, id, subdued: false }]);
       const dismissAfter = toastDismissAfterMs(tone);
       if (dismissAfter !== undefined) {
         window.setTimeout(() => dismiss(id), dismissAfter);
       }
+      scheduleSubdue(id, tone);
     },
-  }), [dismiss]);
+  }), [dismiss, scheduleSubdue]);
+
+  useEffect(() => () => {
+    for (const timer of subdueTimers.current.values()) {
+      window.clearTimeout(timer);
+    }
+    subdueTimers.current.clear();
+  }, []);
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {/* Above a dialog rather than behind it: a failure raised by something
-          done in a dialog has to be readable without closing the dialog. */}
-      <div className="fixed bottom-4 right-4 z-[60] grid w-[min(92vw,360px)] gap-2" role="status" aria-live="polite">
+      {/* Above even the raised confirmation dialogs: a failure raised by
+          something done in a dialog has to stay readable and dismissible. */}
+      <div
+        className="fixed bottom-4 right-4 z-[80] grid w-[min(92vw,360px)] gap-2"
+        onPointerDown={(event) => event.stopPropagation()}
+        style={{ pointerEvents: "auto" }}
+        role="status"
+        aria-live="polite"
+      >
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={cn("rounded-md border p-3 text-sm shadow-lg", toneClasses[toast.tone])}
+            data-toast-state={toast.subdued ? "subdued" : "active"}
+            onFocusCapture={() => brighten(toast.id)}
+            onBlurCapture={() => scheduleSubdue(toast.id, toast.tone)}
+            onPointerEnter={() => brighten(toast.id)}
+            onPointerLeave={() => scheduleSubdue(toast.id, toast.tone)}
+            className={cn(
+              "rounded-md border p-3 text-sm shadow-lg motion-safe:animate-toast-enter",
+              toast.subdued && "opacity-50 transition-opacity focus-within:opacity-100",
+              toneClasses[toast.tone],
+            )}
           >
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">

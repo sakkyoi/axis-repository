@@ -16,6 +16,10 @@ export function toastAutoDismissMs(): number {
   return 3000;
 }
 
+export function toastSubdueAfterMs(tone: ToastTone): number | undefined {
+  return tone === "info" ? undefined : 1500;
+}
+
 /** Undefined where the message stays until someone closes it. */
 export function toastDismissAfterMs(tone: ToastTone): number | undefined {
   return tone === "info" ? toastAutoDismissMs() : undefined;

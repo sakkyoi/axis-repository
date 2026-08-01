@@ -22,9 +22,12 @@
       "default": "./src/plugin-runtime-testing.ts"
     }
   },
+  "imports": {
+    "#admin-ui-assets-generated": "./src/admin-ui-assets/generated-empty.ts"
+  },
   "scripts": {
     "build": "pnpm --filter @axis-repository/admin-ui build && pnpm run build:worker",
-    "build:worker": "node scripts/generate-admin-ui-assets.mjs && tsup src/index.ts src/plugin-runtime.ts src/plugin-runtime-testing.ts --format esm --dts",
+    "build:worker": "node scripts/generate-admin-ui-assets.mjs && tsup",
     "deploy:dry-run": "pnpm --workspace-root deploy:dry-run",
     "typecheck": "tsc --noEmit"
   },
