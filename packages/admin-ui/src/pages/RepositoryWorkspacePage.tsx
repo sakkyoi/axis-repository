@@ -29,6 +29,7 @@ import {
   workspaceColumnClass,
 } from "./list-detail-model";
 import { getRepositoryPublishPlugin } from "../repositories/plugins/repository-ui-plugins";
+import { RepositoryEcosystemLabel } from "../repositories/plugins/repository-ecosystem-icon";
 import {
   filesFromFileList,
   repositoryBrowserAcceptedPublishFiles,
@@ -409,7 +410,7 @@ function RepositoryPageShell({
                   />
                 </div>
                 <aside className={workspaceAsideColumnClass(beside)}>
-                  <RepositorySummaryCard repository={repository} />
+                  <RepositorySummaryCard repository={repository} pluginMetadata={pluginMetadata} />
                   <RepositoryDetailSections
                     repository={repository}
                     pluginMetadata={pluginMetadata}
@@ -433,15 +434,25 @@ function RepositoryPageShell({
 }
 
 /** What the repository is, which no selection on the page changes. */
-function RepositorySummaryCard({ repository }: { repository: Repository }) {
+function RepositorySummaryCard({
+  repository,
+  pluginMetadata,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
   return (
     <section className="grid gap-2 rounded-md border border-border bg-background/40 p-3">
       {repositorySummaryItems(repository).map(([label, value]) => (
         <div key={label} className="grid gap-0.5">
           <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
-          <span className="break-all text-sm">
-            {label === "Created" || label === "Updated" ? formatDate(value) : value}
-          </span>
+          {label === "Ecosystem" ? (
+            <RepositoryEcosystemLabel ecosystem={repository.ecosystem} plugin={pluginMetadata} className="text-sm" />
+          ) : (
+            <span className="break-all text-sm">
+              {label === "Created" || label === "Updated" ? formatDate(value) : value}
+            </span>
+          )}
         </div>
       ))}
     </section>

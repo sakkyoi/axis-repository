@@ -14,6 +14,13 @@ export const repositoryClientHelperActionSchema = z.object({
   displayPath: z.string().optional(),
 });
 
+export const resolvedPluginIconSchema = z.object({
+  title: z.string(),
+  accentColor: z.string(),
+  inlineSvg: z.string(),
+  faviconDataUrl: z.string(),
+});
+
 export const repositorySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -128,6 +135,7 @@ export const repositoryPluginSchema = z.object({
   experimental: z.boolean().optional(),
   runtime: z.boolean().optional(),
   adminUi: z.boolean().optional(),
+  icon: resolvedPluginIconSchema.optional(),
   capabilities: z.array(z.string()),
   clientHelpers: z.object({
     namespace: z.string(),
