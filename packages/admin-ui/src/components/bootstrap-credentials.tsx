@@ -1,55 +1,56 @@
 import { useEffect, useRef } from "react";
-import { Link, useLocation } from "react-router";
-import { ShieldAlert } from "lucide-react";
+import { useLocation } from "react-router";
 import { useDeployment } from "../api/hooks";
 import { ADMIN_UI_PATHS } from "../navigation";
-import { Alert } from "./ui/alert";
 import { CodeBlock } from "./ui/code-block";
+import { useToast } from "./ui/toast";
 import { leftoverBannerText, leftoverNeedsBanner } from "./bootstrap-credentials-model";
 
 /**
- * Names the card rather than the page, so that arriving from the banner lands
- * on the thing it was talking about instead of the top of Settings.
+ * Names the card rather than the page, so that a link to it lands on the thing
+ * it was talking about instead of the top of Settings.
  */
 export const BOOTSTRAP_CREDENTIALS_ANCHOR = "bootstrap-credentials";
 
 /**
- * Says that this deployment is still holding the password that seeded it.
+ * Says, once a session, that this deployment is still holding what seeded it.
  *
- * Above the page rather than inside it, because the reader did not come here
- * to find this out and there is no page they would have gone to. It does not
- * close: it describes a state of the deployment rather than an event, and the
- * only thing that ends it is removing the value, at which point it goes on its
- * own.
+ * Raised rather than drawn into the page, because the reader did not come here
+ * to find this out and there is no page they would have gone to. As a warning
+ * it waits to be dismissed instead of expiring while it is being read.
+ *
+ * Being dismissible is the cost of saying it this way: closed, it is gone
+ * until the console is opened again, whereas the state it describes is not.
+ * So it carries the way to the card that keeps the full account, and closing
+ * it after following that is the reader having dealt with it.
  */
-export function BootstrapCredentialsBanner() {
+export function useBootstrapCredentialsToast(): void {
+  const toast = useToast();
   const deployment = useDeployment();
   const leftover = deployment.data?.leftoverBootstrapCredentials ?? [];
+  const message = leftoverNeedsBanner(leftover) ? leftoverBannerText(leftover) : undefined;
+  const announced = useRef<string | undefined>(undefined);
 
-  if (!leftoverNeedsBanner(leftover)) {
-    return null;
-  }
-
-  return (
-    <Alert
-      role="status"
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-none border-x-0 border-t-0 border-b-warning/40 bg-warning/10"
-    >
-      <ShieldAlert className="h-4 w-4 shrink-0 text-warning-ink" aria-hidden="true" />
-      <span className="min-w-0">
-        <span className="font-medium">{leftoverBannerText(leftover)}</span>{" "}
-        <span className="text-muted-foreground">
-          The admin account it created already exists, so it is never read again.
-        </span>
-      </span>
-      <Link
-        to={{ pathname: ADMIN_UI_PATHS.settings, hash: `#${BOOTSTRAP_CREDENTIALS_ANCHOR}` }}
-        className="ml-auto shrink-0 font-medium text-primary-ink underline-offset-4 hover:underline"
-      >
-        How to remove it
-      </Link>
-    </Alert>
-  );
+  // Announced once per distinct finding: the query is read by more than one
+  // component and refetches on its own, and a warning that reappears every
+  // time is one that gets closed without being read.
+  useEffect(() => {
+    if (message === undefined || announced.current === message) {
+      return;
+    }
+    announced.current = message;
+    toast.notify({
+      title: message,
+      description: "The admin account it created already exists, so it is never read again.",
+      tone: "warning",
+      // To the card rather than to Settings: the page has several of them, and
+      // the one this is about is not the first.
+      action: {
+        label: "How to remove it",
+        to: { pathname: ADMIN_UI_PATHS.settings, hash: `#${BOOTSTRAP_CREDENTIALS_ANCHOR}` },
+      },
+    });
+  }, [message, toast]);
 }
 
 /**

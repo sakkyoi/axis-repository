@@ -4,11 +4,15 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { toastAutoDismissMs } from "./ui/toast-model";
 import { AuthTestProvider } from "../auth-test-support";
 import { useDeployment } from "../api/hooks";
-import { ADMIN_UI_PATHS } from "../navigation";
-import { BOOTSTRAP_CREDENTIALS_ANCHOR } from "./bootstrap-credentials";
-import { BootstrapCredentialsBanner, BootstrapCredentialsCard } from "./bootstrap-credentials";
+import { ToastProvider } from "./ui/toast";
+import {
+  BOOTSTRAP_CREDENTIALS_ANCHOR,
+  BootstrapCredentialsCard,
+  useBootstrapCredentialsToast,
+} from "./bootstrap-credentials";
 
 const leftover: Array<{ name: string; sensitive: boolean; removal: string }> = [];
 
@@ -51,8 +55,10 @@ async function show(node: React.ReactNode, reported: typeof leftover) {
     <AuthTestProvider value={{ accessToken: "token" }}>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          {node}
-          <Loaded />
+          <ToastProvider>
+            {node}
+            <Loaded />
+          </ToastProvider>
         </MemoryRouter>
       </QueryClientProvider>
     </AuthTestProvider>,
@@ -61,44 +67,60 @@ async function show(node: React.ReactNode, reported: typeof leftover) {
   return view;
 }
 
-describe("the banner about credentials nobody removed", () => {
+/** Nothing of its own; the warning it raises is what there is to look at. */
+function Warned() {
+  useBootstrapCredentialsToast();
+  return null;
+}
+
+describe("the warning about credentials nobody removed", () => {
   afterEach(cleanup);
 
-  it("interrupts every page while a password is still set", async () => {
-    await show(<BootstrapCredentialsBanner />, [password, username]);
+  it("is raised while a password is still set", async () => {
+    await show(<Warned />, [password, username]);
 
-    expect(screen.getByText(/AXIS_ADMIN_PASSWORD is still set/)).toBeTruthy();
+    expect(await screen.findByText(/AXIS_ADMIN_PASSWORD is still set/)).toBeTruthy();
   });
 
-  it("stays out of the way when only the username is left over", async () => {
-    // Nothing is exposed by it, and a banner nobody needs is one they learn to
-    // read past.
-    await show(<BootstrapCredentialsBanner />, [username]);
+  it("leads to the card that says how, not to the top of Settings", async () => {
+    // A warning with nowhere to act on it is one the reader closes. Settings
+    // holds several cards, and the one this is about is not the first.
+    await show(<Warned />, [password]);
+
+    const link = await screen.findByRole("link", { name: "How to remove it" });
+    expect(link.getAttribute("href")).toBe(`/ui/settings#${BOOTSTRAP_CREDENTIALS_ANCHOR}`);
+  });
+
+  it("stays quiet when only the username is left over", async () => {
+    // Nothing is exposed by it, and a warning nobody needs is one they learn
+    // to close without reading.
+    await show(<Warned />, [username]);
 
     expect(screen.queryByText(/still set/)).toBeNull();
   });
 
   it("says nothing on a deployment that was cleaned up", async () => {
-    await show(<BootstrapCredentialsBanner />, []);
+    await show(<Warned />, []);
 
     expect(screen.queryByText(/still set/)).toBeNull();
   });
 
-  it("offers the way to the part of the page that explains it", async () => {
-    // The admin UI is served under /ui, so a bare /settings leaves the
-    // application entirely -- and landing on Settings without the anchor
-    // leaves the reader to find the card that was being talked about.
-    await show(<BootstrapCredentialsBanner />, [password]);
+  it("waits to be dismissed rather than expiring while it is read", async () => {
+    // It describes something to go and do. Taken away on a timer, it is a
+    // warning that only reaches whoever happened to be looking.
+    await show(<Warned />, [password]);
+    const raised = await screen.findByText(/AXIS_ADMIN_PASSWORD is still set/);
 
-    expect(screen.getByRole("link", { name: "How to remove it" }).getAttribute("href"))
-      .toBe(`${ADMIN_UI_PATHS.settings}#${BOOTSTRAP_CREDENTIALS_ANCHOR}`);
+    await new Promise((resolve) => setTimeout(resolve, toastAutoDismissMs() + 100));
+
+    expect(raised.isConnected).toBe(true);
   });
 });
 
 describe("the settings card about the same thing", () => {
   afterEach(cleanup);
 
-  it("lists the username too, which the banner deliberately omits", async () => {
+  it("lists the username too, which the warning deliberately omits", async () => {
     await show(<BootstrapCredentialsCard />, [password, username]);
 
     expect(screen.getByText("AXIS_ADMIN_USERNAME")).toBeTruthy();

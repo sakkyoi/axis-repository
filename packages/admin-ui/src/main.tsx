@@ -15,11 +15,13 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <ToastProvider>
-            <BrowserRouter>
+          {/* Inside the router: a message may carry a link to the page that
+              deals with it, and that link has to navigate rather than reload. */}
+          <BrowserRouter>
+            <ToastProvider>
               <App />
-            </BrowserRouter>
-          </ToastProvider>
+            </ToastProvider>
+          </BrowserRouter>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router";
 import { Monitor, Moon, Package, PanelLeftClose, Settings, ShieldCheck, Sun, Users } from "lucide-react";
 import { AxisBrand, AxisLogoMark } from "./brand/axis-brand";
-import { BootstrapCredentialsBanner } from "./bootstrap-credentials";
+import { useBootstrapCredentialsToast } from "./bootstrap-credentials";
 import { GithubMark } from "./brand/github-mark";
 import { cn } from "../lib/utils";
 import { ADMIN_UI_NAV_ITEMS, AXIS_SOURCE_URL } from "../navigation";
@@ -101,6 +101,9 @@ const SELECTED_MARKER = "relative before:absolute before:inset-y-1.5 before:left
   + " before:rounded-full before:bg-primary";
 
 export function AppLayout() {
+  // Raised here rather than on a page: it is about the deployment, not about
+  // whatever the reader happens to be looking at.
+  useBootstrapCredentialsToast();
   const storage = typeof window === "undefined" ? undefined : window.localStorage;
   const [chosen, setChosenState] = useState<boolean | undefined>(() => readStoredSidebarChoice(storage));
 
@@ -193,9 +196,7 @@ export function AppLayout() {
           <ProfileMenu collapsed={collapsed} />
         </div>
       </aside>
-      {/* The middle row is `auto` so that it takes no height at all on a
-          deployment with nothing to report, which is most of them. */}
-      <div className="grid min-h-0 min-w-0 grid-rows-[56px_auto_minmax(0,1fr)]">
+      <div className="grid min-h-0 min-w-0 grid-rows-[56px_minmax(0,1fr)]">
         <header className="flex min-w-0 items-center justify-end border-b border-border bg-panel/95 px-5">
           <a
             href={AXIS_SOURCE_URL}
@@ -208,7 +209,6 @@ export function AppLayout() {
             <GithubMark className="h-5 w-5" />
           </a>
         </header>
-        <BootstrapCredentialsBanner />
         <main className="min-h-0 overflow-hidden p-5">
           <Outlet />
         </main>

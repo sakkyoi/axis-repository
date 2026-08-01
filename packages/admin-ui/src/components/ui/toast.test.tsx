@@ -3,12 +3,29 @@
 import { StrictMode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { ToastProvider, useErrorToast, useToast } from "./toast";
 
 function Failing({ title, error }: { title: string; error: unknown }) {
   useErrorToast(title, error);
   return <p>content</p>;
+}
+
+function Pointing() {
+  const toast = useToast();
+  return (
+    <button
+      type="button"
+      onClick={() => toast.notify({
+        title: "Something to deal with",
+        tone: "warning",
+        action: { label: "Deal with it", to: { pathname: "/ui/settings", hash: "#credentials" } },
+      })}
+    >
+      warn
+    </button>
+  );
 }
 
 function Confirming() {
@@ -103,5 +120,39 @@ describe("messages", () => {
     await userEvent.click(screen.getByRole("button", { name: "save" }));
 
     expect(await screen.findByText("Saved")).toBeTruthy();
+  });
+});
+
+describe("a message that has somewhere to be dealt with", () => {
+  afterEach(cleanup);
+
+  async function raise() {
+    render(
+      <MemoryRouter>
+        <ToastProvider>
+          <Pointing />
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "warn" }));
+    return screen.findByRole("link", { name: "Deal with it" });
+  }
+
+  it("offers the way there as a link, not as the name of a page", async () => {
+    // Told where to go and left to find it, the reader navigates by hand --
+    // and a corner holding two sentences is the worst place to give directions.
+    const link = await raise();
+
+    expect(link.getAttribute("href")).toBe("/ui/settings#credentials");
+  });
+
+  it("goes away once it has been followed", async () => {
+    // The page it leads to says the same thing at length. Left up, the message
+    // sits over an account of itself.
+    const link = await raise();
+
+    await userEvent.click(link);
+
+    expect(screen.queryByText("Something to deal with")).toBeNull();
   });
 });
