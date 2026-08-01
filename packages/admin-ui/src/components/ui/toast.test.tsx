@@ -140,6 +140,19 @@ describe("messages", () => {
     expect(await screen.findByText("Saved")).toBeTruthy();
   });
 
+  it("enters with a reduced-motion-safe animation", async () => {
+    render(
+      <ToastProvider>
+        <Confirming />
+      </ToastProvider>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "save" }));
+    const toast = (await screen.findByText("Saved")).closest("[data-toast-state]");
+
+    expect(toast?.className).toContain("motion-safe:animate-toast-enter");
+  });
+
   it("sits above the highest dialog layer so it can still be dismissed", () => {
     render(
       <ToastProvider>

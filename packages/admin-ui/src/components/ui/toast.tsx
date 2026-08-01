@@ -124,7 +124,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             onPointerEnter={() => brighten(toast.id)}
             onPointerLeave={() => scheduleSubdue(toast.id, toast.tone)}
             className={cn(
-              "rounded-md border p-3 text-sm shadow-lg",
+              "rounded-md border p-3 text-sm shadow-lg motion-safe:animate-toast-enter",
               toast.subdued && "opacity-50 transition-opacity focus-within:opacity-100",
               toneClasses[toast.tone],
             )}
