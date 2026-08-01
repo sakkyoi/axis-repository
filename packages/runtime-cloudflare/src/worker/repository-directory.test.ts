@@ -131,6 +131,31 @@ describe("renderRepositoryDirectoryHtml", () => {
     expect(html).toContain("fill=\"#a3e635\"");
     expect(html).not.toContain("<span class=\"mark\" aria-hidden=\"true\"><span></span></span>");
   });
+
+  it("declares the shared site favicon in the document head", () => {
+    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+
+    expect(html).toContain("<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\" />");
+    expect(html.indexOf("<link rel=\"icon\"")).toBeLessThan(html.indexOf("<title>"));
+  });
+
+  it("links to the project GitHub repository from the directory header", () => {
+    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+
+    expect(html).toContain("https://github.com/sakkyoi/axis-repository");
+    expect(html).toContain("aria-label=\"Open Axis Repository on GitHub\"");
+    expect(html).toContain("<span>GitHub</span>");
+    expect(html).toContain("target=\"_blank\"");
+    expect(html).toContain("rel=\"noreferrer\"");
+  });
+
+  it("credits the project author in the footer", () => {
+    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+
+    expect(html).toContain("Made by sakkyoi with");
+    expect(html).toContain("class=\"love-icon\"");
+    expect(html).toContain("aria-label=\"love\"");
+  });
 });
 
 describe("readRepositoryDirectory", () => {
