@@ -1,0 +1,172 @@
+import type { PluginIconManifest, PluginIconShape, ResolvedPluginIconAssets } from "./plugin-manifests";
+
+export type { PluginIconManifest, PluginIconShape, ResolvedPluginIconAssets } from "./plugin-manifests";
+
+const safePathPattern = /^[MmZzLlHhVvCcSsQqTtAa0-9,.\-\s]+$/;
+const safeColorPattern = /^(currentColor|none|#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6})$/;
+const safeViewBoxPattern = /^-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?\s+\d+(?:\.\d+)?\s+\d+(?:\.\d+)?$/;
+
+export const packagePluginIcon: PluginIconManifest = {
+  title: "Package",
+  viewBox: "0 0 24 24",
+  accentColor: "#64748b",
+  shapes: [
+    {
+      kind: "path",
+      d: "M5 7.5 12 3l7 4.5v9L12 21l-7-4.5v-9Z",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: 1.8,
+    },
+    {
+      kind: "path",
+      d: "M5.5 7.7 12 11.5l6.5-3.8M12 11.5V20",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: 1.8,
+    },
+  ],
+};
+
+export function resolvePluginIconAssets(icon: PluginIconManifest | undefined): ResolvedPluginIconAssets {
+  const normalized = normalizePluginIcon(icon ?? packagePluginIcon);
+  const inlineSvg = renderPluginIconSvg(normalized);
+  return {
+    title: normalized.title,
+    accentColor: normalized.accentColor,
+    inlineSvg,
+    faviconDataUrl: `data:image/svg+xml,${encodeURIComponent(renderPluginIconFaviconSvg(normalized))}`,
+  };
+}
+
+function normalizePluginIcon(icon: PluginIconManifest): PluginIconManifest {
+  const title = icon.title.trim();
+  if (!title) {
+    throw new Error("Plugin icon title is required");
+  }
+  if (!safeViewBoxPattern.test(icon.viewBox)) {
+    throw new Error("Invalid plugin icon viewBox");
+  }
+  if (!safeColorPattern.test(icon.accentColor)) {
+    throw new Error("Invalid plugin icon accent color");
+  }
+  if (icon.shapes.length === 0) {
+    throw new Error("Plugin icon must include at least one shape");
+  }
+  return {
+    title,
+    viewBox: icon.viewBox.trim().replace(/\s+/g, " "),
+    accentColor: icon.accentColor,
+    shapes: icon.shapes.map(normalizeShape),
+  };
+}
+
+function normalizeShape(shape: PluginIconShape): PluginIconShape {
+  if (shape.kind === "path") {
+    if (!safePathPattern.test(shape.d)) {
+      throw new Error("Invalid plugin icon path data");
+    }
+    return {
+      kind: "path",
+      d: shape.d.trim(),
+      ...paintAttrs(shape),
+    };
+  }
+  if (shape.kind === "circle") {
+    return {
+      kind: "circle",
+      cx: safeNumber(shape.cx, "circle cx"),
+      cy: safeNumber(shape.cy, "circle cy"),
+      r: safeNumber(shape.r, "circle r"),
+      ...paintAttrs(shape),
+    };
+  }
+  return {
+    kind: "rect",
+    x: safeNumber(shape.x, "rect x"),
+    y: safeNumber(shape.y, "rect y"),
+    width: safeNumber(shape.width, "rect width"),
+    height: safeNumber(shape.height, "rect height"),
+    ...(shape.rx === undefined ? {} : { rx: safeNumber(shape.rx, "rect rx") }),
+    ...paintAttrs(shape),
+  };
+}
+
+function paintAttrs(shape: PluginIconShape) {
+  const attrs: { fill?: string; stroke?: string; strokeWidth?: number } = {};
+  if (shape.fill !== undefined) {
+    attrs.fill = safeColor(shape.fill, "fill");
+  }
+  if (shape.stroke !== undefined) {
+    attrs.stroke = safeColor(shape.stroke, "stroke");
+  }
+  if (shape.strokeWidth !== undefined) {
+    attrs.strokeWidth = safeNumber(shape.strokeWidth, "stroke width");
+  }
+  return attrs;
+}
+
+function safeColor(color: string, label: string): string {
+  if (!safeColorPattern.test(color)) {
+    throw new Error(`Invalid plugin icon ${label}`);
+  }
+  return color;
+}
+
+function safeNumber(value: number, label: string): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`Invalid plugin icon ${label}`);
+  }
+  return value;
+}
+
+function renderPluginIconSvg(icon: PluginIconManifest): string {
+  const shapes = icon.shapes.map(renderShape).join("");
+  return `<svg aria-hidden="true" viewBox="${escapeHtml(icon.viewBox)}" fill="none" xmlns="http://www.w3.org/2000/svg"><title>${escapeHtml(icon.title)}</title>${shapes}</svg>`;
+}
+
+function renderPluginIconFaviconSvg(icon: PluginIconManifest): string {
+  const iconSvg = renderPluginIconSvg(icon)
+    .replace("<svg ", "<svg x=\"31\" y=\"31\" width=\"17\" height=\"17\" ")
+    .replace("<title>", "<title>Badge: ");
+  return [
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 48 48\">",
+    "<rect width=\"48\" height=\"48\" rx=\"10\" fill=\"#111827\"/>",
+    "<path d=\"M14 15.5 24 9l10 6.5v13L24 35l-10-6.5v-13Z\" fill=\"none\" stroke=\"#f8fafc\" stroke-width=\"3\" stroke-linejoin=\"round\"/>",
+    "<path d=\"M14.8 15.9 24 21.2l9.2-5.3M24 21.2v12\" fill=\"none\" stroke=\"#f8fafc\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    `<circle cx="38.5" cy="38.5" r="8.5" fill="${escapeHtml(icon.accentColor)}" stroke="#f8fafc" stroke-width="2"/>`,
+    `<g color="#f8fafc">${iconSvg}</g>`,
+    "</svg>",
+  ].join("");
+}
+
+function renderShape(shape: PluginIconShape): string {
+  const paint = renderPaintAttrs(shape);
+  if (shape.kind === "path") {
+    return `<path d="${escapeHtml(shape.d)}"${paint}/>`;
+  }
+  if (shape.kind === "circle") {
+    return `<circle cx="${shape.cx}" cy="${shape.cy}" r="${shape.r}"${paint}/>`;
+  }
+  return [
+    `<rect x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"`,
+    shape.rx === undefined ? "" : ` rx="${shape.rx}"`,
+    `${paint}/>`,
+  ].join("");
+}
+
+function renderPaintAttrs(shape: PluginIconShape): string {
+  return [
+    shape.fill === undefined ? "" : ` fill="${escapeHtml(shape.fill)}"`,
+    shape.stroke === undefined ? "" : ` stroke="${escapeHtml(shape.stroke)}"`,
+    shape.strokeWidth === undefined ? "" : ` stroke-width="${shape.strokeWidth}"`,
+  ].join("");
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}

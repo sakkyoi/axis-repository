@@ -48,6 +48,35 @@ export interface PluginRepositoryConfigManifest {
   fields: PluginRepositoryConfigFieldManifest[];
 }
 
+export type PluginIconShape =
+  | { kind: "path"; d: string; fill?: string; stroke?: string; strokeWidth?: number }
+  | { kind: "circle"; cx: number; cy: number; r: number; fill?: string; stroke?: string; strokeWidth?: number }
+  | {
+    kind: "rect";
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rx?: number;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+  };
+
+export interface PluginIconManifest {
+  title: string;
+  viewBox: string;
+  accentColor: string;
+  shapes: PluginIconShape[];
+}
+
+export interface ResolvedPluginIconAssets {
+  title: string;
+  accentColor: string;
+  inlineSvg: string;
+  faviconDataUrl: string;
+}
+
 export interface RepositoryPluginManifest {
   ecosystem: "apt" | "pypi" | (string & {});
   displayName: string;
@@ -55,6 +84,7 @@ export interface RepositoryPluginManifest {
   runtimeName: string;
   version: string;
   capabilities: string[];
+  icon?: PluginIconManifest | undefined;
   repositoryConfig: PluginRepositoryConfigManifest;
   clientHelpers?: PluginClientHelpersManifest;
   adminResources?: PluginAdminResourcesManifest;
