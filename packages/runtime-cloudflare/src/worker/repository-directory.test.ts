@@ -61,6 +61,10 @@ describe("directoryNeedsTrailingSlash", () => {
 
 describe("renderRepositoryDirectoryHtml", () => {
   const pluginIcon = resolvePluginIconAssets(undefined);
+  const logoMarks = {
+    light: "<svg viewBox=\"0 0 210 210\"><path d=\"M1 1h208v208H1z\" fill=\"#111827\"/></svg>",
+    dark: "<svg viewBox=\"0 0 210 210\"><path d=\"M2 2h206v206H2z\" fill=\"#e6edf3\"/></svg>",
+  };
   const listing = {
     relativePath: "pool/main/",
     entries: [
@@ -86,14 +90,21 @@ describe("renderRepositoryDirectoryHtml", () => {
     repositoryName?: string;
     repositoryEcosystem?: string;
     pluginIcon?: typeof pluginIcon;
+    logoMarks?: typeof logoMarks;
     listing?: typeof listing;
   } = {}) {
     return renderRepositoryDirectoryHtml({
       repositoryName: input.repositoryName ?? "a",
       repositoryEcosystem: input.repositoryEcosystem ?? "apt",
       pluginIcon: input.pluginIcon ?? pluginIcon,
+      logoMarks: input.logoMarks ?? logoMarks,
       listing: input.listing ?? listing,
     });
+  }
+
+  function faviconSvgs(html: string): string[] {
+    return [...html.matchAll(/<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml,([^"]+)" media="[^"]+" \/>/g)]
+      .map((match) => decodeURIComponent(match[1]!));
   }
 
   it("links so every entry resolves inside the directory", () => {
@@ -139,20 +150,48 @@ describe("renderRepositoryDirectoryHtml", () => {
     expect(html).toContain("2.0 KiB");
   });
 
-  it("uses the Axis logo mark in the directory header", () => {
+  it("uses the light and dark logo assets in the directory header", () => {
     const html = render();
 
-    expect(html).toContain("axis-logo-mark");
-    expect(html).toContain("fill=\"currentColor\"");
-    expect(html).toContain("fill=\"#a3e635\"");
+    expect(html).toContain("<picture class=\"axis-logo-mark\">");
+    expect(html).toContain("srcset=\"/logo-mark-dark.svg\"");
+    expect(html).toContain("src=\"/logo-mark-light.svg\"");
+    expect(html).not.toContain("viewBox=\"0 0 210 210\"");
+    expect(html).not.toContain("M14 15.5 24 9l10 6.5v13L24 35l-10-6.5v-13Z");
     expect(html).not.toContain("<span class=\"mark\" aria-hidden=\"true\"><span></span></span>");
   });
 
-  it("declares the resolved ecosystem favicon in the document head", () => {
+  it("declares light and dark composite favicon assets in the document head", () => {
     const html = render();
+    const favicons = faviconSvgs(html);
 
-    expect(html).toContain(`<link rel=\"icon\" type=\"image/svg+xml\" href=\"${pluginIcon.faviconDataUrl}\" />`);
-    expect(html.indexOf("<link rel=\"icon\"")).toBeLessThan(html.indexOf("<title>"));
+    expect(favicons).toHaveLength(2);
+    expect(favicons[0]).toContain("M1 1h208v208H1z");
+    expect(favicons[1]).toContain("M2 2h206v206H2z");
+    for (const favicon of favicons) {
+      expect(favicon).toContain("Badge: Package");
+      expect(favicon).toContain(pluginIcon.accentColor);
+    }
+    expect(html).toContain("media=\"(prefers-color-scheme: light)\"");
+    expect(html).toContain("media=\"(prefers-color-scheme: dark)\"");
+    expect(html.indexOf("data:image/svg+xml")).toBeLessThan(html.indexOf("<title>"));
+  });
+
+  it("normalizes logo mark dimensions before composing repository favicons", () => {
+    const html = render({
+      logoMarks: {
+        light: "<svg width=\"512\" height=\"512\" viewBox=\"0 0 210 210\"><path d=\"M1 1h208v208H1z\"/></svg>",
+        dark: "<svg width=\"512\" height=\"512\" viewBox=\"0 0 210 210\"><path d=\"M2 2h206v206H2z\"/></svg>",
+      },
+    });
+    const favicons = faviconSvgs(html);
+
+    for (const favicon of favicons) {
+      expect(favicon).not.toContain("width=\"512\"");
+      expect(favicon).not.toContain("height=\"512\"");
+      expect(favicon).toContain("width=\"210\"");
+      expect(favicon).toContain("height=\"210\"");
+    }
   });
 
   it("renders repository ecosystem icon metadata", () => {
@@ -160,7 +199,6 @@ describe("renderRepositoryDirectoryHtml", () => {
       title: "APT",
       accentColor: "#0f766e",
       inlineSvg: "<svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M7 15.5 12 5l5 10.5\" /></svg>",
-      faviconDataUrl: "data:image/svg+xml,%3Csvg%3Eapt%3C%2Fsvg%3E",
     };
     const html = render({ repositoryName: "debian", repositoryEcosystem: "apt", pluginIcon: aptIcon });
 

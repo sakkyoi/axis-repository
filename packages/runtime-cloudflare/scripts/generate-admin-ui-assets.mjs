@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const distRoot = resolve(packageRoot, "../admin-ui/dist");
+const workspaceRoot = resolve(packageRoot, "../..");
 const outputFile = resolve(packageRoot, "generated/admin-ui-assets.ts");
 
 const contentTypes = new Map([
@@ -68,6 +69,11 @@ async function main() {
     if (path === "/index.html") {
       entries.push(["/", asset]);
     }
+  }
+
+  for (const name of ["logo-mark-light.svg", "logo-mark-dark.svg"]) {
+    const bodyBase64 = (await readFile(resolve(workspaceRoot, "assets", name))).toString("base64");
+    entries.push([`/${name}`, { contentType: "image/svg+xml", bodyBase64 }]);
   }
 
   if (!entries.some(([path]) => path === "/index.html")) {

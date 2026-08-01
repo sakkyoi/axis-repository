@@ -12,7 +12,7 @@ describe("plugin icons", () => {
     expect(assets.title).toBe("Package");
     expect(assets.inlineSvg).toContain("<svg");
     expect(assets.inlineSvg).toContain("aria-hidden=\"true\"");
-    expect(assets.faviconDataUrl).toMatch(/^data:image\/svg\+xml,/);
+    expect(assets).not.toHaveProperty("faviconDataUrl");
   });
 
   it("resolves a plugin-owned vector descriptor into trusted assets", () => {
@@ -29,7 +29,7 @@ describe("plugin icons", () => {
     expect(assets.accentColor).toBe("#2563eb");
     expect(assets.inlineSvg).toContain("viewBox=\"0 0 24 24\"");
     expect(assets.inlineSvg).toContain("M4 4h16v16H4z");
-    expect(decodeURIComponent(assets.faviconDataUrl)).toContain("Example");
+    expect(assets.inlineSvg).toContain("Example");
   });
 
   it("escapes text and rejects unsafe shape data", () => {

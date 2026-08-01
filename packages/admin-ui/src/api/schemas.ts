@@ -18,7 +18,6 @@ export const resolvedPluginIconSchema = z.object({
   title: z.string(),
   accentColor: z.string(),
   inlineSvg: z.string(),
-  faviconDataUrl: z.string(),
 });
 
 export const repositorySchema = z.object({

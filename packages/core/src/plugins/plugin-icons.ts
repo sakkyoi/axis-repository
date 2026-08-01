@@ -35,7 +35,6 @@ export function resolvePluginIconAssets(icon: PluginIconManifest | undefined): R
     title: normalized.title,
     accentColor: normalized.accentColor,
     inlineSvg,
-    faviconDataUrl: `data:image/svg+xml,${encodeURIComponent(renderPluginIconFaviconSvg(normalized))}`,
   };
 }
 
@@ -123,21 +122,6 @@ function safeNumber(value: number, label: string): number {
 function renderPluginIconSvg(icon: PluginIconManifest): string {
   const shapes = icon.shapes.map(renderShape).join("");
   return `<svg aria-hidden="true" viewBox="${escapeHtml(icon.viewBox)}" fill="none" xmlns="http://www.w3.org/2000/svg"><title>${escapeHtml(icon.title)}</title>${shapes}</svg>`;
-}
-
-function renderPluginIconFaviconSvg(icon: PluginIconManifest): string {
-  const iconSvg = renderPluginIconSvg(icon)
-    .replace("<svg ", "<svg x=\"31\" y=\"31\" width=\"17\" height=\"17\" ")
-    .replace("<title>", "<title>Badge: ");
-  return [
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 48 48\">",
-    "<rect width=\"48\" height=\"48\" rx=\"10\" fill=\"#111827\"/>",
-    "<path d=\"M14 15.5 24 9l10 6.5v13L24 35l-10-6.5v-13Z\" fill=\"none\" stroke=\"#f8fafc\" stroke-width=\"3\" stroke-linejoin=\"round\"/>",
-    "<path d=\"M14.8 15.9 24 21.2l9.2-5.3M24 21.2v12\" fill=\"none\" stroke=\"#f8fafc\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-    `<circle cx="38.5" cy="38.5" r="8.5" fill="${escapeHtml(icon.accentColor)}" stroke="#f8fafc" stroke-width="2"/>`,
-    `<g color="#f8fafc">${iconSvg}</g>`,
-    "</svg>",
-  ].join("");
 }
 
 function renderShape(shape: PluginIconShape): string {

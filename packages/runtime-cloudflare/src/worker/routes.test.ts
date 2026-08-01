@@ -317,6 +317,17 @@ describe("Cloudflare runtime routes", () => {
     expect(api.status).toBe(401);
   });
 
+  it("declares theme-specific admin UI favicons", async () => {
+    const app = createApp(createDevDependencies());
+
+    const shell = await app.fetch(new Request("https://axis.example/ui/"));
+    const shellHtml = await shell.text();
+
+    expect(shellHtml).toContain('<link rel="icon" type="image/svg+xml" href="/logo-mark-light.svg" media="(prefers-color-scheme: light)" />');
+    expect(shellHtml).toContain('<link rel="icon" type="image/svg+xml" href="/logo-mark-dark.svg" media="(prefers-color-scheme: dark)" />');
+    expect(shellHtml).not.toContain('href="/favicon.svg"');
+  });
+
   it("serves the admin UI favicon at the browser default root path", async () => {
     const app = createApp(createDevDependencies());
     const response = await app.fetch(new Request("https://axis.example/favicon.svg"));
@@ -324,6 +335,20 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/svg+xml");
     await expect(response.text()).resolves.toContain("<svg");
+  });
+
+  it("serves theme-specific logo mark assets", async () => {
+    const app = createApp(createDevDependencies());
+
+    for (const path of ["/logo-mark-light.svg", "/logo-mark-dark.svg"]) {
+      const response = await app.fetch(new Request(`https://axis.example${path}`));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("image/svg+xml");
+      const body = await response.text();
+      expect(body).toContain("<svg");
+      expect(body).not.toContain("<!DOCTYPE html>");
+    }
   });
 
   it("does not serve the admin UI shell for reserved namespace roots", async () => {
@@ -874,7 +899,6 @@ describe("Cloudflare runtime routes", () => {
             title: "APT",
             accentColor: "#0f766e",
             inlineSvg: expect.stringContaining("<svg"),
-            faviconDataUrl: expect.stringMatching(/^data:image\/svg\+xml,/),
           }),
           clientHelpers: {
             namespace: "apt",
@@ -918,7 +942,6 @@ describe("Cloudflare runtime routes", () => {
             title: "PyPI",
             accentColor: "#2563eb",
             inlineSvg: expect.stringContaining("<svg"),
-            faviconDataUrl: expect.stringMatching(/^data:image\/svg\+xml,/),
           }),
           clientHelpers: {
             namespace: "pypi",
@@ -1833,6 +1856,7 @@ describe("Cloudflare runtime routes", () => {
     );
     const uiOnAdmin = await app.fetch(new Request("https://axis.example/ui/"));
     const uiOnCdn = await app.fetch(new Request("https://cdn.axis.example/ui/"));
+    const logoOnCdn = await app.fetch(new Request("https://cdn.axis.example/logo-mark-light.svg"));
     const adminOnCdn = await app.fetch(new Request("https://cdn.axis.example/admin/repositories", {
       headers: { authorization: "Bearer dev-admin-token" },
     }));
@@ -1843,6 +1867,9 @@ describe("Cloudflare runtime routes", () => {
     expect(objectOnAdmin.status).toBe(404);
     expect(uiOnAdmin.status).toBe(200);
     expect(uiOnCdn.status).toBe(404);
+    expect(logoOnCdn.status).toBe(200);
+    expect(logoOnCdn.headers.get("content-type")).toBe("image/svg+xml");
+    await expect(logoOnCdn.text()).resolves.not.toContain("<!DOCTYPE html>");
     expect(adminOnCdn.status).toBe(404);
   });
 

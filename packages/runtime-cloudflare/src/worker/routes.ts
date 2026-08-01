@@ -458,6 +458,33 @@ function adminUiAssetResponse(asset: AdminUiAsset, dependencies: AppDependencies
   );
 }
 
+const SHARED_PUBLIC_ASSET_PATHS = new Set([
+  "/logo-mark-dark.svg",
+  "/logo-mark-light.svg",
+]);
+
+function sharedPublicAssetResponse(pathname: string, dependencies: AppDependencies): Response | null {
+  if (!SHARED_PUBLIC_ASSET_PATHS.has(pathname)) {
+    return null;
+  }
+  const asset = adminUiAssets.get(pathname);
+  return asset ? adminUiAssetResponse(asset, dependencies) : null;
+}
+
+function textAsset(pathname: string): string {
+  const asset = adminUiAssets.get(pathname);
+  if (!asset) {
+    throw new Error(`Missing embedded asset: ${pathname}`);
+  }
+  if (typeof asset.body === "string") {
+    return asset.body;
+  }
+  if (asset.body instanceof Uint8Array) {
+    return new TextDecoder().decode(asset.body);
+  }
+  throw new Error(`Embedded asset is not text-compatible: ${pathname}`);
+}
+
 function adminUiResponse(pathname: string, dependencies: AppDependencies): Response | null {
   if (pathname === "/" || pathname === "/ui") {
     return new Response(null, { status: 302, headers: { location: "/ui/" } });
@@ -934,6 +961,10 @@ async function repositoryDirectoryResponse(input: {
     repositoryName: input.repository.name,
     repositoryEcosystem: input.repository.ecosystem,
     pluginIcon: catalogEntry?.icon ?? resolvePluginIconAssets(undefined),
+    logoMarks: {
+      light: textAsset("/logo-mark-light.svg"),
+      dark: textAsset("/logo-mark-dark.svg"),
+    },
     listing,
   });
   return new Response(input.method === "HEAD" ? null : html, {
@@ -1257,6 +1288,10 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   const { servesArtifacts, servesAdmin } = originRoles(url, dependencies);
   if (url.pathname === "/health") {
     return jsonResponse({ ok: true, service: "axis-repository" });
+  }
+  const sharedAsset = sharedPublicAssetResponse(url.pathname, dependencies);
+  if (sharedAsset) {
+    return sharedAsset;
   }
   if (!servesAdmin && !url.pathname.startsWith("/repositories/")) {
     throw new NotFoundError();

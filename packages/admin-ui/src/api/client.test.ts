@@ -553,7 +553,6 @@ describe("createAxisClient", () => {
                 title: "APT",
                 accentColor: "#0f766e",
                 inlineSvg: "<svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"></svg>",
-                faviconDataUrl: "data:image/svg+xml,%3Csvg%3E%3C%2Fsvg%3E",
               },
               capabilities: ["signed-release", "client-helpers"],
               clientHelpers: {

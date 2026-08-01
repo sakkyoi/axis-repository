@@ -74,7 +74,6 @@ export interface ResolvedPluginIconAssets {
   title: string;
   accentColor: string;
   inlineSvg: string;
-  faviconDataUrl: string;
 }
 
 export interface RepositoryPluginManifest {
