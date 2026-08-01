@@ -1,0 +1,21 @@
+{
+  "name": "@axis-repository/plugin-catalog",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/catalog.ts",
+      "import": "./src/catalog.ts",
+      "default": "./src/catalog.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@axis-repository/core": "workspace:*",
+    "@axis-repository/plugin-apt": "workspace:*",
+    "@axis-repository/plugin-pypi": "workspace:*"
+  }
+}

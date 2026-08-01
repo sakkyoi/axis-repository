@@ -79,7 +79,9 @@ To expose the dev server on your LAN, pass Vite arguments directly:
 pnpm dev --host 0.0.0.0
 ```
 
-`pnpm dev:worker` and `pnpm dev:ui` remain available for lower-level debugging.
+The root dev server is the maintained local development entry point. For
+low-level Worker debugging, run Wrangler directly with the root
+`wrangler.jsonc`.
 
 ## License
 

@@ -207,6 +207,18 @@ importers:
 
   packages/core: {}
 
+  packages/plugin-catalog:
+    dependencies:
+      '@axis-repository/core':
+        specifier: workspace:*
+        version: link:../core
+      '@axis-repository/plugin-apt':
+        specifier: workspace:*
+        version: link:../../plugins/apt
+      '@axis-repository/plugin-pypi':
+        specifier: workspace:*
+        version: link:../../plugins/pypi
+
   packages/publish-client:
     dependencies:
       '@axis-repository/core':
@@ -221,6 +233,9 @@ importers:
       '@axis-repository/plugin-apt':
         specifier: workspace:*
         version: link:../../plugins/apt
+      '@axis-repository/plugin-catalog':
+        specifier: workspace:*
+        version: link:../plugin-catalog
       '@axis-repository/plugin-pypi':
         specifier: workspace:*
         version: link:../../plugins/pypi

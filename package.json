@@ -49,8 +49,6 @@
   "scripts": {
     "build": "pnpm --filter @axis-repository/core build && pnpm --filter @axis-repository/admin-ui build && pnpm --filter @axis-repository/publish-client build && pnpm --filter @axis-repository/runtime-cloudflare build:worker",
     "dev": "vite dev",
-    "dev:ui": "pnpm --filter @axis-repository/admin-ui dev",
-    "dev:worker": "node scripts/dev-worker.mjs",
     "lint": "eslint .",
     "lint:commits": "commitlint --from origin/main --to HEAD --verbose",
     "lint:pr-title": "node scripts/check-pr-title.mjs",

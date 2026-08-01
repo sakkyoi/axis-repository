@@ -207,17 +207,17 @@ Add explicit package exports in `plugins/<ecosystem>/package.json`, for example:
 }
 ```
 
-Add the bundle package to `plugins/bundled.ts`. This is the only static bundled
-plugin list. TypeScript and Worker builds should not discover plugins by
-scanning the filesystem.
+Add the bundle package to `packages/plugin-catalog/src/bundled.ts`. This is the
+only static bundled plugin list. TypeScript and Worker builds should not
+discover plugins by scanning the filesystem.
 
 `catalog.enabled` is the deployment catalog default. `catalog.experimental` is
 metadata exposed to clients for UI labeling and rollout policy. `runtime` means
 the ecosystem provides Worker/runtime behavior. `adminUi` means the ecosystem
 provides admin UI behavior.
 
-`plugins/catalog.ts` projects policy metadata from bundled plugin descriptors.
-It should not hand-maintain a second ecosystem list.
+`packages/plugin-catalog/src/catalog.ts` projects policy metadata from bundled
+plugin descriptors. It should not hand-maintain a second ecosystem list.
 
 The runtime and admin UI registries both filter catalog-disabled plugins at
 startup, but repository plugin availability is resolved through the admin policy
@@ -287,7 +287,7 @@ refer to field kinds declared by the manifest.
 3. Add runtime behavior under `plugins/<ecosystem>/runtime/`.
 4. Add admin UI behavior under `plugins/<ecosystem>/admin-ui/` if needed.
 5. Add `plugins/<ecosystem>/plugin.ts` with a `RepositoryPluginBundle`.
-6. Add the bundle package to `plugins/bundled.ts`.
+6. Add the bundle package to `packages/plugin-catalog/src/bundled.ts`.
 7. Let package host loaders register runtime and admin UI capabilities from package exports.
 8. Add focused tests beside the new plugin code.
 9. Run:

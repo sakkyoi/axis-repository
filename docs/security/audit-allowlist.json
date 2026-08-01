@@ -1,4 +1,4 @@
 {
-  "$schema": "../../scripts/audit-allowlist.schema.json",
+  "$schema": "./audit-allowlist.schema.json",
   "allowed": []
 }
