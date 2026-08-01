@@ -7,6 +7,15 @@ export const pypiPluginManifest = {
   runtimeName: "pypi-simple",
   version: "0.1.0",
   capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
+  icon: {
+    title: "PyPI",
+    viewBox: "0 0 24 24",
+    accentColor: "#2563eb",
+    shapes: [
+      { kind: "rect", x: 4, y: 5, width: 16, height: 14, rx: 2, fill: "none", stroke: "currentColor", strokeWidth: 1.8 },
+      { kind: "path", d: "M8 9h5.2a2.8 2.8 0 0 1 0 5.6H10V18H8V9Z", fill: "currentColor" },
+    ],
+  },
   repositoryConfig: {
     namespace: "pypi",
     fields: [],

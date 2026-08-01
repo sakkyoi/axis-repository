@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolvePluginIconAssets } from "@axis-repository/core/plugin-icons";
 import { aptPluginManifest } from "./manifest";
 
 const manifest = aptPluginManifest;
@@ -58,5 +59,12 @@ describe("APT plugin manifest", () => {
       .map((action) => action.name);
 
     expect(publicActions).toEqual(["key.gpg", "source", "install"]);
+  });
+
+  it("provides a plugin-owned ecosystem icon", () => {
+    expect(manifest.icon?.title).toBe("APT");
+    const assets = resolvePluginIconAssets(manifest.icon);
+    expect(assets.title).toBe("APT");
+    expect(assets.accentColor).not.toBe("#64748b");
   });
 });

@@ -7,6 +7,15 @@ export const aptPluginManifest = {
   runtimeName: "apt-signed",
   version: "0.1.0",
   capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
+  icon: {
+    title: "APT",
+    viewBox: "0 0 24 24",
+    accentColor: "#0f766e",
+    shapes: [
+      { kind: "circle", cx: 12, cy: 12, r: 8.5, fill: "none", stroke: "currentColor", strokeWidth: 1.8 },
+      { kind: "path", d: "M7 15.5 12 5l5 10.5M9 12.5h6", fill: "none", stroke: "currentColor", strokeWidth: 1.8 },
+    ],
+  },
   repositoryConfig: {
     namespace: "apt",
     fields: [

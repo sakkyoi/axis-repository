@@ -29,11 +29,14 @@ describe("repository plugin catalog", () => {
   it("exposes stable catalog lookup and metadata views", () => {
     expect(repositoryPluginCatalogEcosystems()).toEqual(["apt", "pypi"]);
     expect(getRepositoryPluginCatalogEntry("apt")?.manifest.displayName).toBe("APT");
+    expect(getRepositoryPluginCatalogEntry("apt")?.icon.title).toBe("APT");
+    expect(getRepositoryPluginCatalogEntry("pypi")?.icon.title).toBe("PyPI");
     expect(getRepositoryPluginCatalogEntry("npm")).toBeUndefined();
     expect(repositoryPluginCatalogMetadata()).toEqual([
-      { ecosystem: "apt", enabled: true, experimental: false, runtime: true, adminUi: true },
-      { ecosystem: "pypi", enabled: true, experimental: false, runtime: true, adminUi: true },
+      expect.objectContaining({ ecosystem: "apt", enabled: true, experimental: false, runtime: true, adminUi: true }),
+      expect.objectContaining({ ecosystem: "pypi", enabled: true, experimental: false, runtime: true, adminUi: true }),
     ]);
+    expect(repositoryPluginCatalogMetadata().map((entry) => entry.icon.title)).toEqual(["APT", "PyPI"]);
   });
 
   it("keeps catalog ecosystems unique", () => {

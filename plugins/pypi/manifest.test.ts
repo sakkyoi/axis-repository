@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolvePluginIconAssets } from "@axis-repository/core/plugin-icons";
 import { pypiPluginManifest } from "./manifest";
 
 const manifest = pypiPluginManifest;
@@ -28,5 +29,12 @@ describe("PyPI plugin manifest", () => {
       .map((action) => action.name);
 
     expect(publicActions).toEqual(["simple-url"]);
+  });
+
+  it("provides a plugin-owned ecosystem icon", () => {
+    expect(manifest.icon?.title).toBe("PyPI");
+    const assets = resolvePluginIconAssets(manifest.icon);
+    expect(assets.title).toBe("PyPI");
+    expect(assets.accentColor).not.toBe("#64748b");
   });
 });
