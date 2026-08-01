@@ -7,19 +7,19 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     },
     "./archives": {
-      "types": "./dist/archives/index.d.ts",
-      "import": "./dist/archives/index.js",
-      "default": "./dist/archives/index.js"
+      "types": "./src/archives/index.ts",
+      "import": "./src/archives/index.ts",
+      "default": "./src/archives/index.ts"
     },
     "./plugin-manifests": {
-      "types": "./dist/plugins/plugin-manifests.d.ts",
-      "import": "./dist/plugins/plugin-manifests.js",
-      "default": "./dist/plugins/plugin-manifests.js"
+      "types": "./src/plugins/plugin-manifests.ts",
+      "import": "./src/plugins/plugin-manifests.ts",
+      "default": "./src/plugins/plugin-manifests.ts"
     },
     "./test-support": "./src/state/state-store-contract.test-support.ts"
   },

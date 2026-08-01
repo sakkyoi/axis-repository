@@ -12,11 +12,9 @@
   "include": [
     "src",
     "vite.config.ts",
-    "../../scripts/workspace-aliases.ts",
     "../core/src/plugins/plugin-manifests.ts",
     "../core/src/archives",
-    "../../plugins/catalog.ts",
-    "../../plugins/bundled.ts",
+    "../plugin-catalog/src",
     "../../plugins/*/plugin.ts",
     "../../plugins/*/manifest.ts",
     "../../plugins/*/shared/**/*.ts",

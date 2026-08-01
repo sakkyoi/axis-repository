@@ -218,9 +218,8 @@ pnpm verify
 ```
 
 `pnpm verify` intentionally stops at a Cloudflare dry run. Deployment smoke
-tests against a real Worker are handled separately by
-`scripts/verify-deployment.mjs`, because they need deployment credentials and a
-real storage backend.
+tests against a real Worker are not part of the maintained project tooling
+yet, because they need deployment credentials and a real storage backend.
 
 Release branches and version tags, including `vX.Y.Z-rc.N` candidate tags, run
 `Release Check`, which executes `pnpm verify` and validates that the release

@@ -3,5 +3,5 @@
   "compilerOptions": {
     "composite": false
   },
-  "include": ["src", "../../plugins/catalog.ts", "../../plugins/bundled.ts", "../../plugins/*/plugin.ts", "../../plugins/*/manifest.ts"]
+  "include": ["src", "../plugin-catalog/src", "../../plugins/*/plugin.ts", "../../plugins/*/manifest.ts"]
 }

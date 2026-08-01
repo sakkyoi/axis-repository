@@ -5,8 +5,7 @@
   },
   "include": [
     "src/**/*.ts",
-    "../../plugins/catalog.ts",
-    "../../plugins/bundled.ts",
+    "../plugin-catalog/src",
     "../../plugins/*/plugin.ts",
     "../../plugins/*/manifest.ts",
     "../../plugins/*/shared/**/*.ts",

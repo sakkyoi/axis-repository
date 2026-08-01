@@ -7,30 +7,30 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     },
     "./plugin-runtime": {
-      "types": "./dist/plugin-runtime.d.ts",
-      "import": "./dist/plugin-runtime.js",
-      "default": "./dist/plugin-runtime.js"
+      "types": "./src/plugin-runtime.ts",
+      "import": "./src/plugin-runtime.ts",
+      "default": "./src/plugin-runtime.ts"
     },
     "./plugin-runtime/testing": {
-      "types": "./dist/plugin-runtime-testing.d.ts",
-      "import": "./dist/plugin-runtime-testing.js",
-      "default": "./dist/plugin-runtime-testing.js"
+      "types": "./src/plugin-runtime-testing.ts",
+      "import": "./src/plugin-runtime-testing.ts",
+      "default": "./src/plugin-runtime-testing.ts"
     }
   },
   "scripts": {
     "build": "pnpm --filter @axis-repository/admin-ui build && pnpm run build:worker",
     "build:worker": "node scripts/generate-admin-ui-assets.mjs && tsup src/index.ts src/plugin-runtime.ts src/plugin-runtime-testing.ts --format esm --dts",
     "deploy:dry-run": "pnpm --workspace-root deploy:dry-run",
-    "dev": "pnpm --workspace-root dev:worker",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@axis-repository/core": "workspace:*",
+    "@axis-repository/plugin-catalog": "workspace:*",
     "@axis-repository/plugin-apt": "workspace:*",
     "@axis-repository/plugin-pypi": "workspace:*",
     "aws4fetch": "^1.0.20",

@@ -17,6 +17,7 @@ const packageDirs = {
   adminUi: "packages/admin-ui",
   runtimeCloudflare: "packages/runtime-cloudflare",
   publishClient: "packages/publish-client",
+  pluginCatalog: "packages/plugin-catalog",
   pluginApt: "plugins/apt",
   pluginPypi: "plugins/pypi",
 } as const;
@@ -26,6 +27,7 @@ const packageSourceDirs: Record<keyof typeof packageDirs, string> = {
   adminUi: "packages/admin-ui/src",
   runtimeCloudflare: "packages/runtime-cloudflare/src",
   publishClient: "packages/publish-client/src",
+  pluginCatalog: "packages/plugin-catalog/src",
   pluginApt: "plugins/apt",
   pluginPypi: "plugins/pypi",
 };
@@ -35,6 +37,7 @@ const expectedExports: Record<keyof typeof packageDirs, string[]> = {
   adminUi: ["./plugin-ui"],
   runtimeCloudflare: [".", "./plugin-runtime", "./plugin-runtime/testing"],
   publishClient: [".", "./cli"],
+  pluginCatalog: ["."],
   pluginApt: [".", "./admin-ui", "./admin-ui/publish", "./manifest", "./runtime", "./runtime/publisher", "./test-support"],
   pluginPypi: [".", "./admin-ui", "./admin-ui/detail", "./admin-ui/publish", "./manifest", "./runtime", "./test-support"],
 };
@@ -50,6 +53,7 @@ const forbiddenWorkspaceDependencies: Record<keyof typeof packageDirs, string[]>
   adminUi: ["@axis-repository/runtime-cloudflare", "@axis-repository/publish-client"],
   runtimeCloudflare: ["@axis-repository/admin-ui", "@axis-repository/publish-client"],
   publishClient: ["@axis-repository/admin-ui", "@axis-repository/runtime-cloudflare"],
+  pluginCatalog: ["@axis-repository/admin-ui", "@axis-repository/runtime-cloudflare", "@axis-repository/publish-client"],
   pluginApt: ["@axis-repository/plugin-pypi", "@axis-repository/publish-client"],
   pluginPypi: ["@axis-repository/plugin-apt", "@axis-repository/publish-client"],
 };
