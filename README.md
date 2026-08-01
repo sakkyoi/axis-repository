@@ -68,9 +68,18 @@ pnpm typecheck
 pnpm build
 ```
 
-`pnpm dev` runs the Worker and the admin console together and prints which URL
-to open — the console reloads as you edit it. `pnpm dev:worker` and `pnpm dev:ui`
-run either half on its own.
+`pnpm dev` starts a single Vite dev server with the Worker running in the
+Cloudflare Workers runtime behind the same origin. The console reloads as you
+edit it, and `/admin`, `/api`, `/repositories`, and `/health` are handled by the
+Worker.
+
+To expose the dev server on your LAN, pass Vite arguments directly:
+
+```bash
+pnpm dev --host 0.0.0.0
+```
+
+`pnpm dev:worker` and `pnpm dev:ui` remain available for lower-level debugging.
 
 ## License
 

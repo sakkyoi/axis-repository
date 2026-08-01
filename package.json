@@ -48,7 +48,7 @@
   },
   "scripts": {
     "build": "pnpm --filter @axis-repository/core build && pnpm --filter @axis-repository/admin-ui build && pnpm --filter @axis-repository/publish-client build && pnpm --filter @axis-repository/runtime-cloudflare build:worker",
-    "dev": "node scripts/dev.mjs",
+    "dev": "vite dev",
     "dev:ui": "pnpm --filter @axis-repository/admin-ui dev",
     "dev:worker": "node scripts/dev-worker.mjs",
     "lint": "eslint .",
@@ -70,6 +70,7 @@
     "@axis-repository/core": "workspace:^",
     "@axis-repository/publish-client": "workspace:^",
     "@axis-repository/runtime-cloudflare": "workspace:^",
+    "@cloudflare/vite-plugin": "^1.50.0",
     "@cloudflare/workers-types": "^5.20260731.1",
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
@@ -84,6 +85,7 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.10",
     "axios": "^1.19.0",
     "class-variance-authority": "^0.7.1",
@@ -99,6 +101,7 @@
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8",
+    "vite": "^8.2.0",
     "vitest": "^4.1.10",
     "wrangler": "^4.118.0",
     "zod": "^4.4.3"
