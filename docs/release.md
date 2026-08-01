@@ -75,7 +75,8 @@ feat(core)!: change plugin contract
 The scope is optional. The allowed types are `feat`, `fix`, `docs`, `chore`,
 `ci`, `build`, `refactor`, `test`, `perf`, `style`, and `revert`.
 
-Automation derives initial labels from the Conventional Commit title:
+Automation derives initial labels from the Conventional Commit title with
+Release Drafter autolabeler:
 
 - `feat` becomes `type/feature` and `release/minor`.
 - `fix` becomes `type/bug` and `release/patch`.
@@ -88,6 +89,8 @@ Automation derives initial labels from the Conventional Commit title:
 
 Maintainers must review the generated `release/*` and `impact/*` labels before
 merge. Use `release/skip` when the change should not appear in release notes.
+When a PR already has a `release/*` label, automation treats that as the
+maintainer decision and does not replace it.
 
 ### Type
 
@@ -182,8 +185,11 @@ specialized than the fast CI loop.
 ### Workflow and PR Metadata
 
 - `Workflow Lint` checks GitHub Actions workflow syntax and common mistakes.
-- `PR Labels` requires each pull request to carry one `type/*` label or
-  `release/skip`, because Release Drafter uses labels to build release notes.
+- `PR Governance` checks the PR title, applies path and Conventional Commit
+  labels, preserves existing `release/*` decisions, and requires each pull
+  request to carry one `type/*` label plus one `release/*` label because
+  Release Drafter uses labels to build release notes.
+- `PR Commits` checks pull request commit messages with Commitlint.
 
 ### Dependency Updates
 
