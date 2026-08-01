@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { leftoverBootstrapCredentials, leftoverBootstrapWarning } from "./bootstrap-credentials";
+import {
+  formatBootstrapWarningLog,
+  leftoverBootstrapCredentials,
+  leftoverBootstrapWarning,
+} from "./bootstrap-credentials";
 
 describe("bootstrap credentials a deployment is still carrying", () => {
   it("names the environment variable an operator has to go and find", () => {
@@ -72,5 +76,16 @@ describe("bootstrap credentials a deployment is still carrying", () => {
 
     expect(warning).toContain("AXIS_ADMIN_PASSWORD");
     expect(warning).toContain("still readable");
+  });
+
+  it("formats the worker log warning as a visible block", () => {
+    const warning = leftoverBootstrapWarning(leftoverBootstrapCredentials(["username", "password"]));
+
+    const log = formatBootstrapWarningLog(warning!);
+
+    expect(log).toContain("[warn] ⚠ Bootstrap credentials left");
+    expect(log).toContain("AXIS_ADMIN_PASSWORD");
+    expect(log).toContain("AXIS_ADMIN_USERNAME");
+    expect(log.split("\n").at(1)?.startsWith("       ")).toBe(true);
   });
 });

@@ -108,3 +108,33 @@ export function leftoverBootstrapWarning(
   return `${line} Until removed, the account's original ${held} still readable`
     + " from this deployment's configuration.";
 }
+
+export function formatBootstrapWarningLog(message: string): string {
+  const [first = "", ...rest] = wrapLogMessage(message, 88);
+  return [
+    `[warn] ⚠ ${first}`,
+    ...rest.map((line) => `       ${line}`),
+  ].join("\n");
+}
+
+function wrapLogMessage(message: string, width: number): string[] {
+  const words = message.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (!current) {
+      current = word;
+      continue;
+    }
+    if (`${current} ${word}`.length > width) {
+      lines.push(current);
+      current = word;
+      continue;
+    }
+    current = `${current} ${word}`;
+  }
+  if (current) {
+    lines.push(current);
+  }
+  return lines;
+}

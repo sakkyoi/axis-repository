@@ -19,7 +19,7 @@ import {
 } from "@axis-repository/core";
 import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "@axis-repository/plugin-catalog";
 import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "../admin-ui-assets";
-import { leftoverBootstrapCredentials, leftoverBootstrapWarning } from "./bootstrap-credentials";
+import { formatBootstrapWarningLog, leftoverBootstrapCredentials, leftoverBootstrapWarning } from "./bootstrap-credentials";
 import type { AppDependencies } from "./dev-dependencies";
 import { isStringArray, optionalObjectField, readJsonObject, requireAdmin, requireBasicAuthSecret, requireBearer, stringArrayField, stringField } from "../http";
 import {
@@ -1236,7 +1236,7 @@ async function warnAboutLeftoverBootstrapCredentials(dependencies: AppDependenci
       leftoverBootstrapCredentials(await dependencies.adminAuthService.unusedBootstrapCredentials()),
     );
     if (warning) {
-      console.warn(warning);
+      console.warn(formatBootstrapWarningLog(warning));
     }
   } catch {
     // Nothing to do about it, and nothing worth failing a sign-in over.
