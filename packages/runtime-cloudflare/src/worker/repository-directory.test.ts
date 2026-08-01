@@ -226,6 +226,8 @@ describe("renderRepositoryDirectoryHtml", () => {
     expect(html).toContain("data-ecosystem=\"apt\"");
     expect(html).toContain(aptIcon.inlineSvg);
     expect(html).toContain("APT");
+    expect(html).toContain("<div class=\"repository-line\">");
+    expect(html).toContain("<span class=\"repository\">debian</span>");
   });
 
   it("links to the project GitHub repository from the directory header", () => {

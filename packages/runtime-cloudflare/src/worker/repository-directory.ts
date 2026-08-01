@@ -245,6 +245,13 @@ const DIRECTORY_STYLES = `
     width: 30px;
   }
   .wordmark { font-size: 0.95rem; font-weight: 650; letter-spacing: -0.015em; }
+  .repository-line {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.05rem;
+  }
   .repository {
     color: hsl(var(--muted-foreground));
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -256,7 +263,6 @@ const DIRECTORY_STYLES = `
     display: inline-flex;
     font-size: 0.75rem;
     gap: 0.35rem;
-    margin-top: 0.15rem;
   }
   .ecosystem svg {
     color: hsl(var(--primary));
@@ -443,8 +449,10 @@ export function renderRepositoryDirectoryHtml(input: {
     "          </picture>",
     "          <div>",
     "            <div class=\"wordmark\">Axis Repository</div>",
-    `            <div class="repository">${escapeHtml(input.repositoryName)}</div>`,
-    `            <div class="ecosystem" data-ecosystem="${escapeHtml(input.repositoryEcosystem)}">${input.pluginIcon.inlineSvg}<span>${escapeHtml(input.pluginIcon.title)}</span></div>`,
+    "            <div class=\"repository-line\">",
+    `              <span class="repository">${escapeHtml(input.repositoryName)}</span>`,
+    `              <span class="ecosystem" data-ecosystem="${escapeHtml(input.repositoryEcosystem)}">${input.pluginIcon.inlineSvg}<span>${escapeHtml(input.pluginIcon.title)}</span></span>`,
+    "            </div>",
     "          </div>",
     "        </div>",
     `        <a class="github-link" href="${GITHUB_URL}" aria-label="Open Axis Repository on GitHub" target="_blank" rel="noreferrer">${GITHUB_ICON}<span>GitHub</span></a>`,
