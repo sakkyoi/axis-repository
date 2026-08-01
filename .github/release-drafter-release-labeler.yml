@@ -1,0 +1,27 @@
+template: "$CHANGES"
+
+autolabeler:
+  - label: "release/major"
+    title:
+      - "/^[a-z]+(?:\\([a-z0-9][a-z0-9-]*\\))!: .+/"
+
+  - label: "release/minor"
+    title:
+      - "/^feat(?:\\([a-z0-9][a-z0-9-]*\\))?: .+/"
+
+  - label: "release/patch"
+    title:
+      - "/^fix(?:\\([a-z0-9][a-z0-9-]*\\))?: .+/"
+      - "/^docs(?:\\([a-z0-9][a-z0-9-]*\\))?: .+/"
+      - "/^ci(?:\\([a-z0-9][a-z0-9-]*\\))?: .+/"
+      - "/^perf(?:\\([a-z0-9][a-z0-9-]*\\))?: .+/"
+      - "/^(?:chore|build)\\(deps\\): .+/"
+
+  - label: "release/skip"
+    title:
+      - "/^refactor(?:\\([a-z0-9][a-z0-9-]*\\))?: .+/"
+      - "/^test(?:\\([a-z0-9][a-z0-9-]*\\))?: .+/"
+      - "/^style(?:\\([a-z0-9][a-z0-9-]*\\))?: .+/"
+      - "/^revert(?:\\([a-z0-9][a-z0-9-]*\\))?: .+/"
+      - "/^chore(?:\\((?!deps\\))[a-z0-9][a-z0-9-]*\\))?: .+/"
+      - "/^build(?:\\((?!deps\\))[a-z0-9][a-z0-9-]*\\))?: .+/"

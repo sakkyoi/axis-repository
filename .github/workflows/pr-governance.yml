@@ -1,0 +1,116 @@
+name: PR Governance
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Conventional Commit PR title
+        uses: step-security/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            chore
+            ci
+            build
+            refactor
+            test
+            perf
+            style
+            revert
+
+  path-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v6
+        with:
+          configuration-path: .github/labeler.yml
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          sync-labels: true
+
+  detect-release-label:
+    runs-on: ubuntu-latest
+    needs: title
+    outputs:
+      has_release_label: ${{ steps.release-label.outputs.status == 'success' }}
+    steps:
+      - id: release-label
+        name: Detect existing release decision
+        uses: mheap/github-action-required-labels@v5
+        with:
+          mode: minimum
+          count: 1
+          exit_type: success
+          labels: |
+            release/skip
+            release/major
+            release/minor
+            release/patch
+
+  conventional-type-labels:
+    runs-on: ubuntu-latest
+    needs: title
+    steps:
+      - name: Apply Conventional Commit type labels
+        uses: release-drafter/release-drafter/autolabeler@v7
+        with:
+          config-name: release-drafter-type-labeler.yml
+
+  conventional-release-labels:
+    runs-on: ubuntu-latest
+    needs: detect-release-label
+    if: needs.detect-release-label.outputs.has_release_label != 'true'
+    steps:
+      - name: Apply initial release decision labels
+        uses: release-drafter/release-drafter/autolabeler@v7
+        with:
+          config-name: release-drafter-release-labeler.yml
+
+  release-note-labels:
+    runs-on: ubuntu-latest
+    needs:
+      - path-labels
+      - conventional-type-labels
+      - conventional-release-labels
+      - detect-release-label
+    if: always()
+    steps:
+      - name: Require one type label
+        uses: mheap/github-action-required-labels@v5
+        with:
+          mode: exactly
+          count: 1
+          labels: |
+            type/feature
+            type/bug
+            type/documentation
+            type/maintenance
+            type/dependencies
+            type/security
+
+      - name: Require one release decision label
+        uses: mheap/github-action-required-labels@v5
+        with:
+          mode: exactly
+          count: 1
+          labels: |
+            release/skip
+            release/major
+            release/minor
+            release/patch
