@@ -125,7 +125,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: [
-      { find: "stream/web", replacement: fileURLToPath(new URL("scripts/worker-shims/stream-web.ts", root)) },
+      {
+        find: "stream/web",
+        replacement: fileURLToPath(new URL("packages/runtime-cloudflare/src/worker-shims/stream-web.ts", root)),
+      },
     ],
   },
   build: {
