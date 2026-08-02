@@ -1,0 +1,86 @@
+name: Site
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "apps/site/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-pnpm-node
+
+      - run: pnpm --filter @axis-repository/site lint
+
+      - run: pnpm --filter @axis-repository/site check
+
+      - run: pnpm --filter @axis-repository/site build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Pushes always deploy. A PR only deploys when it comes from a branch in
+    # this repository -- GitHub withholds repo secrets from pull_request runs
+    # triggered by a fork, so CLOUDFLARE_API_TOKEN would be empty there and
+    # the wrangler step would fail rather than silently no-op.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-pnpm-node
+
+      - name: Resolve variant, version, and Pages branch
+        id: variant
+        run: |
+          REF="${{ github.ref }}"
+          SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+
+          if [[ "$REF" == refs/tags/v* ]]; then
+            TAG="${REF#refs/tags/}"
+            if [[ "$TAG" == *-rc.* ]]; then
+              VARIANT="preview"
+              VERSION="$TAG"
+            else
+              VARIANT="production"
+              VERSION="$TAG"
+            fi
+          else
+            VARIANT="preview"
+            VERSION="$SHORT_SHA"
+          fi
+
+          if [[ "$VARIANT" == "production" ]]; then
+            PAGES_BRANCH="main"
+          else
+            PAGES_BRANCH=$(echo "preview-$VERSION" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g')
+          fi
+
+          echo "variant=$VARIANT" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "pages_branch=$PAGES_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Build site
+        run: pnpm --filter @axis-repository/site build
+        env:
+          PUBLIC_SITE_VARIANT: ${{ steps.variant.outputs.variant }}
+          PUBLIC_SITE_VERSION: ${{ steps.variant.outputs.version }}
+
+      - name: Deploy to Cloudflare Pages
+        run: pnpm --filter @axis-repository/site exec wrangler pages deploy dist --project-name=axis-site --branch=${{ steps.variant.outputs.pages_branch }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
