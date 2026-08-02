@@ -1,9 +1,50 @@
 ---
 import Default from "@astrojs/starlight/components/Header.astro";
 import PreviewBanner from "./PreviewBanner.astro";
+
+const variant = import.meta.env.PUBLIC_SITE_VARIANT;
+const version = import.meta.env.PUBLIC_SITE_VERSION;
+const showBanner = variant === "preview" && Boolean(version);
 ---
-<PreviewBanner
-  variant={import.meta.env.PUBLIC_SITE_VARIANT}
-  version={import.meta.env.PUBLIC_SITE_VERSION}
-/>
-<Default {...Astro.props}><slot /></Default>
+{showBanner && (
+  <style is:global>
+    /*
+     * PageFrame.astro (Starlight core) sizes the fixed header box, the
+     * sidebar's top offset, and the main content's top padding all from
+     * this one variable (see @astrojs/starlight/style/props.css for the
+     * 3.5rem/4rem defaults being added to below). Without bumping it, the
+     * sidebar and content start where the *unmodified* nav height ends,
+     * overlapping the taller header this banner creates.
+     */
+    :root {
+      --sl-nav-height: calc(3.5rem + 2rem);
+    }
+    @media (min-width: 50rem) {
+      :root {
+        --sl-nav-height: calc(4rem + 2rem);
+      }
+    }
+  </style>
+)}
+<div class="site-header">
+  <PreviewBanner variant={variant} version={version} />
+  <div class="site-header-nav">
+    <Default {...Astro.props}><slot /></Default>
+  </div>
+</div>
+
+<style>
+  .site-header {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* Default's own Header markup is `height: 100%`; wrapping it lets that
+     resolve against the space flexbox leaves after the banner, instead of
+     against the full (now taller) header box. */
+  .site-header-nav {
+    flex: 1;
+    min-height: 0;
+  }
+</style>
