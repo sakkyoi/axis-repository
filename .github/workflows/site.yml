@@ -75,9 +75,6 @@ jobs:
 
       - name: Build site
         run: pnpm --filter @axis-repository/site build
-        env:
-          PUBLIC_SITE_VARIANT: ${{ steps.variant.outputs.variant }}
-          PUBLIC_SITE_VERSION: ${{ steps.variant.outputs.version }}
 
       - name: Deploy to Cloudflare Pages
         run: pnpm --filter @axis-repository/site exec wrangler pages deploy dist --project-name=axis-site --branch=${{ steps.variant.outputs.pages_branch }}

@@ -6,9 +6,6 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "Axis Repository",
-      components: {
-        Header: "./src/components/StarlightHeader.astro",
-      },
       sidebar: [
         {
           label: "Guides",
