@@ -14,6 +14,7 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/.wrangler/**",
       "packages/runtime-cloudflare/generated/**",
+      "apps/site/**",
     ],
   },
   js.configs.recommended,
