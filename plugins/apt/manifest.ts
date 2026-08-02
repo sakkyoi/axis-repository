@@ -1,4 +1,5 @@
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
+import { debianOpenLogoNoTextSvg } from "./assets/debian-openlogo-nd";
 
 export const aptPluginManifest = {
   ecosystem: "apt",
@@ -7,6 +8,16 @@ export const aptPluginManifest = {
   runtimeName: "apt-signed",
   version: "0.1.0",
   capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
+  icon: {
+    title: "APT",
+    accentColor: "#A80030",
+    svg: debianOpenLogoNoTextSvg,
+    svgSource: {
+      name: "Debian Open Use Logo without Debian label",
+      url: "https://www.debian.org/logos/openlogo-nd.svg",
+      rights: "LGPL-3.0-or-later OR CC-BY-SA-3.0",
+    },
+  },
   repositoryConfig: {
     namespace: "apt",
     fields: [

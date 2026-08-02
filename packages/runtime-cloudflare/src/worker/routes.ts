@@ -17,6 +17,7 @@ import {
   type RepositoryObjectMetadata,
   type RepositoryObjectRange,
 } from "@axis-repository/core";
+import { resolvePluginIconAssets } from "@axis-repository/core/plugin-icons";
 import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "@axis-repository/plugin-catalog";
 import { adminUiAssets, injectAdminUiRuntimeConfig, type AdminUiAsset } from "../admin-ui-assets";
 import { formatBootstrapWarningLog, leftoverBootstrapCredentials, leftoverBootstrapWarning } from "./bootstrap-credentials";
@@ -33,8 +34,10 @@ import { scopeSecretsToEcosystem } from "../plugins/scoped-capabilities";
 import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
 import { adminRefreshCookie, clearAdminRefreshCookie, refreshTokenFromCookie, requestIsSecure } from "../auth/admin-auth";
 import {
+  compositeRepositoryFaviconSvg,
   directoryNeedsTrailingSlash,
   readRepositoryDirectory,
+  REPOSITORY_FAVICON_QUERY_PARAM,
   renderRepositoryDirectoryHtml,
   trailingSlashRedirectLocation,
 } from "./repository-directory";
@@ -126,6 +129,7 @@ async function repositoryPluginMetadata(dependencies: AppDependencies) {
       ecosystem: catalogEntry.manifest.ecosystem,
       name: catalogEntry.manifest.runtimeName,
       version: catalogEntry.manifest.version,
+      icon: { ...catalogEntry.icon },
       capabilities: [...catalogEntry.manifest.capabilities],
       ...(catalogEntry.manifest.clientHelpers
         ? {
@@ -154,6 +158,7 @@ async function repositoryPluginMetadata(dependencies: AppDependencies) {
       });
       return {
         ...plugin,
+        icon: resolvePluginIconAssets(undefined),
         ...policy,
         experimental: catalogEntry?.experimental ?? false,
         runtime: catalogEntry?.runtime ?? true,
@@ -453,6 +458,33 @@ function adminUiAssetResponse(asset: AdminUiAsset, dependencies: AppDependencies
       },
     },
   );
+}
+
+const SHARED_PUBLIC_ASSET_PATHS = new Set([
+  "/logo-mark-dark.svg",
+  "/logo-mark-light.svg",
+]);
+
+function sharedPublicAssetResponse(pathname: string, dependencies: AppDependencies): Response | null {
+  if (!SHARED_PUBLIC_ASSET_PATHS.has(pathname)) {
+    return null;
+  }
+  const asset = adminUiAssets.get(pathname);
+  return asset ? adminUiAssetResponse(asset, dependencies) : null;
+}
+
+function textAsset(pathname: string): string {
+  const asset = adminUiAssets.get(pathname);
+  if (!asset) {
+    throw new Error(`Missing embedded asset: ${pathname}`);
+  }
+  if (typeof asset.body === "string") {
+    return asset.body;
+  }
+  if (asset.body instanceof Uint8Array) {
+    return new TextDecoder().decode(asset.body);
+  }
+  throw new Error(`Embedded asset is not text-compatible: ${pathname}`);
 }
 
 function adminUiResponse(pathname: string, dependencies: AppDependencies): Response | null {
@@ -926,7 +958,29 @@ async function repositoryDirectoryResponse(input: {
     });
   }
 
-  const html = renderRepositoryDirectoryHtml({ repositoryName: input.repository.name, listing });
+  const catalogEntry = getRepositoryPluginCatalogEntry(input.repository.ecosystem);
+  const pluginIcon = catalogEntry?.icon ?? resolvePluginIconAssets(undefined);
+  const logoMarks = {
+    light: textAsset("/logo-mark-light.svg"),
+    dark: textAsset("/logo-mark-dark.svg"),
+  };
+  const faviconTheme = url.searchParams.get(REPOSITORY_FAVICON_QUERY_PARAM);
+  if (faviconTheme === "light" || faviconTheme === "dark") {
+    const svg = compositeRepositoryFaviconSvg(logoMarks[faviconTheme], pluginIcon);
+    return new Response(input.method === "HEAD" ? null : svg, {
+      headers: {
+        "content-type": "image/svg+xml; charset=utf-8",
+        "cache-control": repositoryCacheControl(input.repository),
+      },
+    });
+  }
+
+  const html = renderRepositoryDirectoryHtml({
+    repositoryName: input.repository.name,
+    repositoryEcosystem: input.repository.ecosystem,
+    pluginIcon,
+    listing,
+  });
   return new Response(input.method === "HEAD" ? null : html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
@@ -1248,6 +1302,10 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   const { servesArtifacts, servesAdmin } = originRoles(url, dependencies);
   if (url.pathname === "/health") {
     return jsonResponse({ ok: true, service: "axis-repository" });
+  }
+  const sharedAsset = sharedPublicAssetResponse(url.pathname, dependencies);
+  if (sharedAsset) {
+    return sharedAsset;
   }
   if (!servesAdmin && !url.pathname.startsWith("/repositories/")) {
     throw new NotFoundError();

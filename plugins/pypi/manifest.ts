@@ -1,4 +1,5 @@
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
+import { pypiLogoSmallSvg } from "./assets/pypi-logo-small";
 
 export const pypiPluginManifest = {
   ecosystem: "pypi",
@@ -7,6 +8,16 @@ export const pypiPluginManifest = {
   runtimeName: "pypi-simple",
   version: "0.1.0",
   capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
+  icon: {
+    title: "PyPI",
+    accentColor: "#3775A9",
+    svg: pypiLogoSmallSvg,
+    svgSource: {
+      name: "PyPI logo-small.svg",
+      url: "https://pypi.org/static/images/logo-small.0e0855d0.svg",
+      rights: "PyPI warehouse source asset; PyPI and the blocks logos are PSF registered trademarks",
+    },
+  },
   repositoryConfig: {
     namespace: "pypi",
     fields: [],

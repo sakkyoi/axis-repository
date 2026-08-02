@@ -33,11 +33,12 @@
   },
   "dependencies": {
     "@axis-repository/core": "workspace:*",
-    "@axis-repository/plugin-catalog": "workspace:*",
     "@axis-repository/plugin-apt": "workspace:*",
+    "@axis-repository/plugin-catalog": "workspace:*",
     "@axis-repository/plugin-pypi": "workspace:*",
     "aws4fetch": "^1.0.20",
-    "openpgp": "^6.3.1"
+    "openpgp": "^6.3.1",
+    "svgson": "^5.3.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260731.1",

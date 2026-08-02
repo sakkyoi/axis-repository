@@ -317,6 +317,17 @@ describe("Cloudflare runtime routes", () => {
     expect(api.status).toBe(401);
   });
 
+  it("declares theme-specific admin UI favicons", async () => {
+    const app = createApp(createDevDependencies());
+
+    const shell = await app.fetch(new Request("https://axis.example/ui/"));
+    const shellHtml = await shell.text();
+
+    expect(shellHtml).toContain('<link rel="icon" type="image/svg+xml" href="/logo-mark-light.svg" media="(prefers-color-scheme: light)" />');
+    expect(shellHtml).toContain('<link rel="icon" type="image/svg+xml" href="/logo-mark-dark.svg" media="(prefers-color-scheme: dark)" />');
+    expect(shellHtml).not.toContain('href="/favicon.svg"');
+  });
+
   it("serves the admin UI favicon at the browser default root path", async () => {
     const app = createApp(createDevDependencies());
     const response = await app.fetch(new Request("https://axis.example/favicon.svg"));
@@ -324,6 +335,20 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/svg+xml");
     await expect(response.text()).resolves.toContain("<svg");
+  });
+
+  it("serves theme-specific logo mark assets", async () => {
+    const app = createApp(createDevDependencies());
+
+    for (const path of ["/logo-mark-light.svg", "/logo-mark-dark.svg"]) {
+      const response = await app.fetch(new Request(`https://axis.example${path}`));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("image/svg+xml");
+      const body = await response.text();
+      expect(body).toContain("<svg");
+      expect(body).not.toContain("<!DOCTYPE html>");
+    }
   });
 
   it("does not serve the admin UI shell for reserved namespace roots", async () => {
@@ -859,7 +884,7 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       plugins: [
-        {
+        expect.objectContaining({
           ecosystem: "apt",
           name: "apt-signed",
           version: "0.1.0",
@@ -870,6 +895,11 @@ describe("Cloudflare runtime routes", () => {
           runtime: true,
           adminUi: true,
           capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
+          icon: expect.objectContaining({
+            title: "APT",
+            accentColor: "#A80030",
+            inlineSvg: expect.stringContaining("<svg"),
+          }),
           clientHelpers: {
             namespace: "apt",
             actions: [
@@ -896,8 +926,8 @@ describe("Cloudflare runtime routes", () => {
               },
             ],
           },
-        },
-        {
+        }),
+        expect.objectContaining({
           ecosystem: "pypi",
           name: "pypi-simple",
           version: "0.1.0",
@@ -908,6 +938,11 @@ describe("Cloudflare runtime routes", () => {
           runtime: true,
           adminUi: true,
           capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
+          icon: expect.objectContaining({
+            title: "PyPI",
+            accentColor: "#3775A9",
+            inlineSvg: expect.stringContaining("<svg"),
+          }),
           clientHelpers: {
             namespace: "pypi",
             actions: [
@@ -929,7 +964,7 @@ describe("Cloudflare runtime routes", () => {
               },
             ],
           },
-        },
+        }),
       ],
     });
   });
@@ -1821,6 +1856,7 @@ describe("Cloudflare runtime routes", () => {
     );
     const uiOnAdmin = await app.fetch(new Request("https://axis.example/ui/"));
     const uiOnCdn = await app.fetch(new Request("https://cdn.axis.example/ui/"));
+    const logoOnCdn = await app.fetch(new Request("https://cdn.axis.example/logo-mark-light.svg"));
     const adminOnCdn = await app.fetch(new Request("https://cdn.axis.example/admin/repositories", {
       headers: { authorization: "Bearer dev-admin-token" },
     }));
@@ -1831,6 +1867,9 @@ describe("Cloudflare runtime routes", () => {
     expect(objectOnAdmin.status).toBe(404);
     expect(uiOnAdmin.status).toBe(200);
     expect(uiOnCdn.status).toBe(404);
+    expect(logoOnCdn.status).toBe(200);
+    expect(logoOnCdn.headers.get("content-type")).toBe("image/svg+xml");
+    await expect(logoOnCdn.text()).resolves.not.toContain("<!DOCTYPE html>");
     expect(adminOnCdn.status).toBe(404);
   });
 
@@ -5747,6 +5786,52 @@ describe("browsing a repository", () => {
     const body = await response.text();
     expect(body).toContain(">dists/<");
     expect(body).toContain(">pool/<");
+  });
+
+  it("serves the repository favicon as a standalone SVG asset", async () => {
+    const { app } = await browsable();
+
+    const pageResponse = await app.fetch(new Request("https://axis.example/repositories/debian-internal/"));
+    const page = await pageResponse.text();
+    expect(page).toContain("href=\"?axis-repository-favicon=light\"");
+    expect(page).not.toContain("data:image/svg+xml");
+
+    const faviconResponse = await app.fetch(
+      new Request("https://axis.example/repositories/debian-internal/?axis-repository-favicon=light"),
+    );
+
+    expect(faviconResponse.status).toBe(200);
+    expect(faviconResponse.headers.get("content-type")).toContain("image/svg+xml");
+    const favicon = await faviconResponse.text();
+    expect(favicon).toContain("Badge: APT");
+    expect(favicon).toContain("viewBox=\"0 0 210 210\"");
+    expect(favicon).not.toContain("<!DOCTYPE");
+    expect(favicon).not.toContain("&ns_");
+  });
+
+  it("serves PyPI repository favicons without duplicate SVG sizing attributes", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, { name: "python-internal", ecosystem: "pypi", visibility: "public" });
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-internal/simple/index.html",
+      "<!doctype html><a href=\"alpha/\">alpha</a>",
+      "application/vnd.pypi.simple.v1+html",
+    );
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-internal/?axis-repository-favicon=dark"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("image/svg+xml");
+    const favicon = await response.text();
+    const badgeSvgTag = favicon.match(/<svg x="122"[^>]+>/)?.[0] ?? "";
+    expect(badgeSvgTag).toContain("width=\"82\"");
+    expect(badgeSvgTag.match(/\bwidth=/g)).toHaveLength(1);
+    expect(badgeSvgTag.match(/\bheight=/g)).toHaveLength(1);
+    expect(favicon).not.toContain("cx=\"171\"");
+    expect(favicon).not.toContain("#f8fafc");
   });
 
   it("lists a directory further down", async () => {

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { resolvePluginIconAssets } from "@axis-repository/core/plugin-icons";
+import { aptPluginManifest } from "@axis-repository/plugin-apt/manifest";
+import { pypiPluginManifest } from "@axis-repository/plugin-pypi/manifest";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 import {
   directoryNeedsTrailingSlash,
+  compositeRepositoryFaviconSvg,
+  REPOSITORY_FAVICON_QUERY_PARAM,
   readRepositoryDirectory,
   renderRepositoryDirectoryHtml,
   trailingSlashRedirectLocation,
@@ -59,6 +64,11 @@ describe("directoryNeedsTrailingSlash", () => {
 });
 
 describe("renderRepositoryDirectoryHtml", () => {
+  const pluginIcon = resolvePluginIconAssets(undefined);
+  const logoMarks = {
+    light: "<svg viewBox=\"0 0 210 210\"><path d=\"M1 1h208v208H1z\" fill=\"#111827\"/></svg>",
+    dark: "<svg viewBox=\"0 0 210 210\"><path d=\"M2 2h206v206H2z\" fill=\"#e6edf3\"/></svg>",
+  };
   const listing = {
     relativePath: "pool/main/",
     entries: [
@@ -80,11 +90,30 @@ describe("renderRepositoryDirectoryHtml", () => {
     return rows.flatMap((row) => [...row.matchAll(/href="([^"]+)"/g)].map((match) => match[1]!));
   }
 
+  function render(input: {
+    repositoryName?: string;
+    repositoryEcosystem?: string;
+    pluginIcon?: typeof pluginIcon;
+    listing?: typeof listing;
+  } = {}) {
+    return renderRepositoryDirectoryHtml({
+      repositoryName: input.repositoryName ?? "a",
+      repositoryEcosystem: input.repositoryEcosystem ?? "apt",
+      pluginIcon: input.pluginIcon ?? pluginIcon,
+      listing: input.listing ?? listing,
+    });
+  }
+
+  function faviconHrefs(html: string): string[] {
+    return [...html.matchAll(/<link rel="icon" type="image\/svg\+xml" href="([^"]+)" media="[^"]+" \/>/g)]
+      .map((match) => match[1]!);
+  }
+
   it("links so every entry resolves inside the directory", () => {
     // Including a name with a colon: a Debian filename carries one whenever
     // the version has an epoch.
     const at = "https://axis.example/repositories/a/pool/main/";
-    const hrefs = entryHrefs(renderRepositoryDirectoryHtml({ repositoryName: "a", listing }));
+    const hrefs = entryHrefs(render());
 
     expect(hrefs.length).toBeGreaterThan(0);
     for (const href of hrefs) {
@@ -94,7 +123,7 @@ describe("renderRepositoryDirectoryHtml", () => {
 
   it("walks back up through the breadcrumb", () => {
     const at = "https://axis.example/repositories/a/pool/main/";
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
     const nav = /<nav[^>]*>(.*?)<\/nav>/s.exec(html)?.[1] ?? "";
     const crumbs = [...nav.matchAll(/<a href="([^"]+)">([^<]*)</g)]
       .map((match) => ({ href: match[1]!, label: match[2]! }));
@@ -108,7 +137,7 @@ describe("renderRepositoryDirectoryHtml", () => {
 
   it("resolves a colon-carrying entry to the object it names", () => {
     const at = "https://axis.example/repositories/a/pool/main/";
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
     const href = [...html.matchAll(/<a href="([^"]+)"/g)]
       .map((match) => match[1]!)
       .find((candidate) => candidate.includes("alpha"))!;
@@ -118,29 +147,91 @@ describe("renderRepositoryDirectoryHtml", () => {
   });
 
   it("shows sizes for files and none for directories", () => {
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
 
     expect(html).toContain("2.0 KiB");
   });
 
-  it("uses the Axis logo mark in the directory header", () => {
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+  it("uses the light and dark logo assets in the directory header", () => {
+    const html = render();
 
-    expect(html).toContain("axis-logo-mark");
-    expect(html).toContain("fill=\"currentColor\"");
-    expect(html).toContain("fill=\"#a3e635\"");
+    expect(html).toContain("<picture class=\"axis-logo-mark\">");
+    expect(html).toContain("srcset=\"/logo-mark-dark.svg\"");
+    expect(html).toContain("src=\"/logo-mark-light.svg\"");
+    expect(html).not.toContain("viewBox=\"0 0 210 210\"");
+    expect(html).not.toContain("M14 15.5 24 9l10 6.5v13L24 35l-10-6.5v-13Z");
     expect(html).not.toContain("<span class=\"mark\" aria-hidden=\"true\"><span></span></span>");
   });
 
-  it("declares the shared site favicon in the document head", () => {
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+  it("declares light and dark repository favicon URLs in the document head", () => {
+    const html = render();
+    const favicons = faviconHrefs(html);
 
-    expect(html).toContain("<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\" />");
-    expect(html.indexOf("<link rel=\"icon\"")).toBeLessThan(html.indexOf("<title>"));
+    expect(favicons).toHaveLength(2);
+    expect(favicons).toEqual([
+      `?${REPOSITORY_FAVICON_QUERY_PARAM}=light`,
+      `?${REPOSITORY_FAVICON_QUERY_PARAM}=dark`,
+    ]);
+    expect(html).toContain("media=\"(prefers-color-scheme: light)\"");
+    expect(html).toContain("media=\"(prefers-color-scheme: dark)\"");
+    expect(html).not.toContain("data:image/svg+xml");
+  });
+
+  it("composes official plugin SVG icons into browser-safe favicon SVG", () => {
+    const favicon = compositeRepositoryFaviconSvg(
+      logoMarks.light,
+      resolvePluginIconAssets(aptPluginManifest.icon),
+    );
+
+    expect(favicon).toContain("Badge: APT");
+    expect(favicon).toContain("http://www.w3.org/2000/svg");
+    expect(favicon).not.toContain("<circle");
+    expect(favicon).not.toContain("&ns_");
+    expect(favicon).not.toContain("<!DOCTYPE");
+  });
+
+  it("removes sizing attributes from official plugin SVG icons before placing the favicon badge", () => {
+    const favicon = compositeRepositoryFaviconSvg(
+      logoMarks.dark,
+      resolvePluginIconAssets(pypiPluginManifest.icon),
+    );
+    const badgeSvgTag = favicon.match(/<svg x="122"[^>]+>/)?.[0] ?? "";
+
+    expect(badgeSvgTag).toContain("width=\"82\"");
+    expect(badgeSvgTag).toContain("height=\"82\"");
+    expect(badgeSvgTag.match(/\bwidth=/g)).toHaveLength(1);
+    expect(badgeSvgTag.match(/\bheight=/g)).toHaveLength(1);
+  });
+
+  it("normalizes logo mark dimensions before composing repository favicons", () => {
+    const favicon = compositeRepositoryFaviconSvg(
+      "<svg width=\"512\" height=\"512\" viewBox=\"0 0 210 210\"><path d=\"M1 1h208v208H1z\"/></svg>",
+      pluginIcon,
+    );
+
+    expect(favicon).not.toContain("width=\"512\"");
+    expect(favicon).not.toContain("height=\"512\"");
+    expect(favicon).toContain("width=\"210\"");
+    expect(favicon).toContain("height=\"210\"");
+  });
+
+  it("renders repository ecosystem icon metadata", () => {
+    const aptIcon = {
+      title: "APT",
+      accentColor: "#0f766e",
+      inlineSvg: "<svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M7 15.5 12 5l5 10.5\" /></svg>",
+    };
+    const html = render({ repositoryName: "debian", repositoryEcosystem: "apt", pluginIcon: aptIcon });
+
+    expect(html).toContain("data-ecosystem=\"apt\"");
+    expect(html).toContain(aptIcon.inlineSvg);
+    expect(html).toContain("APT");
+    expect(html).toContain("<div class=\"repository-line\">");
+    expect(html).toContain("<span class=\"repository\">debian</span>");
   });
 
   it("links to the project GitHub repository from the directory header", () => {
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
 
     expect(html).toContain("https://github.com/sakkyoi/axis-repository");
     expect(html).toContain("aria-label=\"Open Axis Repository on GitHub\"");
@@ -150,7 +241,7 @@ describe("renderRepositoryDirectoryHtml", () => {
   });
 
   it("credits the project author in the footer", () => {
-    const html = renderRepositoryDirectoryHtml({ repositoryName: "a", listing });
+    const html = render();
 
     expect(html).toContain("Made by sakkyoi with");
     expect(html).toContain("class=\"love-icon\"");

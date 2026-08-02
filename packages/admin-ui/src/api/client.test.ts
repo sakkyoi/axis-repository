@@ -549,6 +549,11 @@ describe("createAxisClient", () => {
               experimental: false,
               runtime: true,
               adminUi: true,
+              icon: {
+                title: "APT",
+                accentColor: "#0f766e",
+                inlineSvg: "<svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"></svg>",
+              },
               capabilities: ["signed-release", "client-helpers"],
               clientHelpers: {
                 namespace: "apt",
@@ -576,6 +581,7 @@ describe("createAxisClient", () => {
 
     expect(requests).toEqual(["GET /admin/repository-plugins"]);
     expect(plugins.map((plugin) => plugin.ecosystem)).toEqual(["apt"]);
+    expect(plugins[0]?.icon?.title).toBe("APT");
     expect(plugins[0]).toMatchObject({
       enabled: true,
       catalogEnabled: true,
@@ -1331,4 +1337,3 @@ describe("unauthorized handling", () => {
     expect(refreshCalls).toBe(0);
   });
 });
-

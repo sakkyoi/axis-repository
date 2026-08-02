@@ -7,6 +7,7 @@ import { useRepositories, useRepositoryPlugins } from "../api/hooks";
 import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { ADMIN_UI_PATHS, repositorySettingsPath, repositoryWorkspacePath } from "../navigation";
 import { pluginLifecycleSummary } from "../repositories/plugins/plugin-lifecycle";
+import { RepositoryEcosystemLabel } from "../repositories/plugins/repository-ecosystem-icon";
 import { repositorySummarySectionsFor } from "../repositories/plugins/repository-detail-plugins";
 import { RepositoryDetailSections } from "../repositories/detail/repository-detail-shared";
 import {
@@ -85,7 +86,9 @@ export function RepositoriesPage() {
                       onClick={() => setSelectedName(repository.name)}
                     >
                       <td className="px-3 py-2 font-medium">{repository.name}</td>
-                      <td className="px-3 py-2">{repository.ecosystem}</td>
+                      <td className="px-3 py-2">
+                        <RepositoryEcosystemLabel ecosystem={repository.ecosystem} plugin={pluginFor(repository)} />
+                      </td>
                       <td className="px-3 py-2">
                         <Badge variant={repository.visibility === "public" ? "success" : "default"}>
                           {repository.visibility}
@@ -114,7 +117,13 @@ export function RepositoriesPage() {
             <div className="flex min-w-0 items-start justify-between gap-3 pr-6">
               <div className="min-w-0">
                 <DialogTitle className="truncate">{selected?.name ?? "Repository"}</DialogTitle>
-                {selected && <p className="text-sm text-muted-foreground">{selected.ecosystem}</p>}
+                {selected && (
+                  <RepositoryEcosystemLabel
+                    ecosystem={selected.ecosystem}
+                    plugin={selectedPlugin}
+                    className="text-sm text-muted-foreground"
+                  />
+                )}
               </div>
               {selectedLifecycle && (
                 <Badge className="shrink-0" variant={selectedLifecycle.variant}>{selectedLifecycle.label}</Badge>
@@ -203,7 +212,11 @@ function RepositoryDetail({
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold">{repository.name}</h2>
-            <p className="text-sm text-muted-foreground">{repository.ecosystem}</p>
+            <RepositoryEcosystemLabel
+              ecosystem={repository.ecosystem}
+              plugin={pluginMetadata}
+              className="text-sm text-muted-foreground"
+            />
           </div>
           {lifecycle && <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>}
         </div>

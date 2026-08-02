@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolvePluginIconAssets } from "@axis-repository/core/plugin-icons";
 import { aptPluginManifest } from "./manifest";
 
 const manifest = aptPluginManifest;
@@ -58,5 +59,24 @@ describe("APT plugin manifest", () => {
       .map((action) => action.name);
 
     expect(publicActions).toEqual(["key.gpg", "source", "install"]);
+  });
+
+  it("provides a plugin-owned ecosystem icon", () => {
+    expect(manifest.icon?.title).toBe("APT");
+    expect(manifest.icon?.accentColor).toBe("#A80030");
+    expect(manifest.icon).toMatchObject({
+      svgSource: {
+        name: "Debian Open Use Logo without Debian label",
+        url: "https://www.debian.org/logos/openlogo-nd.svg",
+        rights: "LGPL-3.0-or-later OR CC-BY-SA-3.0",
+      },
+    });
+    expect(manifest.icon).not.toHaveProperty("shapes");
+    const assets = resolvePluginIconAssets(manifest.icon);
+    expect(assets.title).toBe("APT");
+    expect(assets.accentColor).toBe("#A80030");
+    expect(assets.inlineSvg).toContain("viewBox=\"0 0 87.041 108.445\"");
+    expect(assets.inlineSvg).toContain("#A80030");
+    expect(assets.inlineSvg).not.toContain("<!DOCTYPE");
   });
 });

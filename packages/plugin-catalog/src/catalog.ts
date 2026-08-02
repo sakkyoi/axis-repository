@@ -1,8 +1,10 @@
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
+import { resolvePluginIconAssets, type ResolvedPluginIconAssets } from "@axis-repository/core/plugin-icons";
 import { bundledRepositoryPlugins } from "./bundled";
 
 export interface RepositoryPluginCatalogEntry {
   manifest: RepositoryPluginManifest;
+  icon: ResolvedPluginIconAssets;
   enabled: boolean;
   experimental: boolean;
   runtime: boolean;
@@ -15,10 +17,12 @@ export interface RepositoryPluginCatalogMetadata {
   experimental: boolean;
   runtime: boolean;
   adminUi: boolean;
+  icon: ResolvedPluginIconAssets;
 }
 
 export const repositoryPluginCatalog = bundledRepositoryPlugins.map((plugin) => ({
   manifest: plugin.manifest,
+  icon: resolvePluginIconAssets(plugin.manifest.icon),
   enabled: plugin.catalog.enabled,
   experimental: plugin.catalog.experimental,
   runtime: plugin.runtime,
@@ -40,5 +44,6 @@ export function repositoryPluginCatalogMetadata(): RepositoryPluginCatalogMetada
     experimental: entry.experimental,
     runtime: entry.runtime,
     adminUi: entry.adminUi,
+    icon: { ...entry.icon },
   }));
 }

@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 const root = new URL(".", import.meta.url);
-const workerFirstPaths = ["/admin/*", "/api/*", "/repositories/*", "/health"];
+const workerFirstPaths = [
+  "/admin/*",
+  "/api/*",
+  "/repositories/*",
+  "/health",
+  "/logo-mark-dark.svg",
+  "/logo-mark-light.svg",
+];
 
 interface DevValues {
   UPLOAD_BACKEND?: string;
@@ -128,6 +135,10 @@ export default defineConfig({
       {
         find: "stream/web",
         replacement: fileURLToPath(new URL("packages/runtime-cloudflare/src/worker-shims/stream-web.ts", root)),
+      },
+      {
+        find: "#admin-ui-assets-generated",
+        replacement: fileURLToPath(new URL("packages/runtime-cloudflare/src/admin-ui-assets/generated-dev.ts", root)),
       },
     ],
   },
