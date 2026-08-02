@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["astro/client"]
+  },
+  "include": ["src/**/*", "astro.config.mjs", "vitest.config.ts"]
+}
