@@ -1,11 +1,14 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import starlightThemeRapide from "starlight-theme-rapide";
+import starlightSiteGraph from "starlight-site-graph";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   integrations: [
     starlight({
       title: "Axis Repository",
+      plugins: [starlightThemeRapide(), starlightSiteGraph()],
       sidebar: [
         {
           label: "Guides",

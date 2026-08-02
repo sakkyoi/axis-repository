@@ -16,6 +16,8 @@
     "astro": "^7.1.6",
     "eslint": "^10.8.0",
     "eslint-plugin-astro": "^3.1.0",
+    "starlight-site-graph": "^0.5.0",
+    "starlight-theme-rapide": "^0.5.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8",
