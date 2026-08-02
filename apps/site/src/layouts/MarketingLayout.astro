@@ -1,0 +1,24 @@
+---
+import "../styles/tailwind.css";
+import PreviewBanner from "../components/PreviewBanner.astro";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+  </head>
+  <body class="bg-white text-slate-900">
+    <PreviewBanner
+      variant={import.meta.env.PUBLIC_SITE_VARIANT}
+      version={import.meta.env.PUBLIC_SITE_VERSION}
+    />
+    <slot />
+  </body>
+</html>
