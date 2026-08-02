@@ -50,15 +50,15 @@ export function createPypiClientHelpers(): RepositoryClientHelpers {
             repository: repository.name,
             ecosystem: "pypi",
             uploadUrl: url,
-            // twine reads ~/.pypirc; the token goes in as the password, which
-            // is why the username is the literal __token__.
+            // twine reads ~/.pypirc; Axis publish tokens use this fixed
+            // username and put the token in as the password.
             pypirc: [
               "[distutils]",
               `index-servers = ${repository.name}`,
               "",
               `[${repository.name}]`,
               `repository = ${url}`,
-              "username = __token__",
+              "username = axis",
               "password = <PUBLISH_TOKEN>",
               "",
             ].join("\n"),

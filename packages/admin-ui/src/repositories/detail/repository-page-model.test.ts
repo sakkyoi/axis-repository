@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   repositoryDetailBodyClass,
+  repositoryDetailTitleClass,
+  repositoryListNameCellClass,
+  repositoryListNameTextClass,
   repositoryListEmptyClass,
   repositoryListEmptyPanelClass,
   repositoryDeleteDialogContent,
@@ -22,8 +25,15 @@ describe("repository page model", () => {
 
   it("keeps short repository details packed at the top of the scroll area", () => {
     expect(repositoryDetailBodyClass()).toContain("content-start");
-    expect(repositoryDetailBodyClass()).toContain("h-full");
+    expect(repositoryDetailBodyClass()).toContain("min-h-0");
     expect(repositoryDetailBodyClass()).toContain("overflow-y-auto");
+    expect(repositoryDetailBodyClass()).not.toContain("h-full");
+  });
+
+  it("lets long repository names fit inside the split list and detail panes", () => {
+    expect(repositoryListNameCellClass()).toContain("max-w-0");
+    expect(repositoryListNameTextClass()).toContain("truncate");
+    expect(repositoryDetailTitleClass()).toContain("break-all");
   });
 
   it("keeps the empty repository list filling its panel", () => {

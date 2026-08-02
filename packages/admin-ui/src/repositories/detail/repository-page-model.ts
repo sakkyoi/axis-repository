@@ -24,8 +24,20 @@ export function repositoryRowStateClass(repositoryName: string, selectedName: st
  */
 export function repositoryDetailBodyClass(framed = true): string {
   return framed
-    ? "grid h-full min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4"
+    ? "grid min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4"
     : "grid content-start gap-4";
+}
+
+export function repositoryDetailTitleClass(): string {
+  return "break-all text-base font-semibold leading-snug";
+}
+
+export function repositoryListNameCellClass(): string {
+  return "max-w-0 px-3 py-2 font-medium";
+}
+
+export function repositoryListNameTextClass(): string {
+  return "block truncate";
 }
 
 export function repositoryListEmptyClass(): string {

@@ -87,25 +87,26 @@ export function PypiSettingsSection({
   );
 }
 
-export function pypiUploadUrl(repository: Repository): string {
-  return `/repositories/${repository.name}/legacy/`;
+export function pypiUploadUrl(repository: Repository, origin = globalThis.location?.origin): string {
+  const path = `/repositories/${repository.name}/legacy/`;
+  return origin ? `${origin.replace(/\/+$/g, "")}${path}` : path;
 }
 
 /**
  * How to publish with twine.
  *
- * The token goes in as the password, which is why the username is the literal
- * `__token__`: that is the convention PyPI's own clients follow.
+ * Publish tokens use the shared Axis token-auth username and put the token in
+ * as the password.
  */
-export function pypiUploadCommandText(repository: Repository): string {
+export function pypiUploadCommandText(repository: Repository, origin?: string): string {
   return [
     "# A publish token for this repository.",
-    "export TWINE_USERNAME=__token__",
+    "export TWINE_USERNAME=axis",
     "export TWINE_PASSWORD=\"<PUBLISH_TOKEN>\"",
     "",
     "# Upload a built wheel and sdist.",
     "twine upload \\",
-    `  --repository-url "${pypiUploadUrl(repository)}" \\`,
+    `  --repository-url "${pypiUploadUrl(repository, origin)}" \\`,
     "  dist/*",
   ].join("\n");
 }

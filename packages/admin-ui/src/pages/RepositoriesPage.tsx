@@ -12,8 +12,11 @@ import { repositorySummarySectionsFor } from "../repositories/plugins/repository
 import { RepositoryDetailSections } from "../repositories/detail/repository-detail-shared";
 import {
   repositoryDetailBodyClass,
+  repositoryDetailTitleClass,
   repositoryListEmptyClass,
   repositoryListEmptyPanelClass,
+  repositoryListNameCellClass,
+  repositoryListNameTextClass,
   repositoryRowStateClass,
   repositorySummaryItems,
 } from "../repositories/detail/repository-page-model";
@@ -69,10 +72,10 @@ export function RepositoriesPage() {
                 </div>
               </div>
             ) : (
-              <table className="w-full border-collapse text-sm">
+              <table className="w-full table-fixed border-collapse text-sm">
                 <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="px-3 py-2">Name</th>
+                    <th className="w-2/5 px-3 py-2">Name</th>
                     <th className="px-3 py-2">Ecosystem</th>
                     <th className="px-3 py-2">Visibility</th>
                     <th className="px-3 py-2">Updated</th>
@@ -85,7 +88,9 @@ export function RepositoriesPage() {
                       className={`cursor-pointer border-t border-border ${repositoryRowStateClass(repository.name, selectedName)}`}
                       onClick={() => setSelectedName(repository.name)}
                     >
-                      <td className="px-3 py-2 font-medium">{repository.name}</td>
+                      <td className={repositoryListNameCellClass()}>
+                        <span className={repositoryListNameTextClass()} title={repository.name}>{repository.name}</span>
+                      </td>
                       <td className="px-3 py-2">
                         <RepositoryEcosystemLabel ecosystem={repository.ecosystem} plugin={pluginFor(repository)} />
                       </td>
@@ -211,7 +216,7 @@ function RepositoryDetail({
       <div className="sticky top-0 z-10 border-b border-border bg-panel p-4">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold">{repository.name}</h2>
+            <h2 className={repositoryDetailTitleClass()}>{repository.name}</h2>
             <RepositoryEcosystemLabel
               ecosystem={repository.ecosystem}
               plugin={pluginMetadata}

@@ -118,4 +118,30 @@ describe("PyPI plugin lifecycle", () => {
       pipIndexUrl: "https://axis.example/repositories/python-internal/simple/",
     });
   });
+
+  it("serves a twine config helper with the Axis username", async () => {
+    const plugin = createPypiPlugin();
+
+    const response = await dispatchRepositoryClientHelper(plugin.clientHelpers!, {
+      repository: repositoryFixture(),
+      action: "twine-config",
+      origin: "https://axis.example",
+    });
+
+    await expect(response?.json()).resolves.toEqual({
+      repository: "python-internal",
+      ecosystem: "pypi",
+      uploadUrl: "https://axis.example/repositories/python-internal/legacy/",
+      pypirc: [
+        "[distutils]",
+        "index-servers = python-internal",
+        "",
+        "[python-internal]",
+        "repository = https://axis.example/repositories/python-internal/legacy/",
+        "username = axis",
+        "password = <PUBLISH_TOKEN>",
+        "",
+      ].join("\n"),
+    });
+  });
 });
