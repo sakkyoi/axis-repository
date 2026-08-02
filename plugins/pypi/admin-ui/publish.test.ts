@@ -45,17 +45,17 @@ describe("PyPI upload hints", () => {
     updatedAt: "2026-07-18T00:00:00.000Z",
   };
 
-  it("points twine at the upload endpoint, not the index", () => {
+  it("points twine at the absolute upload endpoint, not the index", () => {
     // Uploading to the Simple index URL is the mistake this hint exists to
     // prevent; they are different endpoints.
-    const text = pypiUploadCommandText(repository);
+    const text = pypiUploadCommandText(repository, "https://axis.example");
 
-    expect(text).toContain("/repositories/python-internal/legacy/");
+    expect(text).toContain("https://axis.example/repositories/python-internal/legacy/");
     expect(text).not.toContain("/simple/");
   });
 
-  it("uses the __token__ username those clients expect", () => {
-    expect(pypiUploadCommandText(repository)).toContain("TWINE_USERNAME=__token__");
+  it("uses the Axis username for token authentication", () => {
+    expect(pypiUploadCommandText(repository)).toContain("TWINE_USERNAME=axis");
   });
 
   it("never writes a real token into the hint", () => {

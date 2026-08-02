@@ -14,4 +14,8 @@ describe("a list and what is selected in it", () => {
     expect(listDetailGridClass(false)).not.toContain("grid-cols");
     expect(listDetailGridClass(true)).toContain("grid-cols");
   });
+
+  it("lets split panes keep their own scroll areas", () => {
+    expect(listDetailGridClass(true)).toContain("min-h-0");
+  });
 });
