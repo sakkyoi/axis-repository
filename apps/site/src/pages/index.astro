@@ -1,12 +1,61 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
+
+const deployUrl =
+  "https://deploy.workers.cloudflare.com/?url=https://github.com/sakkyoi/axis-repository";
+
+const formats = [
+  {
+    name: "apt",
+    description:
+      "Publish .deb packages and install them with apt, from signed indexes it verifies.",
+  },
+  {
+    name: "PyPI",
+    description: "Publish wheels and source distributions and install them with pip.",
+  },
+];
 ---
 <MarketingLayout title="Axis Repository">
   <main class="mx-auto max-w-3xl px-6 py-24">
-    <h1 class="text-4xl font-bold">Axis Repository</h1>
-    <p class="mt-4 text-lg text-slate-600">
-      A lightweight, multi-format artifact repository built on the edge.
-    </p>
-    <a href="/docs/" class="mt-8 inline-block underline">Read the docs</a>
+    <div class="flex flex-col items-center text-center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="/logo-mark-dark.svg" />
+        <img src="/logo-mark-light.svg" alt="Axis Repository" width="96" height="96" />
+      </picture>
+
+      <h1 class="mt-6 text-4xl font-bold tracking-tight">Axis Repository</h1>
+      <p class="mt-4 max-w-xl text-lg text-slate-600 dark:text-slate-400">
+        A lightweight, multi-format artifact repository built on the edge.
+      </p>
+
+      <div class="mt-8 flex flex-wrap justify-center gap-4">
+        <a
+          href={deployUrl}
+          class="rounded-md bg-lime-400 px-5 py-2.5 font-medium text-slate-900 transition hover:bg-lime-300"
+        >
+          Deploy to Cloudflare
+        </a>
+        <a
+          href="/docs/"
+          class="rounded-md border border-slate-300 px-5 py-2.5 font-medium transition hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600"
+        >
+          Read the docs
+        </a>
+      </div>
+    </div>
+
+    <div class="mt-20 grid gap-6 sm:grid-cols-2">
+      {
+        formats.map((format) => (
+          <div class="rounded-lg border border-slate-200 p-6 dark:border-slate-800">
+            <h2 class="font-mono text-sm font-semibold text-lime-600 dark:text-lime-400">
+              {format.name}
+            </h2>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{format.description}</p>
+          </div>
+        ))
+      }
+    </div>
   </main>
 </MarketingLayout>
