@@ -1,0 +1,9 @@
+---
+import Default from "@astrojs/starlight/components/Header.astro";
+import PreviewBanner from "./PreviewBanner.astro";
+---
+<PreviewBanner
+  variant={import.meta.env.PUBLIC_SITE_VARIANT}
+  version={import.meta.env.PUBLIC_SITE_VERSION}
+/>
+<Default {...Astro.props}><slot /></Default>

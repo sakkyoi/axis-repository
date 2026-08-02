@@ -5,5 +5,10 @@ interface Props {
 }
 
 const { variant, version } = Astro.props;
+const showBanner = variant === "preview" && Boolean(version);
 ---
-<!-- Task 4 replaces this with real conditional rendering and a test suite. -->
+{showBanner && (
+  <div class="bg-amber-200 px-4 py-2 text-center text-sm text-amber-900">
+    Preview build @ {version}
+  </div>
+)}
