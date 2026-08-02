@@ -24,6 +24,20 @@ const showBanner = variant === "preview" && Boolean(version);
         --sl-nav-height: calc(4rem + 2rem);
       }
     }
+
+    /*
+     * PageFrame's own `header.header` applies --sl-nav-pad-y/-x padding
+     * (plus extra padding-inline-end reserved for the mobile menu toggle)
+     * to its content -- fine for the nav row, wrong for a full-bleed
+     * banner nested inside the same box. @astrojs/starlight's own styles
+     * live in `@layer starlight.core`, so this plain, unlayered rule wins
+     * automatically without needing !important. The same padding is
+     * reapplied below to .site-header-nav only, so the nav row keeps its
+     * original spacing and only the banner spans edge to edge.
+     */
+    header.header {
+      padding: 0;
+    }
   </style>
 )}
 <div class="site-header">
@@ -42,9 +56,26 @@ const showBanner = variant === "preview" && Boolean(version);
 
   /* Default's own Header markup is `height: 100%`; wrapping it lets that
      resolve against the space flexbox leaves after the banner, instead of
-     against the full (now taller) header box. */
+     against the full (now taller) header box. Padding replicates what
+     PageFrame's header.header normally carries itself (zeroed above so
+     the banner can bleed full-width), including the extra inline-end
+     space PageFrame reserves for the mobile menu toggle. */
   .site-header-nav {
     flex: 1;
     min-height: 0;
+    padding: var(--sl-nav-pad-y) var(--sl-nav-pad-x);
+    padding-inline-end: var(--sl-nav-pad-x);
+  }
+
+  :global([data-has-sidebar]) .site-header-nav {
+    padding-inline-end: calc(
+      var(--sl-nav-gap) + var(--sl-nav-pad-x) + var(--sl-menu-button-size)
+    );
+  }
+
+  @media (min-width: 50rem) {
+    :global([data-has-sidebar]) .site-header-nav {
+      padding-inline-end: var(--sl-nav-pad-x);
+    }
   }
 </style>
