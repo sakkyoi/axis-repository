@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+/*
+ * astro-theme-toggle drives dark mode by toggling a `.dark` class on <html>
+ * (persisted to localStorage, falling back to prefers-color-scheme when
+ * there's no stored preference) rather than relying on the media query
+ * alone -- Tailwind v4 needs this custom variant to make `dark:` respond to
+ * that class instead of (or as well as) the OS-level preference.
+ */
+@custom-variant dark (&:where(.dark, .dark *));

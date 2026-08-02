@@ -1,4 +1,5 @@
 ---
+import { Toggle } from "astro-theme-toggle/components";
 import MarketingLayout from "../layouts/MarketingLayout.astro";
 
 const deployUrl =
@@ -17,12 +18,27 @@ const formats = [
 ];
 ---
 <MarketingLayout title="Axis Repository">
+  <Toggle
+    aria-label="Toggle theme"
+    style="width: 2.25rem; height: 2.25rem;"
+    class="fixed top-6 right-6 rounded-md p-1.5 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-900"
+  />
   <main class="mx-auto max-w-3xl px-6 py-24">
     <div class="flex flex-col items-center text-center">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="/logo-mark-dark.svg" />
-        <img src="/logo-mark-light.svg" alt="Axis Repository" width="96" height="96" />
-      </picture>
+      <img
+        src="/logo-mark-light.svg"
+        alt="Axis Repository"
+        width="96"
+        height="96"
+        class="dark:hidden"
+      />
+      <img
+        src="/logo-mark-dark.svg"
+        alt="Axis Repository"
+        width="96"
+        height="96"
+        class="hidden dark:block"
+      />
 
       <h1 class="mt-6 text-4xl font-bold tracking-tight">Axis Repository</h1>
       <p class="mt-4 max-w-xl text-lg text-slate-600 dark:text-slate-400">
