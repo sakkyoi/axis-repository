@@ -20,46 +20,46 @@ const formats = [
 ];
 ---
 <MarketingLayout title="Axis Repository">
-  <section class="relative overflow-hidden px-6 pt-20 pb-28 text-center">
+  <section class="relative flex min-h-[78vh] flex-col items-center justify-center overflow-hidden px-6 py-16 text-center">
     <!-- Signature element: an abstract branching line -- one trunk forking
          into limbs and tines, reading equally as antlers (the logo's "axis"
          deer) or as a distribution tree (one deployment, several package
          ecosystems branching off it). Faint, behind the copy, never
          competing with it. -->
     <svg
-      viewBox="0 0 600 420"
-      class="pointer-events-none absolute left-1/2 top-0 h-[420px] w-[600px] -translate-x-1/2 text-lime-600/25 dark:text-lime-400/20"
+      viewBox="0 0 700 520"
+      class="pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[700px] -translate-x-1/2 -translate-y-1/2 text-lime-600/25 dark:text-lime-400/20"
       fill="none"
       stroke="currentColor"
       stroke-width="1.5"
       stroke-linecap="round"
       aria-hidden="true"
     >
-      <path d="M300,420 L300,260" />
-      <path d="M300,260 Q240,220 180,180" />
-      <path d="M180,180 Q150,140 110,90" />
-      <path d="M180,180 Q175,150 170,110" />
-      <path d="M180,180 Q160,200 130,210" />
-      <path d="M300,260 Q360,220 420,180" />
-      <path d="M420,180 Q450,140 490,90" />
-      <path d="M420,180 Q425,150 430,110" />
-      <path d="M420,180 Q440,200 470,210" />
+      <path d="M350,520 L350,320" />
+      <path d="M350,320 Q280,270 210,220" />
+      <path d="M210,220 Q175,170 125,110" />
+      <path d="M210,220 Q205,180 200,135" />
+      <path d="M210,220 Q185,245 150,260" />
+      <path d="M350,320 Q420,270 490,220" />
+      <path d="M490,220 Q525,170 575,110" />
+      <path d="M490,220 Q495,180 500,135" />
+      <path d="M490,220 Q515,245 550,260" />
     </svg>
     <div
-      class="pointer-events-none absolute left-1/2 top-10 h-72 w-72 -translate-x-1/2 rounded-full bg-lime-400/20 blur-3xl dark:bg-lime-400/10"
+      class="pointer-events-none absolute left-1/2 top-1/3 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-lime-400/20 blur-3xl dark:bg-lime-400/10"
       aria-hidden="true"
     >
     </div>
 
     <div class="relative mx-auto max-w-2xl">
-      <h1 class="font-display text-5xl font-bold tracking-tight text-balance">
+      <h1 class="font-display text-6xl font-bold tracking-tight text-balance">
         Axis Repository
       </h1>
-      <p class="mt-5 text-lg text-slate-600 dark:text-slate-400">
+      <p class="mt-6 text-xl text-slate-600 dark:text-slate-400">
         A lightweight, multi-format artifact repository built on the edge.
       </p>
 
-      <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
+      <div class="mt-10 flex flex-wrap items-center justify-center gap-3">
         <a
           href="/docs/"
           class="flex h-10 items-center rounded-md bg-lime-400 px-6 font-medium text-slate-900 transition hover:bg-lime-300"
@@ -77,9 +77,19 @@ const formats = [
         </a>
       </div>
     </div>
+
+    <a
+      href="#what-is-axis"
+      aria-label="Scroll down"
+      class="absolute bottom-8 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-slate-300 text-slate-500 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-100"
+    >
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+        <path d="M3 6 L8 11 L13 6" />
+      </svg>
+    </a>
   </section>
 
-  <section class="bg-pine-900 px-6 py-16 text-pine-50 dark:bg-pine-950">
+  <section id="what-is-axis" class="bg-pine-900 px-6 py-16 text-pine-50 dark:bg-pine-950">
     <p class="mx-auto max-w-xl text-center leading-relaxed">
       Bring packages and build artifacts from multiple ecosystems into one place. Axis provides a
       unified, multi-format platform without requiring a separate registry deployment for each
