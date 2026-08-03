@@ -4,16 +4,35 @@ import MarketingLayout from "../layouts/MarketingLayout.astro";
 
 const deployUrl =
   "https://deploy.workers.cloudflare.com/?url=https://github.com/sakkyoi/axis-repository";
+const githubUrl = "https://github.com/sakkyoi/axis-repository";
+
+const badges = [
+  { label: "Status: experimental", tone: "warning" },
+  { label: "Development: active", tone: "info" },
+  { label: "License: AGPL-3.0-only", tone: "neutral" },
+];
+
+const badgeTone: Record<string, string> = {
+  warning:
+    "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400",
+  info: "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-400",
+  neutral:
+    "border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
+};
 
 const formats = [
   {
     name: "apt",
     description:
       "Publish .deb packages and install them with apt, from signed indexes it verifies.",
+    snippet:
+      "deb [signed-by=/usr/share/keyrings/axis-my-repo.gpg] https://axis.example.com/repositories/my-repo noble main",
   },
   {
     name: "PyPI",
     description: "Publish wheels and source distributions and install them with pip.",
+    snippet:
+      "pip install --index-url https://axis.example.com/repositories/my-repo/simple/ my-package",
   },
 ];
 ---
@@ -45,6 +64,18 @@ const formats = [
         A lightweight, multi-format artifact repository built on the edge.
       </p>
 
+      <div class="mt-5 flex flex-wrap justify-center gap-2">
+        {
+          badges.map((badge) => (
+            <span
+              class={`rounded-full border px-3 py-1 text-xs font-medium ${badgeTone[badge.tone]}`}
+            >
+              {badge.label}
+            </span>
+          ))
+        }
+      </div>
+
       <div class="mt-8 flex flex-wrap justify-center gap-4">
         <a
           href={deployUrl}
@@ -61,7 +92,14 @@ const formats = [
       </div>
     </div>
 
-    <div class="mt-20 grid gap-6 sm:grid-cols-2">
+    <p class="mx-auto mt-20 max-w-xl text-center text-slate-600 dark:text-slate-400">
+      Bring packages and build artifacts from multiple ecosystems into one place. Axis provides a
+      unified, multi-format platform without requiring a separate registry deployment for each
+      package ecosystem. Its serverless architecture simplifies deployment and reduces the
+      infrastructure that needs to be maintained.
+    </p>
+
+    <div class="mt-10 grid gap-6 sm:grid-cols-2">
       {
         formats.map((format) => (
           <div class="rounded-lg border border-slate-200 p-6 dark:border-slate-800">
@@ -69,9 +107,18 @@ const formats = [
               {format.name}
             </h2>
             <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{format.description}</p>
+            <pre class="mt-4 overflow-x-auto rounded-md bg-slate-900 p-3 text-xs text-slate-100"><code>{format.snippet}</code></pre>
           </div>
         ))
       }
     </div>
+
+    <footer class="mt-24 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-slate-200 pt-8 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+      <a href={githubUrl} class="hover:text-slate-900 dark:hover:text-slate-100">GitHub</a>
+      <a href="/docs/" class="hover:text-slate-900 dark:hover:text-slate-100">Documentation</a>
+      <a href={`${githubUrl}/blob/main/LICENSE`} class="hover:text-slate-900 dark:hover:text-slate-100">
+        License
+      </a>
+    </footer>
   </main>
 </MarketingLayout>
