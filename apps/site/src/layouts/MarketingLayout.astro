@@ -22,7 +22,7 @@ try {
   // limited, the link still renders, just without a count.
 }
 ---
-<html lang="en">
+<html lang="en" class="scroll-smooth">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -31,7 +31,8 @@ try {
   </head>
   <body class="bg-base-light font-sans text-slate-900 dark:bg-base-dark dark:text-slate-100">
     <header
-      class="sticky top-0 z-20 border-b border-slate-900/10 bg-base-light/80 backdrop-blur dark:border-white/10 dark:bg-base-dark/80"
+      id="site-nav"
+      class="sticky top-0 z-20 -translate-y-2 border-b border-slate-900/10 bg-base-light/80 opacity-0 backdrop-blur transition-all duration-300 dark:border-white/10 dark:bg-base-dark/80"
     >
       <div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <a href="/" class="flex items-center gap-2 font-display text-base font-semibold">
@@ -59,5 +60,52 @@ try {
       </div>
     </header>
     <slot />
+
+    <script>
+      // Nav starts hidden (server-rendered opacity-0, see the header's
+      // class list) so there's no flash of it being visible before this
+      // runs. It only reveals once the page's #hero section (if any) has
+      // scrolled mostly out of view -- avoids the giant hero <h1> and the
+      // nav's own wordmark both being on screen at once. Pages without a
+      // #hero (there's only the one marketing page today, but this stays
+      // generic) just show the nav immediately.
+      function setupNavReveal(): void {
+        const nav = document.getElementById("site-nav");
+        const hero = document.getElementById("hero");
+        if (!nav) return;
+
+        function reveal(): void {
+          nav!.classList.remove("opacity-0", "-translate-y-2");
+          nav!.removeAttribute("inert");
+        }
+
+        function hide(): void {
+          nav!.classList.add("opacity-0", "-translate-y-2");
+          nav!.setAttribute("inert", "");
+        }
+
+        if (!hero) {
+          reveal();
+          return;
+        }
+
+        const navHeight = nav.getBoundingClientRect().height;
+        const observer = new IntersectionObserver(
+          ([entry]) => {
+            if (entry!.isIntersecting) hide();
+            else reveal();
+          },
+          { rootMargin: `-${navHeight}px 0px 0px 0px` },
+        );
+        observer.observe(hero);
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", setupNavReveal);
+      } else {
+        setupNavReveal();
+      }
+      document.addEventListener("astro:page-load", setupNavReveal);
+    </script>
   </body>
 </html>
