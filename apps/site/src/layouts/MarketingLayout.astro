@@ -1,5 +1,6 @@
 ---
 import { ThemeScript, Toggle } from "astro-theme-toggle/components";
+import { fetchGithubStars } from "../lib/github";
 import "../styles/tailwind.css";
 
 interface Props {
@@ -9,18 +10,7 @@ interface Props {
 const { title } = Astro.props;
 
 const githubUrl = "https://github.com/sakkyoi/axis-repository";
-
-let stargazersCount: number | null = null;
-try {
-  const response = await fetch("https://api.github.com/repos/sakkyoi/axis-repository");
-  if (response.ok) {
-    const data = (await response.json()) as { stargazers_count: number };
-    stargazersCount = data.stargazers_count;
-  }
-} catch {
-  // Build-time-only enhancement -- if the GitHub API is unreachable or rate
-  // limited, the link still renders, just without a count.
-}
+const stargazersCount = await fetchGithubStars("sakkyoi/axis-repository");
 ---
 <html lang="en" class="scroll-smooth">
   <head>
