@@ -18,6 +18,16 @@ const stargazersCount = await fetchGithubStars("sakkyoi/axis-repository");
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <!-- Same dark-mode favicon technique as the root README's picture/source
+         tags: browsers without media-query favicon support just get the
+         light (dark-on-transparent) mark. -->
+    <link rel="icon" type="image/svg+xml" href="/logo-mark-light.svg" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="/logo-mark-dark.svg"
+      media="(prefers-color-scheme: dark)"
+    />
     <ThemeScript />
   </head>
   <body class="bg-base-light font-sans text-slate-900 dark:bg-base-dark dark:text-slate-100">
