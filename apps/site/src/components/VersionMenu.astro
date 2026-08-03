@@ -82,18 +82,26 @@ import VersionSelect from "starlight-versions/components/VersionSelect.astro";
     border-radius: 0 0 0.5rem 0.5rem;
     border-top: none;
     box-shadow: var(--sl-shadow-md);
-    /* Left edge lines up with the header divider rather than just the
-       trigger button's own (narrower) width -- ThemeSelect.astro sets
-       --version-menu-divider-gap to whatever margin it put between the
-       divider and the trigger, so this widens back out by that same
-       amount instead of hardcoding a second copy of it. */
+    /* Right edge stays pinned to the trigger's own right edge, and the menu
+       is at least as wide as the trigger plus the divider gap (so its left
+       edge lines up with the header divider when nothing needs more room --
+       ThemeSelect.astro sets --version-menu-divider-gap to whatever margin
+       it put there, read here instead of hardcoding a second copy of it).
+       Longer version labels than the current page's own (e.g. opening the
+       menu on "Dev" while a "v0.3.0-rc.12" entry exists) grow the menu
+       further left past that point rather than getting clipped -- matching
+       the selector's width was only ever meant as a floor, not a cap.
+       max-width just keeps a pathologically long tag name from overflowing
+       the viewport. */
     inset-inline-end: 0;
-    inset-inline-start: calc(-1 * var(--version-menu-divider-gap, 0rem));
     list-style: none;
     margin: 0;
+    max-width: min(90vw, 20rem);
+    min-width: calc(100% + var(--version-menu-divider-gap, 0rem));
     padding: 0.25rem;
     position: absolute;
     top: 100%;
+    width: max-content;
     z-index: 10;
   }
 
