@@ -3,4 +3,4 @@ title: Getting Started
 description: Placeholder page for the Axis Repository documentation site.
 ---
 
-This is a placeholder. Real documentation content migrates here in a follow-up round — see `docs/superpowers/specs/2026-08-02-axis-site-design.md` for what's deferred and why.
+Real documentation is on its way. In the meantime, see the [README](https://github.com/sakkyoi/axis-repository) for how to deploy and develop Axis Repository.
