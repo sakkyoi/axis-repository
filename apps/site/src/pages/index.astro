@@ -6,35 +6,17 @@ const deployUrl =
   "https://deploy.workers.cloudflare.com/?url=https://github.com/sakkyoi/axis-repository";
 const githubUrl = "https://github.com/sakkyoi/axis-repository";
 
-const badges = [
-  { label: "Status: experimental", tone: "warning" },
-  { label: "Development: active", tone: "info" },
-  { label: "License: AGPL-3.0-only", tone: "neutral" },
-];
-
-const badgeTone: Record<string, string> = {
-  warning:
-    "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400",
-  info: "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-400",
-  neutral:
-    "border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
-};
-
-const formats = [
-  {
-    name: "apt",
-    description:
-      "Publish .deb packages and install them with apt, from signed indexes it verifies.",
-    snippet:
-      "deb [signed-by=/usr/share/keyrings/axis-my-repo.gpg] https://axis.example.com/repositories/my-repo noble main",
-  },
-  {
-    name: "PyPI",
-    description: "Publish wheels and source distributions and install them with pip.",
-    snippet:
-      "pip install --index-url https://axis.example.com/repositories/my-repo/simple/ my-package",
-  },
-];
+let stargazersCount: number | null = null;
+try {
+  const response = await fetch("https://api.github.com/repos/sakkyoi/axis-repository");
+  if (response.ok) {
+    const data = (await response.json()) as { stargazers_count: number };
+    stargazersCount = data.stargazers_count;
+  }
+} catch {
+  // Build-time-only enhancement -- if the GitHub API is unreachable or rate
+  // limited, the button still renders, just without a count.
+}
 ---
 <MarketingLayout title="Axis Repository">
   <Toggle
@@ -64,56 +46,46 @@ const formats = [
         A lightweight, multi-format artifact repository built on the edge.
       </p>
 
-      <div class="mt-5 flex flex-wrap justify-center gap-2">
-        {
-          badges.map((badge) => (
-            <span
-              class={`rounded-full border px-3 py-1 text-xs font-medium ${badgeTone[badge.tone]}`}
-            >
-              {badge.label}
-            </span>
-          ))
-        }
-      </div>
+      <a
+        href="/docs/"
+        class="mt-8 rounded-md bg-lime-400 px-6 py-2.5 font-medium text-slate-900 transition hover:bg-lime-300"
+      >
+        Read the docs
+      </a>
 
-      <div class="mt-8 flex flex-wrap justify-center gap-4">
-        <a
-          href={deployUrl}
-          class="rounded-md bg-lime-400 px-5 py-2.5 font-medium text-slate-900 transition hover:bg-lime-300"
-        >
-          Deploy to Cloudflare
+      <div class="mt-4 flex flex-wrap items-center justify-center gap-3">
+        <a href={deployUrl}>
+          <img
+            alt="Deploy to Cloudflare"
+            src="https://deploy.workers.cloudflare.com/button"
+            height="32"
+          />
         </a>
         <a
-          href="/docs/"
-          class="rounded-md border border-slate-300 px-5 py-2.5 font-medium transition hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600"
+          href={githubUrl}
+          class="flex h-8 items-center gap-1.5 rounded-md border border-slate-300 px-3 text-sm font-medium transition hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600"
         >
-          Read the docs
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+          </svg>
+          GitHub
+          {stargazersCount !== null && (
+            <span class="text-slate-500 dark:text-slate-400">★ {stargazersCount}</span>
+          )}
         </a>
       </div>
     </div>
 
     <p class="mx-auto mt-20 max-w-xl text-center text-slate-600 dark:text-slate-400">
-      Bring packages and build artifacts from multiple ecosystems into one place. Axis provides a
-      unified, multi-format platform without requiring a separate registry deployment for each
-      package ecosystem. Its serverless architecture simplifies deployment and reduces the
-      infrastructure that needs to be maintained.
+      Bring packages and build artifacts from multiple ecosystems into one place. Axis supports{" "}
+      <code class="text-sm text-slate-800 dark:text-slate-200">apt</code> and{" "}
+      <code class="text-sm text-slate-800 dark:text-slate-200">PyPI</code> today, with more formats
+      defined as plugins, and provides a unified platform without requiring a separate registry
+      deployment for each package ecosystem. Its serverless architecture simplifies deployment and
+      reduces the infrastructure that needs to be maintained.
     </p>
 
-    <div class="mt-10 grid gap-6 sm:grid-cols-2">
-      {
-        formats.map((format) => (
-          <div class="rounded-lg border border-slate-200 p-6 dark:border-slate-800">
-            <h2 class="font-mono text-sm font-semibold text-lime-600 dark:text-lime-400">
-              {format.name}
-            </h2>
-            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{format.description}</p>
-            <pre class="mt-4 overflow-x-auto rounded-md bg-slate-900 p-3 text-xs text-slate-100"><code>{format.snippet}</code></pre>
-          </div>
-        ))
-      }
-    </div>
-
-    <footer class="mt-24 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-slate-200 pt-8 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+    <footer class="mt-20 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-slate-200 pt-8 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
       <a href={githubUrl} class="hover:text-slate-900 dark:hover:text-slate-100">GitHub</a>
       <a href="/docs/" class="hover:text-slate-900 dark:hover:text-slate-100">Documentation</a>
       <a href={`${githubUrl}/blob/main/LICENSE`} class="hover:text-slate-900 dark:hover:text-slate-100">
