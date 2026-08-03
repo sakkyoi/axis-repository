@@ -163,6 +163,25 @@ import VersionSelect from "starlight-versions/components/VersionSelect.astro";
 
         label.textContent = options.find((option) => option.selected)?.label ?? "";
 
+        // Locks the label to the width of the widest version among *all*
+        // of them, not just whichever one is currently selected -- so the
+        // trigger's own width (and with it, the header divider's position,
+        // defined as a fixed offset from the trigger) stays the same on
+        // every page. Without this, a page showing a short label like "Dev"
+        // gives the menu a narrower floor than a page showing a longer one
+        // like "v0.3.0-rc.12" would, even though the open menu itself is
+        // always sized to fit the longest entry across the whole list --
+        // so the two would only happen to line up on whichever page's own
+        // label was already the longest.
+        const currentLabel = label.textContent;
+        let widestLabelWidth = label.getBoundingClientRect().width;
+        for (const option of options) {
+          label.textContent = option.label;
+          widestLabelWidth = Math.max(widestLabelWidth, label.getBoundingClientRect().width);
+        }
+        label.textContent = currentLabel;
+        label.style.minWidth = `${Math.ceil(widestLabelWidth)}px`;
+
         for (const option of options) {
           const item = document.createElement("li");
           item.role = "option";
