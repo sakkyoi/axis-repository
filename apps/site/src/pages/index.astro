@@ -19,6 +19,22 @@ const formats = [
     snippet:
       "pip install --index-url https://axis.example.com/repositories/my-repo/simple/ my-package",
   },
+  {
+    name: "npm",
+    description: "Publish npm packages and install them with npm or pnpm.",
+  },
+  {
+    name: "Cargo",
+    description: "Publish crates and pull them with cargo.",
+  },
+  {
+    name: "Go",
+    description: "Serve a Go module proxy that go get and go mod resolve against.",
+  },
+  {
+    name: "Docker",
+    description: "Host container images and pull them with docker.",
+  },
 ];
 ---
 <MarketingLayout title="Axis Repository">
@@ -117,19 +133,28 @@ const formats = [
   </section>
 
   <section class="px-6 py-16">
-    <div class="mx-auto max-w-3xl">
+    <div class="mx-auto max-w-5xl">
       <h2 class="text-center font-display text-sm font-semibold tracking-widest text-slate-500 uppercase dark:text-slate-500">
         Supported formats
       </h2>
-      <div class="mt-8 grid gap-6 sm:grid-cols-2">
+      <div class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {
           formats.map((format) => (
             <div class="min-w-0 rounded-lg border border-slate-200 p-6 dark:border-slate-800">
-              <h3 class="font-display text-sm font-semibold text-lime-600 dark:text-lime-400">
-                {format.name}
-              </h3>
+              <div class="flex items-center gap-2">
+                <h3 class="font-display text-sm font-semibold text-lime-600 dark:text-lime-400">
+                  {format.name}
+                </h3>
+                {!format.snippet && (
+                  <span class="rounded-full border border-slate-300 px-2 py-0.5 font-mono text-[10px] font-medium tracking-wide text-slate-500 uppercase dark:border-slate-700 dark:text-slate-400">
+                    Coming soon
+                  </span>
+                )}
+              </div>
               <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{format.description}</p>
-              <pre class="mt-4 overflow-x-auto rounded-md bg-slate-900 p-3 font-mono text-xs text-slate-100"><code>{format.snippet}</code></pre>
+              {format.snippet && (
+                <pre class="mt-4 overflow-x-auto rounded-md bg-slate-900 p-3 font-mono text-xs text-slate-100"><code>{format.snippet}</code></pre>
+              )}
             </div>
           ))
         }
