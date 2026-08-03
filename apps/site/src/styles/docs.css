@@ -1,0 +1,4 @@
+/* Loads the Space Grotesk weight the site title wordmark needs (see
+   SiteTitle.astro) -- self-hosted, matching the marketing layout's own
+   font imports, so there's no external font request. */
+@import "@fontsource/space-grotesk/600.css";

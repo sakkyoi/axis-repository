@@ -1,0 +1,205 @@
+---
+// Wraps starlight-versions' own <VersionSelect /> purely as a data source
+// (it already computes each version's target URL correctly, logic that
+// isn't part of the package's public API to reimplement ourselves) and
+// hides its native <select> entirely, replacing the visible/interactive
+// surface with a borderless button + menu that looks like the rest of the
+// site's controls instead of an OS-native form control.
+import { Icon } from "@astrojs/starlight/components";
+import VersionSelect from "starlight-versions/components/VersionSelect.astro";
+---
+
+<starlight-version-menu class="version-menu">
+  <button
+    type="button"
+    class="version-menu-trigger"
+    aria-haspopup="listbox"
+    aria-expanded="false"
+    aria-label="Select documentation version"
+  >
+    <Icon name="seti:clock" class="icon" />
+    <span class="version-menu-label"></span>
+    <Icon name="down-caret" class="icon caret" />
+  </button>
+  <ul class="version-menu-list" role="listbox" hidden></ul>
+  <div class="version-menu-source" hidden>
+    <VersionSelect />
+  </div>
+</starlight-version-menu>
+
+<style>
+  .version-menu {
+    display: inline-block;
+    position: relative;
+  }
+
+  .version-menu-source {
+    display: none;
+  }
+
+  .version-menu-trigger {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--sl-color-gray-2);
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    font-size: var(--sl-text-sm);
+    gap: 0.25rem;
+    padding-block: 0.625rem;
+  }
+
+  .version-menu-trigger:is(:hover, :focus-visible),
+  .version-menu-trigger[aria-expanded="true"] {
+    color: var(--sl-color-accent-high);
+  }
+
+  .version-menu-trigger .icon {
+    font-size: 0.875rem;
+  }
+
+  .version-menu-trigger .caret {
+    font-size: 1.25rem;
+    transition: transform 200ms ease;
+  }
+
+  .version-menu-trigger[aria-expanded="true"] .caret {
+    transform: rotate(180deg);
+  }
+
+  .version-menu-list {
+    /* The theme's dark palette is near-monochrome -- --sl-color-bg-nav is
+       indistinguishable from the page background there, so background
+       alone doesn't read as a separate surface. A subtle 1px hairline
+       (not the thicker outline a native <select> popup would draw) is
+       the same fix starlight-theme-rapide's own file-tree component uses
+       for the identical problem. */
+    background-color: var(--sl-rapide-ui-bg-color, var(--sl-color-bg-nav));
+    border: 1px solid var(--sl-rapide-ui-border-color, var(--sl-color-gray-5));
+    /* Flush against the trigger with square top corners -- reads as the
+       menu growing out of the button, not a separate floating card. */
+    border-radius: 0 0 0.5rem 0.5rem;
+    border-top: none;
+    box-shadow: var(--sl-shadow-md);
+    /* Left edge lines up with the header divider rather than just the
+       trigger button's own (narrower) width -- ThemeSelect.astro sets
+       --version-menu-divider-gap to whatever margin it put between the
+       divider and the trigger, so this widens back out by that same
+       amount instead of hardcoding a second copy of it. */
+    inset-inline-end: 0;
+    inset-inline-start: calc(-1 * var(--version-menu-divider-gap, 0rem));
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem;
+    position: absolute;
+    top: 100%;
+    z-index: 10;
+  }
+
+  .version-menu-list[hidden] {
+    display: none;
+  }
+
+  /* :global -- these <li> options are created entirely in the client-side
+     script below, not part of this component's rendered template, so they
+     never receive the astro-XXXXX scoping class Astro attaches to
+     everything else here. A scoped selector would silently never match
+     them. */
+  :global(.version-menu-option) {
+    border-radius: 0.375rem;
+    color: var(--sl-color-gray-1);
+    cursor: pointer;
+    font-size: var(--sl-text-sm);
+    overflow: hidden;
+    padding: 0.5rem 0.75rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :global(.version-menu-option:is(:hover, :focus-visible)) {
+    background-color: var(--sl-color-gray-6);
+    color: var(--sl-color-white);
+  }
+
+  :global(.version-menu-option[aria-selected="true"]) {
+    color: var(--sl-color-white);
+  }
+</style>
+
+<script>
+  customElements.define(
+    "starlight-version-menu",
+    class StarlightVersionMenu extends HTMLElement {
+      #initialized = false;
+
+      connectedCallback() {
+        // Starlight's client-side route transitions can persist and
+        // reconnect this element without a full reload, re-running
+        // connectedCallback -- guard against wiring it up (and duplicating
+        // the option list) more than once per instance.
+        if (this.#initialized) return;
+        this.#initialized = true;
+
+        const trigger = this.querySelector<HTMLButtonElement>(".version-menu-trigger");
+        const label = this.querySelector<HTMLSpanElement>(".version-menu-label");
+        const list = this.querySelector<HTMLUListElement>(".version-menu-list");
+        const select = this.querySelector<HTMLSelectElement>("select");
+        if (!trigger || !label || !list || !select) return;
+
+        const options = [...select.options].map((option) => ({
+          label: option.textContent ?? "",
+          value: option.value,
+          selected: option.selected,
+        }));
+
+        label.textContent = options.find((option) => option.selected)?.label ?? "";
+
+        for (const option of options) {
+          const item = document.createElement("li");
+          item.role = "option";
+          item.className = "version-menu-option";
+          item.textContent = option.label;
+          item.tabIndex = 0;
+          item.setAttribute("aria-selected", String(option.selected));
+          item.addEventListener("click", () => {
+            window.location.pathname = option.value;
+          });
+          item.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              window.location.pathname = option.value;
+            }
+          });
+          list.append(item);
+        }
+
+        const open = () => {
+          list.hidden = false;
+          trigger.setAttribute("aria-expanded", "true");
+        };
+
+        const close = () => {
+          list.hidden = true;
+          trigger.setAttribute("aria-expanded", "false");
+        };
+
+        trigger.addEventListener("click", () => {
+          if (list.hidden) open();
+          else close();
+        });
+
+        document.addEventListener("click", (event) => {
+          if (!(event.target instanceof Node) || !this.contains(event.target)) close();
+        });
+
+        this.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            close();
+            trigger.focus();
+          }
+        });
+      }
+    },
+  );
+</script>

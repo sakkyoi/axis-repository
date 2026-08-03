@@ -1,0 +1,34 @@
+---
+// starlight-theme-rapide and starlight-versions both want the ThemeSelect
+// slot (rapide for its own toggle styling, versions for the version
+// dropdown it falls back to when nothing else claims the slot first). Both
+// plugins skip overriding a slot that's already defined rather than
+// clobbering it, so setting this file as the ThemeSelect override in
+// astro.config.mjs -- before either plugin's hook runs -- lets both render
+// side by side instead of one silently losing to the other.
+import RapideThemeSelect from "starlight-theme-rapide/overrides/ThemeSelect.astro";
+import VersionMenu from "./VersionMenu.astro";
+---
+
+<div class="version-select-wrapper">
+  <VersionMenu />
+</div>
+<RapideThemeSelect />
+
+<style>
+  /* starlight-theme-rapide zeroes out .right-group's gap and expects each
+     header control to carry its own spacing (its own ThemeSelect button
+     does, via margin-inline). VersionMenu was built assuming Starlight's
+     default 1rem gap, so without this it sits flush against the divider
+     rendered by .social-icons::after (now a real divider between the
+     GitHub social icon and the version/theme controls, not decoration
+     around nothing). --version-menu-divider-gap is read by VersionMenu's
+     own styles so its open menu can widen back out to that same divider
+     instead of only matching the trigger button's width. */
+  .version-select-wrapper {
+    --version-menu-divider-gap: 0.75rem;
+    align-items: center;
+    display: flex;
+    margin-inline-start: var(--version-menu-divider-gap);
+  }
+</style>
