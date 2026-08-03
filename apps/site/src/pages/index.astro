@@ -1,8 +1,6 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
 
-const deployUrl =
-  "https://deploy.workers.cloudflare.com/?url=https://github.com/sakkyoi/axis-repository";
 const githubUrl = "https://github.com/sakkyoi/axis-repository";
 
 const formats = [
@@ -66,14 +64,7 @@ const formats = [
           href="/docs/"
           class="flex h-10 items-center rounded-md bg-lime-400 px-6 font-medium text-slate-900 transition hover:bg-lime-300"
         >
-          Read the docs
-        </a>
-        <a href={deployUrl} class="flex h-10 items-center">
-          <img
-            alt="Deploy to Cloudflare"
-            src="https://deploy.workers.cloudflare.com/button"
-            height="40"
-          />
+          Get Started
         </a>
         <a
           href={githubUrl}
