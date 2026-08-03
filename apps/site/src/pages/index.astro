@@ -1,10 +1,8 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
 import { Icon } from "astro-icon/components";
-import { fetchGithubStars } from "../lib/github";
 
 const githubUrl = "https://github.com/sakkyoi/axis-repository";
-const stargazersCount = await fetchGithubStars("sakkyoi/axis-repository");
 
 // Cargo has no mark of its own in the simple-icons set, so it borrows Rust's,
 // the same way the apt card borrows Debian's. Rust's mark is defined
@@ -120,7 +118,7 @@ const formats = [
           class="flex h-10 items-center gap-1.5 rounded-md border border-slate-300 px-4 text-sm font-medium transition hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600"
         >
           <Icon name="simple-icons:github" size={16} aria-hidden="true" />
-          GitHub{stargazersCount !== null && ` · ★ ${stargazersCount}`}
+          GitHub<span data-github-star-count></span>
         </a>
       </div>
     </div>
