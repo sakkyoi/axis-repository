@@ -23,7 +23,11 @@ if (!tag) {
   process.exit(1);
 }
 
-const slug = tag.replace(/^v/, "");
+// The slug is the tag as-is (e.g. "v0.3.0", "v0.3.0-rc.1") -- kept
+// identical to the release tag rather than dropped, so the version shown
+// in the switcher and its URL always match the tag someone would look up
+// on GitHub.
+const slug = tag;
 const siteDir = fileURLToPath(new URL("..", import.meta.url));
 const versionsConfigPath = join(siteDir, "docs-versions.json");
 const docsDir = join(siteDir, "src/content/docs");

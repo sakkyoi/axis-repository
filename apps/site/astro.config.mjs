@@ -20,7 +20,14 @@ const docsVersions = JSON.parse(
 );
 
 function compareVersionSlugsDescending(a, b) {
-  const toParts = (slug) => slug.split("-rc.")[0].split(".").map(Number);
+  // Slugs keep the tag's leading "v" (e.g. "v0.3.0-rc.1") -- stripped here
+  // only for numeric comparison, not for the slug value itself.
+  const toParts = (slug) =>
+    slug
+      .replace(/^v/, "")
+      .split("-rc.")[0]
+      .split(".")
+      .map(Number);
   const [aMajor, aMinor, aPatch] = toParts(a.slug);
   const [bMajor, bMinor, bPatch] = toParts(b.slug);
   return bMajor - aMajor || bMinor - aMinor || bPatch - aPatch;
