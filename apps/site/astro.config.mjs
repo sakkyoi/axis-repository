@@ -2,6 +2,7 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightThemeRapide from "starlight-theme-rapide";
 import starlightSiteGraph from "starlight-site-graph";
+import icon from "astro-icon";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
@@ -16,6 +17,7 @@ export default defineConfig({
         },
       ],
     }),
+    icon(),
   ],
   // Tailwind v4's Vite plugin processes any CSS file that `@import
   // "tailwindcss"`, and nothing else. The marketing layout is the only file
