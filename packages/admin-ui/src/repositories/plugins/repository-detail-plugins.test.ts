@@ -103,6 +103,7 @@ describe("repository detail plugins", () => {
       id: "repo_1",
       name: "python-internal",
       ecosystem: "pypi",
+      kind: "hosted" as const,
       visibility: "private" as const,
       config: {},
       createdAt: "2026-07-18T00:00:00.000Z",

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { PluginClientHelperActionManifest } from "@axis-repository/core/plugin-manifests";
 
 export const repositoryVisibilitySchema = z.enum(["private", "public"]);
+export const repositoryKindSchema = z.enum(["hosted", "proxy", "group"]);
 
 export const repositoryClientHelperResponseKindSchema = z.enum(["json", "shell", "text"]);
 
@@ -24,6 +25,7 @@ export const repositorySchema = z.object({
   id: z.string(),
   name: z.string(),
   ecosystem: z.string(),
+  kind: repositoryKindSchema.default("hosted"),
   visibility: repositoryVisibilitySchema,
   config: z.record(z.string(), z.unknown()),
   createdAt: z.string(),
@@ -136,6 +138,7 @@ export const repositoryPluginSchema = z.object({
   adminUi: z.boolean().optional(),
   icon: resolvedPluginIconSchema.optional(),
   capabilities: z.array(z.string()),
+  repositoryKinds: z.array(repositoryKindSchema).default(["hosted"]),
   clientHelpers: z.object({
     namespace: z.string(),
     actions: z.array(repositoryClientHelperActionSchema),
@@ -390,6 +393,7 @@ export type RepositoryArtifactsResponse = z.infer<typeof repositoryArtifactsResp
 export type RepositoryClientHelperAction = PluginClientHelperActionManifest;
 export type RepositoryPlugin = z.infer<typeof repositoryPluginSchema>;
 export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;
+export type RepositoryKind = z.infer<typeof repositoryKindSchema>;
 export type PublishToken = z.infer<typeof publishTokenSchema>;
 export type PublishTokenCreateResponse = z.infer<typeof publishTokenCreateResponseSchema>;
 export type PublishSession = z.infer<typeof publishSessionSchema>;

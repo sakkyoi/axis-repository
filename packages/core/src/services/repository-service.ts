@@ -1,10 +1,11 @@
-import type { Ecosystem, Repository, RepositoryVisibility } from "../domain/domain";
+import type { Ecosystem, Repository, RepositoryKind, RepositoryVisibility } from "../domain/domain";
 import { NotFoundError, ValidationError } from "../domain/errors";
 import type { Clock, RandomId, StateStore } from "../ports/ports";
 
 export interface CreateRepositoryInput {
   name: string;
   ecosystem: Ecosystem;
+  kind?: RepositoryKind;
   visibility?: RepositoryVisibility;
   config?: Record<string, unknown>;
 }
@@ -22,6 +23,7 @@ export interface RepositoryServiceOptions {
 
 const REPOSITORY_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const REPOSITORY_NAME_MAX_LENGTH = 100;
+const SUPPORTED_REPOSITORY_KINDS = new Set<RepositoryKind>(["hosted"]);
 
 /**
  * Repository names are concatenated into object keys (`repositories/<name>/...`),
@@ -45,6 +47,19 @@ export function assertValidRepositoryName(name: string): void {
   }
 }
 
+export function assertSupportedRepositoryKind(kind: RepositoryKind): void {
+  if (!SUPPORTED_REPOSITORY_KINDS.has(kind)) {
+    throw new ValidationError(`Repository kind is not supported yet: ${kind}`);
+  }
+}
+
+function normalizeRepository(record: Repository): Repository {
+  return {
+    ...record,
+    kind: record.kind ?? "hosted",
+  };
+}
+
 export class RepositoryService {
   constructor(private readonly options: RepositoryServiceOptions) {}
 
@@ -56,10 +71,13 @@ export class RepositoryService {
     }
 
     const now = this.options.clock.now().toISOString();
+    const kind = input.kind ?? "hosted";
+    assertSupportedRepositoryKind(kind);
     const repository: Repository = {
       id: this.options.randomId.create("repo"),
       name,
       ecosystem: input.ecosystem,
+      kind,
       visibility: input.visibility ?? "private",
       config: input.config ?? {},
       createdAt: now,
@@ -70,7 +88,7 @@ export class RepositoryService {
   }
 
   async list(): Promise<Repository[]> {
-    return this.options.state.repositories.list();
+    return (await this.options.state.repositories.list()).map(normalizeRepository);
   }
 
   async getByName(name: string): Promise<Repository> {
@@ -78,7 +96,7 @@ export class RepositoryService {
     if (!repository) {
       throw new NotFoundError(`Repository not found: ${name}`);
     }
-    return repository;
+    return normalizeRepository(repository);
   }
 
   async update(name: string, input: UpdateRepositoryInput): Promise<Repository> {

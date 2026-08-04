@@ -40,6 +40,7 @@ describe("admin API schemas", () => {
     });
 
     expect(repository.name).toBe("debian-internal");
+    expect(repository.kind).toBe("hosted");
     expect(repository.config.apt).toMatchObject({ codename: "noble" });
   });
 
@@ -81,6 +82,7 @@ describe("admin API schemas", () => {
       runtime: true,
       adminUi: true,
       capabilities: ["signed-release", "client-helpers"],
+      repositoryKinds: ["hosted"],
       clientHelpers: {
         namespace: "apt",
         actions: [
@@ -108,6 +110,7 @@ describe("admin API schemas", () => {
       enabled: true,
       catalogEnabled: true,
       enabledOverride: null,
+      repositoryKinds: ["hosted"],
     });
   });
 

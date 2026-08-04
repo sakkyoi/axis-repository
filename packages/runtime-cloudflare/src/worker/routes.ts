@@ -11,6 +11,7 @@ import {
   type PublishTokenRecord,
   type AdminUserRecord,
   type Repository,
+  type RepositoryKind,
   type RepositoryVisibility,
   type RepositoryObject,
   type RepositoryObjectList,
@@ -78,6 +79,12 @@ function repositoryVisibility(body: Record<string, unknown>): "private" | "publi
   throw new ValidationError("visibility must be private or public");
 }
 
+function repositoryKind(body: Record<string, unknown>): RepositoryKind | undefined {
+  if (body.kind === undefined) return undefined;
+  if (body.kind === "hosted" || body.kind === "proxy" || body.kind === "group") return body.kind;
+  throw new ValidationError("kind must be hosted, proxy, or group");
+}
+
 function optionalRepositoryVisibility(body: Record<string, unknown>): RepositoryVisibility | undefined {
   if (body.visibility === undefined) return undefined;
   if (body.visibility === "private" || body.visibility === "public") return body.visibility;
@@ -131,6 +138,7 @@ async function repositoryPluginMetadata(dependencies: AppDependencies) {
       version: catalogEntry.manifest.version,
       icon: { ...catalogEntry.icon },
       capabilities: [...catalogEntry.manifest.capabilities],
+      repositoryKinds: [...(catalogEntry.manifest.repositoryKinds ?? ["hosted"])],
       ...(catalogEntry.manifest.clientHelpers
         ? {
             clientHelpers: {
@@ -1436,9 +1444,11 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     if (request.method === "POST") {
       const body = await readJsonObject(request);
       const provisioning = optionalObjectField(body, "provisioning");
+      const kind = repositoryKind(body);
       const repository = await dependencies.repositoryService.create({
         name: stringField(body, "name"),
         ecosystem: stringField(body, "ecosystem"),
+        ...(kind === undefined ? {} : { kind }),
         visibility: repositoryVisibility(body),
         config: optionalObjectField(body, "config") ?? {},
         ...(provisioning === undefined ? {} : { provisioning }),

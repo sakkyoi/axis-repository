@@ -71,6 +71,7 @@ describe("repository UI plugin registry", () => {
         runtime: true,
         adminUi: true,
         capabilities: ["signed-release"],
+        repositoryKinds: ["hosted"],
       },
       {
         ecosystem: "npm",
@@ -83,6 +84,7 @@ describe("repository UI plugin registry", () => {
         runtime: true,
         adminUi: false,
         capabilities: ["package-index"],
+        repositoryKinds: ["hosted"],
       },
     ]);
 
@@ -133,6 +135,7 @@ describe("repository UI plugin registry", () => {
         id: "repo_apt",
         name: "debian-internal",
         ecosystem: "apt",
+        kind: "hosted",
         visibility: "private",
         config: { apt: { signingKeyId: "signing_key_prod" } },
         createdAt: "2026-07-23T00:00:00.000Z",
@@ -193,6 +196,7 @@ describe("repository UI plugin registry", () => {
           id: "repo_apt",
           name: "debian-internal",
           ecosystem: "apt",
+          kind: "hosted",
           visibility: "private",
           config: {},
           createdAt: "2026-07-23T00:00:00.000Z",
@@ -202,6 +206,7 @@ describe("repository UI plugin registry", () => {
           id: "repo_pypi",
           name: "python-internal",
           ecosystem: "pypi",
+          kind: "hosted",
           visibility: "private",
           config: {},
           createdAt: "2026-07-23T00:00:00.000Z",

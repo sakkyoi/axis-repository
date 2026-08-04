@@ -57,6 +57,7 @@ export function createPypiPlugin(input?: {
     ecosystem: "pypi",
     name: pypiPluginManifest.runtimeName,
     version: pypiPluginManifest.version,
+    repositoryKinds: [...(pypiPluginManifest.repositoryKinds ?? ["hosted"])],
     capabilities: [...pypiPluginManifest.capabilities],
     canServeRepositoryPath: createPrefixServingPredicate(SERVED_PREFIXES),
     uploadProtocol: createPypiUploadProtocol(),

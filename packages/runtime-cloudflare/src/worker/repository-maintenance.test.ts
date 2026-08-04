@@ -17,6 +17,7 @@ function repository(name: string, ecosystem = "apt"): Repository {
     id: `repo_${name}`,
     name,
     ecosystem,
+    kind: "hosted",
     visibility: "private",
     config: {},
     createdAt: NOW.toISOString(),

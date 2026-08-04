@@ -16,6 +16,7 @@ function repository(overrides: Partial<Repository> = {}): Repository {
     id: "repo_1",
     name: "debian-internal",
     ecosystem: "apt",
+    kind: "hosted",
     visibility: "private",
     config: { apt: { codename: "noble" } },
     createdAt: "2026-07-12T00:00:00.000Z",

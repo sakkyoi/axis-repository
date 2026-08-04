@@ -388,6 +388,7 @@ describe("Cloudflare runtime routes", () => {
         body: JSON.stringify({
           name: "debian-internal",
           ecosystem: "apt",
+          kind: "hosted",
           visibility: "private",
           config: validAptConfig(),
         }),
@@ -398,6 +399,7 @@ describe("Cloudflare runtime routes", () => {
     await expect(createResponse.json()).resolves.toMatchObject({
       name: "debian-internal",
       ecosystem: "apt",
+      kind: "hosted",
       visibility: "private",
       config: validAptConfig(),
     });
@@ -411,6 +413,32 @@ describe("Cloudflare runtime routes", () => {
     expect(listResponse.status).toBe(200);
     await expect(listResponse.json()).resolves.toMatchObject({
       repositories: [{ name: "debian-internal", ecosystem: "apt" }],
+    });
+  });
+
+  it("rejects repository kinds that are not implemented yet", async () => {
+    const app = createApp(createDevDependencies());
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "debian-proxy",
+          ecosystem: "apt",
+          kind: "proxy",
+          visibility: "private",
+          config: validAptConfig(),
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { message: "Repository kind is not supported yet: proxy" },
     });
   });
 

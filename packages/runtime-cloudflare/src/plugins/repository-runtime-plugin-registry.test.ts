@@ -26,6 +26,7 @@ function publishInput(ecosystem: string): PublishArtifactsInput {
       id: "repo_1",
       name: `${ecosystem}-internal`,
       ecosystem,
+      kind: "hosted",
       visibility: "private",
       config: {},
       createdAt: "2026-07-18T00:00:00.000Z",
@@ -190,6 +191,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
         ecosystem: "apt",
         name: "generic-manifest",
         version: "0.0.0",
+        repositoryKinds: ["hosted"],
         capabilities: ["generic-manifest", "client-helpers"],
         clientHelpers: {
           namespace: "apt",

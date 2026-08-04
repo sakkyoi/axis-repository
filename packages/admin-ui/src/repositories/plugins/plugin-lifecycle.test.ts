@@ -18,6 +18,7 @@ function plugin(input: Partial<RepositoryPlugin> & Pick<RepositoryPlugin, "ecosy
     runtime: input.runtime,
     adminUi: input.adminUi,
     capabilities: input.capabilities ?? [],
+    repositoryKinds: input.repositoryKinds ?? ["hosted"],
     ...(input.clientHelpers ? { clientHelpers: input.clientHelpers } : {}),
   };
 }

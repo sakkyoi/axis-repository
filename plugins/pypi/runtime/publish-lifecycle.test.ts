@@ -13,6 +13,7 @@ function repository(): Repository {
     id: "repo_1",
     name: "python-internal",
     ecosystem: "pypi",
+    kind: "hosted",
     visibility: "private",
     config: {},
     createdAt: NOW.toISOString(),

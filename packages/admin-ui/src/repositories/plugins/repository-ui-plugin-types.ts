@@ -17,7 +17,7 @@ export interface RepositoryCreateWizardState {
   setup: Record<string, string>;
 }
 
-export interface RepositoryCreatePlugin {
+export interface HostedRepositoryCreatePlugin {
   ecosystem: string;
   repositoryConfig: PluginRepositoryConfigManifest;
   steps: RepositoryCreateStep[];
@@ -25,6 +25,9 @@ export interface RepositoryCreatePlugin {
   validateStep(step: RepositoryCreateStep, state: RepositoryCreateWizardState): string[];
   buildCreateInput(state: RepositoryCreateWizardState): CreateRepositoryInput;
 }
+
+/** @deprecated Use HostedRepositoryCreatePlugin. */
+export type RepositoryCreatePlugin = HostedRepositoryCreatePlugin;
 
 export interface RepositoryCreateFieldErrors {
   name?: string;
@@ -66,10 +69,13 @@ export interface RepositoryDetailSection {
   Component: ComponentType<RepositoryDetailSectionProps>;
 }
 
-export interface RepositoryDetailPlugin {
+export interface HostedRepositoryDetailPlugin {
   ecosystem: string;
   sections: RepositoryDetailSection[];
 }
+
+/** @deprecated Use HostedRepositoryDetailPlugin. */
+export type RepositoryDetailPlugin = HostedRepositoryDetailPlugin;
 
 export interface RepositoryCreateFieldRendererProps {
   field: PluginRepositoryConfigFieldManifest;
@@ -108,7 +114,7 @@ export interface RepositoryPublishPreviewComponentProps extends RepositoryDetail
   onPublished: () => void;
 }
 
-export interface RepositoryPublishPlugin {
+export interface HostedRepositoryPublishPlugin {
   ecosystem: string;
   title?: string;
   accept?: string;
@@ -119,12 +125,18 @@ export interface RepositoryPublishPlugin {
   artifactSummary(session: PublishSession): string;
 }
 
-export interface RepositoryUiPlugin {
+/** @deprecated Use HostedRepositoryPublishPlugin. */
+export type RepositoryPublishPlugin = HostedRepositoryPublishPlugin;
+
+export interface HostedRepositoryUiPlugin {
   manifest: RepositoryPluginManifest;
-  create: RepositoryCreatePlugin;
-  detail: RepositoryDetailPlugin;
-  publish?: RepositoryPublishPlugin;
+  create: HostedRepositoryCreatePlugin;
+  detail: HostedRepositoryDetailPlugin;
+  publish?: HostedRepositoryPublishPlugin;
   createFieldRenderers?: RepositoryCreateFieldRendererMap;
   publishTokenScope?: PublishTokenScopeExtension;
   mapCreateServerError?: (message: string) => RepositoryCreateStep | undefined;
 }
+
+/** @deprecated Use HostedRepositoryUiPlugin. */
+export type RepositoryUiPlugin = HostedRepositoryUiPlugin;

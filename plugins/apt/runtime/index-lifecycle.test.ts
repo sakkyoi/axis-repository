@@ -44,6 +44,7 @@ function repository(overrides: Partial<Record<string, unknown>> = {}): Repositor
     id: "repo_1",
     name: "debian-internal",
     ecosystem: "apt",
+    kind: "hosted",
     visibility: "private",
     config: {
       apt: {

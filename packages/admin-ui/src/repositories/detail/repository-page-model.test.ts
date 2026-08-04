@@ -72,6 +72,7 @@ function repository(name: string): Repository {
     id: `repo_${name}`,
     name,
     ecosystem: "apt",
+    kind: "hosted",
     visibility: "private",
     config: {},
     createdAt: "2026-07-22T00:00:00.000Z",

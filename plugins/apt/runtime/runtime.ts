@@ -30,6 +30,7 @@ function repositoryForConfig(input: ValidateRepositoryConfigInput): Repository {
     id: "repo_validation",
     name: "repo-validation",
     ecosystem: input.ecosystem,
+    kind: "hosted",
     visibility: "private",
     config: input.config,
     createdAt: "2026-07-18T00:00:00.000Z",
@@ -46,6 +47,7 @@ export function createAptPlugin(input: {
     ecosystem: "apt",
     name: aptPluginManifest.runtimeName,
     version: aptPluginManifest.version,
+    repositoryKinds: [...(aptPluginManifest.repositoryKinds ?? ["hosted"])],
     capabilities: [...aptPluginManifest.capabilities],
     canServeRepositoryPath: createPrefixServingPredicate(["dists", "pool"]),
     validateRepositoryConfig: (configInput) => {
@@ -228,4 +230,3 @@ function metadataString(metadata: Record<string, unknown>, field: string): strin
   const value = metadata[field];
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
-

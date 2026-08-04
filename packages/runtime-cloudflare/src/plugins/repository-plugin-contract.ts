@@ -1,5 +1,6 @@
 import type {
   Ecosystem,
+  RepositoryKind,
   PublishArtifactRequest,
   PublishArtifactsInput,
   PublishResult,
@@ -18,6 +19,7 @@ export interface PublisherMetadata {
   ecosystem: Ecosystem;
   name: string;
   version: string;
+  repositoryKinds?: RepositoryKind[];
   capabilities: string[];
   clientHelpers?: {
     namespace: string;
@@ -198,7 +200,7 @@ export interface RepositoryMaintenanceLifecycle {
   run(input: RepositoryMaintenanceInput): Promise<RepositoryMaintenanceResult>;
 }
 
-export interface ArtifactRepositoryPlugin extends PublisherMetadata {
+export interface HostedRepositoryPlugin extends PublisherMetadata {
   publish: RepositoryPublishLifecycle;
   artifacts?: RepositoryArtifactIndexLifecycle;
   maintenance?: RepositoryMaintenanceLifecycle;
@@ -213,7 +215,10 @@ export interface ArtifactRepositoryPlugin extends PublisherMetadata {
   adminResources?: RepositoryAdminResources;
 }
 
-export type RepositoryRuntimePluginDescriptor = ArtifactRepositoryPlugin;
+/** @deprecated Use HostedRepositoryPlugin. */
+export type ArtifactRepositoryPlugin = HostedRepositoryPlugin;
+
+export type RepositoryRuntimePluginDescriptor = HostedRepositoryPlugin;
 
 export function createPrefixServingPredicate(prefixes: string[]): RepositoryPathServingRule {
   const normalizedPrefixes = prefixes.map((prefix) => prefix.replace(/^\/+|\/+$/g, ""));

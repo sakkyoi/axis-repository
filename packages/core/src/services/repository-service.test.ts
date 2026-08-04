@@ -88,12 +88,34 @@ describe("RepositoryService", () => {
       id: "repo_fixed",
       name: "debian-internal",
       ecosystem: "apt",
+      kind: "hosted",
       visibility: "private",
       config: { codenames: ["noble"] },
       createdAt: "2026-07-13T00:00:00.000Z",
       updatedAt: "2026-07-13T00:00:00.000Z",
     });
     await expect(service.list()).resolves.toEqual([repository]);
+  });
+
+  it("accepts hosted as the only repository kind for now", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryService({ state, clock, randomId });
+
+    await expect(service.create({
+      name: "debian-internal",
+      ecosystem: "apt",
+      kind: "hosted",
+      visibility: "private",
+      config: {},
+    })).resolves.toMatchObject({ kind: "hosted" });
+
+    await expect(service.create({
+      name: "debian-proxy",
+      ecosystem: "apt",
+      kind: "proxy",
+      visibility: "private",
+      config: {},
+    })).rejects.toThrow("Repository kind is not supported yet: proxy");
   });
 
   it("rejects duplicate repository names", async () => {

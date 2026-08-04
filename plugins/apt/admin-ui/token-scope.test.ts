@@ -45,6 +45,7 @@ function repository(name: string, ecosystem: string, config: Record<string, unkn
     id: `repo_${name}`,
     name,
     ecosystem,
+    kind: "hosted",
     visibility: "private",
     config,
     createdAt: "2026-07-23T00:00:00.000Z",

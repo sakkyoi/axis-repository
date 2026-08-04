@@ -37,6 +37,7 @@ const input = (overrides: Partial<PublishArtifactsInput> = {}): PublishArtifacts
     id: "repo_1",
     name: "debian-internal",
     ecosystem: "apt",
+    kind: "hosted",
     visibility: "private",
     config: {
       apt: {

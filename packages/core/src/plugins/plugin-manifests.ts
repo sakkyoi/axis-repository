@@ -1,3 +1,5 @@
+export type PluginRepositoryKind = "hosted" | "proxy" | "group";
+
 export type PluginClientHelperResponseKind = "json" | "shell" | "text";
 
 export interface PluginClientHelperActionManifest {
@@ -89,6 +91,7 @@ export interface RepositoryPluginManifest {
   runtimeName: string;
   version: string;
   capabilities: string[];
+  repositoryKinds?: PluginRepositoryKind[] | undefined;
   icon?: PluginIconManifest | undefined;
   repositoryConfig: PluginRepositoryConfigManifest;
   clientHelpers?: PluginClientHelpersManifest;

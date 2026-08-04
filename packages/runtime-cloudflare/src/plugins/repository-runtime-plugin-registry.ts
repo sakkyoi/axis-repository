@@ -23,6 +23,7 @@ import { publicClientHelperAction } from "./repository-plugin-client-helpers";
 function clonePlugin(descriptor: ArtifactRepositoryPlugin): ArtifactRepositoryPlugin {
   return {
     ...descriptor,
+    repositoryKinds: [...(descriptor.repositoryKinds ?? ["hosted"])],
     capabilities: [...descriptor.capabilities],
     ...(descriptor.clientHelpers
       ? {
@@ -104,6 +105,7 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
         ecosystem: descriptor.ecosystem,
         name: descriptor.name,
         version: descriptor.version,
+        repositoryKinds: [...(descriptor.repositoryKinds ?? ["hosted"])],
         capabilities: [...descriptor.capabilities],
       };
       if (descriptor.clientHelpers) {

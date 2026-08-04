@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import type { RepositoryPluginManifest } from "./plugin-manifests";
 
 const srcDir = dirname(fileURLToPath(import.meta.url));
 
@@ -14,5 +15,23 @@ describe("shared plugin manifests", () => {
 
     expect(coreManifestTypes).not.toContain("aptPluginManifest");
     expect(coreManifestTypes).not.toContain("pypiPluginManifest");
+  });
+
+  it("lets plugin manifests declare hosted repository support", () => {
+    const manifest = {
+      ecosystem: "example",
+      displayName: "Example",
+      description: "Example packages.",
+      runtimeName: "example-hosted",
+      version: "0.1.0",
+      capabilities: ["example"],
+      repositoryKinds: ["hosted"],
+      repositoryConfig: {
+        namespace: "example",
+        fields: [],
+      },
+    } satisfies RepositoryPluginManifest;
+
+    expect(manifest.repositoryKinds).toEqual(["hosted"]);
   });
 });

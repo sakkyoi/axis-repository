@@ -23,6 +23,7 @@ import {
   repositorySchema,
   type PublishTokenCreateResponse,
   type Repository,
+  type RepositoryKind,
   type RepositoryActivity,
   type RepositoryObjectDetail,
   type RepositoryPlugin,
@@ -47,6 +48,7 @@ export interface CreatePublishTokenInput {
 export interface CreateRepositoryInput {
   name: string;
   ecosystem: string;
+  kind?: RepositoryKind;
   visibility: RepositoryVisibility;
   config: Record<string, unknown>;
   provisioning?: Record<string, unknown>;

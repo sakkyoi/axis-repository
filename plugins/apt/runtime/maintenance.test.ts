@@ -45,6 +45,7 @@ function repository(overrides: Record<string, unknown> = {}): Repository {
     id: "repo_1",
     name: "debian-internal",
     ecosystem: "apt",
+    kind: "hosted",
     visibility: "private",
     config: {
       apt: {

@@ -67,6 +67,7 @@ function publishInput(signingKeyIds = ["signing_key_prod"]): PublishArtifactsInp
       id: "repo_1",
       name: "debian-internal",
       ecosystem: "apt",
+      kind: "hosted",
       visibility: "private",
       config: {
         apt: {

@@ -21,6 +21,7 @@ function repository(config: Record<string, unknown> = {
     id: "repo_1",
     name: "debian-internal",
     ecosystem: "apt",
+    kind: "hosted",
     visibility: "private",
     config,
     createdAt: "2026-07-18T00:00:00.000Z",

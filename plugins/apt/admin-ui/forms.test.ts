@@ -103,6 +103,7 @@ describe("APT repository forms", () => {
       id: "repo_1",
       name: "debian-internal",
       ecosystem: "apt",
+      kind: "hosted",
       visibility: "private",
       config: {
         apt: {
@@ -184,6 +185,7 @@ describe("APT settings that describe the Release", () => {
     id: "repo_1",
     name: "debian-internal",
     ecosystem: "apt",
+    kind: "hosted",
     visibility: "public",
     config: { apt: { codename: "noble", signingKeyId: "signing_key_prod", ...apt } },
     createdAt: "2026-07-18T00:00:00.000Z",
