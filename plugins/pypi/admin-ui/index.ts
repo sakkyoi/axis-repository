@@ -1,10 +1,10 @@
 import { pypiPluginManifest } from "../manifest";
 import type {
-  RepositoryDetailPlugin,
-  RepositoryUiPlugin,
+  HostedRepositoryDetailPlugin,
+  HostedRepositoryUiPlugin,
 } from "@axis-repository/admin-ui/plugin-ui";
 import { RepositoryClientHelpersSection } from "@axis-repository/admin-ui/plugin-ui";
-import { pypiRepositoryCreatePlugin } from "./create";
+import { pypiHostedRepositoryCreatePlugin } from "./create";
 import {
   PypiInstallHintsSection,
   PypiProjectFilesSection,
@@ -13,7 +13,7 @@ import {
 import { PypiPublishArtifactPreview, PypiPublishSessionDetail, pypiPublishSessionArtifactSummary } from "./publish";
 import { pypiIsAcceptedFile } from "./publish-model";
 
-export const pypiRepositoryDetailPlugin: RepositoryDetailPlugin = {
+export const pypiHostedRepositoryDetailPlugin: HostedRepositoryDetailPlugin = {
   ecosystem: pypiPluginManifest.ecosystem,
   sections: [
     { id: "settings", title: "PyPI settings", placement: "settings", Component: PypiSettingsSection },
@@ -23,10 +23,10 @@ export const pypiRepositoryDetailPlugin: RepositoryDetailPlugin = {
   ],
 };
 
-export const pypiRepositoryUiPlugin: RepositoryUiPlugin = {
+export const pypiHostedRepositoryUiPlugin: HostedRepositoryUiPlugin = {
   manifest: pypiPluginManifest,
-  create: pypiRepositoryCreatePlugin,
-  detail: pypiRepositoryDetailPlugin,
+  create: pypiHostedRepositoryCreatePlugin,
+  detail: pypiHostedRepositoryDetailPlugin,
   publish: {
     ecosystem: pypiPluginManifest.ecosystem,
     title: "Publish Python distribution",

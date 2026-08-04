@@ -6,7 +6,7 @@ import {
 } from "@axis-repository/core";
 import { aptPluginManifest } from "../manifest";
 import type {
-  ArtifactRepositoryPlugin,
+  HostedRepositoryPlugin,
   DescribePublishedArtifactsInput,
   ProvisionRepositoryCreateInput,
   RebuildRepositoryArtifactIndexInput,
@@ -42,7 +42,7 @@ export function createAptPlugin(input: {
   publisher: ArtifactPublisher;
   signingKeys: RepositorySigningKeyCapability;
   signer: AptReleaseSigner;
-}): ArtifactRepositoryPlugin {
+}): HostedRepositoryPlugin {
   return {
     ecosystem: "apt",
     name: aptPluginManifest.runtimeName,

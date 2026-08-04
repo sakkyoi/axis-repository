@@ -7,13 +7,13 @@ import {
 import { RepositoryBrowserSection } from "../browser/repository-browser-section";
 import { RepositoryArtifactsSection } from "../artifacts/repository-artifacts-section";
 import { RepositoryPublishSection } from "../publish/repository-publish-section";
-import type { RepositoryDetailPlugin, RepositoryDetailSection } from "./repository-ui-plugin-types";
+import type { HostedRepositoryDetailPlugin, RepositoryDetailSection } from "./repository-ui-plugin-types";
 import {
-  getRepositoryDetailPlugin as getRepositoryDetailPluginFromRegistry,
+  getHostedRepositoryDetailPlugin as getHostedRepositoryDetailPluginFromRegistry,
   repositoryDetailPluginsFromUiRegistry,
 } from "./repository-ui-plugins";
 
-export type { RepositoryDetailPlugin, RepositoryDetailSection, RepositoryDetailSectionProps } from "./repository-ui-plugin-types";
+export type { HostedRepositoryDetailPlugin, RepositoryDetailSection, RepositoryDetailSectionProps } from "./repository-ui-plugin-types";
 
 export const repositoryDetailPlugins = repositoryDetailPluginsFromUiRegistry();
 
@@ -24,17 +24,17 @@ export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
   { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
 ];
 
-export function getRepositoryDetailPlugin(ecosystem: string): RepositoryDetailPlugin | undefined {
-  const plugin = getRepositoryDetailPluginFromRegistry(ecosystem);
-  return plugin ? normalizeRepositoryDetailPlugin(plugin) : undefined;
+export function getHostedRepositoryDetailPlugin(ecosystem: string): HostedRepositoryDetailPlugin | undefined {
+  const plugin = getHostedRepositoryDetailPluginFromRegistry(ecosystem);
+  return plugin ? normalizeHostedRepositoryDetailPlugin(plugin) : undefined;
 }
 
 function repositoryDetailSectionsFor(ecosystem: string): RepositoryDetailSection[] {
-  const sections = getRepositoryDetailPlugin(ecosystem)?.sections ?? genericRepositoryDetailSections;
+  const sections = getHostedRepositoryDetailPlugin(ecosystem)?.sections ?? genericRepositoryDetailSections;
   return normalizeRepositoryDetailSections(sections);
 }
 
-function normalizeRepositoryDetailPlugin(plugin: RepositoryDetailPlugin): RepositoryDetailPlugin {
+function normalizeHostedRepositoryDetailPlugin(plugin: HostedRepositoryDetailPlugin): HostedRepositoryDetailPlugin {
   return {
     ...plugin,
     sections: normalizeRepositoryDetailSections(plugin.sections),

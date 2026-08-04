@@ -22,14 +22,14 @@ import {
 import type {
   RepositoryCreateFieldErrors,
   RepositoryCreateFieldRendererMap,
-  RepositoryCreatePlugin,
-  RepositoryCreatePluginOption,
+  HostedRepositoryCreatePlugin,
+  HostedRepositoryCreatePluginOption,
   RepositoryCreateStep,
   RepositoryCreateWizardState,
 } from "../repositories/plugins/repository-ui-plugin-types";
 import {
   getRepositoryCreateFieldRenderers,
-  getRepositoryCreatePlugin,
+  getHostedRepositoryCreatePlugin,
   getRepositoryPluginManifest,
   repositoryCreatePluginOptionsFromUiRegistry,
   repositoryCreatePluginsFromUiRegistry,
@@ -91,7 +91,7 @@ export function NewRepositoryPage() {
   }, [plugin, state]);
 
   function selectPlugin(ecosystem: string) {
-    const nextPlugin = getRepositoryCreatePlugin(ecosystem);
+    const nextPlugin = getHostedRepositoryCreatePlugin(ecosystem);
     if (!nextPlugin) {
       throw new Error(`Repository UI plugin is not configured: ${ecosystem}`);
     }
@@ -304,7 +304,7 @@ function PluginStep({
   selectedEcosystem,
   onSelect,
 }: {
-  options: RepositoryCreatePluginOption[];
+  options: HostedRepositoryCreatePluginOption[];
   isLoading: boolean;
   error: unknown;
   selectedEcosystem: string;
@@ -413,7 +413,7 @@ function ConfigStep({
   config,
   onChange,
 }: {
-  plugin: RepositoryCreatePlugin;
+  plugin: HostedRepositoryCreatePlugin;
   displayName: string;
   fieldRenderers: RepositoryCreateFieldRendererMap | undefined;
   repositoryName: string;
@@ -447,7 +447,7 @@ function DependenciesStep({
   setup,
   onChange,
 }: {
-  plugin: RepositoryCreatePlugin;
+  plugin: HostedRepositoryCreatePlugin;
   displayName: string;
   fieldRenderers: RepositoryCreateFieldRendererMap | undefined;
   repositoryName: string;

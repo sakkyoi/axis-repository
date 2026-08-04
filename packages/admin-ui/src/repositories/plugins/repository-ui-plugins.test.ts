@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { aptPluginManifest } from "@axis-repository/plugin-apt/manifest";
 import { pypiPluginManifest } from "@axis-repository/plugin-pypi/manifest";
 
-import { assertRepositoryUiPluginContracts } from "./repository-ui-plugins";
+import { assertHostedRepositoryUiPluginContracts } from "./repository-ui-plugins";
 import {
   getPublishTokenScopeExtension,
   getRepositoryCreateFieldRenderers,
-  getRepositoryCreatePlugin,
+  getHostedRepositoryCreatePlugin,
   getRepositoryCreateServerErrorMapper,
-  getRepositoryDetailPlugin,
+  getHostedRepositoryDetailPlugin,
   getRepositoryPluginManifest,
-  getRepositoryPublishPlugin,
+  getHostedRepositoryPublishPlugin,
   repositoryCreatePluginOptionsFromUiRegistry,
   repositoryCreatePluginsFromUiRegistry,
   repositoryDetailPluginsFromUiRegistry,
@@ -27,7 +27,7 @@ describe("repository UI plugin registry", () => {
   });
 
   it("keeps UI plugin extensions aligned with their shared manifests", () => {
-    expect(() => assertRepositoryUiPluginContracts(repositoryUiPlugins)).not.toThrow();
+    expect(() => assertHostedRepositoryUiPluginContracts(repositoryUiPlugins)).not.toThrow();
   });
 
   it("keeps UI plugin ecosystems aligned with shared core manifests", () => {
@@ -54,9 +54,9 @@ describe("repository UI plugin registry", () => {
 
   it("returns undefined for ecosystems without local UI support", () => {
     expect(getRepositoryPluginManifest("npm")).toBeUndefined();
-    expect(getRepositoryCreatePlugin("npm")).toBeUndefined();
-    expect(getRepositoryDetailPlugin("npm")).toBeUndefined();
-    expect(getRepositoryPublishPlugin("npm")).toBeUndefined();
+    expect(getHostedRepositoryCreatePlugin("npm")).toBeUndefined();
+    expect(getHostedRepositoryDetailPlugin("npm")).toBeUndefined();
+    expect(getHostedRepositoryPublishPlugin("npm")).toBeUndefined();
     expect(getPublishTokenScopeExtension("npm")).toBeUndefined();
   });
 
@@ -148,25 +148,25 @@ describe("repository UI plugin registry", () => {
   });
 
   it("lets ecosystem UI plugins provide publish UI and artifact summaries", () => {
-    expect(getRepositoryPublishPlugin("apt")?.PreviewComponent).toBeTypeOf("function");
-    expect(getRepositoryPublishPlugin("apt")?.accept).toContain(".deb");
-    expect(getRepositoryPublishPlugin("apt")?.isAcceptedFile?.(new File(["deb"], "myapp.deb"))).toBe(true);
-    expect(getRepositoryPublishPlugin("apt")?.isAcceptedFile?.(new File(["wheel"], "myapp.whl"))).toBe(false);
-    expect(getRepositoryPublishPlugin("apt")?.SessionDetailComponent).toBeTypeOf("function");
+    expect(getHostedRepositoryPublishPlugin("apt")?.PreviewComponent).toBeTypeOf("function");
+    expect(getHostedRepositoryPublishPlugin("apt")?.accept).toContain(".deb");
+    expect(getHostedRepositoryPublishPlugin("apt")?.isAcceptedFile?.(new File(["deb"], "myapp.deb"))).toBe(true);
+    expect(getHostedRepositoryPublishPlugin("apt")?.isAcceptedFile?.(new File(["wheel"], "myapp.whl"))).toBe(false);
+    expect(getHostedRepositoryPublishPlugin("apt")?.SessionDetailComponent).toBeTypeOf("function");
     // Without a preview component the workspace offers no way to publish at
     // all, which is what PyPI repositories had: uploading meant twine or the
     // session API, and nothing in the admin UI.
-    expect(getRepositoryPublishPlugin("pypi")?.PreviewComponent).toBeTypeOf("function");
-    expect(getRepositoryPublishPlugin("pypi")?.accept).toContain(".whl");
-    expect(getRepositoryPublishPlugin("pypi")?.isAcceptedFile?.(new File(["whl"], "my_project-1.0-py3-none-any.whl"))).toBe(true);
-    expect(getRepositoryPublishPlugin("pypi")?.isAcceptedFile?.(new File(["deb"], "myapp.deb"))).toBe(false);
-    expect(getRepositoryPublishPlugin("pypi")?.SessionDetailComponent).toBeTypeOf("function");
-    expect(getRepositoryPublishPlugin("pypi")?.PreviewComponent)
-      .not.toBe(getRepositoryPublishPlugin("apt")?.PreviewComponent);
+    expect(getHostedRepositoryPublishPlugin("pypi")?.PreviewComponent).toBeTypeOf("function");
+    expect(getHostedRepositoryPublishPlugin("pypi")?.accept).toContain(".whl");
+    expect(getHostedRepositoryPublishPlugin("pypi")?.isAcceptedFile?.(new File(["whl"], "my_project-1.0-py3-none-any.whl"))).toBe(true);
+    expect(getHostedRepositoryPublishPlugin("pypi")?.isAcceptedFile?.(new File(["deb"], "myapp.deb"))).toBe(false);
+    expect(getHostedRepositoryPublishPlugin("pypi")?.SessionDetailComponent).toBeTypeOf("function");
+    expect(getHostedRepositoryPublishPlugin("pypi")?.PreviewComponent)
+      .not.toBe(getHostedRepositoryPublishPlugin("apt")?.PreviewComponent);
     // Distinct plugins must not resolve to the same component.
-    expect(getRepositoryPublishPlugin("pypi")?.SessionDetailComponent)
-      .not.toBe(getRepositoryPublishPlugin("apt")?.SessionDetailComponent);
-    expect(getRepositoryPublishPlugin("apt")?.artifactSummary({
+    expect(getHostedRepositoryPublishPlugin("pypi")?.SessionDetailComponent)
+      .not.toBe(getHostedRepositoryPublishPlugin("apt")?.SessionDetailComponent);
+    expect(getHostedRepositoryPublishPlugin("apt")?.artifactSummary({
       id: "pub_apt",
       repositoryName: "debian-internal",
       ecosystem: "apt",

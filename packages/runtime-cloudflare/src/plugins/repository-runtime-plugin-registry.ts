@@ -6,7 +6,7 @@ import {
   type PublishResult,
 } from "@axis-repository/core";
 import type {
-  ArtifactRepositoryPlugin,
+  HostedRepositoryPlugin,
   PublisherMetadata,
   RepositoryRuntimePluginDescriptor,
 } from "./repository-plugin-contract";
@@ -20,7 +20,7 @@ import { publicClientHelperAction } from "./repository-plugin-client-helpers";
  * caller reassigning a hook anyway. Only host code holds these descriptors, so
  * the guarantee is "metadata is a copy", not "the descriptor is frozen".
  */
-function clonePlugin(descriptor: ArtifactRepositoryPlugin): ArtifactRepositoryPlugin {
+function clonePlugin(descriptor: HostedRepositoryPlugin): HostedRepositoryPlugin {
   return {
     ...descriptor,
     repositoryKinds: [...(descriptor.repositoryKinds ?? ["hosted"])],
@@ -76,7 +76,7 @@ function validateAdminResourceRoutes(descriptor: RepositoryRuntimePluginDescript
 }
 
 export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
-  private readonly plugins = new Map<Ecosystem, ArtifactRepositoryPlugin>();
+  private readonly plugins = new Map<Ecosystem, HostedRepositoryPlugin>();
 
   register(descriptor: RepositoryRuntimePluginDescriptor): void {
     assertRegistrableEcosystem(descriptor.ecosystem);
@@ -118,13 +118,13 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
     });
   }
 
-  getPlugin(ecosystem: Ecosystem): ArtifactRepositoryPlugin | undefined {
+  getPlugin(ecosystem: Ecosystem): HostedRepositoryPlugin | undefined {
     const plugin = this.plugins.get(ecosystem);
     if (!plugin) return undefined;
     return clonePlugin(plugin);
   }
 
-  getPluginByAdminResourceNamespace(namespace: string): ArtifactRepositoryPlugin | undefined {
+  getPluginByAdminResourceNamespace(namespace: string): HostedRepositoryPlugin | undefined {
     const plugin = Array.from(this.plugins.values()).find((descriptor) =>
       descriptor.adminResources?.namespace === namespace,
     );
@@ -132,7 +132,7 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
     return clonePlugin(plugin);
   }
 
-  requirePlugin(ecosystem: Ecosystem): ArtifactRepositoryPlugin {
+  requirePlugin(ecosystem: Ecosystem): HostedRepositoryPlugin {
     const plugin = this.getPlugin(ecosystem);
     if (!plugin) {
       throw new ValidationError(

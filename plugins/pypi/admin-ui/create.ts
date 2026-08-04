@@ -1,8 +1,8 @@
 import { pypiPluginManifest } from "../manifest";
-import type { RepositoryCreatePlugin } from "@axis-repository/admin-ui/plugin-ui";
+import type { HostedRepositoryCreatePlugin } from "@axis-repository/admin-ui/plugin-ui";
 import { repositoryCreateStepsForConfig } from "@axis-repository/admin-ui/plugin-ui";
 
-export const pypiRepositoryCreatePlugin: RepositoryCreatePlugin = {
+export const pypiHostedRepositoryCreatePlugin: HostedRepositoryCreatePlugin = {
   ecosystem: pypiPluginManifest.ecosystem,
   repositoryConfig: pypiPluginManifest.repositoryConfig,
   steps: repositoryCreateStepsForConfig(pypiPluginManifest.repositoryConfig),

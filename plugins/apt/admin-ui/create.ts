@@ -1,7 +1,7 @@
 import type { PluginRepositoryConfigFieldManifest } from "@axis-repository/core/plugin-manifests";
 import { aptPluginManifest } from "../manifest";
 import type {
-  RepositoryCreatePlugin,
+  HostedRepositoryCreatePlugin,
   RepositoryCreateWizardState,
 } from "@axis-repository/admin-ui/plugin-ui";
 import { repositoryCreateStepsForConfig } from "@axis-repository/admin-ui/plugin-ui";
@@ -58,7 +58,7 @@ function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormVal
   };
 }
 
-export const aptRepositoryCreatePlugin: RepositoryCreatePlugin = {
+export const aptHostedRepositoryCreatePlugin: HostedRepositoryCreatePlugin = {
   ecosystem: aptPluginManifest.ecosystem,
   repositoryConfig: aptPluginManifest.repositoryConfig,
   steps: repositoryCreateStepsForConfig(aptPluginManifest.repositoryConfig),

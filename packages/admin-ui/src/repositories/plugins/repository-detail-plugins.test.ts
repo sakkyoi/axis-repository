@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   genericRepositoryDetailSections,
-  getRepositoryDetailPlugin,
+  getHostedRepositoryDetailPlugin,
   repositorySettingsSectionsFor,
   repositorySummarySectionsFor,
   repositoryWorkspaceSectionsFor,
@@ -13,20 +13,20 @@ import { pypiInstallCommandText, pypiSimpleIndexUrl } from "@axis-repository/plu
 describe("repository detail plugins", () => {
   it("exposes APT as a repository detail plugin", () => {
     expect(repositoryDetailPlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
-    expect(getRepositoryDetailPlugin("apt")).toMatchObject({
+    expect(getHostedRepositoryDetailPlugin("apt")).toMatchObject({
       ecosystem: "apt",
     });
-    expect(getRepositoryDetailPlugin("pypi")).toMatchObject({
+    expect(getHostedRepositoryDetailPlugin("pypi")).toMatchObject({
       ecosystem: "pypi",
     });
   });
 
   it("returns undefined when no detail plugin is registered for an ecosystem", () => {
-    expect(getRepositoryDetailPlugin("npm")).toBeUndefined();
+    expect(getHostedRepositoryDetailPlugin("npm")).toBeUndefined();
   });
 
   it("exposes ordered detail sections per ecosystem", () => {
-    expect(getRepositoryDetailPlugin("apt")?.sections.map((section) => section.id)).toEqual([
+    expect(getHostedRepositoryDetailPlugin("apt")?.sections.map((section) => section.id)).toEqual([
       "repository-artifacts",
       "repository-browser",
       "settings",
@@ -34,7 +34,7 @@ describe("repository detail plugins", () => {
       "signing-keys",
       "client-helpers",
     ]);
-    expect(getRepositoryDetailPlugin("pypi")?.sections.map((section) => section.id)).toEqual([
+    expect(getHostedRepositoryDetailPlugin("pypi")?.sections.map((section) => section.id)).toEqual([
       "repository-artifacts",
       "repository-browser",
       "settings",
@@ -45,16 +45,16 @@ describe("repository detail plugins", () => {
   });
 
   it("uses the shared repository browser while plugins provide publish pieces", () => {
-    const aptBrowserSection = getRepositoryDetailPlugin("apt")?.sections.find((section) => section.id === "repository-browser");
-    const pypiBrowserSection = getRepositoryDetailPlugin("pypi")?.sections.find((section) => section.id === "repository-browser");
+    const aptBrowserSection = getHostedRepositoryDetailPlugin("apt")?.sections.find((section) => section.id === "repository-browser");
+    const pypiBrowserSection = getHostedRepositoryDetailPlugin("pypi")?.sections.find((section) => section.id === "repository-browser");
 
     expect(aptBrowserSection?.Component.name).toBe("RepositoryBrowserSection");
     expect(pypiBrowserSection?.Component.name).toBe("RepositoryBrowserSection");
   });
 
   it("renders plugin client helpers through the same shared section", () => {
-    const aptClientHelpers = getRepositoryDetailPlugin("apt")?.sections.find((section) => section.id === "client-helpers");
-    const pypiClientHelpers = getRepositoryDetailPlugin("pypi")?.sections.find((section) => section.id === "client-helpers");
+    const aptClientHelpers = getHostedRepositoryDetailPlugin("apt")?.sections.find((section) => section.id === "client-helpers");
+    const pypiClientHelpers = getHostedRepositoryDetailPlugin("pypi")?.sections.find((section) => section.id === "client-helpers");
 
     expect(aptClientHelpers?.Component).toBe(pypiClientHelpers?.Component);
     expect(aptClientHelpers?.Component.name).toBe("RepositoryClientHelpersSection");

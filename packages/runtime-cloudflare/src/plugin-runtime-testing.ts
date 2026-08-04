@@ -1,5 +1,5 @@
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
-import type { ArtifactRepositoryPlugin } from "./plugins/repository-plugin-contract";
+import type { HostedRepositoryPlugin } from "./plugins/repository-plugin-contract";
 
 export { OpenPgpSigner } from "./signing/openpgp-signer";
 export { MemoryRepositoryObjectStore } from "./storage/repository-object-store";
@@ -14,7 +14,7 @@ function assertJsonEqual(label: string, actual: unknown, expected: unknown): voi
 
 export function assertRuntimePluginManifestParity(input: {
   manifest: RepositoryPluginManifest;
-  plugin: ArtifactRepositoryPlugin;
+  plugin: HostedRepositoryPlugin;
 }): void {
   const { manifest, plugin } = input;
   if (plugin.ecosystem !== manifest.ecosystem) {

@@ -1,6 +1,6 @@
 import type {
   RepositoryCreateFieldErrors,
-  RepositoryCreatePlugin,
+  HostedRepositoryCreatePlugin,
   RepositoryCreateStep,
 } from "./repository-ui-plugin-types";
 import {
@@ -10,8 +10,8 @@ import {
 
 export type {
   RepositoryCreateFieldErrors,
-  RepositoryCreatePlugin,
-  RepositoryCreatePluginOption,
+  HostedRepositoryCreatePlugin,
+  HostedRepositoryCreatePluginOption,
   RepositoryCreateStep,
   RepositoryCreateWizardState,
 } from "./repository-ui-plugin-types";
@@ -32,7 +32,7 @@ function isRepositoryNameError(message: string): boolean {
 
 export function repositoryCreateStepForServerError(
   message: string,
-  plugin: RepositoryCreatePlugin,
+  plugin: HostedRepositoryCreatePlugin,
 ): RepositoryCreateStep | undefined {
   if (isRepositoryNameError(message)) {
     return plugin.steps.includes("basics") ? "basics" : undefined;

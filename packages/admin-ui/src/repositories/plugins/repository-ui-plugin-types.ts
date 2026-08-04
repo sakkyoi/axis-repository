@@ -33,7 +33,7 @@ export interface RepositoryCreateFieldErrors {
   name?: string;
 }
 
-export type RepositoryCreatePluginOption =
+export type HostedRepositoryCreatePluginOption =
   | {
       ecosystem: string;
       displayName: string;
@@ -42,7 +42,7 @@ export type RepositoryCreatePluginOption =
       lifecycle: PluginLifecycleSummary;
       badges: PluginLifecycleBadge[];
       supported: true;
-      plugin: RepositoryCreatePlugin;
+      plugin: HostedRepositoryCreatePlugin;
     }
   | {
       ecosystem: string;
@@ -54,6 +54,9 @@ export type RepositoryCreatePluginOption =
       supported: false;
       disabledReason?: string;
     };
+
+/** @deprecated Use HostedRepositoryCreatePluginOption. */
+export type RepositoryCreatePluginOption = HostedRepositoryCreatePluginOption;
 
 export interface RepositoryDetailSectionProps {
   repository: Repository;

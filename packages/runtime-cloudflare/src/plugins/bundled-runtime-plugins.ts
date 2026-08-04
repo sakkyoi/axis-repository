@@ -1,6 +1,6 @@
 
 import type {
-  ArtifactRepositoryPlugin,
+  HostedRepositoryPlugin,
   RepositorySecretCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { aptRepositoryPluginBundle } from "@axis-repository/plugin-apt";
@@ -32,7 +32,7 @@ export interface BundledRuntimePluginInput {
   aptReleaseSigner: AptReleaseSigner;
 }
 
-type RuntimePluginFactory = (input: BundledRuntimePluginInput) => ArtifactRepositoryPlugin;
+type RuntimePluginFactory = (input: BundledRuntimePluginInput) => HostedRepositoryPlugin;
 
 const bundledRuntimePluginFactories: Record<string, RuntimePluginFactory> = {
   apt: (input) => {
@@ -50,7 +50,7 @@ const bundledRuntimePluginFactories: Record<string, RuntimePluginFactory> = {
   pypi: (input) => createPypiPlugin({ objectStoreFor: input.objectStoreFor }),
 };
 
-export function createBundledRuntimePlugins(input: BundledRuntimePluginInput): ArtifactRepositoryPlugin[] {
+export function createBundledRuntimePlugins(input: BundledRuntimePluginInput): HostedRepositoryPlugin[] {
   return [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
     .filter((plugin) => plugin.catalog.enabled && plugin.runtime)
     .map((plugin) => {

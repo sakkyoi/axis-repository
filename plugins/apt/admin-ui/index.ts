@@ -1,20 +1,20 @@
 import { aptPluginManifest } from "../manifest";
 import type {
-  RepositoryDetailPlugin,
-  RepositoryUiPlugin,
+  HostedRepositoryDetailPlugin,
+  HostedRepositoryUiPlugin,
 } from "@axis-repository/admin-ui/plugin-ui";
 import {
   AdvancedJsonConfigSection,
   RepositoryClientHelpersSection,
 } from "@axis-repository/admin-ui/plugin-ui";
-import { aptRepositoryCreatePlugin } from "./create";
+import { aptHostedRepositoryCreatePlugin } from "./create";
 import { AptSigningKeySetupField } from "./create-field-renderers";
 import { AptSettingsSection, AptSigningKeysSection } from "./detail";
 import { AptPublishArtifactPreview, AptPublishSessionDetail } from "./publish";
 import { aptPublishSessionArtifactSummary } from "./publish-model";
 import { aptPublishTokenMissingRequiredScopes, aptPublishTokenSigningKeyIds } from "./token-scope";
 
-export const aptRepositoryDetailPlugin: RepositoryDetailPlugin = {
+export const aptHostedRepositoryDetailPlugin: HostedRepositoryDetailPlugin = {
   ecosystem: aptPluginManifest.ecosystem,
   sections: [
     { id: "settings", title: "APT settings", placement: "settings", Component: AptSettingsSection },
@@ -24,10 +24,10 @@ export const aptRepositoryDetailPlugin: RepositoryDetailPlugin = {
   ],
 };
 
-export const aptRepositoryUiPlugin: RepositoryUiPlugin = {
+export const aptHostedRepositoryUiPlugin: HostedRepositoryUiPlugin = {
   manifest: aptPluginManifest,
-  create: aptRepositoryCreatePlugin,
-  detail: aptRepositoryDetailPlugin,
+  create: aptHostedRepositoryCreatePlugin,
+  detail: aptHostedRepositoryDetailPlugin,
   publish: {
     ecosystem: aptPluginManifest.ecosystem,
     title: "Publish APT artifact",

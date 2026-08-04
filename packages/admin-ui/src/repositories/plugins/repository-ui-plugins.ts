@@ -9,23 +9,23 @@ import {
 import type {
   PublishTokenScopeExtension,
   RepositoryCreateFieldRendererMap,
-  RepositoryCreatePlugin,
-  RepositoryCreatePluginOption,
+  HostedRepositoryCreatePlugin,
+  HostedRepositoryCreatePluginOption,
   RepositoryCreateStep,
-  RepositoryDetailPlugin,
-  RepositoryPublishPlugin,
-  RepositoryUiPlugin,
+  HostedRepositoryDetailPlugin,
+  HostedRepositoryPublishPlugin,
+  HostedRepositoryUiPlugin,
 } from "./repository-ui-plugin-types";
 import { aptRepositoryPluginBundle } from "@axis-repository/plugin-apt";
-import { aptRepositoryUiPlugin } from "@axis-repository/plugin-apt/admin-ui";
+import { aptHostedRepositoryUiPlugin } from "@axis-repository/plugin-apt/admin-ui";
 import { pypiRepositoryPluginBundle } from "@axis-repository/plugin-pypi";
-import { pypiRepositoryUiPlugin } from "@axis-repository/plugin-pypi/admin-ui";
+import { pypiHostedRepositoryUiPlugin } from "@axis-repository/plugin-pypi/admin-ui";
 
 type NonEmptyArray<T> = [T, ...T[]];
 
-const bundledAdminUiPlugins: Record<string, RepositoryUiPlugin> = {
-  apt: aptRepositoryUiPlugin,
-  pypi: pypiRepositoryUiPlugin,
+const bundledAdminUiPlugins: Record<string, HostedRepositoryUiPlugin> = {
+  apt: aptHostedRepositoryUiPlugin,
+  pypi: pypiHostedRepositoryUiPlugin,
 };
 
 export const repositoryUiPlugins = [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
@@ -36,7 +36,7 @@ export const repositoryUiPlugins = [aptRepositoryPluginBundle, pypiRepositoryPlu
       throw new Error(`Admin UI plugin is not wired for ecosystem: ${plugin.manifest.ecosystem}`);
     }
     return uiPlugin;
-  }) as NonEmptyArray<RepositoryUiPlugin>;
+  }) as NonEmptyArray<HostedRepositoryUiPlugin>;
 
 function assertJsonEqual(label: string, actual: unknown, expected: unknown): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -44,7 +44,7 @@ function assertJsonEqual(label: string, actual: unknown, expected: unknown): voi
   }
 }
 
-export function assertRepositoryUiPluginContracts(plugins: readonly RepositoryUiPlugin[]): void {
+export function assertHostedRepositoryUiPluginContracts(plugins: readonly HostedRepositoryUiPlugin[]): void {
   const ecosystems = new Set<string>();
   for (const plugin of plugins) {
     const ecosystem = plugin.manifest.ecosystem;
@@ -79,52 +79,52 @@ export function assertRepositoryUiPluginContracts(plugins: readonly RepositoryUi
   }
 }
 
-function getRepositoryUiPlugin(ecosystem: string): RepositoryUiPlugin | undefined {
+function getHostedRepositoryUiPlugin(ecosystem: string): HostedRepositoryUiPlugin | undefined {
   return repositoryUiPlugins.find((plugin) => plugin.manifest.ecosystem === ecosystem);
 }
 
 export function getRepositoryPluginManifest(ecosystem: string): RepositoryPluginManifest | undefined {
-  return getRepositoryUiPlugin(ecosystem)?.manifest;
+  return getHostedRepositoryUiPlugin(ecosystem)?.manifest;
 }
 
-export function getRepositoryCreatePlugin(ecosystem: string): RepositoryCreatePlugin | undefined {
-  return getRepositoryUiPlugin(ecosystem)?.create;
+export function getHostedRepositoryCreatePlugin(ecosystem: string): HostedRepositoryCreatePlugin | undefined {
+  return getHostedRepositoryUiPlugin(ecosystem)?.create;
 }
 
-export function getRepositoryDetailPlugin(ecosystem: string): RepositoryDetailPlugin | undefined {
-  return getRepositoryUiPlugin(ecosystem)?.detail;
+export function getHostedRepositoryDetailPlugin(ecosystem: string): HostedRepositoryDetailPlugin | undefined {
+  return getHostedRepositoryUiPlugin(ecosystem)?.detail;
 }
 
-export function getRepositoryPublishPlugin(ecosystem: string): RepositoryPublishPlugin | undefined {
-  return getRepositoryUiPlugin(ecosystem)?.publish;
+export function getHostedRepositoryPublishPlugin(ecosystem: string): HostedRepositoryPublishPlugin | undefined {
+  return getHostedRepositoryUiPlugin(ecosystem)?.publish;
 }
 
 export function getPublishTokenScopeExtension(ecosystem: string): PublishTokenScopeExtension | undefined {
-  return getRepositoryUiPlugin(ecosystem)?.publishTokenScope;
+  return getHostedRepositoryUiPlugin(ecosystem)?.publishTokenScope;
 }
 
 export function getRepositoryCreateFieldRenderers(ecosystem: string): RepositoryCreateFieldRendererMap | undefined {
-  return getRepositoryUiPlugin(ecosystem)?.createFieldRenderers;
+  return getHostedRepositoryUiPlugin(ecosystem)?.createFieldRenderers;
 }
 
 export function getRepositoryCreateServerErrorMapper(
   ecosystem: string,
 ): ((message: string) => RepositoryCreateStep | undefined) | undefined {
-  return getRepositoryUiPlugin(ecosystem)?.mapCreateServerError;
+  return getHostedRepositoryUiPlugin(ecosystem)?.mapCreateServerError;
 }
 
-export function repositoryCreatePluginsFromUiRegistry(): NonEmptyArray<RepositoryCreatePlugin> {
-  return repositoryUiPlugins.map((plugin) => plugin.create) as NonEmptyArray<RepositoryCreatePlugin>;
+export function repositoryCreatePluginsFromUiRegistry(): NonEmptyArray<HostedRepositoryCreatePlugin> {
+  return repositoryUiPlugins.map((plugin) => plugin.create) as NonEmptyArray<HostedRepositoryCreatePlugin>;
 }
 
-export function repositoryDetailPluginsFromUiRegistry(): RepositoryDetailPlugin[] {
+export function repositoryDetailPluginsFromUiRegistry(): HostedRepositoryDetailPlugin[] {
   return repositoryUiPlugins.map((plugin) => plugin.detail);
 }
 
 export function repositoryCreatePluginOptionsFromUiRegistry(
   serverPlugins: RepositoryPlugin[],
-  localPlugins: readonly RepositoryUiPlugin[] = repositoryUiPlugins,
-): RepositoryCreatePluginOption[] {
+  localPlugins: readonly HostedRepositoryUiPlugin[] = repositoryUiPlugins,
+): HostedRepositoryCreatePluginOption[] {
   return serverPlugins.map((serverPlugin) => {
     const localPlugin = localPlugins.find((candidate) => candidate.manifest.ecosystem === serverPlugin.ecosystem);
     const lifecycle = pluginLifecycleSummary(serverPlugin);

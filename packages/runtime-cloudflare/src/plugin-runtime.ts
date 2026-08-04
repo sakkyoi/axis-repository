@@ -1,5 +1,6 @@
 export type {
   ArtifactRepositoryPlugin,
+  HostedRepositoryPlugin,
   AuthorizePublishInput,
   DescribePublishedArtifactsInput,
   DerivedPublishPrincipalScope,

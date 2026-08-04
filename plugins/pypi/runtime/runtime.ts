@@ -2,7 +2,7 @@ import type { RepositoryArtifactRecord, RepositoryObjectStore } from "@axis-repo
 import { ValidationError } from "@axis-repository/core";
 import { pypiPluginManifest } from "../manifest";
 import type {
-  ArtifactRepositoryPlugin,
+  HostedRepositoryPlugin,
   DescribePublishedArtifactsInput,
   RebuildRepositoryArtifactIndexInput,
   ValidatePublishArtifactsInput,
@@ -43,7 +43,7 @@ import { createPypiUploadProtocol } from "./upload-protocol";
 
 export function createPypiPlugin(input?: {
   objectStoreFor?: (repositoryName: string) => RepositoryObjectStore;
-}): ArtifactRepositoryPlugin {
+}): HostedRepositoryPlugin {
   // Without a store there is nowhere to write. Fail loudly rather than
   // reporting a successful publish that stored nothing.
   const publisher = input?.objectStoreFor

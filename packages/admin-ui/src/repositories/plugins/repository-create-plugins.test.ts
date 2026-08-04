@@ -6,29 +6,29 @@ import {
   repositoryCreateStepForServerError,
 } from "./repository-create-plugins";
 import {
-  getRepositoryCreatePlugin,
+  getHostedRepositoryCreatePlugin,
 } from "./repository-ui-plugins";
 
 describe("repository create plugins", () => {
   it("exposes APT as a wizard plugin with config and setup steps", () => {
     expect(repositoryCreatePlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
-    expect(getRepositoryCreatePlugin("apt")!).toMatchObject({
+    expect(getHostedRepositoryCreatePlugin("apt")!).toMatchObject({
       ecosystem: "apt",
       steps: ["plugin", "basics", "config", "setup", "review"],
     });
-    expect(getRepositoryCreatePlugin("pypi")!).toMatchObject({
+    expect(getHostedRepositoryCreatePlugin("pypi")!).toMatchObject({
       ecosystem: "pypi",
       steps: ["plugin", "basics", "review"],
     });
   });
 
   it("derives create steps from repository config field steps", () => {
-    expect(getRepositoryCreatePlugin("apt")!.steps).toEqual(["plugin", "basics", "config", "setup", "review"]);
-    expect(getRepositoryCreatePlugin("pypi")!.steps).toEqual(["plugin", "basics", "review"]);
+    expect(getHostedRepositoryCreatePlugin("apt")!.steps).toEqual(["plugin", "basics", "config", "setup", "review"]);
+    expect(getHostedRepositoryCreatePlugin("pypi")!.steps).toEqual(["plugin", "basics", "review"]);
   });
 
   it("exposes repository config fields to the wizard renderer", () => {
-    const plugin = getRepositoryCreatePlugin("apt")!;
+    const plugin = getHostedRepositoryCreatePlugin("apt")!;
 
     expect(plugin.repositoryConfig.namespace).toBe("apt");
     expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step])).toEqual([
@@ -39,7 +39,7 @@ describe("repository create plugins", () => {
   });
 
   it("builds an APT repository create payload from wizard state", () => {
-    const plugin = getRepositoryCreatePlugin("apt")!;
+    const plugin = getHostedRepositoryCreatePlugin("apt")!;
 
     expect(plugin.buildCreateInput({
       name: "debian-internal",
@@ -76,7 +76,7 @@ describe("repository create plugins", () => {
   });
 
   it("builds a PyPI repository create payload from wizard state", () => {
-    const plugin = getRepositoryCreatePlugin("pypi")!;
+    const plugin = getHostedRepositoryCreatePlugin("pypi")!;
 
     expect(plugin.buildCreateInput({
       name: "python-internal",
@@ -94,7 +94,7 @@ describe("repository create plugins", () => {
   });
 
   it("maps every server-side repository name rejection back to the basics step", () => {
-    const plugin = getRepositoryCreatePlugin("apt")!;
+    const plugin = getHostedRepositoryCreatePlugin("apt")!;
 
     for (const message of [
       "Repository already exists: debian-internal",
@@ -108,7 +108,7 @@ describe("repository create plugins", () => {
   });
 
   it("maps duplicate repository errors back to the basics step and name field", () => {
-    const plugin = getRepositoryCreatePlugin("apt")!;
+    const plugin = getHostedRepositoryCreatePlugin("apt")!;
     const message = "Repository already exists: debian-internal";
 
     expect(repositoryCreateStepForServerError(message, plugin)).toBe("basics");

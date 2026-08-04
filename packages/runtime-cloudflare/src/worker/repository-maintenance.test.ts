@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Repository } from "@axis-repository/core";
-import type { ArtifactRepositoryPlugin, RepositoryMaintenanceResult } from "../plugins/repository-plugin-contract";
+import type { HostedRepositoryPlugin, RepositoryMaintenanceResult } from "../plugins/repository-plugin-contract";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 import { RepositoryWriteLock } from "./repository-write-lock";
 import {
@@ -25,15 +25,15 @@ function repository(name: string, ecosystem = "apt"): Repository {
   };
 }
 
-function registry(plugins: Record<string, Partial<ArtifactRepositoryPlugin>>) {
+function registry(plugins: Record<string, Partial<HostedRepositoryPlugin>>) {
   return {
-    getPlugin: (ecosystem: string) => plugins[ecosystem] as ArtifactRepositoryPlugin | undefined,
+    getPlugin: (ecosystem: string) => plugins[ecosystem] as HostedRepositoryPlugin | undefined,
   } as never;
 }
 
 function maintenancePlugin(
   run: () => Promise<RepositoryMaintenanceResult>,
-): Partial<ArtifactRepositoryPlugin> {
+): Partial<HostedRepositoryPlugin> {
   return { maintenance: { run } };
 }
 
