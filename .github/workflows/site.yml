@@ -59,9 +59,11 @@ jobs:
           # into that subdomain -- but PAGES_BRANCH is already lowercase
           # alphanumeric-and-hyphens, so the sanitized form is identical to
           # what we already have and there's nothing Cloudflare would change.
-          echo "variant=$VARIANT" >> "$GITHUB_OUTPUT"
-          echo "pages_branch=$PAGES_BRANCH" >> "$GITHUB_OUTPUT"
-          echo "preview_url=https://$PAGES_BRANCH.axis-site.pages.dev" >> "$GITHUB_OUTPUT"
+          {
+            echo "variant=$VARIANT"
+            echo "pages_branch=$PAGES_BRANCH"
+            echo "preview_url=https://$PAGES_BRANCH.axis-site.pages.dev"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build site
         run: pnpm --filter @axis-repository/site build
