@@ -23,8 +23,11 @@ const { siteTitle, siteTitleHref } = (Astro.locals as unknown as { starlightRout
   .site-title {
     /* Matches the marketing nav's wordmark -- a brand mark, worth keeping
        in the same display font even though the rest of the docs' own
-       typography stays on starlight-theme-rapide's reading-tuned fonts. */
-    font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+       typography stays on starlight-theme-rapide's reading-tuned fonts.
+       --font-site-title is registered in astro.config.mjs's `fonts` option
+       and rendered via <Font /> in Head.astro, which already expands to
+       the family plus an auto-generated, metrics-matched fallback. */
+    font-family: var(--font-site-title);
     align-items: center;
     color: var(--sl-color-text-accent);
     font-size: var(--sl-text-h4);

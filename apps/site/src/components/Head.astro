@@ -1,0 +1,23 @@
+---
+// Mirrors Starlight's own default Head.astro exactly, adding the site
+// title's font so its @font-face and preload <link> land in <head> (Astro's
+// <Font /> component doesn't require <head> specifically, but that's where
+// the browser's preload scanner finds it earliest).
+import { Font } from "astro:assets";
+
+// Same tsconfig gap as SiteTitle.astro -- `types: ["astro/client"]` keeps
+// Starlight's own `App.Locals` augmentation for `starlightRoute` from being
+// picked up here, even though it's set correctly at runtime. Starlight
+// doesn't export its internal HeadConfig type from a public subpath, so
+// this only types the shape Head.astro actually destructures.
+interface HeadEntry {
+  tag: string;
+  attrs?: Record<string, string | boolean | undefined>;
+  content?: string;
+}
+
+const { head } = (Astro.locals as unknown as { starlightRoute: { head: HeadEntry[] } }).starlightRoute;
+---
+
+{head.map(({ tag: Tag, attrs, content }) => <Tag {...attrs} set:html={content} />)}
+<Font cssVariable="--font-site-title" preload />

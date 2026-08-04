@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "astro/config";
+import { defineConfig, fontProviders } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightThemeRapide from "starlight-theme-rapide";
 import starlightSiteGraph from "starlight-site-graph";
@@ -61,17 +61,42 @@ function redirectDocsRootToLatestStable() {
 }
 
 export default defineConfig({
+  // Astro's own font pipeline generates the @font-face CSS and preload
+  // links at build time (see src/components/Head.astro), instead of the
+  // site title wordmark pulling in @fontsource's CSS at runtime with its
+  // default font-display: swap -- which flashed the fallback font first on
+  // every load, only swapping to Space Grotesk once the file finished
+  // downloading. display: "optional" here means the browser either has the
+  // font in time or quietly keeps the (metrics-matched, auto-generated)
+  // fallback, never swapping late.
+  fonts: [
+    {
+      provider: fontProviders.local(),
+      name: "Space Grotesk",
+      cssVariable: "--font-site-title",
+      options: {
+        variants: [
+          {
+            weight: "600",
+            style: "normal",
+            display: "optional",
+            src: ["@fontsource/space-grotesk/files/space-grotesk-latin-600-normal.woff2"],
+          },
+        ],
+      },
+    },
+  ],
   integrations: [
     starlight({
       title: "Axis Repository",
       components: {
+        Head: "./src/components/Head.astro",
         SiteTitle: "./src/components/SiteTitle.astro",
         ThemeSelect: "./src/components/ThemeSelect.astro",
       },
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/sakkyoi/axis-repository" },
       ],
-      customCss: ["./src/styles/docs.css"],
       // Not using Starlight's own `favicon` option: it renders as `rel="shortcut
       // icon"`, and Starlight's internal head-sorting always pushes that below
       // any plain `rel="icon"` entries regardless -- so it would still need
