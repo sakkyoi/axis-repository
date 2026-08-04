@@ -75,13 +75,14 @@ export function NewRepositoryPage() {
   const canUseSelectedPlugin = Boolean(selectedOption);
   const summaryTitle = repositoryPlugins.isLoading
     ? "Loading plugins"
-    : selectedOption ? selectedOption.displayName : "No supported plugin";
+    : selectedOption ? selectedOption.displayLabel : "No supported plugin";
   const summaryDescription = repositoryPlugins.isLoading
     ? "Checking which repository plugins this server has enabled."
     : selectedOption
       ? selectedOption.description
       : "This server has no repository plugin that the current admin UI can create.";
   const summaryCapabilities = selectedOption?.capabilities ?? [];
+  const summaryRepositoryKind = selectedOption?.kind;
   const summaryBadges = selectedOption?.badges ?? [];
   const [stepIndex, setStepIndex] = useState(0);
   const [state, setState] = useState<RepositoryCreateWizardState>(plugin.defaults);
@@ -226,15 +227,35 @@ export function NewRepositoryPage() {
             <h2 className="text-sm font-semibold">{summaryTitle}</h2>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">{summaryDescription}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {summaryBadges.map((badge) => (
-              <Badge key={badge.label} variant={badge.variant}>{badge.label}</Badge>
-            ))}
-            {summaryCapabilities.map((capability) => (
-              <span key={capability} className="rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
-                {capability}
-              </span>
-            ))}
+          <div className="mt-4 grid gap-3">
+            {summaryBadges.length > 0 && (
+              <div className="grid gap-1.5">
+                <span className="text-xs font-semibold uppercase text-muted-foreground">Lifecycle</span>
+                <div className="flex flex-wrap gap-2">
+                  {summaryBadges.map((badge) => (
+                    <Badge key={badge.label} variant={badge.variant}>{badge.label}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {summaryRepositoryKind && (
+              <div className="grid gap-1.5">
+                <span className="text-xs font-semibold uppercase text-muted-foreground">Repository kind</span>
+                <Badge variant="default" className="w-fit">{repositoryKindLabel(summaryRepositoryKind)}</Badge>
+              </div>
+            )}
+            {summaryCapabilities.length > 0 && (
+              <div className="grid gap-1.5">
+                <span className="text-xs font-semibold uppercase text-muted-foreground">Capabilities</span>
+                <div className="flex flex-wrap gap-2">
+                  {summaryCapabilities.map((capability) => (
+                    <span key={capability} className="rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
+                      {capability}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </aside>
       </div>
@@ -349,7 +370,7 @@ function PluginStep({
               }}
             >
               <span className="flex items-center justify-between gap-2 text-sm font-semibold">
-                {plugin.displayName}
+                {plugin.displayLabel}
                 <span className="flex shrink-0 items-center gap-1.5">
                   {plugin.supported && <Badge variant="default">{repositoryKindLabel(plugin.kind)}</Badge>}
                   <Badge variant={plugin.lifecycle.variant}>{plugin.lifecycle.label}</Badge>

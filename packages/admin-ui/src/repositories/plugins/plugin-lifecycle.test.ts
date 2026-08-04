@@ -75,6 +75,7 @@ describe("plugin lifecycle UI model", () => {
         runtime: true,
         adminUi: true,
         capabilities: ["signed-release"],
+        repositoryKinds: ["proxy", "group"],
         clientHelpers: {
           namespace: "apt",
           actions: [
@@ -90,6 +91,7 @@ describe("plugin lifecycle UI model", () => {
         name: "apt-signed",
         version: "0.1.0",
         capabilities: ["signed-release"],
+        repositoryKinds: ["proxy", "group"],
         clientHelperSummary: "apt: install",
         lifecycle: {
           availability: "disabled",

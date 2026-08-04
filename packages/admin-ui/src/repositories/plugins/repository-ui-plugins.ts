@@ -34,6 +34,16 @@ import {
 
 type NonEmptyArray<T> = [T, ...T[]];
 
+function repositoryKindDisplayName(kind: Repository["kind"]): string {
+  if (kind === "hosted") return "Hosted";
+  if (kind === "proxy") return "Proxy";
+  return "Group";
+}
+
+function repositoryPluginOptionLabel(input: { displayName: string; kind: Repository["kind"] }): string {
+  return `${input.displayName} / ${repositoryKindDisplayName(input.kind)}`;
+}
+
 const bundledAdminUiPlugins: Record<string, RepositoryUiPluginDescriptor> = {
   "hosted:apt": aptHostedRepositoryUiPlugin,
   "proxy:apt": aptProxyRepositoryUiPlugin,
@@ -213,6 +223,10 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
           ecosystem: serverPlugin.ecosystem,
           kind,
           displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
+          displayLabel: repositoryPluginOptionLabel({
+            displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
+            kind,
+          }),
           description: disabledPluginCreateDescription(serverPlugin),
           capabilities: [...serverPlugin.capabilities],
           disabledReason: pluginPolicyDescription(serverPlugin),
@@ -226,6 +240,10 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
           ecosystem: serverPlugin.ecosystem,
           kind,
           displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
+          displayLabel: repositoryPluginOptionLabel({
+            displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
+            kind,
+          }),
           description: "Server plugin has no runtime support.",
           capabilities: [...serverPlugin.capabilities],
           lifecycle,
@@ -238,6 +256,10 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
           ecosystem: serverPlugin.ecosystem,
           kind,
           displayName: serverPlugin.ecosystem,
+          displayLabel: repositoryPluginOptionLabel({
+            displayName: serverPlugin.ecosystem,
+            kind,
+          }),
           description: "No admin UI create adapter is registered for this plugin's repository kinds yet.",
           capabilities: [...serverPlugin.capabilities],
           lifecycle,
@@ -249,6 +271,10 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
         ecosystem: serverPlugin.ecosystem,
         kind,
         displayName: localPlugin.manifest.displayName,
+        displayLabel: repositoryPluginOptionLabel({
+          displayName: localPlugin.manifest.displayName,
+          kind,
+        }),
         description: localPlugin.manifest.description,
         capabilities: [...serverPlugin.capabilities],
         lifecycle,

@@ -91,6 +91,7 @@ export type RepositoryCreatePluginDescriptorOption =
       ecosystem: string;
       kind: RepositoryKind;
       displayName: string;
+      displayLabel: string;
       description: string;
       capabilities: string[];
       lifecycle: PluginLifecycleSummary;
@@ -102,6 +103,7 @@ export type RepositoryCreatePluginDescriptorOption =
       ecosystem: string;
       kind: RepositoryKind;
       displayName: string;
+      displayLabel: string;
       description: string;
       capabilities: string[];
       lifecycle: PluginLifecycleSummary;

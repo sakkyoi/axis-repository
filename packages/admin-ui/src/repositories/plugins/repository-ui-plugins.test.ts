@@ -167,11 +167,12 @@ describe("repository UI plugin registry", () => {
     expect(options.map((option) => ({
       ecosystem: option.ecosystem,
       kind: option.kind,
+      displayLabel: option.displayLabel,
       supported: option.supported,
     }))).toEqual([
-      { ecosystem: "apt", kind: "hosted", supported: true },
-      { ecosystem: "apt", kind: "proxy", supported: true },
-      { ecosystem: "apt", kind: "group", supported: true },
+      { ecosystem: "apt", kind: "hosted", displayLabel: "APT / Hosted", supported: true },
+      { ecosystem: "apt", kind: "proxy", displayLabel: "APT / Proxy", supported: true },
+      { ecosystem: "apt", kind: "group", displayLabel: "APT / Group", supported: true },
     ]);
   });
 

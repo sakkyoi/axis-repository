@@ -7,6 +7,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { HelpTrigger } from "../components/ui/help-trigger";
 import { repositoryPluginStatusRows } from "../repositories/plugins/plugin-lifecycle";
+import { repositoryKindLabel } from "../repositories/detail/repository-page-model";
 import { ErrorState, PageShell } from "./shared";
 import { SkeletonRows } from "../components/ui/skeleton";
 import { useErrorToast } from "../components/ui/toast";
@@ -68,7 +69,7 @@ export function SettingsPage() {
                 <span>Plugin</span>
                 <span>Status</span>
                 <span>Policy</span>
-                <span>Capabilities</span>
+                <span>Kinds / capabilities</span>
                 <span>Client helpers</span>
                 <span>Actions</span>
               </div>
@@ -98,12 +99,25 @@ export function SettingsPage() {
                       <div className="mt-1 text-muted-foreground">{plugin.policySource}</div>
                       <div className="mt-1 text-muted-foreground">{plugin.policyDescription}</div>
                     </div>
-                    <div className="flex min-w-0 flex-wrap content-start gap-1.5">
-                      {plugin.capabilities.map((capability) => (
-                        <span key={capability} className="rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
-                          {capability}
-                        </span>
-                      ))}
+                    <div className="grid min-w-0 content-start gap-2">
+                      <div className="grid gap-1.5">
+                        <span className="text-[11px] font-semibold uppercase text-muted-foreground">Kinds</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {plugin.repositoryKinds.map((kind) => (
+                            <Badge key={kind} variant="default">{repositoryKindLabel(kind)}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid gap-1.5">
+                        <span className="text-[11px] font-semibold uppercase text-muted-foreground">Capabilities</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {plugin.capabilities.map((capability) => (
+                            <span key={capability} className="rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
+                              {capability}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                     <div className="break-words font-mono text-xs text-muted-foreground">{plugin.clientHelperSummary}</div>
                     <div className="flex flex-wrap items-start gap-2">

@@ -1,5 +1,5 @@
 import type { BadgeProps } from "../../components/ui/badge";
-import type { RepositoryPlugin } from "../../api/schemas";
+import type { RepositoryKind, RepositoryPlugin } from "../../api/schemas";
 
 export type PluginLifecycleAvailability = "available" | "disabled" | "missing-runtime" | "missing-ui";
 
@@ -20,6 +20,7 @@ export interface RepositoryPluginStatusRow {
   name: string;
   version: string;
   capabilities: string[];
+  repositoryKinds: RepositoryKind[];
   clientHelperSummary: string;
   lifecycle: PluginLifecycleSummary;
   policySummary: string;
@@ -127,6 +128,7 @@ export function repositoryPluginStatusRows(plugins: RepositoryPlugin[]): Reposit
     name: plugin.name,
     version: plugin.version,
     capabilities: [...plugin.capabilities],
+    repositoryKinds: [...plugin.repositoryKinds],
     clientHelperSummary: clientHelperSummary(plugin),
     lifecycle: pluginLifecycleSummary(plugin),
     policySummary: policySummary(plugin),
