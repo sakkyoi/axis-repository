@@ -2,7 +2,7 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
-import { applyAxisWorkerConfig, devRemoteBindings, readDevValues } from "./vite.dev-config";
+import { applyAxisWorkerConfig, devRemoteBindings, readDevValues } from "./vite.dev-config.ts";
 
 const root = new URL(".", import.meta.url);
 
