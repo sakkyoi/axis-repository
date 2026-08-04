@@ -18,6 +18,7 @@ export interface RepositoryCreateWizardState {
 }
 
 export interface HostedRepositoryCreatePlugin {
+  kind: "hosted";
   ecosystem: string;
   repositoryConfig: PluginRepositoryConfigManifest;
   steps: RepositoryCreateStep[];
@@ -28,6 +29,31 @@ export interface HostedRepositoryCreatePlugin {
 
 /** @deprecated Use HostedRepositoryCreatePlugin. */
 export type RepositoryCreatePlugin = HostedRepositoryCreatePlugin;
+
+export interface ProxyRepositoryCreatePlugin {
+  kind: "proxy";
+  ecosystem: string;
+  repositoryConfig: PluginRepositoryConfigManifest;
+  steps: RepositoryCreateStep[];
+  defaults: RepositoryCreateWizardState;
+  validateStep(step: RepositoryCreateStep, state: RepositoryCreateWizardState): string[];
+  buildCreateInput(state: RepositoryCreateWizardState): CreateRepositoryInput;
+}
+
+export interface GroupRepositoryCreatePlugin {
+  kind: "group";
+  ecosystem: string;
+  repositoryConfig: PluginRepositoryConfigManifest;
+  steps: RepositoryCreateStep[];
+  defaults: RepositoryCreateWizardState;
+  validateStep(step: RepositoryCreateStep, state: RepositoryCreateWizardState): string[];
+  buildCreateInput(state: RepositoryCreateWizardState): CreateRepositoryInput;
+}
+
+export type RepositoryCreatePluginDescriptor =
+  | HostedRepositoryCreatePlugin
+  | ProxyRepositoryCreatePlugin
+  | GroupRepositoryCreatePlugin;
 
 export interface RepositoryCreateFieldErrors {
   name?: string;
@@ -60,6 +86,30 @@ export type HostedRepositoryCreatePluginOption =
 /** @deprecated Use HostedRepositoryCreatePluginOption. */
 export type RepositoryCreatePluginOption = HostedRepositoryCreatePluginOption;
 
+export type RepositoryCreatePluginDescriptorOption =
+  | {
+      ecosystem: string;
+      kind: RepositoryKind;
+      displayName: string;
+      description: string;
+      capabilities: string[];
+      lifecycle: PluginLifecycleSummary;
+      badges: PluginLifecycleBadge[];
+      supported: true;
+      plugin: RepositoryCreatePluginDescriptor;
+    }
+  | {
+      ecosystem: string;
+      kind: RepositoryKind;
+      displayName: string;
+      description: string;
+      capabilities: string[];
+      lifecycle: PluginLifecycleSummary;
+      badges: PluginLifecycleBadge[];
+      supported: false;
+      disabledReason?: string;
+    };
+
 export interface RepositoryDetailSectionProps {
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
@@ -75,12 +125,30 @@ export interface RepositoryDetailSection {
 }
 
 export interface HostedRepositoryDetailPlugin {
+  kind: "hosted";
   ecosystem: string;
   sections: RepositoryDetailSection[];
 }
 
 /** @deprecated Use HostedRepositoryDetailPlugin. */
 export type RepositoryDetailPlugin = HostedRepositoryDetailPlugin;
+
+export interface ProxyRepositoryDetailPlugin {
+  kind: "proxy";
+  ecosystem: string;
+  sections: RepositoryDetailSection[];
+}
+
+export interface GroupRepositoryDetailPlugin {
+  kind: "group";
+  ecosystem: string;
+  sections: RepositoryDetailSection[];
+}
+
+export type RepositoryDetailPluginDescriptor =
+  | HostedRepositoryDetailPlugin
+  | ProxyRepositoryDetailPlugin
+  | GroupRepositoryDetailPlugin;
 
 export interface RepositoryCreateFieldRendererProps {
   field: PluginRepositoryConfigFieldManifest;
@@ -144,8 +212,29 @@ export interface HostedRepositoryUiPlugin {
   mapCreateServerError?: (message: string) => RepositoryCreateStep | undefined;
 }
 
+export interface ProxyRepositoryUiPlugin {
+  kind: "proxy";
+  manifest: RepositoryPluginManifest;
+  create: ProxyRepositoryCreatePlugin;
+  detail: ProxyRepositoryDetailPlugin;
+  createFieldRenderers?: RepositoryCreateFieldRendererMap;
+  mapCreateServerError?: (message: string) => RepositoryCreateStep | undefined;
+}
+
+export interface GroupRepositoryUiPlugin {
+  kind: "group";
+  manifest: RepositoryPluginManifest;
+  create: GroupRepositoryCreatePlugin;
+  detail: GroupRepositoryDetailPlugin;
+  createFieldRenderers?: RepositoryCreateFieldRendererMap;
+  mapCreateServerError?: (message: string) => RepositoryCreateStep | undefined;
+}
+
 /** @deprecated Use HostedRepositoryUiPlugin. */
 export type RepositoryUiPlugin = HostedRepositoryUiPlugin;
 
 export type RepositoryUiPluginKind = RepositoryKind;
-export type RepositoryUiPluginDescriptor = HostedRepositoryUiPlugin;
+export type RepositoryUiPluginDescriptor =
+  | HostedRepositoryUiPlugin
+  | ProxyRepositoryUiPlugin
+  | GroupRepositoryUiPlugin;

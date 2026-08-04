@@ -113,13 +113,12 @@ describe("repository detail plugins", () => {
     expect(repositorySummarySectionsFor(repository({ ecosystem: "unknown" })).map((section) => section.id)).toEqual([]);
   });
 
-  it("falls back to generic detail sections when a repository kind has no UI adapter yet", () => {
+  it("uses skeleton detail sections for proxy and group repositories", () => {
     expect(repositoryWorkspaceSectionsFor(repository({ kind: "proxy" })).map((section) => section.id)).toEqual([
       "repository-artifacts",
       "repository-browser",
     ]);
     expect(repositorySettingsSectionsFor(repository({ kind: "group" })).map((section) => section.id)).toEqual([
-      "settings",
       "advanced-json",
     ]);
     expect(repositorySummarySectionsFor(repository({ kind: "proxy" })).map((section) => section.id)).toEqual([]);

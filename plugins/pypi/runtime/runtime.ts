@@ -2,8 +2,10 @@ import type { RepositoryArtifactRecord, RepositoryObjectStore } from "@axis-repo
 import { ValidationError } from "@axis-repository/core";
 import { pypiPluginManifest } from "../manifest";
 import type {
+  GroupRepositoryPlugin,
   HostedRepositoryPlugin,
   DescribePublishedArtifactsInput,
+  ProxyRepositoryPlugin,
   RebuildRepositoryArtifactIndexInput,
   ValidatePublishArtifactsInput,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
@@ -58,7 +60,7 @@ export function createPypiPlugin(input?: {
     ecosystem: "pypi",
     name: pypiPluginManifest.runtimeName,
     version: pypiPluginManifest.version,
-    repositoryKinds: [...(pypiPluginManifest.repositoryKinds ?? ["hosted"])],
+    repositoryKinds: ["hosted"],
     capabilities: [...pypiPluginManifest.capabilities],
     canServeRepositoryPath: createPrefixServingPredicate(SERVED_PREFIXES),
     uploadProtocol: createPypiUploadProtocol(),
@@ -77,6 +79,32 @@ export function createPypiPlugin(input?: {
     ...(input?.objectStoreFor
       ? { adminResources: createPypiAdminResources({ objectStoreFor: input.objectStoreFor }) }
       : {}),
+  };
+}
+
+export function createPypiProxyPlugin(): ProxyRepositoryPlugin {
+  return {
+    kind: "proxy",
+    ecosystem: "pypi",
+    name: `${pypiPluginManifest.runtimeName}-proxy`,
+    version: pypiPluginManifest.version,
+    repositoryKinds: ["proxy"],
+    capabilities: ["pypi", "proxy"],
+    canServeRepositoryPath: () => false,
+    validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
+  };
+}
+
+export function createPypiGroupPlugin(): GroupRepositoryPlugin {
+  return {
+    kind: "group",
+    ecosystem: "pypi",
+    name: `${pypiPluginManifest.runtimeName}-group`,
+    version: pypiPluginManifest.version,
+    repositoryKinds: ["group"],
+    capabilities: ["pypi", "group"],
+    canServeRepositoryPath: () => false,
+    validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
   };
 }
 

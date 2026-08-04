@@ -59,6 +59,7 @@ function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormVal
 }
 
 export const aptHostedRepositoryCreatePlugin: HostedRepositoryCreatePlugin = {
+  kind: "hosted",
   ecosystem: aptPluginManifest.ecosystem,
   repositoryConfig: aptPluginManifest.repositoryConfig,
   steps: repositoryCreateStepsForConfig(aptPluginManifest.repositoryConfig),

@@ -3,6 +3,7 @@ import type { HostedRepositoryCreatePlugin } from "@axis-repository/admin-ui/plu
 import { repositoryCreateStepsForConfig } from "@axis-repository/admin-ui/plugin-ui";
 
 export const pypiHostedRepositoryCreatePlugin: HostedRepositoryCreatePlugin = {
+  kind: "hosted",
   ecosystem: pypiPluginManifest.ecosystem,
   repositoryConfig: pypiPluginManifest.repositoryConfig,
   steps: repositoryCreateStepsForConfig(pypiPluginManifest.repositoryConfig),

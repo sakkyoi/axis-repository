@@ -21,10 +21,10 @@ import { publicClientHelperAction } from "./repository-plugin-client-helpers";
  * caller reassigning a hook anyway. Only host code holds these descriptors, so
  * the guarantee is "metadata is a copy", not "the descriptor is frozen".
  */
-function clonePlugin(descriptor: HostedRepositoryPlugin): HostedRepositoryPlugin {
+function clonePlugin<T extends RepositoryRuntimePluginDescriptor>(descriptor: T): T {
   return {
     ...descriptor,
-    repositoryKinds: [...(descriptor.repositoryKinds ?? ["hosted"])],
+    repositoryKinds: [...(descriptor.repositoryKinds ?? [descriptor.kind])],
     capabilities: [...descriptor.capabilities],
     ...(descriptor.clientHelpers
       ? {
@@ -45,7 +45,7 @@ function clonePlugin(descriptor: HostedRepositoryPlugin): HostedRepositoryPlugin
           },
         }
       : {}),
-  };
+  } as T;
 }
 
 function pluginKey(input: { ecosystem: Ecosystem; kind: RepositoryKind }): string {
@@ -81,11 +81,12 @@ function validateAdminResourceRoutes(descriptor: RepositoryRuntimePluginDescript
 }
 
 export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
-  private readonly plugins = new Map<string, HostedRepositoryPlugin>();
+  private readonly plugins = new Map<string, RepositoryRuntimePluginDescriptor>();
 
   register(descriptor: RepositoryRuntimePluginDescriptor): void {
     assertRegistrableEcosystem(descriptor.ecosystem);
-    if (!descriptor.kind) {
+    const descriptorKind = (descriptor as { kind?: RepositoryKind }).kind;
+    if (!descriptorKind) {
       throw new ValidationError(`Repository runtime plugin kind is required for ecosystem: ${descriptor.ecosystem}`);
     }
     const key = pluginKey(descriptor);
@@ -114,7 +115,7 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
         ecosystem: descriptor.ecosystem,
         name: descriptor.name,
         version: descriptor.version,
-        repositoryKinds: [...(descriptor.repositoryKinds ?? ["hosted"])],
+        repositoryKinds: [...(descriptor.repositoryKinds ?? [descriptor.kind])],
         capabilities: [...descriptor.capabilities],
       };
       if (descriptor.clientHelpers) {
@@ -129,17 +130,17 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
 
   getPlugin(ecosystem: Ecosystem): HostedRepositoryPlugin | undefined {
     const plugin = this.plugins.get(pluginKey({ ecosystem, kind: "hosted" }));
-    if (!plugin) return undefined;
+    if (!plugin || plugin.kind !== "hosted") return undefined;
     return clonePlugin(plugin);
   }
 
-  getPluginForRepository(repository: { ecosystem: Ecosystem; kind: RepositoryKind }): HostedRepositoryPlugin | undefined {
+  getPluginForRepository(repository: { ecosystem: Ecosystem; kind: RepositoryKind }): RepositoryRuntimePluginDescriptor | undefined {
     const plugin = this.plugins.get(pluginKey(repository));
     if (!plugin) return undefined;
     return clonePlugin(plugin);
   }
 
-  getPluginByAdminResourceNamespace(namespace: string): HostedRepositoryPlugin | undefined {
+  getPluginByAdminResourceNamespace(namespace: string): RepositoryRuntimePluginDescriptor | undefined {
     const plugin = Array.from(this.plugins.values()).find((descriptor) =>
       descriptor.adminResources?.namespace === namespace,
     );
@@ -154,6 +155,11 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
         `Artifact repository plugin is not configured for ecosystem: ${ecosystem}`,
       );
     }
+    if (plugin.kind !== "hosted") {
+      throw new ValidationError(
+        `Artifact repository plugin is not configured for ecosystem: ${ecosystem}`,
+      );
+    }
     return clonePlugin(plugin);
   }
 
@@ -162,6 +168,11 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
     if (!descriptor) {
       throw new ValidationError(
         `Artifact publisher is not configured for repository kind and ecosystem: ${input.repository.kind} ${input.repository.ecosystem}`,
+      );
+    }
+    if (descriptor.kind !== "hosted") {
+      throw new ValidationError(
+        `Artifact publishing is not supported for repository kind and ecosystem: ${input.repository.kind} ${input.repository.ecosystem}`,
       );
     }
     return descriptor.publish.finalize(input);

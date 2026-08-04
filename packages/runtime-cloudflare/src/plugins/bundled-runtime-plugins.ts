@@ -1,13 +1,13 @@
 
 import type {
-  HostedRepositoryPlugin,
+  RepositoryRuntimePluginDescriptor,
   RepositorySecretCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { aptRepositoryPluginBundle } from "@axis-repository/plugin-apt";
 import { AptPublisher } from "@axis-repository/plugin-apt/runtime/publisher";
-import { createAptPlugin, AptSigningKeyResource } from "@axis-repository/plugin-apt/runtime";
+import { createAptGroupPlugin, createAptPlugin, createAptProxyPlugin, AptSigningKeyResource } from "@axis-repository/plugin-apt/runtime";
 import { pypiRepositoryPluginBundle } from "@axis-repository/plugin-pypi";
-import { createPypiPlugin } from "@axis-repository/plugin-pypi/runtime";
+import { createPypiGroupPlugin, createPypiPlugin, createPypiProxyPlugin } from "@axis-repository/plugin-pypi/runtime";
 import { scopeSecretsToEcosystem, type RepositoryObjectStoreFactory } from "./scoped-capabilities";
 
 interface AptReleaseSigner {
@@ -32,25 +32,33 @@ export interface BundledRuntimePluginInput {
   aptReleaseSigner: AptReleaseSigner;
 }
 
-type RuntimePluginFactory = (input: BundledRuntimePluginInput) => HostedRepositoryPlugin;
+type RuntimePluginFactory = (input: BundledRuntimePluginInput) => RepositoryRuntimePluginDescriptor[];
 
 const bundledRuntimePluginFactories: Record<string, RuntimePluginFactory> = {
   apt: (input) => {
     const signingKeys = new AptSigningKeyResource({ secrets: input.secrets });
-    return createAptPlugin({
-      publisher: new AptPublisher({
-        objectStoreFor: input.objectStoreFor,
+    return [
+      createAptPlugin({
+        publisher: new AptPublisher({
+          objectStoreFor: input.objectStoreFor,
+          signingKeys,
+          signer: input.aptReleaseSigner,
+        }),
         signingKeys,
         signer: input.aptReleaseSigner,
       }),
-      signingKeys,
-      signer: input.aptReleaseSigner,
-    });
+      createAptProxyPlugin(),
+      createAptGroupPlugin(),
+    ];
   },
-  pypi: (input) => createPypiPlugin({ objectStoreFor: input.objectStoreFor }),
+  pypi: (input) => [
+    createPypiPlugin({ objectStoreFor: input.objectStoreFor }),
+    createPypiProxyPlugin(),
+    createPypiGroupPlugin(),
+  ],
 };
 
-export function createBundledRuntimePlugins(input: BundledRuntimePluginInput): HostedRepositoryPlugin[] {
+export function createBundledRuntimePlugins(input: BundledRuntimePluginInput): RepositoryRuntimePluginDescriptor[] {
   return [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
     .filter((plugin) => plugin.catalog.enabled && plugin.runtime)
     .map((plugin) => {
@@ -61,5 +69,6 @@ export function createBundledRuntimePlugins(input: BundledRuntimePluginInput): H
       }
       // Each plugin only ever sees the secret namespaces it owns.
       return factory({ ...input, secrets: scopeSecretsToEcosystem(input.secrets, ecosystem) });
-    });
+    })
+    .flat();
 }

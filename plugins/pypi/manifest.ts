@@ -8,7 +8,7 @@ export const pypiPluginManifest = {
   runtimeName: "pypi-simple",
   version: "0.1.0",
   capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
-  repositoryKinds: ["hosted"],
+  repositoryKinds: ["hosted", "proxy", "group"],
   icon: {
     title: "PyPI",
     accentColor: "#3775A9",

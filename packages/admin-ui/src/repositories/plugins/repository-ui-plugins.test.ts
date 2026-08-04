@@ -16,6 +16,7 @@ import {
   hostedRepositoryCreatePluginsFromUiRegistry,
   hostedRepositoryDetailPluginsFromUiRegistry,
   hostedRepositoryUiPlugins,
+  repositoryUiPluginDescriptors,
   repositoryCreatePluginOptionsFromUiRegistry,
 } from "./repository-ui-plugins";
 
@@ -30,7 +31,7 @@ describe("repository UI plugin registry", () => {
   });
 
   it("keeps UI plugin extensions aligned with their shared manifests", () => {
-    expect(() => assertRepositoryUiPluginContracts(hostedRepositoryUiPlugins)).not.toThrow();
+    expect(() => assertRepositoryUiPluginContracts(repositoryUiPluginDescriptors)).not.toThrow();
   });
 
   it("keeps UI plugin ecosystems aligned with shared core manifests", () => {
@@ -133,6 +134,14 @@ describe("repository UI plugin registry", () => {
     expect(getRepositoryDetailPlugin({
       ecosystem: "apt",
       kind: "proxy",
+    })?.ecosystem).toBe("apt");
+    expect(getRepositoryDetailPlugin({
+      ecosystem: "apt",
+      kind: "group",
+    })?.ecosystem).toBe("apt");
+    expect(getRepositoryPublishPlugin({
+      ecosystem: "apt",
+      kind: "proxy",
     })).toBeUndefined();
     expect(getRepositoryPublishPlugin({
       ecosystem: "apt",
@@ -140,11 +149,37 @@ describe("repository UI plugin registry", () => {
     })).toBeUndefined();
   });
 
-  it("reports when no create adapter is registered for the plugin repository kinds", () => {
+  it("offers create adapters for every repository kind supported by a plugin", () => {
     const options = repositoryCreatePluginOptionsFromUiRegistry([
       {
         ecosystem: "apt",
         name: "apt-signed",
+        version: "0.1.0",
+        enabled: true,
+        experimental: false,
+        runtime: true,
+        adminUi: true,
+        capabilities: ["signed-release"],
+        repositoryKinds: ["hosted", "proxy", "group"],
+      },
+    ]);
+
+    expect(options.map((option) => ({
+      ecosystem: option.ecosystem,
+      kind: option.kind,
+      supported: option.supported,
+    }))).toEqual([
+      { ecosystem: "apt", kind: "hosted", supported: true },
+      { ecosystem: "apt", kind: "proxy", supported: true },
+      { ecosystem: "apt", kind: "group", supported: true },
+    ]);
+  });
+
+  it("reports when no create adapter is registered for the plugin repository kinds", () => {
+    const options = repositoryCreatePluginOptionsFromUiRegistry([
+      {
+        ecosystem: "npm",
+        name: "npm-proxy",
         version: "0.1.0",
         enabled: true,
         experimental: false,
@@ -156,8 +191,8 @@ describe("repository UI plugin registry", () => {
     ]);
 
     expect(options).toMatchObject([{
-      ecosystem: "apt",
-      displayName: "APT",
+      ecosystem: "npm",
+      displayName: "npm",
       description: "No admin UI create adapter is registered for this plugin's repository kinds yet.",
       capabilities: ["signed-release"],
       lifecycle: { availability: "available", label: "Available" },

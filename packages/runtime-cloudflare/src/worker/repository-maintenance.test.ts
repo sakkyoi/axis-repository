@@ -36,7 +36,7 @@ function registry(plugins: Record<string, Partial<HostedRepositoryPlugin>>) {
 function maintenancePlugin(
   run: () => Promise<RepositoryMaintenanceResult>,
 ): Partial<HostedRepositoryPlugin> {
-  return { maintenance: { run } };
+  return { kind: "hosted", maintenance: { run } };
 }
 
 describe("runRepositoryMaintenance", () => {

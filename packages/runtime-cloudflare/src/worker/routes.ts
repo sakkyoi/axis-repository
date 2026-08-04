@@ -120,11 +120,39 @@ function publicAdminUser(record: AdminUserRecord): Omit<AdminUserRecord, "passwo
   return publicRecord;
 }
 
+function runtimePluginMetadataByEcosystem(registeredPlugins: ReturnType<AppDependencies["repositoryRuntimePlugins"]["list"]>) {
+  const metadata = new Map<string, (typeof registeredPlugins)[number]>();
+  for (const plugin of registeredPlugins) {
+    const existing = metadata.get(plugin.ecosystem);
+    if (!existing) {
+      metadata.set(plugin.ecosystem, {
+        ...plugin,
+        repositoryKinds: [...(plugin.repositoryKinds ?? ["hosted"])],
+        capabilities: [...plugin.capabilities],
+      });
+      continue;
+    }
+    metadata.set(plugin.ecosystem, {
+      ...existing,
+      repositoryKinds: Array.from(new Set([
+        ...(existing.repositoryKinds ?? ["hosted"]),
+        ...(plugin.repositoryKinds ?? ["hosted"]),
+      ])),
+      capabilities: Array.from(new Set([
+        ...existing.capabilities,
+        ...plugin.capabilities,
+      ])),
+      ...((existing.clientHelpers ?? plugin.clientHelpers)
+        ? { clientHelpers: (existing.clientHelpers ?? plugin.clientHelpers)! }
+        : {}),
+    });
+  }
+  return metadata;
+}
+
 async function repositoryPluginMetadata(dependencies: AppDependencies) {
   const registeredPlugins = dependencies.repositoryRuntimePlugins.list();
-  const registeredPluginsByEcosystem = new Map(
-    registeredPlugins.map((plugin) => [plugin.ecosystem, plugin]),
-  );
+  const registeredPluginsByEcosystem = runtimePluginMetadataByEcosystem(registeredPlugins);
   const catalogPlugins = await Promise.all(repositoryPluginCatalog.map(async (catalogEntry) => {
     const plugin = registeredPluginsByEcosystem.get(catalogEntry.manifest.ecosystem);
     const policy = await repositoryPluginPolicyFields({
@@ -133,6 +161,7 @@ async function repositoryPluginMetadata(dependencies: AppDependencies) {
       catalogEnabled: catalogEntry.enabled,
     });
     return {
+      ...plugin,
       ecosystem: catalogEntry.manifest.ecosystem,
       name: catalogEntry.manifest.runtimeName,
       version: catalogEntry.manifest.version,
@@ -147,7 +176,6 @@ async function repositoryPluginMetadata(dependencies: AppDependencies) {
             },
           }
         : {}),
-      ...plugin,
       ...policy,
       experimental: catalogEntry.experimental,
       runtime: catalogEntry.runtime,
@@ -155,7 +183,7 @@ async function repositoryPluginMetadata(dependencies: AppDependencies) {
     };
   }));
   const catalogEcosystems = new Set<string>(repositoryPluginCatalog.map((entry) => entry.manifest.ecosystem));
-  const uncatalogedPlugins = await Promise.all(registeredPlugins
+  const uncatalogedPlugins = await Promise.all(Array.from(registeredPluginsByEcosystem.values())
     .filter((plugin) => !catalogEcosystems.has(plugin.ecosystem))
     .map(async (plugin) => {
       const catalogEntry = getRepositoryPluginCatalogEntry(plugin.ecosystem);
@@ -838,7 +866,8 @@ async function handleProtocolUpload(
   if (!repository) {
     return null;
   }
-  const protocol = dependencies.repositoryRuntimePlugins.getPluginForRepository(repository)?.uploadProtocol;
+  const plugin = dependencies.repositoryRuntimePlugins.getPluginForRepository(repository);
+  const protocol = plugin?.kind === "hosted" ? plugin.uploadProtocol : undefined;
   if (!protocol || path.relativePath.replace(/\/+$/, "") !== protocol.path) {
     return null;
   }

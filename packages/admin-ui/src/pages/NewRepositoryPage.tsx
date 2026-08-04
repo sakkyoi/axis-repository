@@ -23,14 +23,14 @@ import {
 import type {
   RepositoryCreateFieldErrors,
   RepositoryCreateFieldRendererMap,
-  HostedRepositoryCreatePlugin,
-  HostedRepositoryCreatePluginOption,
+  RepositoryCreatePluginDescriptor,
+  RepositoryCreatePluginDescriptorOption,
   RepositoryCreateStep,
   RepositoryCreateWizardState,
 } from "../repositories/plugins/repository-ui-plugin-types";
 import {
   getRepositoryCreateFieldRenderers,
-  getHostedRepositoryCreatePlugin,
+  getRepositoryCreatePlugin,
   getRepositoryPluginManifest,
   hostedRepositoryCreatePluginsFromUiRegistry,
   repositoryCreatePluginOptionsFromUiRegistry,
@@ -50,6 +50,10 @@ const stepLabels: Record<RepositoryCreateStep, string> = {
   review: "Review",
 };
 
+function repositoryCreateOptionKey(option: Pick<RepositoryCreatePluginDescriptorOption, "ecosystem" | "kind">): string {
+  return `${option.kind}:${option.ecosystem}`;
+}
+
 export function NewRepositoryPage() {
   const navigate = useNavigate();
   const createRepository = useCreateRepository();
@@ -62,8 +66,10 @@ export function NewRepositoryPage() {
   );
   const hostedRepositoryCreatePlugins = hostedRepositoryCreatePluginsFromUiRegistry();
   const firstSupportedPlugin = pluginOptions.find((option) => option.supported)?.plugin ?? hostedRepositoryCreatePlugins[0];
-  const [selectedEcosystem, setSelectedEcosystem] = useState(firstSupportedPlugin.ecosystem);
-  const selectedOption = pluginOptions.find((option) => option.ecosystem === selectedEcosystem && option.supported);
+  const [selectedPluginKey, setSelectedPluginKey] = useState(repositoryCreateOptionKey(firstSupportedPlugin));
+  const selectedOption = pluginOptions.find((option) =>
+    repositoryCreateOptionKey(option) === selectedPluginKey && option.supported,
+  );
   const plugin = selectedOption?.supported ? selectedOption.plugin : firstSupportedPlugin;
   const pluginManifest = getRepositoryPluginManifest(plugin.ecosystem);
   const canUseSelectedPlugin = Boolean(selectedOption);
@@ -91,12 +97,12 @@ export function NewRepositoryPage() {
     }
   }, [plugin, state]);
 
-  function selectPlugin(ecosystem: string) {
-    const nextPlugin = getHostedRepositoryCreatePlugin(ecosystem);
+  function selectPlugin(option: Pick<RepositoryCreatePluginDescriptorOption, "ecosystem" | "kind">) {
+    const nextPlugin = getRepositoryCreatePlugin(option);
     if (!nextPlugin) {
-      throw new Error(`Repository UI plugin is not configured: ${ecosystem}`);
+      throw new Error(`Repository UI plugin is not configured: ${option.kind} ${option.ecosystem}`);
     }
-    setSelectedEcosystem(ecosystem);
+    setSelectedPluginKey(repositoryCreateOptionKey(option));
     setState(nextPlugin.defaults);
     setStepIndex(1);
     setError("");
@@ -164,7 +170,7 @@ export function NewRepositoryPage() {
               options={pluginOptions}
               isLoading={repositoryPlugins.isLoading}
               error={repositoryPlugins.error}
-              selectedEcosystem={selectedEcosystem}
+              selectedPluginKey={selectedPluginKey}
               onSelect={selectPlugin}
             />
           )}
@@ -302,14 +308,14 @@ function PluginStep({
   options,
   isLoading,
   error,
-  selectedEcosystem,
+  selectedPluginKey,
   onSelect,
 }: {
-  options: HostedRepositoryCreatePluginOption[];
+  options: RepositoryCreatePluginDescriptorOption[];
   isLoading: boolean;
   error: unknown;
-  selectedEcosystem: string;
-  onSelect: (ecosystem: string) => void;
+  selectedPluginKey: string;
+  onSelect: (option: Pick<RepositoryCreatePluginDescriptorOption, "ecosystem" | "kind">) => void;
 }) {
   return (
     <div className="grid gap-4">
@@ -327,18 +333,19 @@ function PluginStep({
       <div className="grid gap-3 md:grid-cols-2">
         {options.map((plugin) => {
           const detailBadges = plugin.badges.filter((badge) => badge.label !== plugin.lifecycle.label);
+          const optionKey = repositoryCreateOptionKey(plugin);
           return (
             <button
-              key={plugin.ecosystem}
+              key={optionKey}
               type="button"
               disabled={!plugin.supported}
               className={cn(
                 "grid gap-2 rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-primary hover:bg-muted",
-                selectedEcosystem === plugin.ecosystem && "border-primary bg-primary-ink/10",
+                selectedPluginKey === optionKey && "border-primary bg-primary-ink/10",
                 !plugin.supported && "cursor-not-allowed opacity-60 hover:border-border hover:bg-background",
               )}
               onClick={() => {
-                if (plugin.supported) onSelect(plugin.ecosystem);
+                if (plugin.supported) onSelect(plugin);
               }}
             >
               <span className="flex items-center justify-between gap-2 text-sm font-semibold">
@@ -417,7 +424,7 @@ function ConfigStep({
   config,
   onChange,
 }: {
-  plugin: HostedRepositoryCreatePlugin;
+  plugin: RepositoryCreatePluginDescriptor;
   displayName: string;
   fieldRenderers: RepositoryCreateFieldRendererMap | undefined;
   repositoryName: string;
@@ -451,7 +458,7 @@ function DependenciesStep({
   setup,
   onChange,
 }: {
-  plugin: HostedRepositoryCreatePlugin;
+  plugin: RepositoryCreatePluginDescriptor;
   displayName: string;
   fieldRenderers: RepositoryCreateFieldRendererMap | undefined;
   repositoryName: string;

@@ -1,9 +1,15 @@
 import { pypiPluginManifest } from "../manifest";
 import type {
+  GroupRepositoryCreatePlugin,
+  GroupRepositoryDetailPlugin,
+  GroupRepositoryUiPlugin,
   HostedRepositoryDetailPlugin,
   HostedRepositoryUiPlugin,
+  ProxyRepositoryCreatePlugin,
+  ProxyRepositoryDetailPlugin,
+  ProxyRepositoryUiPlugin,
 } from "@axis-repository/admin-ui/plugin-ui";
-import { RepositoryClientHelpersSection } from "@axis-repository/admin-ui/plugin-ui";
+import { AdvancedJsonConfigSection, RepositoryClientHelpersSection } from "@axis-repository/admin-ui/plugin-ui";
 import { pypiHostedRepositoryCreatePlugin } from "./create";
 import {
   PypiInstallHintsSection,
@@ -14,6 +20,7 @@ import { PypiPublishArtifactPreview, PypiPublishSessionDetail, pypiPublishSessio
 import { pypiIsAcceptedFile } from "./publish-model";
 
 export const pypiHostedRepositoryDetailPlugin: HostedRepositoryDetailPlugin = {
+  kind: "hosted",
   ecosystem: pypiPluginManifest.ecosystem,
   sections: [
     { id: "settings", title: "PyPI settings", placement: "settings", Component: PypiSettingsSection },
@@ -38,4 +45,96 @@ export const pypiHostedRepositoryUiPlugin: HostedRepositoryUiPlugin = {
     SessionDetailComponent: PypiPublishSessionDetail,
     artifactSummary: pypiPublishSessionArtifactSummary,
   },
+};
+
+const pypiProxyRepositoryCreatePlugin: ProxyRepositoryCreatePlugin = {
+  kind: "proxy",
+  ecosystem: pypiPluginManifest.ecosystem,
+  repositoryConfig: {
+    namespace: pypiPluginManifest.repositoryConfig.namespace,
+    fields: [],
+  },
+  steps: ["plugin", "basics", "review"],
+  defaults: {
+    name: "",
+    visibility: "private",
+    config: {},
+    setup: {},
+  },
+  validateStep: (step, state) => {
+    if (step === "basics") {
+      return state.name.trim() ? [] : ["Repository name is required"];
+    }
+    return [];
+  },
+  buildCreateInput: (state) => ({
+    name: state.name,
+    ecosystem: pypiPluginManifest.ecosystem,
+    kind: "proxy",
+    visibility: state.visibility,
+    config: {
+      [pypiPluginManifest.repositoryConfig.namespace]: {},
+    },
+  }),
+};
+
+const pypiGroupRepositoryCreatePlugin: GroupRepositoryCreatePlugin = {
+  kind: "group",
+  ecosystem: pypiPluginManifest.ecosystem,
+  repositoryConfig: {
+    namespace: pypiPluginManifest.repositoryConfig.namespace,
+    fields: [],
+  },
+  steps: ["plugin", "basics", "review"],
+  defaults: {
+    name: "",
+    visibility: "private",
+    config: {},
+    setup: {},
+  },
+  validateStep: (step, state) => {
+    if (step === "basics") {
+      return state.name.trim() ? [] : ["Repository name is required"];
+    }
+    return [];
+  },
+  buildCreateInput: (state) => ({
+    name: state.name,
+    ecosystem: pypiPluginManifest.ecosystem,
+    kind: "group",
+    visibility: state.visibility,
+    config: {
+      [pypiPluginManifest.repositoryConfig.namespace]: {},
+    },
+  }),
+};
+
+const pypiProxyRepositoryDetailPlugin: ProxyRepositoryDetailPlugin = {
+  kind: "proxy",
+  ecosystem: pypiPluginManifest.ecosystem,
+  sections: [
+    { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
+  ],
+};
+
+const pypiGroupRepositoryDetailPlugin: GroupRepositoryDetailPlugin = {
+  kind: "group",
+  ecosystem: pypiPluginManifest.ecosystem,
+  sections: [
+    { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
+  ],
+};
+
+export const pypiProxyRepositoryUiPlugin: ProxyRepositoryUiPlugin = {
+  kind: "proxy",
+  manifest: pypiPluginManifest,
+  create: pypiProxyRepositoryCreatePlugin,
+  detail: pypiProxyRepositoryDetailPlugin,
+};
+
+export const pypiGroupRepositoryUiPlugin: GroupRepositoryUiPlugin = {
+  kind: "group",
+  manifest: pypiPluginManifest,
+  create: pypiGroupRepositoryCreatePlugin,
+  detail: pypiGroupRepositoryDetailPlugin,
 };

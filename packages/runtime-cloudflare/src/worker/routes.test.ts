@@ -923,6 +923,7 @@ describe("Cloudflare runtime routes", () => {
           runtime: true,
           adminUi: true,
           capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
+          repositoryKinds: ["hosted", "proxy", "group"],
           icon: expect.objectContaining({
             title: "APT",
             accentColor: "#A80030",
@@ -966,6 +967,7 @@ describe("Cloudflare runtime routes", () => {
           runtime: true,
           adminUi: true,
           capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
+          repositoryKinds: ["hosted", "proxy", "group"],
           icon: expect.objectContaining({
             title: "PyPI",
             accentColor: "#3775A9",

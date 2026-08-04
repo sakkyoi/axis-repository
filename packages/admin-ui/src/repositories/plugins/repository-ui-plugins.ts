@@ -8,25 +8,39 @@ import {
 } from "./plugin-lifecycle";
 import type {
   PublishTokenScopeExtension,
+  RepositoryCreatePluginDescriptor,
+  RepositoryCreatePluginDescriptorOption,
   RepositoryCreateFieldRendererMap,
   HostedRepositoryCreatePlugin,
-  HostedRepositoryCreatePluginOption,
   RepositoryCreateStep,
+  RepositoryDetailPluginDescriptor,
   HostedRepositoryDetailPlugin,
   HostedRepositoryPublishPlugin,
   HostedRepositoryUiPlugin,
   RepositoryUiPluginDescriptor,
 } from "./repository-ui-plugin-types";
 import { aptRepositoryPluginBundle } from "@axis-repository/plugin-apt";
-import { aptHostedRepositoryUiPlugin } from "@axis-repository/plugin-apt/admin-ui";
+import {
+  aptGroupRepositoryUiPlugin,
+  aptHostedRepositoryUiPlugin,
+  aptProxyRepositoryUiPlugin,
+} from "@axis-repository/plugin-apt/admin-ui";
 import { pypiRepositoryPluginBundle } from "@axis-repository/plugin-pypi";
-import { pypiHostedRepositoryUiPlugin } from "@axis-repository/plugin-pypi/admin-ui";
+import {
+  pypiGroupRepositoryUiPlugin,
+  pypiHostedRepositoryUiPlugin,
+  pypiProxyRepositoryUiPlugin,
+} from "@axis-repository/plugin-pypi/admin-ui";
 
 type NonEmptyArray<T> = [T, ...T[]];
 
-const bundledAdminUiPlugins: Record<string, HostedRepositoryUiPlugin> = {
-  apt: aptHostedRepositoryUiPlugin,
-  pypi: pypiHostedRepositoryUiPlugin,
+const bundledAdminUiPlugins: Record<string, RepositoryUiPluginDescriptor> = {
+  "hosted:apt": aptHostedRepositoryUiPlugin,
+  "proxy:apt": aptProxyRepositoryUiPlugin,
+  "group:apt": aptGroupRepositoryUiPlugin,
+  "hosted:pypi": pypiHostedRepositoryUiPlugin,
+  "proxy:pypi": pypiProxyRepositoryUiPlugin,
+  "group:pypi": pypiGroupRepositoryUiPlugin,
 };
 
 function repositoryUiPluginKey(plugin: Pick<RepositoryUiPluginDescriptor, "kind" | "manifest">): string {
@@ -40,15 +54,25 @@ function repositoryKey(repository: Pick<Repository, "ecosystem" | "kind">): stri
 export const hostedRepositoryUiPlugins = [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
   .filter((plugin) => plugin.catalog.enabled && plugin.adminUi)
   .map((plugin) => {
-    const uiPlugin = bundledAdminUiPlugins[plugin.manifest.ecosystem];
+    const uiPlugin = bundledAdminUiPlugins[`hosted:${plugin.manifest.ecosystem}`];
     if (!uiPlugin) {
       throw new Error(`Admin UI plugin is not wired for ecosystem: ${plugin.manifest.ecosystem}`);
     }
     return uiPlugin;
   }) as NonEmptyArray<HostedRepositoryUiPlugin>;
 
+export const repositoryUiPluginDescriptors = [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
+  .filter((plugin) => plugin.catalog.enabled && plugin.adminUi)
+  .flatMap((plugin) => (plugin.manifest.repositoryKinds ?? ["hosted"]).map((kind) => {
+    const uiPlugin = bundledAdminUiPlugins[`${kind}:${plugin.manifest.ecosystem}`];
+    if (!uiPlugin) {
+      throw new Error(`Admin UI plugin is not wired for repository kind and ecosystem: ${kind} ${plugin.manifest.ecosystem}`);
+    }
+    return uiPlugin;
+  })) as NonEmptyArray<RepositoryUiPluginDescriptor>;
+
 const repositoryUiPluginByKindAndEcosystem = new Map<string, RepositoryUiPluginDescriptor>(
-  hostedRepositoryUiPlugins.map((plugin) => [repositoryUiPluginKey(plugin), plugin]),
+  repositoryUiPluginDescriptors.map((plugin) => [repositoryUiPluginKey(plugin), plugin]),
 );
 
 /** @deprecated Use hostedRepositoryUiPlugins. */
@@ -75,13 +99,15 @@ export function assertRepositoryUiPluginContracts(plugins: readonly RepositoryUi
     if (plugin.detail.ecosystem !== ecosystem) {
       throw new Error(`Detail UI plugin ecosystem does not match manifest: ${plugin.detail.ecosystem}`);
     }
-    if (plugin.publish && plugin.publish.ecosystem !== ecosystem) {
+    if (plugin.kind === "hosted" && plugin.publish && plugin.publish.ecosystem !== ecosystem) {
       throw new Error(`Publish UI plugin ecosystem does not match manifest: ${plugin.publish.ecosystem}`);
     }
     if (!(plugin.manifest.repositoryKinds ?? ["hosted"]).includes(plugin.kind)) {
       throw new Error(`UI plugin kind does not match manifest repository kinds for ecosystem ${ecosystem}: ${plugin.kind}`);
     }
-    assertJsonEqual("Create UI repository config", plugin.create.repositoryConfig, plugin.manifest.repositoryConfig);
+    if (plugin.kind === "hosted") {
+      assertJsonEqual("Create UI repository config", plugin.create.repositoryConfig, plugin.manifest.repositoryConfig);
+    }
 
     const sectionIds = new Set<string>();
     for (const section of plugin.detail.sections) {
@@ -113,10 +139,6 @@ function getRepositoryUiPlugin(repository: Pick<Repository, "ecosystem" | "kind"
   return repositoryUiPluginByKindAndEcosystem.get(repositoryKey(repository));
 }
 
-function creatableRepositoryKind(plugin: Pick<RepositoryPlugin, "repositoryKinds">): "hosted" | undefined {
-  return plugin.repositoryKinds.includes("hosted") ? "hosted" : undefined;
-}
-
 export function getRepositoryPluginManifest(ecosystem: string): RepositoryPluginManifest | undefined {
   return getHostedRepositoryUiPlugin(ecosystem)?.manifest;
 }
@@ -129,7 +151,11 @@ export function getHostedRepositoryDetailPlugin(ecosystem: string): HostedReposi
   return getHostedRepositoryUiPlugin(ecosystem)?.detail;
 }
 
-export function getRepositoryDetailPlugin(repository: Pick<Repository, "ecosystem" | "kind">): HostedRepositoryDetailPlugin | undefined {
+export function getRepositoryCreatePlugin(repository: Pick<Repository, "ecosystem" | "kind">): RepositoryCreatePluginDescriptor | undefined {
+  return getRepositoryUiPlugin(repository)?.create;
+}
+
+export function getRepositoryDetailPlugin(repository: Pick<Repository, "ecosystem" | "kind">): RepositoryDetailPluginDescriptor | undefined {
   return getRepositoryUiPlugin(repository)?.detail;
 }
 
@@ -138,7 +164,8 @@ export function getHostedRepositoryPublishPlugin(ecosystem: string): HostedRepos
 }
 
 export function getRepositoryPublishPlugin(repository: Pick<Repository, "ecosystem" | "kind">): HostedRepositoryPublishPlugin | undefined {
-  return getRepositoryUiPlugin(repository)?.publish;
+  const plugin = getRepositoryUiPlugin(repository);
+  return plugin?.kind === "hosted" ? plugin.publish : undefined;
 }
 
 export function getPublishTokenScopeExtension(ecosystem: string): PublishTokenScopeExtension | undefined {
@@ -171,54 +198,56 @@ export const repositoryDetailPluginsFromUiRegistry = hostedRepositoryDetailPlugi
 
 export function repositoryCreatePluginOptionsFromUiRegistry(
   serverPlugins: RepositoryPlugin[],
-  localPlugins: readonly HostedRepositoryUiPlugin[] = hostedRepositoryUiPlugins,
-): HostedRepositoryCreatePluginOption[] {
-  return serverPlugins.map((serverPlugin) => {
-    const localPlugin = localPlugins.find((candidate) => candidate.manifest.ecosystem === serverPlugin.ecosystem);
+  localPlugins: readonly RepositoryUiPluginDescriptor[] = repositoryUiPluginDescriptors,
+): RepositoryCreatePluginDescriptorOption[] {
+  return serverPlugins.flatMap((serverPlugin) => {
     const lifecycle = pluginLifecycleSummary(serverPlugin);
     const badges = pluginLifecycleBadges(serverPlugin);
-    if (serverPlugin.enabled === false) {
+    const supportedKinds = serverPlugin.repositoryKinds.length > 0 ? serverPlugin.repositoryKinds : ["hosted" as const];
+    return supportedKinds.map((kind) => {
+      const localPlugin = localPlugins.find((candidate) =>
+        candidate.kind === kind && candidate.manifest.ecosystem === serverPlugin.ecosystem,
+      );
+      if (serverPlugin.enabled === false) {
+        return {
+          ecosystem: serverPlugin.ecosystem,
+          kind,
+          displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
+          description: disabledPluginCreateDescription(serverPlugin),
+          capabilities: [...serverPlugin.capabilities],
+          disabledReason: pluginPolicyDescription(serverPlugin),
+          lifecycle,
+          badges,
+          supported: false,
+        };
+      }
+      if (serverPlugin.runtime === false) {
+        return {
+          ecosystem: serverPlugin.ecosystem,
+          kind,
+          displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
+          description: "Server plugin has no runtime support.",
+          capabilities: [...serverPlugin.capabilities],
+          lifecycle,
+          badges,
+          supported: false,
+        };
+      }
+      if (!localPlugin) {
+        return {
+          ecosystem: serverPlugin.ecosystem,
+          kind,
+          displayName: serverPlugin.ecosystem,
+          description: "No admin UI create adapter is registered for this plugin's repository kinds yet.",
+          capabilities: [...serverPlugin.capabilities],
+          lifecycle,
+          badges,
+          supported: false,
+        };
+      }
       return {
         ecosystem: serverPlugin.ecosystem,
-        kind: "hosted",
-        displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
-        description: disabledPluginCreateDescription(serverPlugin),
-        capabilities: [...serverPlugin.capabilities],
-        disabledReason: pluginPolicyDescription(serverPlugin),
-        lifecycle,
-        badges,
-        supported: false,
-      };
-    }
-    if (serverPlugin.runtime === false) {
-      return {
-        ecosystem: serverPlugin.ecosystem,
-        kind: "hosted",
-        displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
-        description: "Server plugin has no runtime support.",
-        capabilities: [...serverPlugin.capabilities],
-        lifecycle,
-        badges,
-        supported: false,
-      };
-    }
-    const createKind = creatableRepositoryKind(serverPlugin);
-    if (!createKind) {
-      return {
-        ecosystem: serverPlugin.ecosystem,
-        kind: "hosted",
-        displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
-        description: "No admin UI create adapter is registered for this plugin's repository kinds yet.",
-        capabilities: [...serverPlugin.capabilities],
-        lifecycle,
-        badges,
-        supported: false,
-      };
-    }
-    if (localPlugin) {
-      return {
-        ecosystem: serverPlugin.ecosystem,
-        kind: createKind,
+        kind,
         displayName: localPlugin.manifest.displayName,
         description: localPlugin.manifest.description,
         capabilities: [...serverPlugin.capabilities],
@@ -227,16 +256,6 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
         supported: true,
         plugin: localPlugin.create,
       };
-    }
-    return {
-      ecosystem: serverPlugin.ecosystem,
-      kind: "hosted",
-      displayName: serverPlugin.ecosystem,
-      description: "Server plugin is enabled, but this admin UI cannot create it yet.",
-      capabilities: [...serverPlugin.capabilities],
-      lifecycle,
-      badges,
-      supported: false,
-    };
+    });
   });
 }

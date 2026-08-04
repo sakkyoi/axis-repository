@@ -6,8 +6,10 @@ import {
 } from "@axis-repository/core";
 import { aptPluginManifest } from "../manifest";
 import type {
+  GroupRepositoryPlugin,
   HostedRepositoryPlugin,
   DescribePublishedArtifactsInput,
+  ProxyRepositoryPlugin,
   ProvisionRepositoryCreateInput,
   RebuildRepositoryArtifactIndexInput,
   RepositoryMaintenanceInput,
@@ -38,6 +40,19 @@ function repositoryForConfig(input: ValidateRepositoryConfigInput): Repository {
   };
 }
 
+function aptSkeletonRepositoryConfig(input: ValidateRepositoryConfigInput): Repository {
+  return {
+    id: "repo_validation",
+    name: "repo-validation",
+    ecosystem: input.ecosystem,
+    kind: "proxy",
+    visibility: "private",
+    config: input.config,
+    createdAt: "2026-07-18T00:00:00.000Z",
+    updatedAt: "2026-07-18T00:00:00.000Z",
+  };
+}
+
 export function createAptPlugin(input: {
   publisher: ArtifactPublisher;
   signingKeys: RepositorySigningKeyCapability;
@@ -48,7 +63,7 @@ export function createAptPlugin(input: {
     ecosystem: "apt",
     name: aptPluginManifest.runtimeName,
     version: aptPluginManifest.version,
-    repositoryKinds: [...(aptPluginManifest.repositoryKinds ?? ["hosted"])],
+    repositoryKinds: ["hosted"],
     capabilities: [...aptPluginManifest.capabilities],
     canServeRepositoryPath: createPrefixServingPredicate(["dists", "pool"]),
     validateRepositoryConfig: (configInput) => {
@@ -93,6 +108,36 @@ export function createAptPlugin(input: {
     },
     clientHelpers: createAptClientHelpers({ signingKeys: input.signingKeys }),
     adminResources: createAptAdminResources({ signingKeys: input.signingKeys }),
+  };
+}
+
+export function createAptProxyPlugin(): ProxyRepositoryPlugin {
+  return {
+    kind: "proxy",
+    ecosystem: "apt",
+    name: `${aptPluginManifest.runtimeName}-proxy`,
+    version: aptPluginManifest.version,
+    repositoryKinds: ["proxy"],
+    capabilities: ["apt", "proxy"],
+    canServeRepositoryPath: () => false,
+    validateRepositoryConfig: (configInput) => {
+      aptSkeletonRepositoryConfig(configInput);
+    },
+  };
+}
+
+export function createAptGroupPlugin(): GroupRepositoryPlugin {
+  return {
+    kind: "group",
+    ecosystem: "apt",
+    name: `${aptPluginManifest.runtimeName}-group`,
+    version: aptPluginManifest.version,
+    repositoryKinds: ["group"],
+    capabilities: ["apt", "group"],
+    canServeRepositoryPath: () => false,
+    validateRepositoryConfig: (configInput) => {
+      aptSkeletonRepositoryConfig(configInput);
+    },
   };
 }
 

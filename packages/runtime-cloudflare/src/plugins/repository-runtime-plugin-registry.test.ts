@@ -165,6 +165,61 @@ describe("RepositoryRuntimePluginRegistry", () => {
     expect(apt.calls).toHaveLength(0);
   });
 
+  it("registers hosted, proxy, and group descriptors for the same ecosystem independently", () => {
+    const registry = new RepositoryRuntimePluginRegistry();
+    const apt = publisherReturning("apt.json");
+    registry.register({
+      kind: "hosted",
+      ecosystem: "apt",
+      name: "apt-hosted",
+      version: "0.0.0",
+      capabilities: ["package-index"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: publishLifecycle(apt.publisher),
+    });
+    registry.register({
+      kind: "proxy",
+      ecosystem: "apt",
+      name: "apt-proxy",
+      version: "0.0.0",
+      capabilities: ["proxy"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+    });
+    registry.register({
+      kind: "group",
+      ecosystem: "apt",
+      name: "apt-group",
+      version: "0.0.0",
+      capabilities: ["group"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+    });
+
+    expect(registry.getPluginForRepository({ ecosystem: "apt", kind: "hosted" })?.name).toBe("apt-hosted");
+    expect(registry.getPluginForRepository({ ecosystem: "apt", kind: "proxy" })?.name).toBe("apt-proxy");
+    expect(registry.getPluginForRepository({ ecosystem: "apt", kind: "group" })?.name).toBe("apt-group");
+    expect(registry.getPluginForRepository({ ecosystem: "pypi", kind: "proxy" })).toBeUndefined();
+  });
+
+  it("rejects publishing through a registered non-hosted repository plugin", async () => {
+    const registry = new RepositoryRuntimePluginRegistry();
+    registry.register({
+      kind: "proxy",
+      ecosystem: "apt",
+      name: "apt-proxy",
+      version: "0.0.0",
+      capabilities: ["proxy"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+    });
+
+    await expect(registry.publish(publishInputFor({ ecosystem: "apt", kind: "proxy" }))).rejects.toThrow(
+      new ValidationError("Artifact publishing is not supported for repository kind and ecosystem: proxy apt"),
+    );
+  });
+
   it("rejects duplicate repository kind and ecosystem registrations", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const first = publisherReturning("first.json");

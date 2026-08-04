@@ -216,10 +216,33 @@ export interface HostedRepositoryPlugin extends PublisherMetadata {
   adminResources?: RepositoryAdminResources;
 }
 
+export interface ProxyRepositoryPlugin extends PublisherMetadata {
+  kind: "proxy";
+  canServeRepositoryPath: RepositoryPathServingRule;
+  /** Defaults to serving the requested path as the object key once proxy fetching exists. */
+  resolveRepositoryPath?: RepositoryPathResolver;
+  validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
+  clientHelpers?: RepositoryClientHelpers;
+  adminResources?: RepositoryAdminResources;
+}
+
+export interface GroupRepositoryPlugin extends PublisherMetadata {
+  kind: "group";
+  canServeRepositoryPath: RepositoryPathServingRule;
+  /** Defaults to serving the requested path as the object key once group resolution exists. */
+  resolveRepositoryPath?: RepositoryPathResolver;
+  validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
+  clientHelpers?: RepositoryClientHelpers;
+  adminResources?: RepositoryAdminResources;
+}
+
 /** @deprecated Use HostedRepositoryPlugin. */
 export type ArtifactRepositoryPlugin = HostedRepositoryPlugin;
 
-export type RepositoryRuntimePluginDescriptor = HostedRepositoryPlugin;
+export type RepositoryRuntimePluginDescriptor =
+  | HostedRepositoryPlugin
+  | ProxyRepositoryPlugin
+  | GroupRepositoryPlugin;
 
 export function createPrefixServingPredicate(prefixes: string[]): RepositoryPathServingRule {
   const normalizedPrefixes = prefixes.map((prefix) => prefix.replace(/^\/+|\/+$/g, ""));

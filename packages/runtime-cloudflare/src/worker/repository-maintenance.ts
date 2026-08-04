@@ -43,7 +43,8 @@ export async function runRepositoryMaintenance(input: {
   const dueTimes: number[] = [];
 
   for (const repository of input.repositories) {
-    const maintenance = input.plugins.getPluginForRepository(repository)?.maintenance;
+    const plugin = input.plugins.getPluginForRepository(repository);
+    const maintenance = plugin?.kind === "hosted" ? plugin.maintenance : undefined;
     if (!maintenance) {
       continue;
     }
