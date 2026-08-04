@@ -1,12 +1,12 @@
 import { PublishSessionsSection } from "../detail/repository-detail-shared";
-import { getHostedRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
+import { getRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 
 export function RepositoryPublishSection({
   repository,
   pluginMetadata,
 }: RepositoryDetailSectionProps) {
-  const publishPlugin = repository.kind === "hosted" ? getHostedRepositoryPublishPlugin(repository.ecosystem) : undefined;
+  const publishPlugin = getRepositoryPublishPlugin(repository);
   const PreviewComponent = publishPlugin?.PreviewComponent;
   return (
     <div className="grid gap-2">

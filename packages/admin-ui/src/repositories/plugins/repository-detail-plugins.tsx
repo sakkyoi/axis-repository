@@ -10,6 +10,7 @@ import { RepositoryArtifactsSection } from "../artifacts/repository-artifacts-se
 import { RepositoryPublishSection } from "../publish/repository-publish-section";
 import type { HostedRepositoryDetailPlugin, RepositoryDetailSection } from "./repository-ui-plugin-types";
 import {
+  getRepositoryDetailPlugin,
   getHostedRepositoryDetailPlugin as getHostedRepositoryDetailPluginFromRegistry,
   hostedRepositoryDetailPluginsFromUiRegistry,
 } from "./repository-ui-plugins";
@@ -33,8 +34,8 @@ export function getHostedRepositoryDetailPlugin(ecosystem: string): HostedReposi
 }
 
 function repositoryDetailSectionsFor(repository: Repository): RepositoryDetailSection[] {
-  if (repository.kind !== "hosted") return [];
-  const sections = getHostedRepositoryDetailPlugin(repository.ecosystem)?.sections ?? genericRepositoryDetailSections;
+  const plugin = getRepositoryDetailPlugin(repository);
+  const sections = plugin?.sections ?? genericRepositoryDetailSections;
   return normalizeRepositoryDetailSections(sections);
 }
 

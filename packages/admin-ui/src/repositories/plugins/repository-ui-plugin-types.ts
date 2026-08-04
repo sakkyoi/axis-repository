@@ -36,6 +36,7 @@ export interface RepositoryCreateFieldErrors {
 export type HostedRepositoryCreatePluginOption =
   | {
       ecosystem: string;
+      kind: "hosted";
       displayName: string;
       description: string;
       capabilities: string[];
@@ -46,6 +47,7 @@ export type HostedRepositoryCreatePluginOption =
     }
   | {
       ecosystem: string;
+      kind?: "hosted";
       displayName: string;
       description: string;
       capabilities: string[];

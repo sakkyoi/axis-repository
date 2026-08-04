@@ -14,7 +14,7 @@ import {
 } from "../../components/ui/dialog";
 import { ErrorState } from "../../pages/shared";
 import { SkeletonRows, SkeletonText } from "../../components/ui/skeleton";
-import { getHostedRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
+import { getRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
   repositoryBrowserBreadcrumbs,
@@ -42,7 +42,7 @@ export function RepositoryBrowserSection({
   const artifacts = useRepositoryArtifacts(repository.name);
   const deleteObject = useDeleteRepositoryObject(repository.name);
   const toast = useToast();
-  const publishPlugin = repository.kind === "hosted" ? getHostedRepositoryPublishPlugin(repository.ecosystem) : undefined;
+  const publishPlugin = getRepositoryPublishPlugin(repository);
   const PreviewComponent = publishPlugin?.PreviewComponent;
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
   const layout = repositoryBrowserLayoutClasses();

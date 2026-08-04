@@ -1,5 +1,5 @@
 import type { RepositoryPluginManifest } from "@axis-repository/core/plugin-manifests";
-import type { RepositoryPlugin } from "../../api/schemas";
+import type { Repository, RepositoryPlugin } from "../../api/schemas";
 import {
   disabledPluginCreateDescription,
   pluginLifecycleBadges,
@@ -86,8 +86,13 @@ function getHostedRepositoryUiPlugin(ecosystem: string): HostedRepositoryUiPlugi
   return hostedRepositoryUiPlugins.find((plugin) => plugin.manifest.ecosystem === ecosystem);
 }
 
-function supportsHostedRepositories(plugin: Pick<RepositoryPlugin, "repositoryKinds">): boolean {
-  return plugin.repositoryKinds.includes("hosted");
+function getRepositoryUiPlugin(repository: Pick<Repository, "ecosystem" | "kind">): HostedRepositoryUiPlugin | undefined {
+  if (repository.kind === "hosted") return getHostedRepositoryUiPlugin(repository.ecosystem);
+  return undefined;
+}
+
+function creatableRepositoryKind(plugin: Pick<RepositoryPlugin, "repositoryKinds">): "hosted" | undefined {
+  return plugin.repositoryKinds.includes("hosted") ? "hosted" : undefined;
 }
 
 export function getRepositoryPluginManifest(ecosystem: string): RepositoryPluginManifest | undefined {
@@ -102,8 +107,16 @@ export function getHostedRepositoryDetailPlugin(ecosystem: string): HostedReposi
   return getHostedRepositoryUiPlugin(ecosystem)?.detail;
 }
 
+export function getRepositoryDetailPlugin(repository: Pick<Repository, "ecosystem" | "kind">): HostedRepositoryDetailPlugin | undefined {
+  return getRepositoryUiPlugin(repository)?.detail;
+}
+
 export function getHostedRepositoryPublishPlugin(ecosystem: string): HostedRepositoryPublishPlugin | undefined {
   return getHostedRepositoryUiPlugin(ecosystem)?.publish;
+}
+
+export function getRepositoryPublishPlugin(repository: Pick<Repository, "ecosystem" | "kind">): HostedRepositoryPublishPlugin | undefined {
+  return getRepositoryUiPlugin(repository)?.publish;
 }
 
 export function getPublishTokenScopeExtension(ecosystem: string): PublishTokenScopeExtension | undefined {
@@ -165,11 +178,12 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
         supported: false,
       };
     }
-    if (!supportsHostedRepositories(serverPlugin)) {
+    const createKind = creatableRepositoryKind(serverPlugin);
+    if (!createKind) {
       return {
         ecosystem: serverPlugin.ecosystem,
         displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
-        description: "This admin UI can only create hosted repositories for this plugin.",
+        description: "No admin UI create adapter is registered for this plugin's repository kinds yet.",
         capabilities: [...serverPlugin.capabilities],
         lifecycle,
         badges,
@@ -179,6 +193,7 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
     if (localPlugin) {
       return {
         ecosystem: serverPlugin.ecosystem,
+        kind: createKind,
         displayName: localPlugin.manifest.displayName,
         description: localPlugin.manifest.description,
         capabilities: [...serverPlugin.capabilities],

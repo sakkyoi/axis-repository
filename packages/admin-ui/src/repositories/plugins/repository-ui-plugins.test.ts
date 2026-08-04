@@ -94,6 +94,7 @@ describe("repository UI plugin registry", () => {
     ]);
     expect(options[0]).toMatchObject({
       ecosystem: "apt",
+      kind: "hosted",
       displayName: "APT",
       supported: true,
       lifecycle: { availability: "available", label: "Available" },
@@ -117,7 +118,7 @@ describe("repository UI plugin registry", () => {
     });
   });
 
-  it("does not offer create UI for plugins that do not support hosted repositories", () => {
+  it("reports when no create adapter is registered for the plugin repository kinds", () => {
     const options = repositoryCreatePluginOptionsFromUiRegistry([
       {
         ecosystem: "apt",
@@ -135,7 +136,7 @@ describe("repository UI plugin registry", () => {
     expect(options).toMatchObject([{
       ecosystem: "apt",
       displayName: "APT",
-      description: "This admin UI can only create hosted repositories for this plugin.",
+      description: "No admin UI create adapter is registered for this plugin's repository kinds yet.",
       capabilities: ["signed-release"],
       lifecycle: { availability: "available", label: "Available" },
       badges: [

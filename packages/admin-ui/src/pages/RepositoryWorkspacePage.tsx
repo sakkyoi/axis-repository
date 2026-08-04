@@ -28,7 +28,7 @@ import {
   workspaceBodyClass,
   workspaceColumnClass,
 } from "./list-detail-model";
-import { getHostedRepositoryPublishPlugin } from "../repositories/plugins/repository-ui-plugins";
+import { getRepositoryPublishPlugin } from "../repositories/plugins/repository-ui-plugins";
 import { RepositoryEcosystemLabel } from "../repositories/plugins/repository-ecosystem-icon";
 import {
   filesFromFileList,
@@ -57,7 +57,7 @@ export function RepositoryWorkspacePage() {
   const repositoryPlugins = useRepositoryPlugins();
   const repository = useRepositoryByName(repositories.data, name);
   const pluginMetadata = repositoryPlugins.data?.find((plugin) => plugin.ecosystem === repository?.ecosystem);
-  const publishPlugin = repository?.kind === "hosted" ? getHostedRepositoryPublishPlugin(repository.ecosystem) : undefined;
+  const publishPlugin = repository ? getRepositoryPublishPlugin(repository) : undefined;
   const PreviewComponent = publishPlugin?.PreviewComponent;
   const overlay = repository
     ? repositoryBrowserUploadOverlay({
