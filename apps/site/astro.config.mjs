@@ -50,7 +50,11 @@ function redirectDocsRootToLatestStable() {
       "astro:build:done": async ({ dir }) => {
         if (!latestStableVersion) return;
 
-        const target = `/docs/${latestStableVersion.slug}/`;
+        // starlight-versions puts the version slug *before* the page's own
+        // path (/v0.0.0/docs/), not after it -- confirmed against a real
+        // deploy after an earlier /docs/<slug>/ version of this redirect
+        // pointed at a route that doesn't exist.
+        const target = `/${latestStableVersion.slug}/docs/`;
         await writeFile(
           fileURLToPath(new URL("_redirects", dir)),
           `/docs ${target} 302\n/docs/ ${target} 302\n`,
