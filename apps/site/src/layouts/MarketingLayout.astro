@@ -1,6 +1,7 @@
 ---
 import { ThemeScript, Toggle } from "astro-theme-toggle/components";
 import { Icon } from "astro-icon/components";
+import { getLatestStableDocsHref } from "../lib/docs-versions.mjs";
 import "../styles/tailwind.css";
 
 interface Props {
@@ -10,6 +11,9 @@ interface Props {
 const { title } = Astro.props;
 
 const githubUrl = "https://github.com/sakkyoi/axis-repository";
+// Points directly at the resolved latest stable release -- see index.astro
+// for why the bare /docs/ entry point can't be redirected there anymore.
+const docsHref = getLatestStableDocsHref();
 ---
 <html lang="en" class="scroll-smooth">
   <head>
@@ -55,7 +59,7 @@ const githubUrl = "https://github.com/sakkyoi/axis-repository";
             Axis Repository
           </a>
           <nav class="flex items-center gap-5 text-sm">
-            <a href="/docs/" class="hover:text-lime-600 dark:hover:text-lime-400">Docs</a>
+            <a href={docsHref} class="hover:text-lime-600 dark:hover:text-lime-400">Docs</a>
             <a
               href={githubUrl}
               class="flex items-center gap-1.5 hover:text-lime-600 dark:hover:text-lime-400"

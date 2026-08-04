@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { defineConfig, fontProviders } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightThemeRapide from "starlight-theme-rapide";
@@ -8,6 +5,7 @@ import starlightSiteGraph from "starlight-site-graph";
 import starlightVersions from "starlight-versions";
 import icon from "astro-icon";
 import tailwindcss from "@tailwindcss/vite";
+import { getDocsVersions } from "./src/lib/docs-versions.mjs";
 
 // docs-versions.json is the single source of truth for which release
 // snapshots exist. CI appends to it (and archives the matching
@@ -15,54 +13,7 @@ import tailwindcss from "@tailwindcss/vite";
 // .github/workflows/site.yml. The unarchived root (src/content/docs/**)
 // always mirrors whatever's on main right now, so it needs no entry here:
 // it's what the "Dev" version in the switcher points at.
-const docsVersions = JSON.parse(
-  readFileSync(fileURLToPath(new URL("./docs-versions.json", import.meta.url)), "utf8"),
-);
-
-function compareVersionSlugsDescending(a, b) {
-  // Slugs keep the tag's leading "v" (e.g. "v0.3.0-rc.1") -- stripped here
-  // only for numeric comparison, not for the slug value itself.
-  const toParts = (slug) =>
-    slug
-      .replace(/^v/, "")
-      .split("-rc.")[0]
-      .split(".")
-      .map(Number);
-  const [aMajor, aMinor, aPatch] = toParts(a.slug);
-  const [bMajor, bMinor, bPatch] = toParts(b.slug);
-  return bMajor - aMajor || bMinor - aMinor || bPatch - aPatch;
-}
-
-const latestStableVersion = docsVersions
-  .filter((version) => !version.slug.includes("-rc."))
-  .sort(compareVersionSlugsDescending)[0];
-
-// Lands visitors who hit the bare /docs/ entry point on the latest stable
-// release instead of the unversioned "Dev" content. Deep links into Dev
-// stay put and rely on the plugin's own "you're viewing an unreleased
-// version" banner instead of a redirect, since a blanket /docs/* redirect
-// could send someone to a page that doesn't exist yet in the last stable
-// release.
-function redirectDocsRootToLatestStable() {
-  return {
-    name: "redirect-docs-root-to-latest-stable",
-    hooks: {
-      "astro:build:done": async ({ dir }) => {
-        if (!latestStableVersion) return;
-
-        // starlight-versions puts the version slug *before* the page's own
-        // path (/v0.0.0/docs/), not after it -- confirmed against a real
-        // deploy after an earlier /docs/<slug>/ version of this redirect
-        // pointed at a route that doesn't exist.
-        const target = `/${latestStableVersion.slug}/docs/`;
-        await writeFile(
-          fileURLToPath(new URL("_redirects", dir)),
-          `/docs ${target} 302\n/docs/ ${target} 302\n`,
-        );
-      },
-    },
-  };
-}
+const docsVersions = getDocsVersions();
 
 export default defineConfig({
   // Astro's own font pipeline generates the @font-face CSS and preload
@@ -140,7 +91,6 @@ export default defineConfig({
       ],
     }),
     icon(),
-    redirectDocsRootToLatestStable(),
   ],
   // Tailwind v4's Vite plugin processes any CSS file that `@import
   // "tailwindcss"`, and nothing else. The marketing layout is the only file

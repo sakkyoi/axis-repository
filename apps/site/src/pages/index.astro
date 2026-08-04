@@ -1,8 +1,15 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
 import { Icon } from "astro-icon/components";
+import { getLatestStableDocsHref } from "../lib/docs-versions.mjs";
 
 const githubUrl = "https://github.com/sakkyoi/axis-repository";
+// Points directly at the resolved latest stable release instead of the
+// bare /docs/ entry point -- that path is also Dev's own URL (it has no
+// version prefix, being whatever's unarchived), so a blanket redirect
+// there can't tell "first-time visitor" apart from "someone who explicitly
+// picked Dev from the version switcher" and ends up bouncing both.
+const docsHref = getLatestStableDocsHref();
 
 // Cargo has no mark of its own in the simple-icons set, so it borrows Rust's,
 // the same way the apt card borrows Debian's. Rust's mark is defined
@@ -113,7 +120,7 @@ const formats = [
 
       <div class="mt-10 flex flex-wrap items-center justify-center gap-3">
         <a
-          href="/docs/"
+          href={docsHref}
           class="flex h-10 items-center rounded-md bg-lime-400 px-6 font-medium text-slate-900 transition hover:bg-lime-300"
         >
           Get Started
@@ -182,7 +189,7 @@ const formats = [
   <footer class="border-t border-slate-200 px-6 py-8 dark:border-slate-800">
     <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-500 dark:text-slate-400">
       <a href={githubUrl} class="hover:text-slate-900 dark:hover:text-slate-100">GitHub</a>
-      <a href="/docs/" class="hover:text-slate-900 dark:hover:text-slate-100">Documentation</a>
+      <a href={docsHref} class="hover:text-slate-900 dark:hover:text-slate-100">Documentation</a>
       <a href={`${githubUrl}/blob/main/LICENSE`} class="hover:text-slate-900 dark:hover:text-slate-100">
         License
       </a>
