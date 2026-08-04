@@ -7,6 +7,7 @@ import {
   repositoryListEmptyClass,
   repositoryListEmptyPanelClass,
   repositoryDeleteDialogContent,
+  repositoryListSkeletonColumns,
   repositorySummaryItems,
   repositoryRowStateClass,
 } from "./repository-page-model";
@@ -42,6 +43,10 @@ describe("repository page model", () => {
     expect(repositoryListEmptyPanelClass()).toContain("h-full");
     expect(repositoryListEmptyPanelClass()).toContain("place-items-center");
     expect(repositoryListEmptyPanelClass()).toContain("border-dashed");
+  });
+
+  it("keeps repository list skeleton columns aligned with the table", () => {
+    expect(repositoryListSkeletonColumns()).toEqual(["w-48", "w-24", "w-14", "w-16", "w-20"]);
   });
 
   it("formats readonly repository summary items", () => {

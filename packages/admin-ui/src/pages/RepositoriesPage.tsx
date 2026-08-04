@@ -17,6 +17,7 @@ import {
   repositoryListEmptyPanelClass,
   repositoryListNameCellClass,
   repositoryListNameTextClass,
+  repositoryListSkeletonColumns,
   repositoryRowStateClass,
   repositorySummaryItems,
 } from "../repositories/detail/repository-page-model";
@@ -59,7 +60,7 @@ export function RepositoriesPage() {
       {repositories.isError && <ErrorState error={repositories.error} />}
       {repositories.isLoading && (
         <div className="rounded-lg border border-border bg-panel">
-          <SkeletonRows rows={5} columns={["w-48", "w-20", "w-24", "w-32"]} />
+          <SkeletonRows rows={5} columns={repositoryListSkeletonColumns()} />
         </div>
       )}
       {repositories.data && (
