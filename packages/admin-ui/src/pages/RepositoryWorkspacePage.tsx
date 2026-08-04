@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useDeleteRepository, useRepositories, useRepositoryPlugins } from "../api/hooks";
 import type { Repository, RepositoryPlugin } from "../api/schemas";
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { DestructiveActionDialog } from "../components/ui/destructive-action-dialog";
 import {
@@ -16,7 +17,7 @@ import { ADMIN_UI_PATHS, repositorySettingsPath, repositoryWorkspacePath } from 
 import { repositorySettingsSectionsFor, repositoryWorkspaceSectionsFor } from "../repositories/plugins/repository-detail-plugins";
 import { PublishSessionsSection, RepositoryDetailSections } from "../repositories/detail/repository-detail-shared";
 import type { RepositoryDetailSection } from "../repositories/plugins/repository-ui-plugin-types";
-import { repositoryDeleteDialogContent, repositorySummaryItems } from "../repositories/detail/repository-page-model";
+import { repositoryDeleteDialogContent, repositoryKindLabel, repositorySummaryItems } from "../repositories/detail/repository-page-model";
 import { EmptyState, ErrorState, formatDate, NotFoundState, PageShell } from "./shared";
 import { SkeletonText } from "../components/ui/skeleton";
 import { useViewportWidth } from "../components/use-viewport-width";
@@ -448,6 +449,12 @@ function RepositorySummaryCard({
           <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
           {label === "Ecosystem" ? (
             <RepositoryEcosystemLabel ecosystem={repository.ecosystem} plugin={pluginMetadata} className="text-sm" />
+          ) : label === "Kind" ? (
+            <Badge variant="default" className="w-fit justify-self-start">{repositoryKindLabel(repository.kind)}</Badge>
+          ) : label === "Visibility" ? (
+            <Badge variant={repository.visibility === "public" ? "success" : "default"} className="w-fit justify-self-start">
+              {repository.visibility}
+            </Badge>
           ) : (
             <span className="break-all text-sm">
               {label === "Created" || label === "Updated" ? formatDate(value) : value}

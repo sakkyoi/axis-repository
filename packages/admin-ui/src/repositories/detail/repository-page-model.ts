@@ -1,4 +1,4 @@
-import type { Repository } from "../../api/schemas";
+import type { Repository, RepositoryKind } from "../../api/schemas";
 import type { DestructiveActionDialogContent } from "../../components/ui/destructive-action-dialog-model";
 
 
@@ -52,9 +52,26 @@ export function repositoryListSkeletonColumns(): string[] {
   return ["w-48", "w-24", "w-14", "w-16", "w-20"];
 }
 
+export function repositoryKindLabel(kind: RepositoryKind): string {
+  if (kind === "hosted") return "Hosted";
+  if (kind === "proxy") return "Proxy";
+  return "Group";
+}
+
+export function repositoryListUpdatedLabel(timestamp: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    year: "2-digit",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
+}
+
 export function repositorySummaryItems(repository: Repository): Array<[string, string]> {
   return [
     ["Ecosystem", repository.ecosystem],
+    ["Kind", repository.kind],
     ["Visibility", repository.visibility],
     ["Created", repository.createdAt],
     ["Updated", repository.updatedAt],

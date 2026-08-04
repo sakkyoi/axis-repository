@@ -7,7 +7,9 @@ import {
   repositoryListEmptyClass,
   repositoryListEmptyPanelClass,
   repositoryDeleteDialogContent,
+  repositoryKindLabel,
   repositoryListSkeletonColumns,
+  repositoryListUpdatedLabel,
   repositorySummaryItems,
   repositoryRowStateClass,
 } from "./repository-page-model";
@@ -52,10 +54,21 @@ describe("repository page model", () => {
   it("formats readonly repository summary items", () => {
     expect(repositorySummaryItems(repository("debian-internal"))).toEqual([
       ["Ecosystem", "apt"],
+      ["Kind", "hosted"],
       ["Visibility", "private"],
       ["Created", "2026-07-22T00:00:00.000Z"],
       ["Updated", "2026-07-22T00:00:00.000Z"],
     ]);
+  });
+
+  it("formats repository kind labels", () => {
+    expect(repositoryKindLabel("hosted")).toBe("Hosted");
+    expect(repositoryKindLabel("proxy")).toBe("Proxy");
+    expect(repositoryKindLabel("group")).toBe("Group");
+  });
+
+  it("formats repository list updated dates without seconds", () => {
+    expect(repositoryListUpdatedLabel("2026-08-02T12:51:54.000Z")).toMatch(/8\/2\/26,? 8:51 PM|8\/2\/26,? 12:51 PM/);
   });
 
   it("builds destructive dialog copy for deleting a repository", () => {

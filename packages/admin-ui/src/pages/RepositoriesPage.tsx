@@ -13,6 +13,8 @@ import { RepositoryDetailSections } from "../repositories/detail/repository-deta
 import {
   repositoryDetailBodyClass,
   repositoryDetailTitleClass,
+  repositoryKindLabel,
+  repositoryListUpdatedLabel,
   repositoryListEmptyClass,
   repositoryListEmptyPanelClass,
   repositoryListNameCellClass,
@@ -76,10 +78,11 @@ export function RepositoriesPage() {
               <table className="w-full table-fixed border-collapse text-sm">
                 <thead className="sticky top-0 bg-muted text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="w-2/5 px-3 py-2">Name</th>
-                    <th className="px-3 py-2">Ecosystem</th>
-                    <th className="px-3 py-2">Visibility</th>
-                    <th className="px-3 py-2">Updated</th>
+                    <th className="w-[38%] px-3 py-2">Name</th>
+                    <th className="w-[18%] px-3 py-2">Ecosystem</th>
+                    <th className="w-[13%] px-3 py-2">Kind</th>
+                    <th className="w-[13%] px-3 py-2">Visibility</th>
+                    <th className="w-[18%] px-3 py-2">Updated</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -96,11 +99,16 @@ export function RepositoriesPage() {
                         <RepositoryEcosystemLabel ecosystem={repository.ecosystem} plugin={pluginFor(repository)} />
                       </td>
                       <td className="px-3 py-2">
+                        <RepositoryKindBadge kind={repository.kind} />
+                      </td>
+                      <td className="px-3 py-2">
                         <Badge variant={repository.visibility === "public" ? "success" : "default"}>
                           {repository.visibility}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground">{formatDate(repository.updatedAt)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-muted-foreground" title={formatDate(repository.updatedAt)}>
+                        {repositoryListUpdatedLabel(repository.updatedAt)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -198,9 +206,17 @@ function RepositoryDetail({
           {summaryItems.map(([label, value]) => (
             <div key={label} className="grid gap-1 rounded-md border border-border bg-background/40 p-3">
               <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
-              <span className="break-all text-sm">
-                {label === "Created" || label === "Updated" ? formatDate(value) : value}
-              </span>
+              {label === "Kind" ? (
+                <RepositoryKindBadge kind={repository.kind} />
+              ) : label === "Visibility" ? (
+                <Badge variant={repository.visibility === "public" ? "success" : "default"} className="w-fit justify-self-start">
+                  {repository.visibility}
+                </Badge>
+              ) : (
+                <span className="break-all text-sm">
+                  {label === "Created" || label === "Updated" ? formatDate(value) : value}
+                </span>
+              )}
             </div>
           ))}
           {lifecycle && <p className="text-sm text-muted-foreground">{lifecycle.description}</p>}
@@ -230,4 +246,8 @@ function RepositoryDetail({
       {body}
     </aside>
   );
+}
+
+function RepositoryKindBadge({ kind }: { kind: Repository["kind"] }) {
+  return <Badge variant="default" className="w-fit justify-self-start">{repositoryKindLabel(kind)}</Badge>;
 }

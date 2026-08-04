@@ -13,6 +13,7 @@ import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { cn } from "../lib/utils";
 import { ADMIN_UI_PATHS } from "../navigation";
+import { repositoryKindLabel } from "../repositories/detail/repository-page-model";
 import { RepositoryDependencyFields } from "../repositories/create/repository-create-dependency-renderer";
 import {
   repositoryCreateAvailabilityError,
@@ -342,7 +343,10 @@ function PluginStep({
             >
               <span className="flex items-center justify-between gap-2 text-sm font-semibold">
                 {plugin.displayName}
-                <Badge variant={plugin.lifecycle.variant}>{plugin.lifecycle.label}</Badge>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {plugin.supported && <Badge variant="default">{repositoryKindLabel(plugin.kind)}</Badge>}
+                  <Badge variant={plugin.lifecycle.variant}>{plugin.lifecycle.label}</Badge>
+                </span>
               </span>
               <span className="text-sm text-muted-foreground">{plugin.description}</span>
               {!plugin.supported && plugin.disabledReason && (
