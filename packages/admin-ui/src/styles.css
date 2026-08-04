@@ -1,6 +1,13 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* @import must come first -- PostCSS enforces the standard CSS rule that
+   @import precedes other statements, and @config before it doesn't just
+   warn, it silently produces zero generated utility classes.
+   @config keeps the existing theme.extend color/keyframe/animation
+   mappings in tailwind.config.ts working under v4's compatibility mode,
+   instead of rewriting them into CSS @theme syntax right away -- v4 no
+   longer auto-detects a JS/TS config file the way v3 did, so this has to
+   be explicit now. */
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 :root {
   color-scheme: light;
