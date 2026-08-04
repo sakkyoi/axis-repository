@@ -57,6 +57,17 @@ function publishInput(ecosystem: string): PublishArtifactsInput {
   };
 }
 
+function publishInputFor(input: { ecosystem: string; kind: "hosted" | "proxy" | "group" }): PublishArtifactsInput {
+  const base = publishInput(input.ecosystem);
+  return {
+    ...base,
+    repository: {
+      ...base.repository,
+      kind: input.kind,
+    },
+  };
+}
+
 function publisherReturning(key: string): {
   publisher: ArtifactPublisher;
   calls: PublishArtifactsInput[];
@@ -96,6 +107,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     const apt = publisherReturning("apt.json");
     const pypi = publisherReturning("pypi.json");
     registry.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -105,6 +117,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
       publish: publishLifecycle(apt.publisher),
     });
     registry.register({
+      kind: "hosted",
       ecosystem: "pypi",
       name: "pypi-test",
       version: "0.0.0",
@@ -124,20 +137,41 @@ describe("RepositoryRuntimePluginRegistry", () => {
     expect(pypi.calls[0]?.repository.ecosystem).toBe("pypi");
   });
 
-  it("fails closed when no publisher is registered for the repository ecosystem", async () => {
+  it("fails closed when no publisher is registered for the repository kind and ecosystem", async () => {
     const registry = new RepositoryRuntimePluginRegistry();
 
     await expect(registry.publish(publishInput("npm"))).rejects.toThrow(
-      new ValidationError("Artifact publisher is not configured for ecosystem: npm"),
+      new ValidationError("Artifact publisher is not configured for repository kind and ecosystem: hosted npm"),
     );
   });
 
-  it("rejects duplicate ecosystem registrations", () => {
+  it("dispatches publish calls by repository kind and ecosystem", async () => {
+    const registry = new RepositoryRuntimePluginRegistry();
+    const apt = publisherReturning("apt.json");
+    registry.register({
+      kind: "hosted",
+      ecosystem: "apt",
+      name: "apt-test",
+      version: "0.0.0",
+      capabilities: ["package-index"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: publishLifecycle(apt.publisher),
+    });
+
+    await expect(registry.publish(publishInputFor({ ecosystem: "apt", kind: "proxy" }))).rejects.toThrow(
+      new ValidationError("Artifact publisher is not configured for repository kind and ecosystem: proxy apt"),
+    );
+    expect(apt.calls).toHaveLength(0);
+  });
+
+  it("rejects duplicate repository kind and ecosystem registrations", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const first = publisherReturning("first.json");
     const second = publisherReturning("second.json");
 
     registry.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-first",
       version: "1.0.0",
@@ -149,6 +183,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
 
     expect(() =>
       registry.register({
+        kind: "hosted",
         ecosystem: "apt",
         name: "apt-second",
         version: "2.0.0",
@@ -157,13 +192,31 @@ describe("RepositoryRuntimePluginRegistry", () => {
         validateRepositoryConfig: () => {},
         publish: publishLifecycle(second.publisher),
       }),
-    ).toThrow(new ValidationError("Artifact publisher is already registered for ecosystem: apt"));
+    ).toThrow(new ValidationError("Artifact publisher is already registered for repository kind and ecosystem: hosted apt"));
+  });
+
+  it("rejects runtime plugin descriptors without an explicit repository kind", () => {
+    const registry = new RepositoryRuntimePluginRegistry();
+    const apt = publisherReturning("apt.json");
+
+    expect(() =>
+      registry.register({
+        ecosystem: "apt",
+        name: "apt-test",
+        version: "0.0.0",
+        capabilities: ["package-index"],
+        canServeRepositoryPath: () => false,
+        validateRepositoryConfig: () => {},
+        publish: publishLifecycle(apt.publisher),
+      } as never),
+    ).toThrow(new ValidationError("Repository runtime plugin kind is required for ecosystem: apt"));
   });
 
   it("lists diagnostic metadata without exposing publisher instances", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const apt = publisherReturning("apt.json");
     registry.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "generic-manifest",
       version: "0.0.0",
@@ -215,6 +268,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const apt = publisherReturning("apt.json");
     registry.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-signed",
       version: "0.1.0",
@@ -227,6 +281,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     const plugin = registry.getPlugin("apt");
 
     expect(plugin?.ecosystem).toBe("apt");
+    expect(plugin?.kind).toBe("hosted");
     expect(plugin?.name).toBe("apt-signed");
     expect(plugin?.canServeRepositoryPath({ relativePath: "dists/noble/InRelease" })).toBe(true);
   });
@@ -261,6 +316,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const calls: string[] = [];
     registry.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -313,6 +369,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");
     registry.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -362,6 +419,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");
     registry.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -417,6 +475,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");
     registry.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -481,6 +540,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
 
     expect(() =>
       registry.register({
+        kind: "hosted",
         ecosystem: "apt",
         name: "apt-test",
         version: "0.0.0",
@@ -516,6 +576,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     const apt = publisherReturning("apt.json");
     const npm = publisherReturning("npm.json");
     registry.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -539,6 +600,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
 
     expect(() =>
       registry.register({
+        kind: "hosted",
         ecosystem: "npm",
         name: "npm-test",
         version: "0.0.0",
@@ -566,6 +628,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");
     registry.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",

@@ -44,6 +44,7 @@ export function createAptPlugin(input: {
   signer: AptReleaseSigner;
 }): HostedRepositoryPlugin {
   return {
+    kind: "hosted",
     ecosystem: "apt",
     name: aptPluginManifest.runtimeName,
     version: aptPluginManifest.version,

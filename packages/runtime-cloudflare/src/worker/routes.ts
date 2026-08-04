@@ -666,7 +666,7 @@ function parseRepositoryClientHelperPath(requestUrl: string): {
 }
 
 function repositoryClientHelpers(dependencies: AppDependencies, repository: Repository, namespace: string) {
-  const plugin = dependencies.repositoryRuntimePlugins.getPlugin(repository.ecosystem);
+  const plugin = dependencies.repositoryRuntimePlugins.getPluginForRepository(repository);
   const helpers = plugin?.clientHelpers;
   if (!helpers || helpers.namespace !== namespace) {
     return undefined;
@@ -800,7 +800,7 @@ async function resolveServedRepositoryPath(
   context: { relativePath: string; accept?: string },
 ): Promise<{ objectPath: string; contentType?: string }> {
   await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
-  const plugin = dependencies.repositoryRuntimePlugins.getPlugin(repository.ecosystem);
+  const plugin = dependencies.repositoryRuntimePlugins.getPluginForRepository(repository);
   // The repository root is not a path any plugin serves an object at; it is
   // the directory above the trees they do, and its listing is filtered by the
   // same rule, so nothing appears there that the plugin would not hand out.
@@ -838,7 +838,7 @@ async function handleProtocolUpload(
   if (!repository) {
     return null;
   }
-  const protocol = dependencies.repositoryRuntimePlugins.getPlugin(repository.ecosystem)?.uploadProtocol;
+  const protocol = dependencies.repositoryRuntimePlugins.getPluginForRepository(repository)?.uploadProtocol;
   if (!protocol || path.relativePath.replace(/\/+$/, "") !== protocol.path) {
     return null;
   }
@@ -934,7 +934,7 @@ async function repositoryDirectoryResponse(input: {
   relativePath: string;
   method: string;
 }): Promise<Response | null> {
-  const plugin = input.dependencies.repositoryRuntimePlugins.getPlugin(input.repository.ecosystem);
+  const plugin = input.dependencies.repositoryRuntimePlugins.getPluginForRepository(input.repository);
   if (!plugin) {
     return null;
   }
@@ -1728,7 +1728,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       if (!(error instanceof NotFoundError)) throw error;
     }
     const plugin = repository
-      ? dependencies.repositoryRuntimePlugins.getPlugin(repository.ecosystem)
+      ? dependencies.repositoryRuntimePlugins.getPluginForRepository(repository)
       : dependencies.repositoryRuntimePlugins.getPluginByAdminResourceNamespace(adminPluginResourcePath.namespace);
     if (plugin) {
       await ensureRepositoryPluginEnabled(dependencies, plugin.ecosystem, () => new NotFoundError());

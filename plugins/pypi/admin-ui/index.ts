@@ -24,6 +24,7 @@ export const pypiHostedRepositoryDetailPlugin: HostedRepositoryDetailPlugin = {
 };
 
 export const pypiHostedRepositoryUiPlugin: HostedRepositoryUiPlugin = {
+  kind: "hosted",
   manifest: pypiPluginManifest,
   create: pypiHostedRepositoryCreatePlugin,
   detail: pypiHostedRepositoryDetailPlugin,

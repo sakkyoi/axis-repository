@@ -107,6 +107,7 @@ describe("PluginPublishSessionService", () => {
     };
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -173,6 +174,7 @@ describe("PluginPublishSessionService", () => {
     let authorizeSigningKeyIds: string[] | undefined;
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -239,6 +241,7 @@ describe("PluginPublishSessionService", () => {
     });
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -292,6 +295,7 @@ describe("PluginPublishSessionService", () => {
     });
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -381,6 +385,7 @@ describe("PluginPublishSessionService", () => {
     };
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -464,6 +469,7 @@ describe("PluginRepositoryArtifactIndexService", () => {
     await state.repositoryArtifacts.upsert(indexedArtifact);
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -516,6 +522,7 @@ describe("PluginRepositoryArtifactIndexService", () => {
     const pluginCalls: string[] = [];
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
+      kind: "hosted",
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",

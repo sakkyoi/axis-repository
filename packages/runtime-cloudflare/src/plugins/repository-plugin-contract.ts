@@ -201,6 +201,7 @@ export interface RepositoryMaintenanceLifecycle {
 }
 
 export interface HostedRepositoryPlugin extends PublisherMetadata {
+  kind: "hosted";
   publish: RepositoryPublishLifecycle;
   artifacts?: RepositoryArtifactIndexLifecycle;
   maintenance?: RepositoryMaintenanceLifecycle;

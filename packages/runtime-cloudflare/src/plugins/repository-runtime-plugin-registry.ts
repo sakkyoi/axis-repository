@@ -4,6 +4,7 @@ import {
   type Ecosystem,
   type PublishArtifactsInput,
   type PublishResult,
+  type RepositoryKind,
 } from "@axis-repository/core";
 import type {
   HostedRepositoryPlugin,
@@ -47,6 +48,10 @@ function clonePlugin(descriptor: HostedRepositoryPlugin): HostedRepositoryPlugin
   };
 }
 
+function pluginKey(input: { ecosystem: Ecosystem; kind: RepositoryKind }): string {
+  return `${input.kind}:${input.ecosystem}`;
+}
+
 const ECOSYSTEM_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 /**
@@ -76,13 +81,17 @@ function validateAdminResourceRoutes(descriptor: RepositoryRuntimePluginDescript
 }
 
 export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
-  private readonly plugins = new Map<Ecosystem, HostedRepositoryPlugin>();
+  private readonly plugins = new Map<string, HostedRepositoryPlugin>();
 
   register(descriptor: RepositoryRuntimePluginDescriptor): void {
     assertRegistrableEcosystem(descriptor.ecosystem);
-    if (this.plugins.has(descriptor.ecosystem)) {
+    if (!descriptor.kind) {
+      throw new ValidationError(`Repository runtime plugin kind is required for ecosystem: ${descriptor.ecosystem}`);
+    }
+    const key = pluginKey(descriptor);
+    if (this.plugins.has(key)) {
       throw new ValidationError(
-        `Artifact publisher is already registered for ecosystem: ${descriptor.ecosystem}`,
+        `Artifact publisher is already registered for repository kind and ecosystem: ${descriptor.kind} ${descriptor.ecosystem}`,
       );
     }
     if (
@@ -96,7 +105,7 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
       );
     }
     validateAdminResourceRoutes(descriptor);
-    this.plugins.set(descriptor.ecosystem, clonePlugin(descriptor));
+    this.plugins.set(key, clonePlugin(descriptor));
   }
 
   list(): PublisherMetadata[] {
@@ -119,7 +128,13 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
   }
 
   getPlugin(ecosystem: Ecosystem): HostedRepositoryPlugin | undefined {
-    const plugin = this.plugins.get(ecosystem);
+    const plugin = this.plugins.get(pluginKey({ ecosystem, kind: "hosted" }));
+    if (!plugin) return undefined;
+    return clonePlugin(plugin);
+  }
+
+  getPluginForRepository(repository: { ecosystem: Ecosystem; kind: RepositoryKind }): HostedRepositoryPlugin | undefined {
+    const plugin = this.plugins.get(pluginKey(repository));
     if (!plugin) return undefined;
     return clonePlugin(plugin);
   }
@@ -133,20 +148,20 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
   }
 
   requirePlugin(ecosystem: Ecosystem): HostedRepositoryPlugin {
-    const plugin = this.getPlugin(ecosystem);
+    const plugin = this.plugins.get(pluginKey({ ecosystem, kind: "hosted" }));
     if (!plugin) {
       throw new ValidationError(
         `Artifact repository plugin is not configured for ecosystem: ${ecosystem}`,
       );
     }
-    return plugin;
+    return clonePlugin(plugin);
   }
 
   async publish(input: PublishArtifactsInput): Promise<PublishResult> {
-    const descriptor = this.plugins.get(input.repository.ecosystem);
+    const descriptor = this.plugins.get(pluginKey(input.repository));
     if (!descriptor) {
       throw new ValidationError(
-        `Artifact publisher is not configured for ecosystem: ${input.repository.ecosystem}`,
+        `Artifact publisher is not configured for repository kind and ecosystem: ${input.repository.kind} ${input.repository.ecosystem}`,
       );
     }
     return descriptor.publish.finalize(input);

@@ -5,7 +5,7 @@ import type {
 } from "@axis-repository/core/plugin-manifests";
 import type { ComponentType } from "react";
 import type { CreateRepositoryInput } from "../../api/client";
-import type { PublishSession, Repository, RepositoryPlugin, RepositoryVisibility } from "../../api/schemas";
+import type { PublishSession, Repository, RepositoryKind, RepositoryPlugin, RepositoryVisibility } from "../../api/schemas";
 import type { PluginLifecycleBadge, PluginLifecycleSummary } from "./plugin-lifecycle";
 
 export type RepositoryCreateStep = "plugin" | "basics" | "config" | "setup" | "review";
@@ -47,7 +47,7 @@ export type HostedRepositoryCreatePluginOption =
     }
   | {
       ecosystem: string;
-      kind?: "hosted";
+      kind: "hosted";
       displayName: string;
       description: string;
       capabilities: string[];
@@ -134,6 +134,7 @@ export interface HostedRepositoryPublishPlugin {
 export type RepositoryPublishPlugin = HostedRepositoryPublishPlugin;
 
 export interface HostedRepositoryUiPlugin {
+  kind: "hosted";
   manifest: RepositoryPluginManifest;
   create: HostedRepositoryCreatePlugin;
   detail: HostedRepositoryDetailPlugin;
@@ -145,3 +146,6 @@ export interface HostedRepositoryUiPlugin {
 
 /** @deprecated Use HostedRepositoryUiPlugin. */
 export type RepositoryUiPlugin = HostedRepositoryUiPlugin;
+
+export type RepositoryUiPluginKind = RepositoryKind;
+export type RepositoryUiPluginDescriptor = HostedRepositoryUiPlugin;

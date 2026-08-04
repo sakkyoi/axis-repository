@@ -54,6 +54,7 @@ export function createPypiPlugin(input?: {
       },
     };
   return {
+    kind: "hosted",
     ecosystem: "pypi",
     name: pypiPluginManifest.runtimeName,
     version: pypiPluginManifest.version,

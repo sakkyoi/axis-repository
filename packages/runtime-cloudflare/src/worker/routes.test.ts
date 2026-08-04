@@ -1061,6 +1061,7 @@ describe("Cloudflare runtime routes", () => {
   it("allows policy overrides for uncataloged runtime plugins reported in repository plugin metadata", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "hosted",
       ecosystem: "demo",
       name: "demo-plugin",
       version: "0.1.0",
@@ -1170,6 +1171,7 @@ describe("Cloudflare runtime routes", () => {
   it("dispatches admin repository plugin resources through the repository plugin", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "hosted",
       ecosystem: "demo",
       name: "demo-plugin",
       version: "0.1.0",
@@ -1683,6 +1685,7 @@ describe("Cloudflare runtime routes", () => {
   it("rejects apt helper routes for non-apt repositories", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "hosted",
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",
@@ -1713,6 +1716,7 @@ describe("Cloudflare runtime routes", () => {
   it("serves repository client helpers through the repository plugin namespace", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "hosted",
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",
@@ -1779,6 +1783,7 @@ describe("Cloudflare runtime routes", () => {
   it("applies repository read auth to plugin client helpers that are not public", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "hosted",
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",
@@ -1998,6 +2003,7 @@ describe("Cloudflare runtime routes", () => {
   it("serves repository objects through a non-apt registered plugin", async () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "hosted",
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",

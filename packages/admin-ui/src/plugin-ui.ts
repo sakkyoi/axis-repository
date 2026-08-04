@@ -52,6 +52,8 @@ export type {
   RepositoryPublishPreviewComponentProps,
   HostedRepositoryPublishPlugin,
   RepositoryPublishPlugin,
+  RepositoryUiPluginDescriptor,
+  RepositoryUiPluginKind,
   HostedRepositoryUiPlugin,
   RepositoryUiPlugin,
 } from "./repositories/plugins/repository-ui-plugin-types";

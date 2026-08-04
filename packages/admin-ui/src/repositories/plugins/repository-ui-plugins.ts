@@ -15,6 +15,7 @@ import type {
   HostedRepositoryDetailPlugin,
   HostedRepositoryPublishPlugin,
   HostedRepositoryUiPlugin,
+  RepositoryUiPluginDescriptor,
 } from "./repository-ui-plugin-types";
 import { aptRepositoryPluginBundle } from "@axis-repository/plugin-apt";
 import { aptHostedRepositoryUiPlugin } from "@axis-repository/plugin-apt/admin-ui";
@@ -28,6 +29,14 @@ const bundledAdminUiPlugins: Record<string, HostedRepositoryUiPlugin> = {
   pypi: pypiHostedRepositoryUiPlugin,
 };
 
+function repositoryUiPluginKey(plugin: Pick<RepositoryUiPluginDescriptor, "kind" | "manifest">): string {
+  return `${plugin.kind}:${plugin.manifest.ecosystem}`;
+}
+
+function repositoryKey(repository: Pick<Repository, "ecosystem" | "kind">): string {
+  return `${repository.kind}:${repository.ecosystem}`;
+}
+
 export const hostedRepositoryUiPlugins = [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
   .filter((plugin) => plugin.catalog.enabled && plugin.adminUi)
   .map((plugin) => {
@@ -38,6 +47,10 @@ export const hostedRepositoryUiPlugins = [aptRepositoryPluginBundle, pypiReposit
     return uiPlugin;
   }) as NonEmptyArray<HostedRepositoryUiPlugin>;
 
+const repositoryUiPluginByKindAndEcosystem = new Map<string, RepositoryUiPluginDescriptor>(
+  hostedRepositoryUiPlugins.map((plugin) => [repositoryUiPluginKey(plugin), plugin]),
+);
+
 /** @deprecated Use hostedRepositoryUiPlugins. */
 export const repositoryUiPlugins = hostedRepositoryUiPlugins;
 
@@ -47,14 +60,15 @@ function assertJsonEqual(label: string, actual: unknown, expected: unknown): voi
   }
 }
 
-export function assertHostedRepositoryUiPluginContracts(plugins: readonly HostedRepositoryUiPlugin[]): void {
-  const ecosystems = new Set<string>();
+export function assertRepositoryUiPluginContracts(plugins: readonly RepositoryUiPluginDescriptor[]): void {
+  const pluginKeys = new Set<string>();
   for (const plugin of plugins) {
     const ecosystem = plugin.manifest.ecosystem;
-    if (ecosystems.has(ecosystem)) {
-      throw new Error(`Duplicate repository UI plugin ecosystem: ${ecosystem}`);
+    const pluginKey = repositoryUiPluginKey(plugin);
+    if (pluginKeys.has(pluginKey)) {
+      throw new Error(`Duplicate repository UI plugin kind and ecosystem: ${pluginKey}`);
     }
-    ecosystems.add(ecosystem);
+    pluginKeys.add(pluginKey);
     if (plugin.create.ecosystem !== ecosystem) {
       throw new Error(`Create UI plugin ecosystem does not match manifest: ${plugin.create.ecosystem}`);
     }
@@ -63,6 +77,9 @@ export function assertHostedRepositoryUiPluginContracts(plugins: readonly Hosted
     }
     if (plugin.publish && plugin.publish.ecosystem !== ecosystem) {
       throw new Error(`Publish UI plugin ecosystem does not match manifest: ${plugin.publish.ecosystem}`);
+    }
+    if (!(plugin.manifest.repositoryKinds ?? ["hosted"]).includes(plugin.kind)) {
+      throw new Error(`UI plugin kind does not match manifest repository kinds for ecosystem ${ecosystem}: ${plugin.kind}`);
     }
     assertJsonEqual("Create UI repository config", plugin.create.repositoryConfig, plugin.manifest.repositoryConfig);
 
@@ -82,13 +99,18 @@ export function assertHostedRepositoryUiPluginContracts(plugins: readonly Hosted
   }
 }
 
-function getHostedRepositoryUiPlugin(ecosystem: string): HostedRepositoryUiPlugin | undefined {
-  return hostedRepositoryUiPlugins.find((plugin) => plugin.manifest.ecosystem === ecosystem);
+/** @deprecated Use assertRepositoryUiPluginContracts. */
+export function assertHostedRepositoryUiPluginContracts(plugins: readonly HostedRepositoryUiPlugin[]): void {
+  assertRepositoryUiPluginContracts(plugins);
 }
 
-function getRepositoryUiPlugin(repository: Pick<Repository, "ecosystem" | "kind">): HostedRepositoryUiPlugin | undefined {
-  if (repository.kind === "hosted") return getHostedRepositoryUiPlugin(repository.ecosystem);
-  return undefined;
+function getHostedRepositoryUiPlugin(ecosystem: string): HostedRepositoryUiPlugin | undefined {
+  const plugin = repositoryUiPluginByKindAndEcosystem.get(`hosted:${ecosystem}`);
+  return plugin?.kind === "hosted" ? plugin : undefined;
+}
+
+function getRepositoryUiPlugin(repository: Pick<Repository, "ecosystem" | "kind">): RepositoryUiPluginDescriptor | undefined {
+  return repositoryUiPluginByKindAndEcosystem.get(repositoryKey(repository));
 }
 
 function creatableRepositoryKind(plugin: Pick<RepositoryPlugin, "repositoryKinds">): "hosted" | undefined {
@@ -158,6 +180,7 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
     if (serverPlugin.enabled === false) {
       return {
         ecosystem: serverPlugin.ecosystem,
+        kind: "hosted",
         displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
         description: disabledPluginCreateDescription(serverPlugin),
         capabilities: [...serverPlugin.capabilities],
@@ -170,6 +193,7 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
     if (serverPlugin.runtime === false) {
       return {
         ecosystem: serverPlugin.ecosystem,
+        kind: "hosted",
         displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
         description: "Server plugin has no runtime support.",
         capabilities: [...serverPlugin.capabilities],
@@ -182,6 +206,7 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
     if (!createKind) {
       return {
         ecosystem: serverPlugin.ecosystem,
+        kind: "hosted",
         displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
         description: "No admin UI create adapter is registered for this plugin's repository kinds yet.",
         capabilities: [...serverPlugin.capabilities],
@@ -205,6 +230,7 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
     }
     return {
       ecosystem: serverPlugin.ecosystem,
+      kind: "hosted",
       displayName: serverPlugin.ecosystem,
       description: "Server plugin is enabled, but this admin UI cannot create it yet.",
       capabilities: [...serverPlugin.capabilities],

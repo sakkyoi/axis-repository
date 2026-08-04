@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { aptPluginManifest } from "@axis-repository/plugin-apt/manifest";
 import { pypiPluginManifest } from "@axis-repository/plugin-pypi/manifest";
 
-import { assertHostedRepositoryUiPluginContracts } from "./repository-ui-plugins";
 import {
+  assertRepositoryUiPluginContracts,
   getPublishTokenScopeExtension,
   getRepositoryCreateFieldRenderers,
   getHostedRepositoryCreatePlugin,
@@ -11,6 +11,8 @@ import {
   getHostedRepositoryDetailPlugin,
   getRepositoryPluginManifest,
   getHostedRepositoryPublishPlugin,
+  getRepositoryDetailPlugin,
+  getRepositoryPublishPlugin,
   hostedRepositoryCreatePluginsFromUiRegistry,
   hostedRepositoryDetailPluginsFromUiRegistry,
   hostedRepositoryUiPlugins,
@@ -20,6 +22,7 @@ import {
 describe("repository UI plugin registry", () => {
   it("registers each ecosystem once with both create and detail UI support", () => {
     expect(hostedRepositoryUiPlugins.map((plugin) => plugin.manifest.ecosystem)).toEqual(["apt", "pypi"]);
+    expect(hostedRepositoryUiPlugins.map((plugin) => plugin.kind)).toEqual(["hosted", "hosted"]);
     expect(hostedRepositoryUiPlugins.map((plugin) => [plugin.create.ecosystem, plugin.detail.ecosystem])).toEqual([
       ["apt", "apt"],
       ["pypi", "pypi"],
@@ -27,7 +30,7 @@ describe("repository UI plugin registry", () => {
   });
 
   it("keeps UI plugin extensions aligned with their shared manifests", () => {
-    expect(() => assertHostedRepositoryUiPluginContracts(hostedRepositoryUiPlugins)).not.toThrow();
+    expect(() => assertRepositoryUiPluginContracts(hostedRepositoryUiPlugins)).not.toThrow();
   });
 
   it("keeps UI plugin ecosystems aligned with shared core manifests", () => {
@@ -116,6 +119,25 @@ describe("repository UI plugin registry", () => {
         { label: "Runtime", variant: "default" },
       ],
     });
+  });
+
+  it("dispatches repository UI plugins by repository kind and ecosystem", () => {
+    expect(getRepositoryDetailPlugin({
+      ecosystem: "apt",
+      kind: "hosted",
+    })?.ecosystem).toBe("apt");
+    expect(getRepositoryPublishPlugin({
+      ecosystem: "apt",
+      kind: "hosted",
+    })?.PreviewComponent).toBeTypeOf("function");
+    expect(getRepositoryDetailPlugin({
+      ecosystem: "apt",
+      kind: "proxy",
+    })).toBeUndefined();
+    expect(getRepositoryPublishPlugin({
+      ecosystem: "apt",
+      kind: "group",
+    })).toBeUndefined();
   });
 
   it("reports when no create adapter is registered for the plugin repository kinds", () => {

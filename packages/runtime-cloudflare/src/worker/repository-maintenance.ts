@@ -43,7 +43,7 @@ export async function runRepositoryMaintenance(input: {
   const dueTimes: number[] = [];
 
   for (const repository of input.repositories) {
-    const maintenance = input.plugins.getPlugin(repository.ecosystem)?.maintenance;
+    const maintenance = input.plugins.getPluginForRepository(repository)?.maintenance;
     if (!maintenance) {
       continue;
     }

@@ -27,7 +27,9 @@ function repository(name: string, ecosystem = "apt"): Repository {
 
 function registry(plugins: Record<string, Partial<HostedRepositoryPlugin>>) {
   return {
-    getPlugin: (ecosystem: string) => plugins[ecosystem] as HostedRepositoryPlugin | undefined,
+    getPluginForRepository: (repository: Repository) => {
+      return plugins[`${repository.kind}:${repository.ecosystem}`] as HostedRepositoryPlugin | undefined;
+    },
   } as never;
 }
 
@@ -42,7 +44,7 @@ describe("runRepositoryMaintenance", () => {
     const run = await runRepositoryMaintenance({
       repositories: [repository("early"), repository("late")],
       plugins: registry({
-        apt: maintenancePlugin(async () => ({
+        "hosted:apt": maintenancePlugin(async () => ({
           refreshed: [],
           nextDueAt: new Date(NOW.getTime() + 60 * 60 * 1000),
         })),
@@ -59,7 +61,7 @@ describe("runRepositoryMaintenance", () => {
   it("still comes back when nothing is due, so a config change is picked up", async () => {
     const run = await runRepositoryMaintenance({
       repositories: [repository("idle")],
-      plugins: registry({ apt: maintenancePlugin(async () => ({ refreshed: [] })) }),
+      plugins: registry({ "hosted:apt": maintenancePlugin(async () => ({ refreshed: [] })) }),
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
@@ -73,7 +75,7 @@ describe("runRepositoryMaintenance", () => {
     const run = await runRepositoryMaintenance({
       repositories: [repository("overdue")],
       plugins: registry({
-        apt: maintenancePlugin(async () => ({
+        "hosted:apt": maintenancePlugin(async () => ({
           refreshed: ["noble"],
           nextDueAt: new Date(NOW.getTime() - 10_000),
         })),
@@ -93,8 +95,8 @@ describe("runRepositoryMaintenance", () => {
     const run = await runRepositoryMaintenance({
       repositories: [repository("broken"), repository("healthy", "pypi")],
       plugins: registry({
-        apt: maintenancePlugin(() => Promise.reject(new Error("signing key revoked"))),
-        pypi: maintenancePlugin(async () => ({
+        "hosted:apt": maintenancePlugin(() => Promise.reject(new Error("signing key revoked"))),
+        "hosted:pypi": maintenancePlugin(async () => ({
           refreshed: ["noble"],
           nextDueAt: new Date(NOW.getTime() + 120_000),
         })),
@@ -113,7 +115,7 @@ describe("runRepositoryMaintenance", () => {
   it("skips ecosystems whose plugin has nothing to maintain", async () => {
     const run = await runRepositoryMaintenance({
       repositories: [repository("pypi-only", "pypi")],
-      plugins: registry({ pypi: {} }),
+      plugins: registry({ "hosted:pypi": {} }),
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,

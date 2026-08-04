@@ -41,6 +41,7 @@ describe("ecosystem ids that namespace ownership depends on", () => {
   it("refuses ids that could swallow another plugin's namespaces", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const descriptor = {
+      kind: "hosted" as const,
       ecosystem: "apt.extra",
       name: "apt-extra",
       version: "0.0.0",

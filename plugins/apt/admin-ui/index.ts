@@ -25,6 +25,7 @@ export const aptHostedRepositoryDetailPlugin: HostedRepositoryDetailPlugin = {
 };
 
 export const aptHostedRepositoryUiPlugin: HostedRepositoryUiPlugin = {
+  kind: "hosted",
   manifest: aptPluginManifest,
   create: aptHostedRepositoryCreatePlugin,
   detail: aptHostedRepositoryDetailPlugin,
