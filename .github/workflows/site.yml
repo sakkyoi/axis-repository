@@ -62,14 +62,14 @@ jobs:
           {
             echo "variant=$VARIANT"
             echo "pages_branch=$PAGES_BRANCH"
-            echo "preview_url=https://$PAGES_BRANCH.axis-site.pages.dev"
+            echo "preview_url=https://$PAGES_BRANCH.axis-repository.pages.dev"
           } >> "$GITHUB_OUTPUT"
 
       - name: Build site
         run: pnpm --filter @axis-repository/site build
 
       - name: Deploy to Cloudflare Pages
-        run: pnpm --filter @axis-repository/site exec wrangler pages deploy dist --project-name=axis-site --branch=${{ steps.variant.outputs.pages_branch }}
+        run: pnpm --filter @axis-repository/site exec wrangler pages deploy dist --project-name=axis-repository --branch=${{ steps.variant.outputs.pages_branch }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
