@@ -31,8 +31,8 @@ import {
   getRepositoryCreateFieldRenderers,
   getHostedRepositoryCreatePlugin,
   getRepositoryPluginManifest,
+  hostedRepositoryCreatePluginsFromUiRegistry,
   repositoryCreatePluginOptionsFromUiRegistry,
-  repositoryCreatePluginsFromUiRegistry,
 } from "../repositories/plugins/repository-ui-plugins";
 import { repositoryConfigFieldsForStep } from "../repositories/create/repository-create-field-model";
 import { RepositoryConfigFields } from "../repositories/create/repository-create-field-renderer";
@@ -59,8 +59,8 @@ export function NewRepositoryPage() {
     () => repositoryCreatePluginOptionsFromUiRegistry(repositoryPlugins.data ?? []),
     [repositoryPlugins.data],
   );
-  const repositoryCreatePlugins = repositoryCreatePluginsFromUiRegistry();
-  const firstSupportedPlugin = pluginOptions.find((option) => option.supported)?.plugin ?? repositoryCreatePlugins[0];
+  const hostedRepositoryCreatePlugins = hostedRepositoryCreatePluginsFromUiRegistry();
+  const firstSupportedPlugin = pluginOptions.find((option) => option.supported)?.plugin ?? hostedRepositoryCreatePlugins[0];
   const [selectedEcosystem, setSelectedEcosystem] = useState(firstSupportedPlugin.ecosystem);
   const selectedOption = pluginOptions.find((option) => option.ecosystem === selectedEcosystem && option.supported);
   const plugin = selectedOption?.supported ? selectedOption.plugin : firstSupportedPlugin;

@@ -6,13 +6,28 @@ import {
   repositorySummarySectionsFor,
   repositoryWorkspaceSectionsFor,
   repositoryClientHelperDisplayText,
-  repositoryDetailPlugins,
+  hostedRepositoryDetailPlugins,
 } from "./repository-detail-plugins";
+import type { Repository } from "../../api/schemas";
 import { pypiInstallCommandText, pypiSimpleIndexUrl } from "@axis-repository/plugin-pypi/admin-ui/detail";
+
+function repository(input: Partial<Repository> = {}): Repository {
+  return {
+    id: "repo_1",
+    name: "debian-internal",
+    ecosystem: "apt",
+    kind: "hosted",
+    visibility: "private",
+    config: {},
+    createdAt: "2026-07-18T00:00:00.000Z",
+    updatedAt: "2026-07-18T00:00:00.000Z",
+    ...input,
+  };
+}
 
 describe("repository detail plugins", () => {
   it("exposes APT as a repository detail plugin", () => {
-    expect(repositoryDetailPlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
+    expect(hostedRepositoryDetailPlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
     expect(getHostedRepositoryDetailPlugin("apt")).toMatchObject({
       ecosystem: "apt",
     });
@@ -70,32 +85,38 @@ describe("repository detail plugins", () => {
   });
 
   it("splits repository workspace sections from settings sections", () => {
-    expect(repositoryWorkspaceSectionsFor("apt").map((section) => section.id)).toEqual([
+    expect(repositoryWorkspaceSectionsFor(repository({ ecosystem: "apt" })).map((section) => section.id)).toEqual([
       "repository-artifacts",
       "repository-browser",
       "client-helpers",
     ]);
-    expect(repositorySettingsSectionsFor("apt").map((section) => section.id)).toEqual([
+    expect(repositorySettingsSectionsFor(repository({ ecosystem: "apt" })).map((section) => section.id)).toEqual([
       "settings",
       "advanced-json",
       "signing-keys",
     ]);
-    expect(repositoryWorkspaceSectionsFor("pypi").map((section) => section.id)).toEqual([
+    expect(repositoryWorkspaceSectionsFor(repository({ ecosystem: "pypi" })).map((section) => section.id)).toEqual([
       "repository-artifacts",
       "repository-browser",
       "client-helpers",
       "install-hints",
       "project-files",
     ]);
-    expect(repositorySettingsSectionsFor("pypi").map((section) => section.id)).toEqual([
+    expect(repositorySettingsSectionsFor(repository({ ecosystem: "pypi" })).map((section) => section.id)).toEqual([
       "settings",
     ]);
   });
 
   it("lets plugins choose sections for the readonly repository summary", () => {
-    expect(repositorySummarySectionsFor("apt").map((section) => section.id)).toEqual(["client-helpers"]);
-    expect(repositorySummarySectionsFor("pypi").map((section) => section.id)).toEqual(["install-hints"]);
-    expect(repositorySummarySectionsFor("unknown").map((section) => section.id)).toEqual([]);
+    expect(repositorySummarySectionsFor(repository({ ecosystem: "apt" })).map((section) => section.id)).toEqual(["client-helpers"]);
+    expect(repositorySummarySectionsFor(repository({ ecosystem: "pypi" })).map((section) => section.id)).toEqual(["install-hints"]);
+    expect(repositorySummarySectionsFor(repository({ ecosystem: "unknown" })).map((section) => section.id)).toEqual([]);
+  });
+
+  it("does not apply hosted detail sections to non-hosted repositories", () => {
+    expect(repositoryWorkspaceSectionsFor(repository({ kind: "proxy" })).map((section) => section.id)).toEqual([]);
+    expect(repositorySettingsSectionsFor(repository({ kind: "group" })).map((section) => section.id)).toEqual([]);
+    expect(repositorySummarySectionsFor(repository({ kind: "proxy" })).map((section) => section.id)).toEqual([]);
   });
 
   it("builds PyPI client setup text from a repository", () => {

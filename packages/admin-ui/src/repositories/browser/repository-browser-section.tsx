@@ -42,7 +42,7 @@ export function RepositoryBrowserSection({
   const artifacts = useRepositoryArtifacts(repository.name);
   const deleteObject = useDeleteRepositoryObject(repository.name);
   const toast = useToast();
-  const publishPlugin = getHostedRepositoryPublishPlugin(repository.ecosystem);
+  const publishPlugin = repository.kind === "hosted" ? getHostedRepositoryPublishPlugin(repository.ecosystem) : undefined;
   const PreviewComponent = publishPlugin?.PreviewComponent;
   const rows = objects.data ? repositoryBrowserRows(objects.data) : [];
   const layout = repositoryBrowserLayoutClasses();

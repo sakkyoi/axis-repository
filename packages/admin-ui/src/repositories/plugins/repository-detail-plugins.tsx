@@ -4,18 +4,21 @@ import {
   RepositorySettingsSection,
   repositoryClientHelperDisplayText,
 } from "../detail/repository-detail-shared";
+import type { Repository } from "../../api/schemas";
 import { RepositoryBrowserSection } from "../browser/repository-browser-section";
 import { RepositoryArtifactsSection } from "../artifacts/repository-artifacts-section";
 import { RepositoryPublishSection } from "../publish/repository-publish-section";
 import type { HostedRepositoryDetailPlugin, RepositoryDetailSection } from "./repository-ui-plugin-types";
 import {
   getHostedRepositoryDetailPlugin as getHostedRepositoryDetailPluginFromRegistry,
-  repositoryDetailPluginsFromUiRegistry,
+  hostedRepositoryDetailPluginsFromUiRegistry,
 } from "./repository-ui-plugins";
 
 export type { HostedRepositoryDetailPlugin, RepositoryDetailSection, RepositoryDetailSectionProps } from "./repository-ui-plugin-types";
 
-export const repositoryDetailPlugins = repositoryDetailPluginsFromUiRegistry();
+export const hostedRepositoryDetailPlugins = hostedRepositoryDetailPluginsFromUiRegistry();
+/** @deprecated Use hostedRepositoryDetailPlugins. */
+export const repositoryDetailPlugins = hostedRepositoryDetailPlugins;
 
 export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
   { id: "settings", title: "Repository settings", placement: "settings", Component: RepositorySettingsSection },
@@ -29,8 +32,9 @@ export function getHostedRepositoryDetailPlugin(ecosystem: string): HostedReposi
   return plugin ? normalizeHostedRepositoryDetailPlugin(plugin) : undefined;
 }
 
-function repositoryDetailSectionsFor(ecosystem: string): RepositoryDetailSection[] {
-  const sections = getHostedRepositoryDetailPlugin(ecosystem)?.sections ?? genericRepositoryDetailSections;
+function repositoryDetailSectionsFor(repository: Repository): RepositoryDetailSection[] {
+  if (repository.kind !== "hosted") return [];
+  const sections = getHostedRepositoryDetailPlugin(repository.ecosystem)?.sections ?? genericRepositoryDetailSections;
   return normalizeRepositoryDetailSections(sections);
 }
 
@@ -69,16 +73,16 @@ function normalizeRepositoryDetailSections(sections: RepositoryDetailSection[]):
   ];
 }
 
-export function repositoryWorkspaceSectionsFor(ecosystem: string): RepositoryDetailSection[] {
-  return repositoryDetailSectionsFor(ecosystem).filter((section) => section.placement === "workspace");
+export function repositoryWorkspaceSectionsFor(repository: Repository): RepositoryDetailSection[] {
+  return repositoryDetailSectionsFor(repository).filter((section) => section.placement === "workspace");
 }
 
-export function repositorySummarySectionsFor(ecosystem: string): RepositoryDetailSection[] {
-  return repositoryDetailSectionsFor(ecosystem).filter((section) => section.summary === true);
+export function repositorySummarySectionsFor(repository: Repository): RepositoryDetailSection[] {
+  return repositoryDetailSectionsFor(repository).filter((section) => section.summary === true);
 }
 
-export function repositorySettingsSectionsFor(ecosystem: string): RepositoryDetailSection[] {
-  return repositoryDetailSectionsFor(ecosystem).filter((section) => section.placement === "settings");
+export function repositorySettingsSectionsFor(repository: Repository): RepositoryDetailSection[] {
+  return repositoryDetailSectionsFor(repository).filter((section) => section.placement === "settings");
 }
 
 export {

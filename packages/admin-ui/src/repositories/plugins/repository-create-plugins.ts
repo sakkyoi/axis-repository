@@ -5,7 +5,7 @@ import type {
 } from "./repository-ui-plugin-types";
 import {
   getRepositoryCreateServerErrorMapper,
-  repositoryCreatePluginsFromUiRegistry,
+  hostedRepositoryCreatePluginsFromUiRegistry,
 } from "./repository-ui-plugins";
 
 export type {
@@ -16,7 +16,9 @@ export type {
   RepositoryCreateWizardState,
 } from "./repository-ui-plugin-types";
 
-export const repositoryCreatePlugins = repositoryCreatePluginsFromUiRegistry();
+export const hostedRepositoryCreatePlugins = hostedRepositoryCreatePluginsFromUiRegistry();
+/** @deprecated Use hostedRepositoryCreatePlugins. */
+export const repositoryCreatePlugins = hostedRepositoryCreatePlugins;
 export { repositoryCreateStepsForConfig } from "../create/repository-create-steps";
 
 /**

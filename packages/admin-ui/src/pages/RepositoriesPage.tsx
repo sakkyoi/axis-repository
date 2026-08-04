@@ -170,7 +170,7 @@ function RepositoryDetail({
   const navigate = useNavigate();
   const lifecycle = pluginMetadata ? pluginLifecycleSummary(pluginMetadata) : undefined;
   const summaryItems = repositorySummaryItems(repository);
-  const summarySections = repositorySummarySectionsFor(repository.ecosystem);
+  const summarySections = repositorySummarySectionsFor(repository);
 
   const body = (
       <div className={repositoryDetailBodyClass(framed)}>

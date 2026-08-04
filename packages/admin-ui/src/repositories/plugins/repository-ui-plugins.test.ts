@@ -11,27 +11,27 @@ import {
   getHostedRepositoryDetailPlugin,
   getRepositoryPluginManifest,
   getHostedRepositoryPublishPlugin,
+  hostedRepositoryCreatePluginsFromUiRegistry,
+  hostedRepositoryDetailPluginsFromUiRegistry,
+  hostedRepositoryUiPlugins,
   repositoryCreatePluginOptionsFromUiRegistry,
-  repositoryCreatePluginsFromUiRegistry,
-  repositoryDetailPluginsFromUiRegistry,
-  repositoryUiPlugins,
 } from "./repository-ui-plugins";
 
 describe("repository UI plugin registry", () => {
   it("registers each ecosystem once with both create and detail UI support", () => {
-    expect(repositoryUiPlugins.map((plugin) => plugin.manifest.ecosystem)).toEqual(["apt", "pypi"]);
-    expect(repositoryUiPlugins.map((plugin) => [plugin.create.ecosystem, plugin.detail.ecosystem])).toEqual([
+    expect(hostedRepositoryUiPlugins.map((plugin) => plugin.manifest.ecosystem)).toEqual(["apt", "pypi"]);
+    expect(hostedRepositoryUiPlugins.map((plugin) => [plugin.create.ecosystem, plugin.detail.ecosystem])).toEqual([
       ["apt", "apt"],
       ["pypi", "pypi"],
     ]);
   });
 
   it("keeps UI plugin extensions aligned with their shared manifests", () => {
-    expect(() => assertHostedRepositoryUiPluginContracts(repositoryUiPlugins)).not.toThrow();
+    expect(() => assertHostedRepositoryUiPluginContracts(hostedRepositoryUiPlugins)).not.toThrow();
   });
 
   it("keeps UI plugin ecosystems aligned with shared core manifests", () => {
-    expect(repositoryUiPlugins.map((plugin) => plugin.manifest.ecosystem)).toEqual([
+    expect(hostedRepositoryUiPlugins.map((plugin) => plugin.manifest.ecosystem)).toEqual([
       aptPluginManifest.ecosystem,
       pypiPluginManifest.ecosystem,
     ]);
@@ -48,8 +48,8 @@ describe("repository UI plugin registry", () => {
   });
 
   it("provides create and detail registry views from the same UI plugin entries", () => {
-    expect(repositoryCreatePluginsFromUiRegistry()).toEqual(repositoryUiPlugins.map((plugin) => plugin.create));
-    expect(repositoryDetailPluginsFromUiRegistry()).toEqual(repositoryUiPlugins.map((plugin) => plugin.detail));
+    expect(hostedRepositoryCreatePluginsFromUiRegistry()).toEqual(hostedRepositoryUiPlugins.map((plugin) => plugin.create));
+    expect(hostedRepositoryDetailPluginsFromUiRegistry()).toEqual(hostedRepositoryUiPlugins.map((plugin) => plugin.detail));
   });
 
   it("returns undefined for ecosystems without local UI support", () => {
@@ -115,6 +115,36 @@ describe("repository UI plugin registry", () => {
         { label: "Runtime", variant: "default" },
       ],
     });
+  });
+
+  it("does not offer create UI for plugins that do not support hosted repositories", () => {
+    const options = repositoryCreatePluginOptionsFromUiRegistry([
+      {
+        ecosystem: "apt",
+        name: "apt-signed",
+        version: "0.1.0",
+        enabled: true,
+        experimental: false,
+        runtime: true,
+        adminUi: true,
+        capabilities: ["signed-release"],
+        repositoryKinds: ["proxy"],
+      },
+    ]);
+
+    expect(options).toMatchObject([{
+      ecosystem: "apt",
+      displayName: "APT",
+      description: "This admin UI can only create hosted repositories for this plugin.",
+      capabilities: ["signed-release"],
+      lifecycle: { availability: "available", label: "Available" },
+      badges: [
+        { label: "Available", variant: "success" },
+        { label: "Runtime", variant: "default" },
+        { label: "Admin UI", variant: "default" },
+      ],
+      supported: false,
+    }]);
   });
 
   it("lets ecosystem UI plugins map create errors for their own config and setup", () => {

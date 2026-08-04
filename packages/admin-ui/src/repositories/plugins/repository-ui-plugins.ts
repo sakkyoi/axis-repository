@@ -28,7 +28,7 @@ const bundledAdminUiPlugins: Record<string, HostedRepositoryUiPlugin> = {
   pypi: pypiHostedRepositoryUiPlugin,
 };
 
-export const repositoryUiPlugins = [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
+export const hostedRepositoryUiPlugins = [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
   .filter((plugin) => plugin.catalog.enabled && plugin.adminUi)
   .map((plugin) => {
     const uiPlugin = bundledAdminUiPlugins[plugin.manifest.ecosystem];
@@ -37,6 +37,9 @@ export const repositoryUiPlugins = [aptRepositoryPluginBundle, pypiRepositoryPlu
     }
     return uiPlugin;
   }) as NonEmptyArray<HostedRepositoryUiPlugin>;
+
+/** @deprecated Use hostedRepositoryUiPlugins. */
+export const repositoryUiPlugins = hostedRepositoryUiPlugins;
 
 function assertJsonEqual(label: string, actual: unknown, expected: unknown): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -80,7 +83,11 @@ export function assertHostedRepositoryUiPluginContracts(plugins: readonly Hosted
 }
 
 function getHostedRepositoryUiPlugin(ecosystem: string): HostedRepositoryUiPlugin | undefined {
-  return repositoryUiPlugins.find((plugin) => plugin.manifest.ecosystem === ecosystem);
+  return hostedRepositoryUiPlugins.find((plugin) => plugin.manifest.ecosystem === ecosystem);
+}
+
+function supportsHostedRepositories(plugin: Pick<RepositoryPlugin, "repositoryKinds">): boolean {
+  return plugin.repositoryKinds.includes("hosted");
 }
 
 export function getRepositoryPluginManifest(ecosystem: string): RepositoryPluginManifest | undefined {
@@ -113,17 +120,23 @@ export function getRepositoryCreateServerErrorMapper(
   return getHostedRepositoryUiPlugin(ecosystem)?.mapCreateServerError;
 }
 
-export function repositoryCreatePluginsFromUiRegistry(): NonEmptyArray<HostedRepositoryCreatePlugin> {
-  return repositoryUiPlugins.map((plugin) => plugin.create) as NonEmptyArray<HostedRepositoryCreatePlugin>;
+export function hostedRepositoryCreatePluginsFromUiRegistry(): NonEmptyArray<HostedRepositoryCreatePlugin> {
+  return hostedRepositoryUiPlugins.map((plugin) => plugin.create) as NonEmptyArray<HostedRepositoryCreatePlugin>;
 }
 
-export function repositoryDetailPluginsFromUiRegistry(): HostedRepositoryDetailPlugin[] {
-  return repositoryUiPlugins.map((plugin) => plugin.detail);
+/** @deprecated Use hostedRepositoryCreatePluginsFromUiRegistry. */
+export const repositoryCreatePluginsFromUiRegistry = hostedRepositoryCreatePluginsFromUiRegistry;
+
+export function hostedRepositoryDetailPluginsFromUiRegistry(): HostedRepositoryDetailPlugin[] {
+  return hostedRepositoryUiPlugins.map((plugin) => plugin.detail);
 }
+
+/** @deprecated Use hostedRepositoryDetailPluginsFromUiRegistry. */
+export const repositoryDetailPluginsFromUiRegistry = hostedRepositoryDetailPluginsFromUiRegistry;
 
 export function repositoryCreatePluginOptionsFromUiRegistry(
   serverPlugins: RepositoryPlugin[],
-  localPlugins: readonly HostedRepositoryUiPlugin[] = repositoryUiPlugins,
+  localPlugins: readonly HostedRepositoryUiPlugin[] = hostedRepositoryUiPlugins,
 ): HostedRepositoryCreatePluginOption[] {
   return serverPlugins.map((serverPlugin) => {
     const localPlugin = localPlugins.find((candidate) => candidate.manifest.ecosystem === serverPlugin.ecosystem);
@@ -146,6 +159,17 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
         ecosystem: serverPlugin.ecosystem,
         displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
         description: "Server plugin has no runtime support.",
+        capabilities: [...serverPlugin.capabilities],
+        lifecycle,
+        badges,
+        supported: false,
+      };
+    }
+    if (!supportsHostedRepositories(serverPlugin)) {
+      return {
+        ecosystem: serverPlugin.ecosystem,
+        displayName: localPlugin?.manifest.displayName ?? serverPlugin.ecosystem,
+        description: "This admin UI can only create hosted repositories for this plugin.",
         capabilities: [...serverPlugin.capabilities],
         lifecycle,
         badges,

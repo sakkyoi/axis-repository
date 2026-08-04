@@ -98,5 +98,8 @@ export const aptHostedRepositoryCreatePlugin: HostedRepositoryCreatePlugin = {
     }
     return [];
   },
-  buildCreateInput: (state) => buildCreateAptRepositoryInput(aptFormValues(state)),
+  buildCreateInput: (state) => ({
+    ...buildCreateAptRepositoryInput(aptFormValues(state)),
+    kind: "hosted",
+  }),
 };

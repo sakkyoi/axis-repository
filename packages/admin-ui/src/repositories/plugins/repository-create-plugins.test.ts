@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  hostedRepositoryCreatePlugins,
   repositoryCreateAvailabilityError,
   repositoryCreateFieldErrors,
-  repositoryCreatePlugins,
   repositoryCreateStepForServerError,
 } from "./repository-create-plugins";
 import {
@@ -11,7 +11,7 @@ import {
 
 describe("repository create plugins", () => {
   it("exposes APT as a wizard plugin with config and setup steps", () => {
-    expect(repositoryCreatePlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
+    expect(hostedRepositoryCreatePlugins.map((plugin) => plugin.ecosystem)).toEqual(["apt", "pypi"]);
     expect(getHostedRepositoryCreatePlugin("apt")!).toMatchObject({
       ecosystem: "apt",
       steps: ["plugin", "basics", "config", "setup", "review"],
@@ -56,6 +56,7 @@ describe("repository create plugins", () => {
     })).toEqual({
       name: "debian-internal",
       ecosystem: "apt",
+      kind: "hosted",
       visibility: "private",
       config: {
         apt: {
@@ -86,6 +87,7 @@ describe("repository create plugins", () => {
     })).toEqual({
       name: "python-internal",
       ecosystem: "pypi",
+      kind: "hosted",
       visibility: "private",
       config: {
         pypi: {},

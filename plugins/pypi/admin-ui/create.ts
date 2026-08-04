@@ -21,6 +21,7 @@ export const pypiHostedRepositoryCreatePlugin: HostedRepositoryCreatePlugin = {
   buildCreateInput: (state) => ({
     name: state.name,
     ecosystem: pypiPluginManifest.ecosystem,
+    kind: "hosted",
     visibility: state.visibility,
     config: {
       [pypiPluginManifest.repositoryConfig.namespace]: {},

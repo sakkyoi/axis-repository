@@ -6,7 +6,7 @@ export function RepositoryPublishSection({
   repository,
   pluginMetadata,
 }: RepositoryDetailSectionProps) {
-  const publishPlugin = getHostedRepositoryPublishPlugin(repository.ecosystem);
+  const publishPlugin = repository.kind === "hosted" ? getHostedRepositoryPublishPlugin(repository.ecosystem) : undefined;
   const PreviewComponent = publishPlugin?.PreviewComponent;
   return (
     <div className="grid gap-2">

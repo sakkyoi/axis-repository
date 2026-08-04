@@ -57,7 +57,7 @@ export function RepositoryWorkspacePage() {
   const repositoryPlugins = useRepositoryPlugins();
   const repository = useRepositoryByName(repositories.data, name);
   const pluginMetadata = repositoryPlugins.data?.find((plugin) => plugin.ecosystem === repository?.ecosystem);
-  const publishPlugin = repository ? getHostedRepositoryPublishPlugin(repository.ecosystem) : undefined;
+  const publishPlugin = repository?.kind === "hosted" ? getHostedRepositoryPublishPlugin(repository.ecosystem) : undefined;
   const PreviewComponent = publishPlugin?.PreviewComponent;
   const overlay = repository
     ? repositoryBrowserUploadOverlay({
@@ -167,7 +167,7 @@ export function RepositoryWorkspacePage() {
             )}
           </>
         ) : undefined}
-        sections={repository ? repositoryWorkspaceSectionsFor(repository.ecosystem) : []}
+        sections={repository ? repositoryWorkspaceSectionsFor(repository) : []}
         {...(repository && PreviewComponent ? { onPublishFiles: handlePublishFiles } : {})}
       />
       {repository && (
@@ -275,7 +275,7 @@ export function RepositorySettingsPage() {
             Repository
           </Button>
         ) : undefined}
-        sections={repository ? repositorySettingsSectionsFor(repository.ecosystem) : []}
+        sections={repository ? repositorySettingsSectionsFor(repository) : []}
         afterSections={repository ? (
           <section className="grid gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
             <div>
