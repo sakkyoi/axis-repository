@@ -53,3 +53,8 @@ area/runtime-cloudflare:
       - any-glob-to-any-file:
           - packages/runtime-cloudflare/**
           - wrangler.jsonc
+
+area/site:
+  - changed-files:
+      - any-glob-to-any-file:
+          - apps/site/**

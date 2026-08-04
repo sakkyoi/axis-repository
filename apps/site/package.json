@@ -1,0 +1,35 @@
+{
+  "name": "@axis-repository/site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "check": "astro check",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@astrojs/starlight": "^0.41.6",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
+    "@iconify-json/lucide": "^1.2.121",
+    "@iconify-json/mdi": "^1.2.3",
+    "@iconify-json/simple-icons": "^1.2.93",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.1.6",
+    "astro-icon": "^1.1.5",
+    "astro-theme-toggle": "^0.8.1",
+    "eslint": "^10.8.0",
+    "eslint-plugin-astro": "^3.1.0",
+    "starlight-site-graph": "^0.5.0",
+    "starlight-theme-rapide": "^0.5.2",
+    "starlight-versions": "^0.9.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.118.0"
+  }
+}

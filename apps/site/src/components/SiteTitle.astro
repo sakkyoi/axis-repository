@@ -1,0 +1,55 @@
+---
+// Starlight's own logo config expects a src/-relative path it can run
+// through Astro's image pipeline; these marks live in public/ instead (so
+// the favicon links and the marketing nav's plain <img> tags can reference
+// them as stable, unprocessed URLs), which is why this overrides SiteTitle
+// directly rather than using that config option.
+// This project's tsconfig sets `types: ["astro/client"]`, which keeps other
+// ambient globals (e.g. from other workspace packages) out of Astro files --
+// but it also means Starlight's own `App.Locals` augmentation for
+// `starlightRoute` never gets picked up here, even though it's set correctly
+// at runtime by Starlight's middleware.
+const { siteTitle, siteTitleHref } = (Astro.locals as unknown as { starlightRoute: { siteTitle: string; siteTitleHref: string } })
+  .starlightRoute;
+---
+
+<a href={siteTitleHref} class="site-title sl-flex">
+  <img src="/logo-mark-dark.svg" alt="" width="24" height="24" class="light:sl-hidden" />
+  <img src="/logo-mark-light.svg" alt="" width="24" height="24" class="dark:sl-hidden" />
+  <span translate="no">{siteTitle}</span>
+</a>
+
+<style>
+  .site-title {
+    /* Matches the marketing nav's wordmark -- a brand mark, worth keeping
+       in the same display font even though the rest of the docs' own
+       typography stays on starlight-theme-rapide's reading-tuned fonts.
+       --font-site-title is registered in astro.config.mjs's `fonts` option
+       and rendered via <Font /> in Head.astro, which already expands to
+       the family plus an auto-generated, metrics-matched fallback. */
+    font-family: var(--font-site-title);
+    align-items: center;
+    color: var(--sl-color-text-accent);
+    font-size: var(--sl-text-h4);
+    font-weight: 600;
+    /* --sl-nav-gap (Starlight's default here) is sized for spacing between
+       whole header sections, not a logo sitting right next to its own
+       wordmark -- matches the marketing nav's gap-2 instead. */
+    gap: 0.5rem;
+    min-width: 0;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  span {
+    overflow: hidden;
+  }
+
+  img {
+    height: calc(var(--sl-nav-height) - 2 * var(--sl-nav-pad-y));
+    max-width: 100%;
+    object-fit: contain;
+    object-position: 0 50%;
+    width: auto;
+  }
+</style>

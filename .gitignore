@@ -5,6 +5,8 @@ node_modules/
 coverage/
 packages/*/dist/
 packages/runtime-cloudflare/generated/
+apps/*/dist/
+apps/*/.astro/
 *.tsbuildinfo
 .dev.vars
 packages/runtime-cloudflare/.dev.vars

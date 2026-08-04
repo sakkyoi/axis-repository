@@ -1,0 +1,48 @@
+name: Site Archive Version
+
+# Archives the docs for a release into a versioned snapshot and commits it
+# straight to main -- the standard way tools like this work (Docusaurus's
+# own versioning does the same), not a bespoke cache branch. The resulting
+# commit is what actually triggers the Site workflow's normal production
+# deploy; this workflow never deploys anything itself.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  # Shared across every run of this workflow, not scoped to $github.ref --
+  # each run commits and pushes to main, so two tags processed at once could
+  # race on that push. Queuing (not cancelling) keeps every tag archived
+  # even if several are pushed back to back.
+  group: site-archive-version
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-pnpm-node
+
+      - name: Archive docs for ${{ github.ref_name }}
+        run: node apps/site/scripts/archive-docs-version.mjs "${{ github.ref_name }}"
+
+      - name: Commit and push
+        run: |
+          if git diff --quiet -- apps/site/docs-versions.json apps/site/src/content/docs apps/site/src/content/versions; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/site/docs-versions.json apps/site/src/content/docs apps/site/src/content/versions
+          git commit -m "docs(site): archive ${{ github.ref_name }} docs version"
+          git push origin main

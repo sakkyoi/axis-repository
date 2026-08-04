@@ -1,0 +1,84 @@
+name: Site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "apps/site/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-pnpm-node
+
+      - run: pnpm --filter @axis-repository/site lint
+
+      - run: pnpm --filter @axis-repository/site check
+
+      - run: pnpm --filter @axis-repository/site build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Pushes always deploy. A PR only deploys when it comes from a branch in
+    # this repository -- GitHub withholds repo secrets from pull_request runs
+    # triggered by a fork, so CLOUDFLARE_API_TOKEN would be empty there and
+    # the wrangler step would fail rather than silently no-op.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-pnpm-node
+
+      - name: Resolve variant, Pages branch, and preview URL
+        id: variant
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VARIANT="production"
+            PAGES_BRANCH="main"
+          else
+            VARIANT="preview"
+            SHA="${{ github.event.pull_request.head.sha }}"
+            PAGES_BRANCH="preview-${SHA:0:7}"
+          fi
+
+          # Cloudflare Pages serves a non-production branch deployment at
+          # https://<branch>.<project>.pages.dev, sanitizing the branch name
+          # into that subdomain -- but PAGES_BRANCH is already lowercase
+          # alphanumeric-and-hyphens, so the sanitized form is identical to
+          # what we already have and there's nothing Cloudflare would change.
+          {
+            echo "variant=$VARIANT"
+            echo "pages_branch=$PAGES_BRANCH"
+            echo "preview_url=https://$PAGES_BRANCH.axis-site.pages.dev"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build site
+        run: pnpm --filter @axis-repository/site build
+
+      - name: Deploy to Cloudflare Pages
+        run: pnpm --filter @axis-repository/site exec wrangler pages deploy dist --project-name=axis-site --branch=${{ steps.variant.outputs.pages_branch }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Comment preview URL on the PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --edit-last --create-if-none \
+            --body "Preview deployed: ${{ steps.variant.outputs.preview_url }}"

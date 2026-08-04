@@ -1,0 +1,14 @@
+{
+  "sidebar": [
+    {
+      "label": "Guides",
+      "items": [
+        {
+          "autogenerate": {
+            "directory": "docs"
+          }
+        }
+      ]
+    }
+  ]
+}

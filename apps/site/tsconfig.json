@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["astro/client"],
+    // apps/site is a leaf app, never imported as a library, so it doesn't
+    // need declaration emit -- unlike root tsconfig.base.json's packages.
+    // Left as inherited "true", tsc reports "inferred type cannot be named"
+    // portability errors for any exported value whose type flows through a
+    // package with multiple physical copies in node_modules (zod, vite),
+    // which is unavoidable in a pnpm workspace and irrelevant here anyway.
+    "declaration": false,
+    "noEmit": true
+  },
+  "include": ["src/**/*", "astro.config.mjs", "vitest.config.ts"]
+}

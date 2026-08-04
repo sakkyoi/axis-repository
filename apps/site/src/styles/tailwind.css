@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* Self-hosted (no external font requests) -- fits a project whose whole
+   pitch is running lean at the edge. */
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/600.css";
+@import "@fontsource/space-grotesk/700.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+/*
+ * astro-theme-toggle drives dark mode by toggling a `.dark` class on <html>
+ * (persisted to localStorage, falling back to prefers-color-scheme when
+ * there's no stored preference) rather than relying on the media query
+ * alone -- Tailwind v4 needs this custom variant to make `dark:` respond to
+ * that class instead of (or as well as) the OS-level preference.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Section-background pine green, distinct from the lime brand accent --
+     used to break the page into visually separate bands rather than one
+     continuous flat color. */
+  --color-pine-950: #0f2a20;
+  --color-pine-900: #1b4332;
+  --color-pine-50: #eef6f1;
+
+  /* Base page background -- a cool off-white and a green-tinted near-black,
+     not the stock white/slate-950 pair. */
+  --color-base-light: #f7f8f6;
+  --color-base-dark: #0a0e0a;
+}

@@ -36,7 +36,7 @@
 
 Bring packages and build artifacts from multiple ecosystems into one place.
 
-Axis provides a unified, multi-format platform without requiring a separate registry deployment for each package ecosystem. Its serverless architecture simplifies deployment and reduces the infrastructure that needs to be maintained.
+Axis Repository is a lightweight, multi-format artifact repository designed to run at the edge — one deployment you own, instead of a separate registry for each package ecosystem.
 
 > [!WARNING]
 > Axis Repository is under active development. Do not rely on it as a production artifact source yet.
