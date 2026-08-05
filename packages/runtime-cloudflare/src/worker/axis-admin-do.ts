@@ -21,6 +21,7 @@ import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, Plug
 import { RepositoryIndexJobService } from "./repository-index-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
+import { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import { RepositoryWriteLock } from "./repository-write-lock";
@@ -243,7 +244,19 @@ export function createDurableObjectDependencies(
     publishSessionService: pluginPublishSessionService,
     clock,
   });
-  const backgroundJobService = new BackgroundJobService({ state, clock });
+  const stagingUploadGcJobService = new StagingUploadGcJobService({
+    state,
+    objectStore,
+    clock,
+    sessionTtlMs: publishSessionService.ttlSeconds * 1000,
+  });
+  const backgroundJobService = new BackgroundJobService({
+    state,
+    clock,
+    repositoryIndexJobService,
+    publishFinalizeJobService,
+    stagingUploadGcJobService,
+  });
 
   const artifactOrigin = parseArtifactOrigin(env.AXIS_ARTIFACT_ORIGIN);
 
@@ -266,6 +279,7 @@ export function createDurableObjectDependencies(
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
     publishSessionService: pluginPublishSessionService,
     backgroundJobService,
+    stagingUploadGcJobService,
     publishFinalizeJobService,
     repositoryActivityService,
     repositoryArtifactStore: state.repositoryArtifacts,
@@ -322,21 +336,17 @@ export class AxisAdminDO {
     try {
       const finalizeJobs = await this.dependencies.publishFinalizeJobService.drain({ limit: 1 });
       const indexJobs = await this.dependencies.repositoryIndexJobService.drain({ limit: 1 });
+      await this.dependencies.stagingUploadGcJobService.run();
       const run = await runRepositoryMaintenance({
         repositories: await this.dependencies.repositoryService.list(),
         plugins: this.dependencies.repositoryRuntimePlugins,
         repositoryObjectStore: this.dependencies.repositoryObjectStore,
         writeLock: this.dependencies.repositoryWriteLock,
         clock: { now: () => new Date() },
-        sessionTtlMs: this.dependencies.publishSessionTtlMs,
       });
       nextRunAt = run.nextRunAt;
       for (const failure of run.failures) {
-        if (failure.kind === "staging") {
-          console.error(`Repository staging sweep failed: ${failure.message}`);
-        } else {
-          console.error(`Repository maintenance failed for ${failure.repositoryName}: ${failure.message}`);
-        }
+        console.error(`Repository maintenance failed for ${failure.repositoryName}: ${failure.message}`);
       }
       if (finalizeJobs.remaining > 0 || indexJobs.remaining > 0) {
         nextRunAt = new Date(Date.now() + 1000);

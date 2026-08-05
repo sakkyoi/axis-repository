@@ -1,10 +1,11 @@
-import { Ban } from "lucide-react";
-import { useBackgroundJobs, useCancelBackgroundJob } from "../api/hooks";
+import { Ban, RotateCcw } from "lucide-react";
+import { useBackgroundJobs, useCancelBackgroundJob, useRetryBackgroundJob } from "../api/hooks";
 import type { BackgroundJob } from "../api/schemas";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { SkeletonRows } from "../components/ui/skeleton";
 import { useErrorToast } from "../components/ui/toast";
+import { backgroundJobStatusLabel, backgroundJobTypeLabel } from "../jobs/job-model";
 import { ErrorState, PageShell } from "./shared";
 
 const statusVariant: Record<BackgroundJob["status"], "default" | "success" | "warning" | "destructive"> = {
@@ -19,7 +20,9 @@ const statusVariant: Record<BackgroundJob["status"], "default" | "success" | "wa
 export function JobsPage() {
   const jobs = useBackgroundJobs({ limit: 50 });
   const cancelJob = useCancelBackgroundJob();
+  const retryJob = useRetryBackgroundJob();
   useErrorToast("Job cancellation failed", cancelJob.error);
+  useErrorToast("Job retry failed", retryJob.error);
 
   return (
     <PageShell
@@ -40,7 +43,7 @@ export function JobsPage() {
       {jobs.data && jobs.data.jobs.length > 0 && (
         <div className="overflow-x-auto rounded-md border border-border">
           <div className="min-w-[980px]">
-            <div className="grid grid-cols-[minmax(220px,1.2fr)_120px_minmax(220px,1fr)_180px_minmax(220px,1fr)_120px] border-b border-border bg-muted px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
+            <div className="grid grid-cols-[minmax(220px,1.2fr)_120px_minmax(220px,1fr)_180px_minmax(220px,1fr)_160px] border-b border-border bg-muted px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
               <span>Job</span>
               <span>Status</span>
               <span>Subject</span>
@@ -52,14 +55,14 @@ export function JobsPage() {
               {jobs.data.jobs.map((job) => (
                 <div
                   key={job.id}
-                  className="grid grid-cols-[minmax(220px,1.2fr)_120px_minmax(220px,1fr)_180px_minmax(220px,1fr)_120px] gap-3 px-3 py-3 text-sm"
+                  className="grid grid-cols-[minmax(220px,1.2fr)_120px_minmax(220px,1fr)_180px_minmax(220px,1fr)_160px] gap-3 px-3 py-3 text-sm"
                 >
                   <div className="min-w-0">
-                    <div className="truncate font-mono text-xs">{job.id}</div>
-                    <div className="mt-1 text-muted-foreground">{job.type}</div>
+                    <div className="truncate font-medium">{backgroundJobTypeLabel(job)}</div>
+                    <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{job.id}</div>
                   </div>
                   <div>
-                    <Badge variant={statusVariant[job.status]}>{job.status}</Badge>
+                    <Badge variant={statusVariant[job.status]}>{backgroundJobStatusLabel(job.status)}</Badge>
                     {job.attempts > 0 && (
                       <div className="mt-2 text-xs text-muted-foreground">{job.attempts} attempt{job.attempts === 1 ? "" : "s"}</div>
                     )}
@@ -86,7 +89,7 @@ export function JobsPage() {
                       "-"
                     )}
                   </div>
-                  <div>
+                  <div className="flex flex-wrap gap-2">
                     {(job.status === "pending" || job.status === "running") && (
                       <Button
                         type="button"
@@ -97,6 +100,18 @@ export function JobsPage() {
                       >
                         <Ban className="mr-1.5 size-3.5" aria-hidden="true" />
                         Cancel
+                      </Button>
+                    )}
+                    {(job.status === "failed" || job.status === "canceled") && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={retryJob.isPending}
+                        onClick={() => retryJob.mutate(job.id)}
+                      >
+                        <RotateCcw className="mr-1.5 size-3.5" aria-hidden="true" />
+                        Retry
                       </Button>
                     )}
                   </div>

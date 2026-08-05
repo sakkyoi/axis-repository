@@ -170,10 +170,6 @@ export const repositoryIndexJobResponseSchema = z.object({
   job: repositoryIndexJobSchema,
 });
 
-export const repositoryIndexJobStatusResponseSchema = z.object({
-  job: repositoryIndexJobSchema.nullable(),
-});
-
 export const backgroundJobSchema = z.object({
   id: z.string(),
   type: z.string(),
@@ -367,23 +363,9 @@ export const publishSessionsResponseSchema = z.object({
   sessions: z.array(publishSessionSchema),
 });
 
-export const publishFinalizeJobSchema = z.object({
-  sessionId: z.string(),
-  repositoryName: z.string(),
-  status: z.enum(["pending", "running", "ready", "failed"]),
-  requestedAt: z.string(),
-  attempts: z.number(),
-  startedAt: z.string().optional(),
-  finishedAt: z.string().optional(),
-  lastFailure: z.object({
-    message: z.string(),
-    failedAt: z.string(),
-  }).optional(),
-});
-
 export const publishFinalizeResponseSchema = z.object({
   session: publishSessionSchema,
-  job: publishFinalizeJobSchema,
+  job: backgroundJobSchema,
 });
 
 export const objectDeleteActivitySchema = z.object({

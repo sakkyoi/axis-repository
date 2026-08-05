@@ -713,7 +713,8 @@ describe("AxisAdminDO", () => {
         status: "finalize_queued",
       },
       job: {
-        sessionId: session.id,
+        id: `publish.finalize:${session.id}`,
+        type: "publish.finalize",
         status: "pending",
       },
     });

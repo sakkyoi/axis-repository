@@ -52,7 +52,6 @@ describe("runRepositoryMaintenance", () => {
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
-      sessionTtlMs: 15 * 60 * 1000,
     });
 
     expect(run.nextRunAt.getTime()).toBe(NOW.getTime() + 60 * 60 * 1000);
@@ -65,7 +64,6 @@ describe("runRepositoryMaintenance", () => {
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
-      sessionTtlMs: 15 * 60 * 1000,
     });
 
     expect(run.nextRunAt.getTime()).toBe(NOW.getTime() + MAINTENANCE_MAX_INTERVAL_MS);
@@ -83,7 +81,6 @@ describe("runRepositoryMaintenance", () => {
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
-      sessionTtlMs: 15 * 60 * 1000,
     });
 
     expect(run.nextRunAt.getTime()).toBe(NOW.getTime() + MAINTENANCE_MIN_INTERVAL_MS);
@@ -104,31 +101,11 @@ describe("runRepositoryMaintenance", () => {
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
-      sessionTtlMs: 15 * 60 * 1000,
     });
 
     expect(run.failures).toEqual([{ kind: "repository", repositoryName: "broken", message: "signing key revoked" }]);
     expect(run.refreshed).toEqual([{ repositoryName: "healthy", details: ["noble"] }]);
     expect(run.nextRunAt.getTime()).toBe(NOW.getTime() + 120_000);
-  });
-
-  it("reports staged upload sweep failures separately from repository failures", async () => {
-    const objectStore = new MemoryRepositoryObjectStore();
-    objectStore.listObjects = async () => {
-      throw new Error("Network connection lost.");
-    };
-
-    const run = await runRepositoryMaintenance({
-      repositories: [],
-      plugins: registry({}),
-      repositoryObjectStore: objectStore,
-      writeLock: new RepositoryWriteLock(),
-      clock,
-      sessionTtlMs: 15 * 60 * 1000,
-    });
-
-    expect(run.failures).toEqual([{ kind: "staging", message: "Network connection lost." }]);
-    expect(run.nextRunAt.getTime()).toBe(NOW.getTime() + MAINTENANCE_MAX_INTERVAL_MS);
   });
 
   it("skips ecosystems whose plugin has nothing to maintain", async () => {
@@ -138,7 +115,6 @@ describe("runRepositoryMaintenance", () => {
       repositoryObjectStore: new MemoryRepositoryObjectStore(),
       writeLock: new RepositoryWriteLock(),
       clock,
-      sessionTtlMs: 15 * 60 * 1000,
     });
 
     expect(run.refreshed).toEqual([]);

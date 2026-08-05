@@ -113,7 +113,13 @@ describe("PublishFinalizeJobService", () => {
     });
 
     await expect(service.request({ sessionId: "pub_fixed", principal })).resolves.toMatchObject({
-      job: { sessionId: "pub_fixed", repositoryName: "debian-internal", status: "pending" },
+      job: {
+        id: "publish.finalize:pub_fixed",
+        type: "publish.finalize",
+        subject: { type: "publish-session", id: "pub_fixed", repositoryName: "debian-internal" },
+        repositoryName: "debian-internal",
+        status: "pending",
+      },
       session: { status: "finalize_queued" },
     });
 

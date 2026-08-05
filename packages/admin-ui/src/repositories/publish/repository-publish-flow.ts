@@ -6,7 +6,7 @@ import {
   useFinalizeAdminPublishSession,
   useVerifyAdminPublishUpload,
 } from "../../api/hooks";
-import type { CreatedPublishSession, PublishArtifact, Repository } from "../../api/schemas";
+import type { CreatedPublishSession, PublishArtifact, PublishFinalizeResponse, Repository } from "../../api/schemas";
 import { useToast } from "../../components/ui/toast";
 import { publishSteps, type UploadProgress } from "./publish-progress-model";
 
@@ -28,8 +28,8 @@ export interface RepositoryPublishFlowInput {
     onProgress: (sent: { loaded: number; total?: number }) => void,
   ): Promise<void>;
   verifyUpload(input: { sessionId: string; uploadId: string }): Promise<unknown>;
-  finalizeSession(sessionId: string): Promise<unknown>;
-  waitForFinalize(sessionId: string): Promise<unknown>;
+  finalizeSession(sessionId: string): Promise<PublishFinalizeResponse>;
+  waitForJob(jobId: string): Promise<unknown>;
   refresh(): Promise<unknown>;
   onPhase(phase: RepositoryPublishPhase): void;
   onUploadProgress?(progress: UploadProgress): void;
@@ -94,8 +94,8 @@ export async function publishRepositoryArtifacts(input: RepositoryPublishFlowInp
   }
 
   input.onPhase("finalizing");
-  await input.finalizeSession(session.id);
-  await input.waitForFinalize(session.id);
+  const finalize = await input.finalizeSession(session.id);
+  await input.waitForJob(finalize.job.id);
   await input.refresh();
   input.onPhase("published");
 }
@@ -143,7 +143,7 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
           });
           return result;
         },
-        waitForFinalize: (sessionId) => waitForAdminFinalize(client, sessionId),
+        waitForJob: (jobId) => waitForBackgroundJob(client, jobId),
         refresh: async () => {
           await Promise.all([
             queryClient.invalidateQueries({ queryKey: ["publish-sessions"] }),
@@ -176,17 +176,17 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
   };
 }
 
-async function waitForAdminFinalize(
+async function waitForBackgroundJob(
   client: ReturnType<typeof useAxisClient>,
-  sessionId: string,
+  jobId: string,
 ): Promise<void> {
   for (;;) {
-    const session = await client.getAdminPublishSession(sessionId);
-    if (session.status === "finalized") {
+    const job = await client.getBackgroundJob(jobId);
+    if (job.status === "succeeded") {
       return;
     }
-    if (session.status === "finalize_failed" || session.status === "failed") {
-      throw new Error(session.failure?.message ?? "Publish finalize failed");
+    if (job.status === "failed" || job.status === "canceled") {
+      throw new Error(job.failure?.message ?? `Background job ${job.status}`);
     }
     await delay(FINALIZE_POLL_INTERVAL_MS);
   }

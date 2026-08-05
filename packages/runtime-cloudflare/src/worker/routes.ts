@@ -773,7 +773,6 @@ const ADMIN_REPOSITORY_ROUTES = {
   objects: /^\/admin\/repositories\/([^/]+)\/objects$/,
   objectDetail: /^\/admin\/repositories\/([^/]+)\/objects\/detail$/,
   activity: /^\/admin\/repositories\/([^/]+)\/activity$/,
-  artifactIndexJob: /^\/admin\/repositories\/([^/]+)\/artifact-index-job$/,
   artifactFamilies: /^\/admin\/repositories\/([^/]+)\/artifacts\/families$/,
   artifacts: /^\/admin\/repositories\/([^/]+)\/artifacts$/,
   artifactsRebuildIndex: /^\/admin\/repositories\/([^/]+)\/artifacts\/rebuild-index$/,
@@ -1587,6 +1586,16 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     throw new NotFoundError();
   }
+  const adminRetryJobMatch = url.pathname.match(/^\/admin\/jobs\/([^/]+)\/retry$/);
+  if (adminRetryJobMatch) {
+    await requireAdmin(request, dependencies.adminAuthService);
+    if (request.method === "POST") {
+      const job = await dependencies.backgroundJobService.retry(decodeURIComponent(adminRetryJobMatch[1] ?? ""));
+      if (!job) throw new NotFoundError();
+      return jsonResponse({ job });
+    }
+    throw new NotFoundError();
+  }
   if (url.pathname === "/admin/repositories") {
     await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "GET") {
@@ -1742,18 +1751,6 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       await repositoryActivityTimeline(dependencies, repository.name),
       repositoryActivityPageParams(url.searchParams),
     ));
-  }
-  const adminRepositoryArtifactIndexJobName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.artifactIndexJob);
-  if (adminRepositoryArtifactIndexJobName) {
-    await requireAdmin(request, dependencies.adminAuthService);
-    if (request.method !== "GET") {
-      throw new NotFoundError();
-    }
-    const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactIndexJobName);
-    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
-    return jsonResponse({
-      job: await dependencies.repositoryIndexJobService.getByRepository(repository.name),
-    });
   }
   const adminRepositoryArtifactFamiliesName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.artifactFamilies);
   if (adminRepositoryArtifactFamiliesName) {

@@ -29,7 +29,7 @@ import {
   artifactsForVersion,
   groupArtifactsByFamily,
 } from "./artifact-groups-model";
-import { repositoryIndexJobStatusView } from "./repository-index-job-model";
+import { repositoryIndexJobIsActive, repositoryIndexJobStatusView } from "./repository-index-job-model";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
   repositoryArtifactDeleteDialogContent,
@@ -53,8 +53,7 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
   const families = pages.flatMap((page) => page.families);
   const totalFamilies = pages[0]?.totalFamilies ?? families.length;
   const totalArtifacts = pages[0]?.totalArtifacts ?? families.reduce((total, family) => total + family.artifactCount, 0);
-  const indexJobStatus = indexJob.data?.job?.status;
-  const indexJobIsRunning = indexJobStatus === "pending" || indexJobStatus === "running";
+  const indexJobIsRunning = repositoryIndexJobIsActive(indexJob.data?.job);
   const indexJobView = repositoryIndexJobStatusView(indexJob.data?.job);
   const detailGroups = groupArtifactsByFamily(familyArtifactsQuery.data?.artifacts ?? []);
   // Re-read from the current grouping rather than held: a rebuild replaces

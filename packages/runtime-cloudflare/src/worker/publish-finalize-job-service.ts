@@ -20,7 +20,7 @@ export interface RequestPublishFinalizeJobInput extends FinalizePublishSessionIn
 
 export interface RequestPublishFinalizeJobResult {
   session: PublishSession;
-  job: PublishFinalizeJobRecord;
+  job: BackgroundJobRecord;
 }
 
 export interface DrainPublishFinalizeJobsInput {
@@ -66,10 +66,10 @@ export class PublishFinalizeJobService {
     const existing = await this.options.state.publishFinalizeJobs.getBySession(session.id);
     const requestedAt = this.options.clock.now().toISOString();
     if (existing?.status === "running") {
-      return { session, job: existing };
+      return { session, job: backgroundJobFromPublishFinalizeJob(existing) };
     }
     if (existing?.status === "pending") {
-      return { session, job: existing };
+      return { session, job: backgroundJobFromPublishFinalizeJob(existing) };
     }
     const job: PublishFinalizeJobRecord = {
       sessionId: session.id,
@@ -81,8 +81,9 @@ export class PublishFinalizeJobService {
       ...(session.status === "finalized" ? { finishedAt: requestedAt } : {}),
     };
     await this.options.state.publishFinalizeJobs.save(job);
-    await this.options.state.backgroundJobs.save(backgroundJobFromPublishFinalizeJob(job));
-    return { session, job };
+    const backgroundJob = backgroundJobFromPublishFinalizeJob(job);
+    await this.options.state.backgroundJobs.save(backgroundJob);
+    return { session, job: backgroundJob };
   }
 
   async drain(input: DrainPublishFinalizeJobsInput = {}): Promise<DrainPublishFinalizeJobsResult> {

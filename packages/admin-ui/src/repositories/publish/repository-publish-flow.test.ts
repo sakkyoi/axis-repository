@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { CreatedPublishSession, PublishArtifact } from "../../api/schemas";
+import type { CreatedPublishSession, PublishArtifact, PublishFinalizeResponse } from "../../api/schemas";
 import { publishRepositoryArtifacts } from "./repository-publish-flow";
 
 const artifact: PublishArtifact = {
@@ -36,6 +36,21 @@ const session: CreatedPublishSession = {
   expiresAt: "2026-07-23T00:10:00.000Z",
 };
 
+const finalizeResponse: PublishFinalizeResponse = {
+  session: { ...session, status: "finalize_queued" },
+  job: {
+    id: "publish.finalize:pub_1",
+    type: "publish.finalize",
+    status: "pending",
+    subject: { type: "publish-session", id: "pub_1", repositoryName: "debian-internal" },
+    repositoryName: "debian-internal",
+    priority: 0,
+    attempts: 0,
+    requestedAt: "2026-07-23T00:01:00.000Z",
+    scheduledAt: "2026-07-23T00:01:00.000Z",
+  },
+};
+
 describe("repository publish flow", () => {
   it("creates, uploads, verifies, finalizes, and refreshes publish state in order", async () => {
     const calls: string[] = [];
@@ -61,9 +76,10 @@ describe("repository publish flow", () => {
       }),
       finalizeSession: vi.fn(async () => {
         calls.push("finalize");
+        return finalizeResponse;
       }),
-      waitForFinalize: vi.fn(async () => {
-        calls.push("wait");
+      waitForJob: vi.fn(async (jobId) => {
+        calls.push(`wait:${jobId}`);
       }),
       refresh,
       onPhase: (phase) => calls.push(`phase:${phase}`),
@@ -80,7 +96,7 @@ describe("repository publish flow", () => {
       "verify",
       "phase:finalizing",
       "finalize",
-      "wait",
+      "wait:publish.finalize:pub_1",
       "refresh",
       "phase:published",
     ]);
@@ -96,8 +112,8 @@ describe("repository publish flow", () => {
         createSession: async () => ({ ...session, uploads: [] }),
         uploadArtifact: async () => undefined,
         verifyUpload: async () => undefined,
-        finalizeSession: async () => undefined,
-        waitForFinalize: async () => undefined,
+        finalizeSession: async () => finalizeResponse,
+        waitForJob: async () => undefined,
         refresh: async () => undefined,
         onPhase: () => undefined,
       }),

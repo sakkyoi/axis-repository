@@ -3010,7 +3010,7 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("reads repository artifact index job status without listing artifacts", async () => {
+  it("does not expose the legacy repository artifact index job endpoint", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
     await createRepository(app, {
@@ -3025,9 +3025,9 @@ describe("Cloudflare runtime routes", () => {
       { headers: { authorization: "Bearer dev-admin-token" } },
     ));
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     await expect(response.json()).resolves.toMatchObject({
-      job: { repositoryName: "debian-internal", kind: "hosted-rebuild", status: "pending" },
+      error: { code: "not_found" },
     });
   });
 
@@ -3080,6 +3080,36 @@ describe("Cloudflare runtime routes", () => {
       },
     });
     await expect(harness.dependencies.repositoryIndexJobService.getByRepository("python-proxy")).resolves.toBeNull();
+  });
+
+  it("retries failed background jobs through admin routes", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-proxy",
+      ecosystem: "pypi",
+      kind: "proxy",
+      visibility: "private",
+      config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
+    });
+    await harness.dependencies.repositoryIndexJobService.request({ repositoryName: "python-proxy" });
+    await harness.dependencies.backgroundJobService.cancel("repository.index:python-proxy");
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/admin/jobs/repository.index%3Apython-proxy/retry",
+      { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      job: {
+        id: "repository.index:python-proxy",
+        type: "repository.index.proxy-refresh",
+        status: "pending",
+      },
+    });
+    await expect(harness.dependencies.repositoryIndexJobService.getByRepository("python-proxy"))
+      .resolves.toMatchObject({ repositoryName: "python-proxy", status: "pending" });
   });
 
   it("records repository activity when rebuilding artifact indexes", async () => {
@@ -4171,10 +4201,14 @@ describe("Cloudflare runtime routes", () => {
     expect(finalizeResponse.status).toBe(202);
     const finalizeBody = (await finalizeResponse.json()) as {
       session: { id: string; status: string };
-      job: { sessionId: string; status: string };
+      job: { id: string; type: string; status: string };
     };
     expect(finalizeBody.session).toMatchObject({ id: session.id, status: "finalize_queued" });
-    expect(finalizeBody.job).toMatchObject({ sessionId: session.id, status: "pending" });
+    expect(finalizeBody.job).toMatchObject({
+      id: `publish.finalize:${session.id}`,
+      type: "publish.finalize",
+      status: "pending",
+    });
     await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 0 });
     const finalizedSession = await harness.dependencies.publishSessionService.getAsAdmin({ sessionId: session.id });
     expect(finalizedSession.status).toBe("finalized");
@@ -4721,7 +4755,7 @@ describe("Cloudflare runtime routes", () => {
     expect(finalizeResponse.status).toBe(202);
     await expect(finalizeResponse.json()).resolves.toMatchObject({
       session: { id: session.id, status: "finalize_queued" },
-      job: { sessionId: session.id, status: "pending" },
+      job: { id: `publish.finalize:${session.id}`, type: "publish.finalize", status: "pending" },
     });
     await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 1 });
     const failedSession = await harness.dependencies.publishSessionService.getAsAdmin({ sessionId: session.id });
@@ -4817,7 +4851,7 @@ describe("Cloudflare runtime routes", () => {
         id: session.id,
         status: "finalize_queued",
       },
-      job: { sessionId: session.id, status: "pending" },
+      job: { id: `publish.finalize:${session.id}`, type: "publish.finalize", status: "pending" },
     });
     await expect(harness.dependencies.publishFinalizeJobService.drain({ limit: 1 }))
       .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
@@ -4931,7 +4965,7 @@ describe("Cloudflare runtime routes", () => {
     expect(finalizeResponse.status).toBe(202);
     await expect(finalizeResponse.json()).resolves.toMatchObject({
       session: { id: session.id, status: "finalize_queued" },
-      job: { sessionId: session.id, status: "pending" },
+      job: { id: `publish.finalize:${session.id}`, type: "publish.finalize", status: "pending" },
     });
     await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 1 });
     const failedSession = await harness.dependencies.publishSessionService.getAsAdmin({ sessionId: session.id });

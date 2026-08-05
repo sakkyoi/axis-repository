@@ -21,7 +21,6 @@ import {
   backgroundJobResponseSchema,
   backgroundJobsResponseSchema,
   repositoryIndexJobResponseSchema,
-  repositoryIndexJobStatusResponseSchema,
   repositoryObjectDeleteResponseSchema,
   repositoryObjectDetailResponseSchema,
   repositoryObjectsResponseSchema,
@@ -108,6 +107,7 @@ export interface AxisClient {
   listBackgroundJobs(options?: ListBackgroundJobsOptions): Promise<ReturnType<typeof backgroundJobsResponseSchema.parse>>;
   getBackgroundJob(id: string): Promise<ReturnType<typeof backgroundJobResponseSchema.parse>["job"]>;
   cancelBackgroundJob(id: string): Promise<ReturnType<typeof backgroundJobResponseSchema.parse>["job"]>;
+  retryBackgroundJob(id: string): Promise<ReturnType<typeof backgroundJobResponseSchema.parse>["job"]>;
   listRepositoryPlugins(): Promise<RepositoryPlugin[]>;
   updateRepositoryPluginPolicy(ecosystem: string, input: UpdateRepositoryPluginPolicyInput): Promise<RepositoryPlugin>;
   listRepositories(): Promise<Repository[]>;
@@ -122,7 +122,6 @@ export interface AxisClient {
   ): Promise<ReturnType<typeof repositoryArtifactFamiliesResponseSchema.parse>>;
   listRepositoryArtifacts(name: string, options?: PageOptions): Promise<ReturnType<typeof repositoryArtifactsResponseSchema.parse>>;
   rebuildRepositoryArtifactIndex(name: string): Promise<ReturnType<typeof repositoryIndexJobResponseSchema.parse>>;
-  getRepositoryArtifactIndexJob(name: string): Promise<ReturnType<typeof repositoryIndexJobStatusResponseSchema.parse>>;
   deleteRepositoryArtifact(name: string, artifactId: string): Promise<ReturnType<typeof repositoryArtifactDeleteResponseSchema.parse>>;
   getRepositoryObjectDetail(name: string, path: string): Promise<RepositoryObjectDetail>;
   deleteRepositoryObject(name: string, path: string): Promise<RepositoryActivity>;
@@ -284,6 +283,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.post(`/admin/jobs/${encodeURIComponent(id)}/cancel`);
       return backgroundJobResponseSchema.parse(response.data).job;
     },
+    async retryBackgroundJob(id: string) {
+      const response = await http.post(`/admin/jobs/${encodeURIComponent(id)}/retry`);
+      return backgroundJobResponseSchema.parse(response.data).job;
+    },
     async listRepositoryPlugins() {
       const response = await http.get("/admin/repository-plugins");
       return repositoryPluginsResponseSchema.parse(response.data).plugins;
@@ -330,12 +333,6 @@ export function createAxisClient(options: HttpOptions): AxisClient {
         bulkRequest,
       );
       return repositoryIndexJobResponseSchema.parse(response.data);
-    },
-    async getRepositoryArtifactIndexJob(name: string) {
-      const response = await http.get(
-        `/admin/repositories/${encodeURIComponent(name)}/artifact-index-job`,
-      );
-      return repositoryIndexJobStatusResponseSchema.parse(response.data);
     },
     async deleteRepositoryArtifact(name: string, artifactId: string) {
       const response = await http.delete(

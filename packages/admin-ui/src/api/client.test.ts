@@ -865,40 +865,7 @@ describe("createAxisClient", () => {
     ]);
   });
 
-  it("reads repository artifact index job status through a lightweight endpoint", async () => {
-    const client = createAxisClient({
-      baseUrl: "https://axis.example/",
-      accessToken: "admin-secret",
-    });
-    const requests: string[] = [];
-    client.http.defaults.adapter = async (config) => {
-      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
-      return {
-        data: {
-          job: {
-            repositoryName: "debian internal",
-            kind: "hosted-rebuild",
-            status: "running",
-            requestedAt: "2026-08-05T00:00:00.000Z",
-            attempts: 1,
-            startedAt: "2026-08-05T00:00:01.000Z",
-          },
-        },
-        status: 200,
-        statusText: "OK",
-        headers: {},
-        config,
-      };
-    };
-
-    await expect(client.getRepositoryArtifactIndexJob("debian internal"))
-      .resolves.toMatchObject({ job: { repositoryName: "debian internal", status: "running" } });
-    expect(requests).toEqual([
-      "GET /admin/repositories/debian%20internal/artifact-index-job",
-    ]);
-  });
-
-  it("lists, reads, and cancels background jobs through admin endpoints", async () => {
+  it("lists, reads, cancels, and retries background jobs through admin endpoints", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
       accessToken: "admin-secret",
@@ -934,10 +901,13 @@ describe("createAxisClient", () => {
       .resolves.toMatchObject({ id: "repository.index:python-proxy", status: "pending" });
     await expect(client.cancelBackgroundJob("repository.index:python-proxy"))
       .resolves.toMatchObject({ id: "repository.index:python-proxy", status: "canceled" });
+    await expect(client.retryBackgroundJob("repository.index:python-proxy"))
+      .resolves.toMatchObject({ id: "repository.index:python-proxy", status: "canceled" });
     expect(requests).toEqual([
       "GET /admin/jobs?repositoryName=python-proxy&status=pending",
       "GET /admin/jobs/repository.index%3Apython-proxy",
       "POST /admin/jobs/repository.index%3Apython-proxy/cancel",
+      "POST /admin/jobs/repository.index%3Apython-proxy/retry",
     ]);
   });
 
@@ -1267,10 +1237,14 @@ describe("createAxisClient", () => {
             expiresAt: "2026-07-23T00:10:00.000Z",
           },
           job: {
-            sessionId: "pub_1",
+            id: "publish.finalize:pub_1",
+            type: "publish.finalize",
+            subject: { type: "publish-session", id: "pub_1", repositoryName: "debian-internal" },
             repositoryName: "debian-internal",
             status: "pending",
+            priority: 0,
             requestedAt: "2026-07-23T00:01:00.000Z",
+            scheduledAt: "2026-07-23T00:01:00.000Z",
             attempts: 0,
           },
         },
@@ -1295,7 +1269,10 @@ describe("createAxisClient", () => {
     await client.uploadPublishArtifact(session.uploads[0]!, new Blob(["deb"]));
     await client.verifyAdminPublishUpload(session.id, "upl_1");
     await expect(client.finalizeAdminPublishSession(session.id))
-      .resolves.toMatchObject({ session: { status: "finalize_queued" }, job: { status: "pending" } });
+      .resolves.toMatchObject({
+        session: { status: "finalize_queued" },
+        job: { id: "publish.finalize:pub_1", type: "publish.finalize", status: "pending" },
+      });
 
     expect(requests.map((request) => `${request.method} ${request.url}`)).toEqual([
       "POST /admin/publish-sessions",

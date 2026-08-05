@@ -72,6 +72,19 @@ export function useCancelBackgroundJob() {
   });
 }
 
+export function useRetryBackgroundJob() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.retryBackgroundJob(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["background-jobs"] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-index-job"] });
+      void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
+    },
+  });
+}
+
 export function useRepositoryPlugins() {
   const client = useAxisClient();
   return useQuery({
@@ -209,17 +222,25 @@ export function useRepositoryArtifactIndexJob(repositoryName: string | undefined
   const hadActiveJob = useRef(false);
   const query = useQuery({
     queryKey: ["repository-artifact-index-job", repositoryName],
-    queryFn: () => client.getRepositoryArtifactIndexJob(repositoryName ?? ""),
+    queryFn: async () => {
+      if (!repositoryName) return { job: null };
+      try {
+        return { job: await client.getBackgroundJob(repositoryIndexBackgroundJobId(repositoryName)) };
+      } catch (error) {
+        if (errorResponseStatus(error) === 404) return { job: null };
+        throw error;
+      }
+    },
     enabled: Boolean(repositoryName),
     refetchInterval: (query) => {
       const status = query.state.data?.job?.status;
-      return status === "pending" || status === "running" ? 1500 : false;
+      return backgroundJobIsActive(status) ? 1500 : false;
     },
   });
 
   useEffect(() => {
     const status = query.data?.job?.status;
-    const active = status === "pending" || status === "running";
+    const active = backgroundJobIsActive(status);
     if (active) {
       hadActiveJob.current = true;
       return;
@@ -237,6 +258,21 @@ export function useRepositoryArtifactIndexJob(repositoryName: string | undefined
   }, [query.data?.job?.status, queryClient, repositoryName]);
 
   return query;
+}
+
+function repositoryIndexBackgroundJobId(repositoryName: string): string {
+  return `repository.index:${repositoryName}`;
+}
+
+function backgroundJobIsActive(status: string | undefined): boolean {
+  return status === "pending" || status === "running" || status === "canceling";
+}
+
+function errorResponseStatus(error: unknown): number | undefined {
+  if (typeof error !== "object" || error === null || !("response" in error)) {
+    return undefined;
+  }
+  return (error as { response?: { status?: number } }).response?.status;
 }
 
 export function useRebuildRepositoryArtifactIndex(repositoryName: string | undefined) {
@@ -332,10 +368,6 @@ export function usePublishSessions() {
   return useQuery({
     queryKey: ["publish-sessions"],
     queryFn: () => client.listPublishSessions(),
-    refetchInterval: (query) =>
-      query.state.data?.some((session) => session.status === "finalize_queued" || session.status === "finalizing")
-        ? 1500
-        : false,
   });
 }
 

@@ -24,6 +24,7 @@ import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, Plug
 import { RepositoryIndexJobService } from "./repository-index-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
+import { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import type { RepositoryObjectDownloadSigner } from "../storage/object-download-url";
@@ -40,6 +41,7 @@ export interface AppDependencies {
   publishTokenService: PublishTokenService;
   publishSessionService: PluginPublishSessionService;
   backgroundJobService: BackgroundJobService;
+  stagingUploadGcJobService: StagingUploadGcJobService;
   publishFinalizeJobService: PublishFinalizeJobService;
   repositoryActivityService: RepositoryActivityService;
   repositoryArtifactStore: RepositoryArtifactStore;
@@ -218,7 +220,19 @@ export function createDevDependencyHarness(
     publishSessionService: pluginPublishSessionService,
     clock,
   });
-  const backgroundJobService = new BackgroundJobService({ state, clock });
+  const stagingUploadGcJobService = new StagingUploadGcJobService({
+    state,
+    objectStore,
+    clock,
+    sessionTtlMs: publishSessionService.ttlSeconds * 1000,
+  });
+  const backgroundJobService = new BackgroundJobService({
+    state,
+    clock,
+    repositoryIndexJobService,
+    publishFinalizeJobService,
+    stagingUploadGcJobService,
+  });
 
   return {
     dependencies: {
@@ -232,6 +246,7 @@ export function createDevDependencyHarness(
       publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
       publishSessionService: pluginPublishSessionService,
       backgroundJobService,
+      stagingUploadGcJobService,
       publishFinalizeJobService,
       repositoryActivityService,
       repositoryArtifactStore: state.repositoryArtifacts,
