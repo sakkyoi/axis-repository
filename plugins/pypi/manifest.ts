@@ -33,6 +33,12 @@ export const pypiPluginManifest = {
         responseKind: "json",
       },
       {
+        name: "get-project",
+        method: "GET",
+        path: ["projects", ":project"],
+        responseKind: "json",
+      },
+      {
         name: "yank-file",
         method: "POST",
         path: ["projects", ":project", "files", ":filename", "yank"],

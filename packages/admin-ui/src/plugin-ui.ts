@@ -1,5 +1,5 @@
 export type { CreateRepositoryInput, UpdateRepositoryInput } from "./api/client";
-export { useAxisClient, useUpdateRepository } from "./api/hooks";
+export { useAxisClient, useRepositoryArtifactIndexJob, useRepositoryArtifacts, useUpdateRepository } from "./api/hooks";
 export {
   repositoryVisibilitySchema,
   signingKeySchema,
@@ -7,6 +7,7 @@ export {
   type PublishArtifact,
   type PublishSession,
   type Repository,
+  type RepositoryIndexJob,
   type RepositoryPlugin,
   type RepositoryVisibility,
   type SigningKey,
@@ -37,6 +38,11 @@ export { PublishProgress } from "./repositories/publish/publish-progress";
 export { asJson, EmptyState, ErrorState, formatDate } from "./pages/shared";
 export { useErrorToast, useToast } from "./components/ui/toast";
 export { CodeBlock } from "./components/ui/code-block";
+export {
+  repositoryIndexJobIsActive,
+  repositoryIndexJobStatusView,
+  type RepositoryIndexJobStatusView,
+} from "./repositories/artifacts/repository-index-job-model";
 export type {
   PublishTokenScopeInput,
   PublishSessionDetailComponentProps,

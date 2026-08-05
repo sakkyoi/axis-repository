@@ -1,8 +1,14 @@
 import { Eye, Package, RefreshCcw, RotateCw, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useDeleteRepositoryArtifact, useRebuildRepositoryArtifactIndex, useRepositoryArtifacts } from "../../api/hooks";
-import type { RepositoryArtifact } from "../../api/schemas";
+import {
+  useDeleteRepositoryArtifact,
+  useRebuildRepositoryArtifactIndex,
+  useRepositoryArtifactIndexJob,
+  useRepositoryArtifactFamiliesPages,
+  useRepositoryArtifactFamilyArtifacts,
+} from "../../api/hooks";
+import type { RepositoryArtifact, RepositoryArtifactFamily } from "../../api/schemas";
 import { Button } from "../../components/ui/button";
 import { CopyToClipboardButton } from "../../components/ui/copy-to-clipboard-button";
 import { DestructiveActionDialog } from "../../components/ui/destructive-action-dialog";
@@ -20,11 +26,10 @@ import { cn } from "../../lib/utils";
 import { moreChoicesLabel, visibleChoices } from "./artifact-choice-model";
 import {
   artifactVariantLabel,
-  artifactVersionCountLabel,
   artifactsForVersion,
   groupArtifactsByFamily,
-  type ArtifactGroup,
 } from "./artifact-groups-model";
+import { repositoryIndexJobStatusView } from "./repository-index-job-model";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
   repositoryArtifactDeleteDialogContent,
@@ -32,26 +37,40 @@ import {
 } from "./repository-artifacts-model";
 
 export function RepositoryArtifactsSection({ repository }: RepositoryDetailSectionProps) {
-  const artifacts = useRepositoryArtifacts(repository.name);
+  const familiesQuery = useRepositoryArtifactFamiliesPages(repository.name);
+  const indexJob = useRepositoryArtifactIndexJob(repository.name);
   const rebuildIndex = useRebuildRepositoryArtifactIndex(repository.name);
   const deleteArtifact = useDeleteRepositoryArtifact(repository.name);
   const toast = useToast();
   useErrorToast("Artifact index rebuild failed", rebuildIndex.error);
   useErrorToast("Artifact not deleted", deleteArtifact.error);
   const [, setSearchParams] = useSearchParams();
-  const [openGroupKey, setOpenGroupKey] = useState<string>();
+  const [openFamilyKey, setOpenFamilyKey] = useState<string>();
   const [selectedArtifact, setSelectedArtifact] = useState<RepositoryArtifact>();
   const [pendingDeleteArtifact, setPendingDeleteArtifact] = useState<RepositoryArtifact>();
-  const rows = artifacts.data?.artifacts ?? [];
-  const groups = groupArtifactsByFamily(rows);
+  const familyArtifactsQuery = useRepositoryArtifactFamilyArtifacts(repository.name, openFamilyKey);
+  const pages = familiesQuery.data?.pages ?? [];
+  const families = pages.flatMap((page) => page.families);
+  const totalFamilies = pages[0]?.totalFamilies ?? families.length;
+  const totalArtifacts = pages[0]?.totalArtifacts ?? families.reduce((total, family) => total + family.artifactCount, 0);
+  const indexJobStatus = indexJob.data?.job?.status;
+  const indexJobIsRunning = indexJobStatus === "pending" || indexJobStatus === "running";
+  const indexJobView = repositoryIndexJobStatusView(indexJob.data?.job);
+  const detailGroups = groupArtifactsByFamily(familyArtifactsQuery.data?.artifacts ?? []);
   // Re-read from the current grouping rather than held: a rebuild replaces
   // every artifact, and a version kept in state would go on describing one
   // that is no longer there.
-  const openGroup = groups.find((group) => group.key === openGroupKey);
+  const openGroup = detailGroups.find((group) => group.key === openFamilyKey);
 
-  function openArtifactGroup(group: ArtifactGroup) {
-    setOpenGroupKey(group.key);
-    setSelectedArtifact(group.latest);
+  useEffect(() => {
+    if (!openGroup) return;
+    if (selectedArtifact && openGroup.artifacts.some((artifact) => artifact.id === selectedArtifact.id)) return;
+    setSelectedArtifact(openGroup.latest);
+  }, [openGroup, selectedArtifact]);
+
+  function openArtifactFamily(family: RepositoryArtifactFamily) {
+    setOpenFamilyKey(family.key);
+    setSelectedArtifact(family.latestArtifact);
   }
 
   // The chosen version, and within it the chosen build. Choosing a version
@@ -72,7 +91,7 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
   }
 
   function closeArtifactGroup() {
-    setOpenGroupKey(undefined);
+    setOpenFamilyKey(undefined);
     setSelectedArtifact(undefined);
   }
 
@@ -116,10 +135,10 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
-          {rows.length === 1 ? "1 artifact" : `${rows.length} artifacts`}
+          {artifactFamilyCountLabel(totalFamilies, totalArtifacts)}
         </div>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => void artifacts.refetch()}>
+          <Button type="button" variant="outline" size="sm" onClick={() => void familiesQuery.refetch()}>
             <RefreshCcw className="mr-2 h-3.5 w-3.5" />
             Refresh
           </Button>
@@ -127,36 +146,61 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
             type="button"
             variant="outline"
             size="sm"
-            disabled={rebuildIndex.isPending}
+            disabled={rebuildIndex.isPending || indexJobIsRunning}
             onClick={() => rebuildIndex.mutate(undefined, {
-              onSuccess: (result) => {
+              onSuccess: () => {
                 toast.notify({
-                  title: "Artifact index rebuilt",
-                  description: `${result.artifacts.length} artifact${result.artifacts.length === 1 ? "" : "s"} indexed.`,
+                  title: "Repository index refresh started",
+                  description: "The job is running in the background.",
+                  action: { label: "View jobs", to: "/ui/jobs" },
                 });
               },
             })}
           >
             <RotateCw className="mr-2 h-3.5 w-3.5" />
-            {rebuildIndex.isPending ? "Rebuilding..." : "Rebuild index"}
+            {rebuildIndex.isPending || indexJobIsRunning ? "Rebuilding..." : "Rebuild index"}
           </Button>
         </div>
       </div>
       <div className="min-h-0 overflow-hidden rounded-md border border-border bg-background/40">
-        {artifacts.isLoading && <SkeletonRows rows={4} columns={["w-40", "w-14", "w-16", "w-44", "w-20"]} />}
-        {artifacts.isError && <div className="p-3"><ErrorState title="Repository artifacts unavailable" error={artifacts.error} /></div>}
-        {!artifacts.isLoading && !artifacts.isError && rows.length === 0 && (
+        {indexJobView && (
+          <div className={cn(
+            "border-b border-border px-3 py-2 text-xs",
+            indexJobView.failed ? "bg-destructive/10 text-destructive" : "bg-muted/40 text-muted-foreground",
+          )}>
+            <span className="font-medium text-foreground">{indexJobView.label}</span>
+            <span className="ml-2">{indexJobView.description}</span>
+          </div>
+        )}
+        {familiesQuery.isLoading && <SkeletonRows rows={4} columns={["w-40", "w-14", "w-16", "w-44", "w-20"]} />}
+        {familiesQuery.isError && <div className="p-3"><ErrorState title="Repository artifacts unavailable" error={familiesQuery.error} /></div>}
+        {!familiesQuery.isLoading && !familiesQuery.isError && families.length === 0 && (
           <div className="grid min-h-64 p-3">
             <div className="grid min-h-[calc(16rem-1.5rem)] place-items-center rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
               No indexed artifacts yet. Publish artifacts or rebuild the index after adding repository contents.
             </div>
           </div>
         )}
-        {!artifacts.isLoading && !artifacts.isError && rows.length > 0 && (
-          <RepositoryArtifactsTable groups={groups} onOpenGroup={openArtifactGroup} />
+        {!familiesQuery.isLoading && !familiesQuery.isError && families.length > 0 && (
+          <>
+            <RepositoryArtifactsTable families={families} onOpenFamily={openArtifactFamily} />
+            {familiesQuery.hasNextPage && (
+              <div className="border-t border-border p-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={familiesQuery.isFetchingNextPage}
+                  onClick={() => void familiesQuery.fetchNextPage()}
+                >
+                  {familiesQuery.isFetchingNextPage ? "Loading..." : "Load more"}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
-      <Dialog open={Boolean(openGroup)} onOpenChange={(open) => {
+      <Dialog open={Boolean(openFamilyKey)} onOpenChange={(open) => {
         if (!open) closeArtifactGroup();
       }}>
         <DialogContent className="content-start grid-rows-[auto_minmax(0,1fr)] bottom-0 left-0 top-auto max-h-[88dvh] w-full translate-x-0 translate-y-0 overflow-hidden rounded-b-none sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-dvh sm:max-h-none sm:w-[min(92vw,460px)] sm:translate-x-0 sm:translate-y-0 sm:rounded-l-lg sm:rounded-r-none">
@@ -166,7 +210,13 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
             </DialogTitle>
           </DialogHeader>
           <div className="min-h-0 overflow-y-auto pr-1">
-            {openGroup && (
+            {familyArtifactsQuery.isLoading && (
+              <SkeletonRows rows={3} columns={["w-24", "w-32"]} />
+            )}
+            {familyArtifactsQuery.isError && (
+              <ErrorState title="Artifact detail unavailable" error={familyArtifactsQuery.error} />
+            )}
+            {!familyArtifactsQuery.isLoading && !familyArtifactsQuery.isError && openGroup && (
               <div className="grid gap-4">
                 <ArtifactChoice
                   label="Version"
@@ -214,11 +264,11 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
 }
 
 function RepositoryArtifactsTable({
-  groups,
-  onOpenGroup,
+  families,
+  onOpenFamily,
 }: {
-  groups: ArtifactGroup[];
-  onOpenGroup: (group: ArtifactGroup) => void;
+  families: RepositoryArtifactFamily[];
+  onOpenFamily: (family: RepositoryArtifactFamily) => void;
 }) {
   return (
     <div className="max-h-80 overflow-auto">
@@ -233,31 +283,31 @@ function RepositoryArtifactsTable({
           </tr>
         </thead>
         <tbody>
-          {groups.map((group) => (
-            <tr key={group.key} className="border-t border-border">
+          {families.map((family) => (
+            <tr key={family.key} className="border-t border-border">
               <td className="min-w-0 px-3 py-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <Package className="h-4 w-4 shrink-0 text-primary-ink" />
                   <div className="min-w-0">
-                    <div className="truncate font-medium">{group.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">{group.latest.summary}</div>
+                    <div className="truncate font-medium">{family.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">{family.latestSummary}</div>
                   </div>
                 </div>
               </td>
-              <td className="truncate px-3 py-2 text-muted-foreground">{group.latest.version ?? "-"}</td>
+              <td className="truncate px-3 py-2 text-muted-foreground">{family.latestVersion ?? "-"}</td>
               <td className="truncate px-3 py-2 text-xs text-muted-foreground">
-                {artifactVersionCountLabel(group) ?? "1 version"}
+                {artifactFamilyVersionLabel(family)}
               </td>
-              <td className="truncate px-3 py-2 text-xs text-muted-foreground">{group.latest.publishedAt}</td>
+              <td className="truncate px-3 py-2 text-xs text-muted-foreground">{family.updatedAt}</td>
               <td className="px-3 py-2 text-right">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-muted-foreground"
-                  aria-label={`Open ${group.name}`}
-                  title={`Open ${group.name}`}
-                  onClick={() => onOpenGroup(group)}
+                  aria-label={`Open ${family.name}`}
+                  title={`Open ${family.name}`}
+                  onClick={() => onOpenFamily(family)}
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
@@ -268,6 +318,21 @@ function RepositoryArtifactsTable({
       </table>
     </div>
   );
+}
+
+function artifactFamilyCountLabel(totalFamilies: number, totalArtifacts: number): string {
+  const familyLabel = totalFamilies === 1 ? "1 package" : `${totalFamilies} packages`;
+  const artifactLabel = totalArtifacts === 1 ? "1 artifact" : `${totalArtifacts} artifacts`;
+  return `${familyLabel}, ${artifactLabel}`;
+}
+
+function artifactFamilyVersionLabel(family: RepositoryArtifactFamily): string {
+  const versionLabel = family.versionCount === 1 ? "1 version" : `${family.versionCount} versions`;
+  if (family.artifactCount === family.versionCount) {
+    return versionLabel;
+  }
+  const artifactLabel = family.artifactCount === 1 ? "1 artifact" : `${family.artifactCount} artifacts`;
+  return `${versionLabel}, ${artifactLabel}`;
 }
 
 /**

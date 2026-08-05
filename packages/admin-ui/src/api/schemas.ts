@@ -120,10 +120,99 @@ export const repositoryArtifactSchema = z.object({
   publishSessionId: z.string().optional(),
 });
 
+export const repositoryIndexJobSchema = z.object({
+    repositoryName: z.string(),
+    kind: z.enum(["hosted-rebuild", "proxy-refresh", "group-refresh"]),
+    status: z.enum(["pending", "running", "ready", "failed"]),
+    requestedAt: z.string(),
+    attempts: z.number(),
+    startedAt: z.string().optional(),
+    finishedAt: z.string().optional(),
+    lastSuccessAt: z.string().optional(),
+    rerunRequestedAt: z.string().optional(),
+    lastFailure: z.object({
+      message: z.string(),
+      failedAt: z.string(),
+    }).optional(),
+});
+
 export const repositoryArtifactsResponseSchema = z.object({
   artifacts: z.array(repositoryArtifactSchema),
+  indexJob: repositoryIndexJobSchema.nullable().optional(),
   cursor: z.string().optional(),
   truncated: z.boolean(),
+});
+
+export const repositoryArtifactFamilySchema = z.object({
+  key: z.string(),
+  repositoryName: z.string(),
+  ecosystem: z.string(),
+  name: z.string(),
+  latestVersion: z.string().optional(),
+  latestSummary: z.string(),
+  latestPublishedAt: z.string(),
+  updatedAt: z.string(),
+  artifactCount: z.number(),
+  versionCount: z.number(),
+  latestArtifact: repositoryArtifactSchema,
+});
+
+export const repositoryArtifactFamiliesResponseSchema = z.object({
+  families: z.array(repositoryArtifactFamilySchema),
+  totalFamilies: z.number(),
+  totalArtifacts: z.number(),
+  indexJob: repositoryIndexJobSchema.nullable().optional(),
+  cursor: z.string().optional(),
+  truncated: z.boolean(),
+});
+
+export const repositoryIndexJobResponseSchema = z.object({
+  job: repositoryIndexJobSchema,
+});
+
+export const repositoryIndexJobStatusResponseSchema = z.object({
+  job: repositoryIndexJobSchema.nullable(),
+});
+
+export const backgroundJobSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  status: z.enum(["pending", "running", "succeeded", "failed", "canceling", "canceled"]),
+  subject: z.object({
+    type: z.enum(["repository", "publish-session", "upload", "artifact", "system"]),
+    id: z.string(),
+    repositoryName: z.string().optional(),
+  }),
+  repositoryName: z.string().optional(),
+  priority: z.number(),
+  attempts: z.number(),
+  maxAttempts: z.number().optional(),
+  requestedAt: z.string(),
+  scheduledAt: z.string(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional(),
+  lastHeartbeatAt: z.string().optional(),
+  progress: z.object({
+    current: z.number().optional(),
+    total: z.number().optional(),
+    message: z.string().optional(),
+  }).optional(),
+  result: z.record(z.string(), z.unknown()).optional(),
+  failure: z.object({
+    message: z.string(),
+    failedAt: z.string(),
+    retryable: z.boolean(),
+  }).optional(),
+  cancelRequestedAt: z.string().optional(),
+});
+
+export const backgroundJobsResponseSchema = z.object({
+  jobs: z.array(backgroundJobSchema),
+  total: z.number(),
+});
+
+export const backgroundJobResponseSchema = z.object({
+  job: backgroundJobSchema,
 });
 
 export const repositoryPluginSchema = z.object({
@@ -186,8 +275,10 @@ export const publishTokenCreateResponseSchema = z.object({
 export const publishSessionStatusSchema = z.enum([
   "pending_uploads",
   "ready",
+  "finalize_queued",
   "finalizing",
   "finalized",
+  "finalize_failed",
   "failed",
 ]);
 
@@ -274,6 +365,25 @@ export const createdPublishSessionSchema = publishSessionSchema.extend({
 
 export const publishSessionsResponseSchema = z.object({
   sessions: z.array(publishSessionSchema),
+});
+
+export const publishFinalizeJobSchema = z.object({
+  sessionId: z.string(),
+  repositoryName: z.string(),
+  status: z.enum(["pending", "running", "ready", "failed"]),
+  requestedAt: z.string(),
+  attempts: z.number(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional(),
+  lastFailure: z.object({
+    message: z.string(),
+    failedAt: z.string(),
+  }).optional(),
+});
+
+export const publishFinalizeResponseSchema = z.object({
+  session: publishSessionSchema,
+  job: publishFinalizeJobSchema,
 });
 
 export const objectDeleteActivitySchema = z.object({
@@ -389,7 +499,11 @@ export type RepositoryObject = z.infer<typeof repositoryObjectSchema>;
 export type RepositoryObjectDetail = z.infer<typeof repositoryObjectDetailSchema>;
 export type RepositoryObjectsResponse = z.infer<typeof repositoryObjectsResponseSchema>;
 export type RepositoryArtifact = z.infer<typeof repositoryArtifactSchema>;
+export type RepositoryArtifactFamily = z.infer<typeof repositoryArtifactFamilySchema>;
 export type RepositoryArtifactsResponse = z.infer<typeof repositoryArtifactsResponseSchema>;
+export type RepositoryArtifactFamiliesResponse = z.infer<typeof repositoryArtifactFamiliesResponseSchema>;
+export type RepositoryIndexJob = z.infer<typeof repositoryIndexJobSchema>;
+export type BackgroundJob = z.infer<typeof backgroundJobSchema>;
 export type RepositoryClientHelperAction = PluginClientHelperActionManifest;
 export type RepositoryPlugin = z.infer<typeof repositoryPluginSchema>;
 export type RepositoryVisibility = z.infer<typeof repositoryVisibilitySchema>;
@@ -397,6 +511,7 @@ export type RepositoryKind = z.infer<typeof repositoryKindSchema>;
 export type PublishToken = z.infer<typeof publishTokenSchema>;
 export type PublishTokenCreateResponse = z.infer<typeof publishTokenCreateResponseSchema>;
 export type PublishSession = z.infer<typeof publishSessionSchema>;
+export type PublishFinalizeResponse = z.infer<typeof publishFinalizeResponseSchema>;
 export type CreatedPublishSession = z.infer<typeof createdPublishSessionSchema>;
 export type PublishSessionStatus = z.infer<typeof publishSessionStatusSchema>;
 export type PublishArtifact = z.infer<typeof publishArtifactSchema>;

@@ -773,6 +773,8 @@ const ADMIN_REPOSITORY_ROUTES = {
   objects: /^\/admin\/repositories\/([^/]+)\/objects$/,
   objectDetail: /^\/admin\/repositories\/([^/]+)\/objects\/detail$/,
   activity: /^\/admin\/repositories\/([^/]+)\/activity$/,
+  artifactIndexJob: /^\/admin\/repositories\/([^/]+)\/artifact-index-job$/,
+  artifactFamilies: /^\/admin\/repositories\/([^/]+)\/artifacts\/families$/,
   artifacts: /^\/admin\/repositories\/([^/]+)\/artifacts$/,
   artifactsRebuildIndex: /^\/admin\/repositories\/([^/]+)\/artifacts\/rebuild-index$/,
   artifact: /^\/admin\/repositories\/([^/]+)\/artifacts\/([^/]+)$/,
@@ -1114,6 +1116,8 @@ interface RepositoryActivityPageParams {
 
 const DEFAULT_ACTIVITY_PAGE_LIMIT = 10;
 const MAX_ACTIVITY_PAGE_LIMIT = 100;
+const DEFAULT_ARTIFACT_PAGE_LIMIT = 50;
+const MAX_ARTIFACT_PAGE_LIMIT = 100;
 
 function repositoryActivityPageParams(searchParams: URLSearchParams): RepositoryActivityPageParams {
   const limitParam = searchParams.get("limit");
@@ -1124,7 +1128,7 @@ function repositoryActivityPageParams(searchParams: URLSearchParams): Repository
   const cursor = searchParams.get("cursor");
   return {
     limit,
-    offset: cursor ? decodeActivityCursor(cursor) : 0,
+    offset: cursor ? decodeOffsetCursor(cursor) : 0,
   };
 }
 
@@ -1135,18 +1139,81 @@ function repositoryActivityPage<T>(activities: T[], params: RepositoryActivityPa
   return {
     activities: pageActivities,
     truncated,
-    ...(truncated ? { cursor: encodeActivityCursor(end) } : {}),
+    ...(truncated ? { cursor: encodeOffsetCursor(end) } : {}),
   };
 }
 
-function encodeActivityCursor(offset: number): string {
+function repositoryArtifactPage<T>(records: T[], total: number, params: RepositoryActivityPageParams) {
+  const end = params.offset + params.limit;
+  const truncated = end < total;
+  return {
+    artifacts: records,
+    truncated,
+    ...(truncated ? { cursor: encodeOffsetCursor(end) } : {}),
+  };
+}
+
+function repositoryArtifactFamilyPage<T>(
+  records: T[],
+  totals: { totalFamilies: number; totalArtifacts: number },
+  params: RepositoryActivityPageParams,
+) {
+  const end = params.offset + params.limit;
+  const truncated = end < totals.totalFamilies;
+  return {
+    families: records,
+    totalFamilies: totals.totalFamilies,
+    totalArtifacts: totals.totalArtifacts,
+    truncated,
+    ...(truncated ? { cursor: encodeOffsetCursor(end) } : {}),
+  };
+}
+
+function repositoryArtifactPageParams(searchParams: URLSearchParams): RepositoryActivityPageParams {
+  return offsetPageParams(searchParams, DEFAULT_ARTIFACT_PAGE_LIMIT, MAX_ARTIFACT_PAGE_LIMIT);
+}
+
+function offsetPageParams(searchParams: URLSearchParams, defaultLimit: number, maxLimit: number): RepositoryActivityPageParams {
+  const limitParam = searchParams.get("limit");
+  const limit = limitParam === null ? defaultLimit : Number(limitParam);
+  if (!Number.isInteger(limit) || limit < 1 || limit > maxLimit) {
+    throw new ValidationError(`limit must be an integer between 1 and ${maxLimit}`);
+  }
+  const cursor = searchParams.get("cursor");
+  return {
+    limit,
+    offset: cursor ? decodeOffsetCursor(cursor) : 0,
+  };
+}
+
+function optionalPositiveIntegerSearchParam(url: URL, name: string): number | undefined {
+  const value = url.searchParams.get(name);
+  if (value === null) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new ValidationError(`${name} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function optionalNonNegativeIntegerSearchParam(url: URL, name: string): number | undefined {
+  const value = url.searchParams.get(name);
+  if (value === null) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new ValidationError(`${name} must be a non-negative integer`);
+  }
+  return parsed;
+}
+
+function encodeOffsetCursor(offset: number): string {
   return btoa(JSON.stringify({ offset }))
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replace(/=+$/u, "");
 }
 
-function decodeActivityCursor(cursor: string): number {
+function decodeOffsetCursor(cursor: string): number {
   try {
     const normalized = cursor.replaceAll("-", "+").replaceAll("_", "/");
     const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
@@ -1484,6 +1551,42 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     throw new NotFoundError();
   }
+  if (url.pathname === "/admin/jobs") {
+    await requireAdmin(request, dependencies.adminAuthService);
+    if (request.method === "GET") {
+      const limit = optionalPositiveIntegerSearchParam(url, "limit");
+      const offset = optionalNonNegativeIntegerSearchParam(url, "offset");
+      return jsonResponse(await dependencies.backgroundJobService.list({
+        ...(url.searchParams.has("repositoryName") ? { repositoryName: url.searchParams.get("repositoryName") ?? "" } : {}),
+        ...(url.searchParams.has("status") ? { status: url.searchParams.get("status") as never } : {}),
+        ...(url.searchParams.has("type") ? { type: url.searchParams.get("type") as never } : {}),
+        ...(limit === undefined ? {} : { limit }),
+        ...(offset === undefined ? {} : { offset }),
+      }));
+    }
+    throw new NotFoundError();
+  }
+  const adminJobMatch = url.pathname.match(/^\/admin\/jobs\/([^/]+)$/);
+  if (adminJobMatch) {
+    await requireAdmin(request, dependencies.adminAuthService);
+    const jobId = decodeURIComponent(adminJobMatch[1] ?? "");
+    if (request.method === "GET") {
+      const job = await dependencies.backgroundJobService.get(jobId);
+      if (!job) throw new NotFoundError();
+      return jsonResponse({ job });
+    }
+    throw new NotFoundError();
+  }
+  const adminCancelJobMatch = url.pathname.match(/^\/admin\/jobs\/([^/]+)\/cancel$/);
+  if (adminCancelJobMatch) {
+    await requireAdmin(request, dependencies.adminAuthService);
+    if (request.method === "POST") {
+      const job = await dependencies.backgroundJobService.cancel(decodeURIComponent(adminCancelJobMatch[1] ?? ""));
+      if (!job) throw new NotFoundError();
+      return jsonResponse({ job });
+    }
+    throw new NotFoundError();
+  }
   if (url.pathname === "/admin/repositories") {
     await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "GET") {
@@ -1640,6 +1743,36 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       repositoryActivityPageParams(url.searchParams),
     ));
   }
+  const adminRepositoryArtifactIndexJobName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.artifactIndexJob);
+  if (adminRepositoryArtifactIndexJobName) {
+    await requireAdmin(request, dependencies.adminAuthService);
+    if (request.method !== "GET") {
+      throw new NotFoundError();
+    }
+    const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactIndexJobName);
+    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
+    return jsonResponse({
+      job: await dependencies.repositoryIndexJobService.getByRepository(repository.name),
+    });
+  }
+  const adminRepositoryArtifactFamiliesName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.artifactFamilies);
+  if (adminRepositoryArtifactFamiliesName) {
+    await requireAdmin(request, dependencies.adminAuthService);
+    if (request.method !== "GET") {
+      throw new NotFoundError();
+    }
+    const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactFamiliesName);
+    await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
+    const pageParams = repositoryArtifactPageParams(url.searchParams);
+    const page = await dependencies.repositoryArtifactStore.listFamiliesByRepositoryPage(repository.name, pageParams);
+    return jsonResponse({
+      ...repositoryArtifactFamilyPage(page.records, {
+        totalFamilies: page.totalFamilies,
+        totalArtifacts: page.totalArtifacts,
+      }, pageParams),
+      indexJob: await dependencies.repositoryIndexJobService.getByRepository(repository.name),
+    });
+  }
   const adminRepositoryArtifactsName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.artifacts);
   if (adminRepositoryArtifactsName) {
     await requireAdmin(request, dependencies.adminAuthService);
@@ -1648,9 +1781,19 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactsName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
+    const family = url.searchParams.get("family");
+    if (family !== null) {
+      return jsonResponse({
+        artifacts: await dependencies.repositoryArtifactStore.listByRepositoryFamily(repository.name, family),
+        truncated: false,
+        indexJob: await dependencies.repositoryIndexJobService.getByRepository(repository.name),
+      });
+    }
+    const pageParams = repositoryArtifactPageParams(url.searchParams);
+    const page = await dependencies.repositoryArtifactStore.listByRepositoryPage(repository.name, pageParams);
     return jsonResponse({
-      artifacts: await dependencies.repositoryArtifactStore.listByRepository(repository.name),
-      truncated: false,
+      ...repositoryArtifactPage(page.records, page.total, pageParams),
+      indexJob: await dependencies.repositoryIndexJobService.getByRepository(repository.name),
     });
   }
   const adminRepositoryArtifactsRebuildName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.artifactsRebuildIndex);
@@ -1661,12 +1804,9 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactsRebuildName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
-    const result = await dependencies.repositoryArtifactIndexService.rebuild({ repositoryName: repository.name });
-    await dependencies.repositoryActivityService.recordArtifactIndexRebuild({
-      repositoryName: repository.name,
-      artifactCount: result.artifacts.length,
-    });
-    return jsonResponse({ ...result, truncated: false });
+    const job = await dependencies.repositoryIndexJobService.request({ repositoryName: repository.name });
+    await dependencies.scheduleRepositoryIndexJobs?.();
+    return jsonResponse({ job }, { status: 202 });
   }
   const adminRepositoryArtifactPath = parseAdminRepositoryArtifactPath(url.pathname);
   if (adminRepositoryArtifactPath) {
@@ -1709,6 +1849,16 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const repository = await dependencies.repositoryService.getByName(adminRepositoryObjectDetailName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     const relativePath = repositoryObjectRelativePathParam(url.searchParams.get("path"));
+    const plugin = dependencies.repositoryRuntimePlugins.getPluginForRepository(repository);
+    const pluginDetail = await plugin?.objectBrowser?.getObjectDetail?.({
+      repository,
+      objectStore: dependencies.repositoryObjectStore,
+      path: relativePath,
+      origin: publicArtifactOrigin(url, dependencies),
+    });
+    if (pluginDetail) {
+      return jsonResponse({ object: pluginDetail });
+    }
     const objectKey = `repositories/${repository.name}/${relativePath}`;
     const metadata = await dependencies.repositoryObjectStore.headObject(objectKey);
     if (!metadata) {
@@ -1729,6 +1879,15 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     if (request.method === "GET") {
       const prefix = repositoryObjectListPrefix(url.searchParams.get("prefix"));
+      const plugin = dependencies.repositoryRuntimePlugins.getPluginForRepository(repository);
+      const pluginListing = await plugin?.objectBrowser?.listObjects({
+        repository,
+        objectStore: dependencies.repositoryObjectStore,
+        prefix,
+      });
+      if (pluginListing) {
+        return jsonResponse(pluginListing);
+      }
       const listing = await dependencies.repositoryObjectStore.listObjects({
         prefix: `repositories/${repository.name}/${prefix}`,
         delimiter: "/",
@@ -1814,6 +1973,16 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     });
     return jsonResponse(session, { status: 201 });
   }
+  const adminGetPublishSessionMatch = url.pathname.match(/^\/admin\/publish-sessions\/([^/]+)$/);
+  if (adminGetPublishSessionMatch && request.method === "GET") {
+    await requireAdmin(request, dependencies.adminAuthService);
+    const [, sessionId] = adminGetPublishSessionMatch;
+    if (!sessionId) {
+      throw new NotFoundError();
+    }
+    const session = await dependencies.publishSessionService.getAsAdmin({ sessionId });
+    return jsonResponse({ session: readablePublishSession(session) });
+  }
   const adminVerifyUploadMatch = url.pathname.match(
     /^\/admin\/publish-sessions\/([^/]+)\/uploads\/([^/]+)\/verify$/,
   );
@@ -1867,10 +2036,11 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     if (!sessionId) {
       throw new NotFoundError();
     }
-    const result = await dependencies.publishSessionService.finalizeAsAdmin({
+    const result = await dependencies.publishFinalizeJobService.requestAsAdmin({
       sessionId,
     });
-    return jsonResponse({ ...result, session: readablePublishSession(result.session) });
+    await dependencies.schedulePublishFinalizeJobs?.();
+    return jsonResponse({ ...result, session: readablePublishSession(result.session) }, { status: 202 });
   }
   if (url.pathname === "/api/publish-sessions" && request.method === "GET") {
     const secret = requireBearer(request);
@@ -1927,11 +2097,12 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     const secret = requireBearer(request);
     const principal = await dependencies.publishTokenService.verify(secret);
-    const result = await dependencies.publishSessionService.finalize({
+    const result = await dependencies.publishFinalizeJobService.request({
       sessionId,
       principal,
     });
-    return jsonResponse({ ...result, session: readablePublishSession(result.session) });
+    await dependencies.schedulePublishFinalizeJobs?.();
+    return jsonResponse({ ...result, session: readablePublishSession(result.session) }, { status: 202 });
   }
   const clientHelperPath = servesArtifacts ? parseRepositoryClientHelperPath(request.url) : null;
   if (clientHelperPath && request.method === "GET") {

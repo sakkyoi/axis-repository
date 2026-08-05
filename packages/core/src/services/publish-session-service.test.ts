@@ -659,6 +659,34 @@ describe("PublishSessionService", () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it("queues finalize for a ready session without publishing immediately", async () => {
+    const state = await createStateWithRepository();
+    const { publisher, calls } = createPublisher();
+    const service = new PublishSessionService({ state, uploadBroker, artifactPublisher: publisher, clock, randomId });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+
+    const result = await service.requestFinalize({
+      sessionId: "pub_fixed",
+      principal,
+    });
+
+    expect(calls).toHaveLength(0);
+    expect(result.session.status).toBe("finalize_queued");
+    await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
+      status: "finalize_queued",
+    });
+  });
+
   it("finalizes a ready session and stores the publish result", async () => {
     const state = await createStateWithRepository();
     const { publisher, calls } = createPublisher();
@@ -722,6 +750,38 @@ describe("PublishSessionService", () => {
     });
   });
 
+  it("finalizes a queued session and stores the publish result", async () => {
+    const state = await createStateWithRepository();
+    const { publisher, calls } = createPublisher();
+    const service = new PublishSessionService({ state, uploadBroker, artifactPublisher: publisher, clock, randomId });
+    await service.create({
+      repositoryName: "debian-internal",
+      ecosystem: "apt",
+      principal,
+      artifacts: [artifact],
+    });
+    await service.verifyUpload({
+      sessionId: "pub_fixed",
+      uploadId: "upl_fixed",
+      principal,
+    });
+    await service.requestFinalize({
+      sessionId: "pub_fixed",
+      principal,
+    });
+
+    const result = await service.finalize({
+      sessionId: "pub_fixed",
+      principal,
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      session: { id: "pub_fixed", status: "finalizing" },
+    });
+    expect(result.session.status).toBe("finalized");
+  });
+
   it("finalizes using the latest verified upload after re-verification", async () => {
     const backingState = await createStateWithRepository();
     const { publisher, calls } = createPublisher();
@@ -781,6 +841,8 @@ describe("PublishSessionService", () => {
         },
       },
       publishTokens: backingState.publishTokens,
+      backgroundJobs: backingState.backgroundJobs,
+      publishFinalizeJobs: backingState.publishFinalizeJobs,
       adminUsers: backingState.adminUsers,
       adminRefreshSessions: backingState.adminRefreshSessions,
       publishSessions: backingState.publishSessions,
@@ -788,6 +850,7 @@ describe("PublishSessionService", () => {
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,
       repositoryArtifacts: backingState.repositoryArtifacts,
+      repositoryIndexJobs: backingState.repositoryIndexJobs,
     };
     const service = new PublishSessionService({
       state,
@@ -886,7 +949,7 @@ describe("PublishSessionService", () => {
     });
   });
 
-  it("marks the session failed when the publisher throws", async () => {
+  it("marks the session finalize_failed when the publisher throws", async () => {
     const state = await createStateWithRepository();
     const service = new PublishSessionService({
       state,
@@ -918,7 +981,7 @@ describe("PublishSessionService", () => {
       }),
     ).rejects.toThrow("write failed");
     await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
-      status: "failed",
+      status: "finalize_failed",
       failure: {
         message: "write failed",
         failedAt: "2026-07-12T00:00:00.000Z",
@@ -936,12 +999,15 @@ describe("PublishSessionService", () => {
     const state: StateStore = {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
+      backgroundJobs: backingState.backgroundJobs,
+      publishFinalizeJobs: backingState.publishFinalizeJobs,
       adminUsers: backingState.adminUsers,
       adminRefreshSessions: backingState.adminRefreshSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,
       repositoryArtifacts: backingState.repositoryArtifacts,
+      repositoryIndexJobs: backingState.repositoryIndexJobs,
       publishSessions: {
         ...backingState.publishSessions,
         save: async (session: PublishSession) => {
@@ -1028,12 +1094,15 @@ describe("PublishSessionService", () => {
     const state: StateStore = {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
+      backgroundJobs: backingState.backgroundJobs,
+      publishFinalizeJobs: backingState.publishFinalizeJobs,
       adminUsers: backingState.adminUsers,
       adminRefreshSessions: backingState.adminRefreshSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,
       repositoryArtifacts: backingState.repositoryArtifacts,
+      repositoryIndexJobs: backingState.repositoryIndexJobs,
       publishSessions: {
         ...backingState.publishSessions,
         update: async (id, updater) => {

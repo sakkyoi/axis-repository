@@ -4,6 +4,7 @@ import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-p
 import { createDevDependencies, createDevDependencyHarness } from "./dev-dependencies";
 import { debArchive } from "@axis-repository/plugin-apt/test-support";
 import { sdistBytes, wheelBytes } from "@axis-repository/plugin-pypi/test-support";
+import type { RepositoryArtifactRecord } from "@axis-repository/core";
 import type { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 
 afterEach(() => {
@@ -155,6 +156,24 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function artifactRecord(id: string, name: string, updatedAt: string): RepositoryArtifactRecord {
+  return {
+    id,
+    repositoryName: "debian-private",
+    ecosystem: "apt",
+    identity: `apt:${name}:1.0.0:amd64`,
+    family: `apt:${name}`,
+    name,
+    version: "1.0.0",
+    summary: `${name} 1.0.0 amd64`,
+    primaryObjectKey: `repositories/debian-private/pool/main/${name}/${name}_1.0.0_amd64.deb`,
+    objectKeys: [`repositories/debian-private/pool/main/${name}/${name}_1.0.0_amd64.deb`],
+    metadata: { architecture: "amd64" },
+    publishedAt: updatedAt,
+    updatedAt,
+  };
+}
+
 function readStoredText(store: MemoryRepositoryObjectStore, key: string): string {
   const object = [...store.objects].reverse().find((candidate) => candidate.key === key);
   if (!object) {
@@ -236,13 +255,21 @@ async function createSigningKey(app: ReturnType<typeof createApp>): Promise<{ id
   return (await response.json()) as { id: string; publicKeyArmored: string };
 }
 
+async function drainPublishFinalizeJobs(
+  harness: ReturnType<typeof createDevDependencyHarness>,
+  limit = 1,
+) {
+  return harness.dependencies.publishFinalizeJobService.drain({ limit });
+}
+
 function basicAuth(secret: string, username = "axis"): string {
   return `Basic ${btoa(`${username}:${secret}`)}`;
 }
 
 describe("Cloudflare runtime routes", () => {
   it("responds to health checks", async () => {
-    const app = createApp(createDevDependencies());
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
     const response = await app.fetch(new Request("https://axis.example/health"));
 
     expect(response.status).toBe(200);
@@ -250,7 +277,8 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("returns not found for unknown API routes", async () => {
-    const app = createApp(createDevDependencies());
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
     const response = await app.fetch(new Request("https://axis.example/api/missing"));
 
     expect(response.status).toBe(404);
@@ -466,9 +494,9 @@ describe("Cloudflare runtime routes", () => {
 
   it("rebuilds PyPI proxy artifacts from the upstream Simple API cache", async () => {
     const upstreamHtml = new Map([
-      ["https://pypi.example/simple/", "<a href=\"demo/\">demo</a>"],
+      ["https://pypi.org/simple/", "<a href=\"demo/\">demo</a>"],
       [
-        "https://pypi.example/simple/demo/",
+        "https://pypi.org/simple/demo/",
         `<a href="https://files.example/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}">demo-1.0-py3-none-any.whl</a>`,
       ],
     ]);
@@ -476,7 +504,8 @@ describe("Cloudflare runtime routes", () => {
       status: upstreamHtml.has(request.url) ? 200 : 404,
       headers: { "content-type": "text/html" },
     }));
-    const app = createApp(createDevDependencies());
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
 
     const createResponse = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
@@ -490,7 +519,7 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           kind: "proxy",
           visibility: "public",
-          config: { pypi: { upstreamUrl: "https://pypi.example/" } },
+          config: { pypi: { upstreamUrl: "https://pypi.org/" } },
         }),
       }),
     );
@@ -502,10 +531,12 @@ describe("Cloudflare runtime routes", () => {
         headers: { authorization: "Bearer dev-admin-token" },
       }),
     );
-    expect(rebuildResponse.status).toBe(200);
+    expect(rebuildResponse.status).toBe(202);
     await expect(rebuildResponse.json()).resolves.toMatchObject({
-      artifacts: [expect.objectContaining({ identity: "pypi:demo:demo-1.0-py3-none-any.whl" })],
+      job: { repositoryName: "python-proxy", kind: "proxy-refresh", status: "pending" },
     });
+    await expect(harness.dependencies.repositoryIndexJobService.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, remaining: 0 });
 
     const projectsResponse = await app.fetch(
       new Request("https://axis.example/admin/repositories/python-proxy/pypi/projects", {
@@ -514,7 +545,17 @@ describe("Cloudflare runtime routes", () => {
     );
     expect(projectsResponse.status).toBe(200);
     await expect(projectsResponse.json()).resolves.toMatchObject({
-      projects: [{ name: "demo", files: [expect.objectContaining({ filename: "demo-1.0-py3-none-any.whl" })] }],
+      projects: [{ name: "demo", fileCount: 1 }],
+    });
+
+    const projectResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-proxy/pypi/projects/demo", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(projectResponse.status).toBe(200);
+    await expect(projectResponse.json()).resolves.toMatchObject({
+      project: { name: "demo", files: [expect.objectContaining({ filename: "demo-1.0-py3-none-any.whl" })] },
     });
   });
 
@@ -2672,6 +2713,109 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("lets repository plugins provide a virtual admin object browser", async () => {
+    const harness = createDevDependencyHarness();
+    harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "hosted",
+      ecosystem: "demo",
+      name: "demo-hosted",
+      version: "0.1.0",
+      repositoryKinds: ["hosted"],
+      capabilities: ["hosted"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: "2026-07-23T00:00:00.000Z", objects: [] }),
+      },
+    });
+    harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "proxy",
+      ecosystem: "demo",
+      name: "demo-proxy",
+      version: "0.1.0",
+      repositoryKinds: ["proxy"],
+      capabilities: ["proxy"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      objectBrowser: {
+        listObjects: async ({ prefix }) => ({
+          prefix,
+          directories: prefix === "" ? [{ name: "simple", path: "simple/" }] : [],
+          objects: prefix === "simple/" ? [{
+            name: "demo-1.0.0.whl",
+            path: "simple/demo/demo-1.0.0.whl",
+            size: 123,
+            contentType: "application/octet-stream",
+          }] : [],
+          truncated: false,
+        }),
+        getObjectDetail: async ({ path, origin, repository }) => ({
+          name: path.split("/").at(-1) ?? path,
+          path,
+          objectKey: `virtual:${path}`,
+          repositoryUrl: `${origin}/repositories/${repository.name}/${path}`,
+          size: 123,
+          contentType: "application/octet-stream",
+        }),
+      },
+    });
+    await harness.dependencies.repositoryService.create({
+      name: "demo-proxy",
+      ecosystem: "demo",
+      kind: "proxy",
+      visibility: "private",
+      config: { demo: {} },
+    });
+    const app = createApp(harness.dependencies);
+    await harness.repositoryObjectStore.putText(
+      "repositories/demo-proxy/_proxy-cache/raw-cache-key",
+      "cache",
+      "text/plain",
+    );
+
+    const root = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/demo-proxy/objects",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const nested = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/demo-proxy/objects?prefix=simple%2F",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const detail = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/demo-proxy/objects/detail?path=simple%2Fdemo%2Fdemo-1.0.0.whl",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(root.status).toBe(200);
+    await expect(root.json()).resolves.toEqual({
+      prefix: "",
+      directories: [{ name: "simple", path: "simple/" }],
+      objects: [],
+      truncated: false,
+    });
+    expect(nested.status).toBe(200);
+    await expect(nested.json()).resolves.toEqual({
+      prefix: "simple/",
+      directories: [],
+      objects: [{
+        name: "demo-1.0.0.whl",
+        path: "simple/demo/demo-1.0.0.whl",
+        size: 123,
+        contentType: "application/octet-stream",
+      }],
+      truncated: false,
+    });
+    expect(detail.status).toBe(200);
+    await expect(detail.json()).resolves.toMatchObject({
+      object: {
+        path: "simple/demo/demo-1.0.0.whl",
+        objectKey: "virtual:simple/demo/demo-1.0.0.whl",
+      },
+    });
+  });
+
   it("requires admin auth for repository object listings", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
@@ -2702,7 +2846,8 @@ describe("Cloudflare runtime routes", () => {
       `https://axis.example/api/publish-sessions/${session.id}/finalize`,
       { method: "POST", headers: { authorization: `Bearer ${token}` } },
     ));
-    expect(finalize.status).toBe(200);
+    expect(finalize.status).toBe(202);
+    await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 0 });
 
     const response = await app.fetch(new Request(
       "https://axis.example/admin/repositories/debian-internal/artifacts",
@@ -2742,6 +2887,7 @@ describe("Cloudflare runtime routes", () => {
       `https://axis.example/api/publish-sessions/${session.id}/finalize`,
       { method: "POST", headers: { authorization: `Bearer ${token}` } },
     ));
+    await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 0 });
     const artifactsResponse = await app.fetch(new Request(
       "https://axis.example/admin/repositories/debian-internal/artifacts",
       { headers: { authorization: "Bearer dev-admin-token" } },
@@ -2790,7 +2936,7 @@ describe("Cloudflare runtime routes", () => {
       },
     });
     await expect(harness.repositoryObjectStore.headObject(artifact!.objectKeys[0]!)).resolves.toBeNull();
-    await expect(artifactsAfterDelete.json()).resolves.toEqual({ artifacts: [], truncated: false });
+    await expect(artifactsAfterDelete.json()).resolves.toMatchObject({ artifacts: [], truncated: false });
     // Leaving the stanza behind would keep apt asking for a .deb that is gone,
     // and the signed Release would still vouch for that index. The index file
     // itself stays and goes empty, because Release still names the
@@ -2820,6 +2966,10 @@ describe("Cloudflare runtime routes", () => {
 
   it("rebuilds repository artifact indexes from current storage", async () => {
     const harness = createDevDependencyHarness();
+    let scheduledIndexJobs = 0;
+    harness.dependencies.scheduleRepositoryIndexJobs = async () => {
+      scheduledIndexJobs += 1;
+    };
     const app = createApp(harness.dependencies);
     const { token, session } = await createPublishSession(app, harness.repositoryObjectStore);
     const uploadId = session.uploads[0]?.uploadId;
@@ -2832,6 +2982,7 @@ describe("Cloudflare runtime routes", () => {
       `https://axis.example/api/publish-sessions/${session.id}/finalize`,
       { method: "POST", headers: { authorization: `Bearer ${token}` } },
     ));
+    await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 0 });
     await harness.repositoryObjectStore.deleteObject(
       "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb",
     );
@@ -2840,14 +2991,95 @@ describe("Cloudflare runtime routes", () => {
       "https://axis.example/admin/repositories/debian-internal/artifacts/rebuild-index",
       { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
     ));
+    await expect(harness.dependencies.repositoryIndexJobService.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, remaining: 0 });
     const artifacts = await app.fetch(new Request(
       "https://axis.example/admin/repositories/debian-internal/artifacts",
       { headers: { authorization: "Bearer dev-admin-token" } },
     ));
 
-    expect(rebuild.status).toBe(200);
-    await expect(rebuild.json()).resolves.toEqual({ artifacts: [], truncated: false });
-    await expect(artifacts.json()).resolves.toEqual({ artifacts: [], truncated: false });
+    expect(rebuild.status).toBe(202);
+    expect(scheduledIndexJobs).toBe(1);
+    await expect(rebuild.json()).resolves.toMatchObject({
+      job: { repositoryName: "debian-internal", kind: "hosted-rebuild", status: "pending" },
+    });
+    await expect(artifacts.json()).resolves.toMatchObject({
+      artifacts: [],
+      indexJob: { repositoryName: "debian-internal", status: "ready" },
+      truncated: false,
+    });
+  });
+
+  it("reads repository artifact index job status without listing artifacts", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-internal",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    await harness.dependencies.repositoryIndexJobService.request({ repositoryName: "debian-internal" });
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/artifact-index-job",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      job: { repositoryName: "debian-internal", kind: "hosted-rebuild", status: "pending" },
+    });
+  });
+
+  it("lists and cancels background jobs through admin routes", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-proxy",
+      ecosystem: "pypi",
+      kind: "proxy",
+      visibility: "private",
+      config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
+    });
+    await harness.dependencies.repositoryIndexJobService.request({ repositoryName: "python-proxy" });
+
+    const listResponse = await app.fetch(new Request(
+      "https://axis.example/admin/jobs?repositoryName=python-proxy",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const detailResponse = await app.fetch(new Request(
+      "https://axis.example/admin/jobs/repository.index%3Apython-proxy",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const cancelResponse = await app.fetch(new Request(
+      "https://axis.example/admin/jobs/repository.index%3Apython-proxy/cancel",
+      { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(listResponse.status).toBe(200);
+    await expect(listResponse.json()).resolves.toMatchObject({
+      jobs: [{
+        id: "repository.index:python-proxy",
+        type: "repository.index.proxy-refresh",
+        status: "pending",
+      }],
+      total: 1,
+    });
+    expect(detailResponse.status).toBe(200);
+    await expect(detailResponse.json()).resolves.toMatchObject({
+      job: {
+        id: "repository.index:python-proxy",
+        subject: { type: "repository", id: "python-proxy" },
+      },
+    });
+    expect(cancelResponse.status).toBe(200);
+    await expect(cancelResponse.json()).resolves.toMatchObject({
+      job: {
+        id: "repository.index:python-proxy",
+        status: "canceled",
+      },
+    });
+    await expect(harness.dependencies.repositoryIndexJobService.getByRepository("python-proxy")).resolves.toBeNull();
   });
 
   it("records repository activity when rebuilding artifact indexes", async () => {
@@ -2863,12 +3095,14 @@ describe("Cloudflare runtime routes", () => {
       "https://axis.example/admin/repositories/debian-private/artifacts/rebuild-index",
       { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
     ));
+    await expect(harness.dependencies.repositoryIndexJobService.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, remaining: 0 });
     const activity = await app.fetch(new Request(
       "https://axis.example/admin/repositories/debian-private/activity",
       { headers: { authorization: "Bearer dev-admin-token" } },
     ));
 
-    expect(rebuild.status).toBe(200);
+    expect(rebuild.status).toBe(202);
     expect(activity.status).toBe(200);
     await expect(activity.json()).resolves.toMatchObject({
       activities: [{
@@ -2898,6 +3132,7 @@ describe("Cloudflare runtime routes", () => {
       `https://axis.example/api/publish-sessions/${session.id}/finalize`,
       { method: "POST", headers: { authorization: `Bearer ${token}` } },
     ));
+    await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 0 });
 
     const deleted = await app.fetch(new Request(
       "https://axis.example/admin/repositories/debian-internal/objects?path=pool%2Fmain%2Fmyapp%2Fmyapp_1.2.3_amd64.deb",
@@ -2909,7 +3144,7 @@ describe("Cloudflare runtime routes", () => {
     ));
 
     expect(deleted.status).toBe(200);
-    await expect(artifacts.json()).resolves.toEqual({ artifacts: [], truncated: false });
+    await expect(artifacts.json()).resolves.toMatchObject({ artifacts: [], truncated: false });
   });
 
   it("returns repository object detail metadata through the admin file browser", async () => {
@@ -3086,6 +3321,122 @@ describe("Cloudflare runtime routes", () => {
       ...secondPageBody.activities,
       ...thirdPageBody.activities,
     ].filter((activity) => activity.type === "artifact-index.rebuild")).toHaveLength(3);
+  });
+
+  it("paginates repository artifact indexes with an opaque cursor", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    for (const artifact of [
+      artifactRecord("artifact_old", "old", "2026-08-05T00:00:00.000Z"),
+      artifactRecord("artifact_new", "new", "2026-08-05T00:02:00.000Z"),
+      artifactRecord("artifact_middle", "middle", "2026-08-05T00:01:00.000Z"),
+    ]) {
+      await harness.dependencies.repositoryArtifactStore.upsert(artifact);
+    }
+
+    const firstPage = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/artifacts?limit=2",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(firstPage.status).toBe(200);
+    const firstPageBody = await firstPage.json() as { artifacts: Array<{ id: string }>; cursor?: string; truncated: boolean };
+    expect(firstPageBody).toMatchObject({
+      artifacts: [{ id: "artifact_new" }, { id: "artifact_middle" }],
+      truncated: true,
+      cursor: expect.any(String),
+    });
+
+    const secondPage = await app.fetch(new Request(
+      `https://axis.example/admin/repositories/debian-private/artifacts?limit=2&cursor=${encodeURIComponent(firstPageBody.cursor ?? "")}`,
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(secondPage.status).toBe(200);
+    await expect(secondPage.json()).resolves.toMatchObject({
+      artifacts: [{ id: "artifact_old" }],
+      truncated: false,
+    });
+  });
+
+  it("paginates repository artifact families and exposes family details", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "debian-private",
+      ecosystem: "apt",
+      visibility: "private",
+    });
+    const artifactVersion = (
+      id: string,
+      name: string,
+      version: string,
+      updatedAt: string,
+    ): RepositoryArtifactRecord => ({
+      ...artifactRecord(id, name, updatedAt),
+      identity: `apt:${name}:${version}:amd64`,
+      version,
+      summary: `${name} ${version} amd64`,
+      primaryObjectKey: `repositories/debian-private/pool/main/${name}/${name}_${version}_amd64.deb`,
+      objectKeys: [`repositories/debian-private/pool/main/${name}/${name}_${version}_amd64.deb`],
+    });
+    for (const artifact of [
+      artifactVersion("artifact_alpha_old", "alpha", "1.0.0", "2026-08-05T00:00:00.000Z"),
+      artifactVersion("artifact_alpha_new", "alpha", "1.1.0", "2026-08-05T00:02:00.000Z"),
+      artifactRecord("artifact_bravo", "bravo", "2026-08-05T00:01:00.000Z"),
+    ]) {
+      await harness.dependencies.repositoryArtifactStore.upsert(artifact);
+    }
+
+    const firstPage = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/artifacts/families?limit=1",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(firstPage.status).toBe(200);
+    const firstPageBody = await firstPage.json() as {
+      families: Array<{ key: string; latestArtifact: { id: string }; artifactCount: number; versionCount: number }>;
+      totalFamilies: number;
+      totalArtifacts: number;
+      cursor?: string;
+      truncated: boolean;
+    };
+    expect(firstPageBody).toMatchObject({
+      families: [{
+        key: "apt:alpha",
+        latestArtifact: { id: "artifact_alpha_new" },
+        artifactCount: 2,
+        versionCount: 2,
+      }],
+      totalFamilies: 2,
+      totalArtifacts: 3,
+      truncated: true,
+      cursor: expect.any(String),
+    });
+
+    const secondPage = await app.fetch(new Request(
+      `https://axis.example/admin/repositories/debian-private/artifacts/families?limit=1&cursor=${encodeURIComponent(firstPageBody.cursor ?? "")}`,
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(secondPage.status).toBe(200);
+    await expect(secondPage.json()).resolves.toMatchObject({
+      families: [{ key: "apt:bravo" }],
+      totalFamilies: 2,
+      totalArtifacts: 3,
+      truncated: false,
+    });
+
+    const detail = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/artifacts?family=apt%3Aalpha",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    expect(detail.status).toBe(200);
+    await expect(detail.json()).resolves.toMatchObject({
+      artifacts: [{ id: "artifact_alpha_new" }, { id: "artifact_alpha_old" }],
+      truncated: false,
+    });
   });
 
   it("rejects malformed repository activity pagination parameters", async () => {
@@ -3590,7 +3941,7 @@ describe("Cloudflare runtime routes", () => {
       session: { uploads: Array<Record<string, unknown>> };
     };
 
-    expect(finalizeResponse.status).toBe(200);
+    expect(finalizeResponse.status).toBe(202);
     expect(finalized.session.uploads[0]).not.toHaveProperty("url");
   });
 
@@ -3817,13 +4168,17 @@ describe("Cloudflare runtime routes", () => {
         headers: { authorization: "Bearer dev-admin-token" },
       },
     ));
-    expect(finalizeResponse.status).toBe(200);
+    expect(finalizeResponse.status).toBe(202);
     const finalizeBody = (await finalizeResponse.json()) as {
       session: { id: string; status: string };
-      result: { objects: Array<{ key: string }> };
+      job: { sessionId: string; status: string };
     };
-    expect(finalizeBody.session).toMatchObject({ id: session.id, status: "finalized" });
-    expect(finalizeBody.result.objects).toEqual(
+    expect(finalizeBody.session).toMatchObject({ id: session.id, status: "finalize_queued" });
+    expect(finalizeBody.job).toMatchObject({ sessionId: session.id, status: "pending" });
+    await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 0 });
+    const finalizedSession = await harness.dependencies.publishSessionService.getAsAdmin({ sessionId: session.id });
+    expect(finalizedSession.status).toBe("finalized");
+    expect(finalizedSession.publishResult?.objects).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" }),
       ]),
@@ -3902,7 +4257,8 @@ describe("Cloudflare runtime routes", () => {
       `https://axis.example/admin/publish-sessions/${finalized.id}/finalize`,
       { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
     ));
-    expect(finalizeResponse.status).toBe(200);
+    expect(finalizeResponse.status).toBe(202);
+    await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 0 });
 
     const replayResponse = await app.fetch(new Request(`https://axis.example${finalizedUpload.url}`, {
       method: "PUT",
@@ -4362,10 +4718,15 @@ describe("Cloudflare runtime routes", () => {
       },
     ));
 
-    expect(finalizeResponse.status).toBe(400);
-    await expect(finalizeResponse.json()).resolves.toEqual({
-      error: { code: "validation_error", message: "APT artifact is not a Debian package archive" },
+    expect(finalizeResponse.status).toBe(202);
+    await expect(finalizeResponse.json()).resolves.toMatchObject({
+      session: { id: session.id, status: "finalize_queued" },
+      job: { sessionId: session.id, status: "pending" },
     });
+    await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 1 });
+    const failedSession = await harness.dependencies.publishSessionService.getAsAdmin({ sessionId: session.id });
+    expect(failedSession.status).toBe("finalize_failed");
+    expect(failedSession.failure?.message).toBe("APT artifact is not a Debian package archive");
   });
 
   it("rejects apt publish sessions without signing key scope before creating uploads", async () => {
@@ -4450,25 +4811,28 @@ describe("Cloudflare runtime routes", () => {
       }),
     );
 
-    expect(finalizeResponse.status).toBe(200);
+    expect(finalizeResponse.status).toBe(202);
     await expect(finalizeResponse.json()).resolves.toMatchObject({
       session: {
         id: session.id,
-        status: "finalized",
-        publishResult: {
-          objects: [
-            { key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" },
-            { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages" },
-            { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz" },
-            { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en" },
-            { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en.gz" },
-            { key: "repositories/debian-internal/dists/noble/Release" },
-            { key: "repositories/debian-internal/dists/noble/InRelease" },
-            { key: "repositories/debian-internal/dists/noble/Release.gpg" },
-          ],
-        },
+        status: "finalize_queued",
       },
+      job: { sessionId: session.id, status: "pending" },
     });
+    await expect(harness.dependencies.publishFinalizeJobService.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
+    const finalizedSession = await harness.dependencies.publishSessionService.get({ sessionId: session.id, principal: {
+      tokenId: "tok_1",
+      name: "publisher",
+      permissions: ["publish"],
+      repositories: ["debian-internal"],
+      ecosystemScopes: {},
+      signingKeyIds: [],
+    } });
+    expect(finalizedSession.status).toBe("finalized");
+    expect(finalizedSession.publishResult?.objects).toContainEqual(expect.objectContaining({
+      key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb",
+    }));
     expect(readStoredText(harness.repositoryObjectStore, "repositories/debian-internal/dists/noble/main/binary-amd64/Packages"))
       .toContain("Filename: pool/main/myapp/myapp_1.2.3_amd64.deb");
     expect(readStoredText(harness.repositoryObjectStore, "repositories/debian-internal/dists/noble/Release"))
@@ -4477,6 +4841,22 @@ describe("Cloudflare runtime routes", () => {
       .toContain("-----BEGIN PGP SIGNED MESSAGE-----");
     expect(readStoredText(harness.repositoryObjectStore, "repositories/debian-internal/dists/noble/Release.gpg"))
       .toContain("-----BEGIN PGP SIGNATURE-----");
+  });
+
+  it("gets one admin publish session", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const { session } = await createPublishSession(app, harness.repositoryObjectStore);
+
+    const response = await app.fetch(new Request(
+      `https://axis.example/admin/publish-sessions/${session.id}`,
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      session: { id: session.id, repositoryName: "debian-internal" },
+    });
   });
 
   it("refuses to sign a repository with another repository's signing key", async () => {
@@ -4548,7 +4928,15 @@ describe("Cloudflare runtime routes", () => {
       }),
     );
 
-    expect(finalizeResponse.status).toBe(404);
+    expect(finalizeResponse.status).toBe(202);
+    await expect(finalizeResponse.json()).resolves.toMatchObject({
+      session: { id: session.id, status: "finalize_queued" },
+      job: { sessionId: session.id, status: "pending" },
+    });
+    await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 1 });
+    const failedSession = await harness.dependencies.publishSessionService.getAsAdmin({ sessionId: session.id });
+    expect(failedSession.status).toBe("finalize_failed");
+    expect(failedSession.failure?.message).toBe("Not Found");
     expect(
       harness.repositoryObjectStore.objects.some((object) =>
         object.key.startsWith("repositories/debian-attacker/dists/"),
@@ -5422,7 +5810,8 @@ describe("concurrent publishes to one repository", () => {
     const finalizeBeta = await publish("beta");
     const responses = await Promise.all([finalizeAlpha(), finalizeBeta()]);
 
-    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(responses.map((response) => response.status)).toEqual([202, 202]);
+    await expect(drainPublishFinalizeJobs(harness, 2)).resolves.toMatchObject({ processed: 2, failed: 0 });
     const packages = readStoredText(
       harness.repositoryObjectStore,
       "repositories/debian-internal/dists/noble/main/binary-amd64/Packages",
@@ -5591,7 +5980,8 @@ describe("concurrent publishes to one PyPI repository", () => {
 
     const responses = await Promise.all([finalizeOne(), finalizeTwo()]);
 
-    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(responses.map((response) => response.status)).toEqual([202, 202]);
+    await expect(drainPublishFinalizeJobs(harness, 2)).resolves.toMatchObject({ processed: 2, failed: 0 });
     const page = readStoredText(
       harness.repositoryObjectStore,
       "repositories/python-internal/simple/alpha/index.html",

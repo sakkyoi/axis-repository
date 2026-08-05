@@ -127,10 +127,13 @@ export function publishSessionStatusMeta(status: PublishSessionStatus): {
   switch (status) {
     case "finalized":
       return { label: "finalized", variant: "success" };
+    case "finalize_failed":
     case "failed":
       return { label: status, variant: "destructive" };
     case "pending_uploads":
       return { label: "pending uploads", variant: "warning" };
+    case "finalize_queued":
+      return { label: "finalize queued", variant: "default" };
     case "ready":
     case "finalizing":
       return { label: status, variant: "default" };

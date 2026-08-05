@@ -706,37 +706,43 @@ describe("AxisAdminDO", () => {
       }),
     );
 
-    expect(finalize.status).toBe(200);
+    expect(finalize.status).toBe(202);
     await expect(finalize.json()).resolves.toMatchObject({
       session: {
         id: session.id,
-        status: "finalized",
-        publishResult: {
-          objects: [
-            { key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" },
-            { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages" },
-            { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz" },
-            { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en" },
-            { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en.gz" },
-            { key: "repositories/debian-internal/dists/noble/Release" },
-            { key: "repositories/debian-internal/dists/noble/InRelease" },
-            { key: "repositories/debian-internal/dists/noble/Release.gpg" },
-          ],
-        },
+        status: "finalize_queued",
       },
-      result: {
-        objects: [
-          { key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" },
-          { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages" },
-          { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz" },
-          { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en" },
-          { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en.gz" },
-          { key: "repositories/debian-internal/dists/noble/Release" },
-          { key: "repositories/debian-internal/dists/noble/InRelease" },
-          { key: "repositories/debian-internal/dists/noble/Release.gpg" },
-        ],
+      job: {
+        sessionId: session.id,
+        status: "pending",
       },
     });
+    await object.alarm();
+    const finalized = await object.fetch(
+      new Request(`https://axis.example/admin/publish-sessions/${session.id}`, {
+        headers: { authorization: adminAuthorization },
+      }),
+    );
+    expect(finalized.status).toBe(200);
+    const expectedPublishObjects = [
+      { key: "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb" },
+      { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages" },
+      { key: "repositories/debian-internal/dists/noble/main/binary-amd64/Packages.gz" },
+      { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en" },
+      { key: "repositories/debian-internal/dists/noble/main/i18n/Translation-en.gz" },
+      { key: "repositories/debian-internal/dists/noble/Release" },
+      { key: "repositories/debian-internal/dists/noble/InRelease" },
+      { key: "repositories/debian-internal/dists/noble/Release.gpg" },
+    ];
+    const finalizedBody = await finalized.json() as {
+      session: {
+        id: string;
+        status: string;
+        publishResult?: { objects: Array<{ key: string }> };
+      };
+    };
+    expect(finalizedBody.session).toMatchObject({ id: session.id, status: "finalized" });
+    expect(finalizedBody.session.publishResult).toMatchObject({ objects: expectedPublishObjects });
     expect(readBucketBytes(bucket, "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb"))
       .toHaveLength(debBytes.byteLength);
     // Publishing copies the upload into the repository, and the staged copy is

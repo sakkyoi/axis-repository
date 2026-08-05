@@ -57,9 +57,17 @@ describe("repository publish sessions model", () => {
       label: "failed",
       variant: "destructive",
     });
+    expect(publishSessionStatusMeta("finalize_failed")).toMatchObject({
+      label: "finalize_failed",
+      variant: "destructive",
+    });
     expect(publishSessionStatusMeta("pending_uploads")).toMatchObject({
       label: "pending uploads",
       variant: "warning",
+    });
+    expect(publishSessionStatusMeta("finalize_queued")).toMatchObject({
+      label: "finalize queued",
+      variant: "default",
     });
   });
 

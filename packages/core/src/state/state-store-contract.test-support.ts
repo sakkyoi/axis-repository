@@ -441,6 +441,218 @@ export function describeStateStoreContract(
           { id: "artifact_other" },
         ]);
       });
+
+      it("paginates repository artifacts in listing order", async () => {
+        const state = await store();
+        await state.repositoryArtifacts.upsert(repositoryArtifact({
+          id: "artifact_old",
+          identity: "apt:old:1.0.0:amd64",
+          updatedAt: "2026-08-05T00:00:00.000Z",
+        }));
+        await state.repositoryArtifacts.upsert(repositoryArtifact({
+          id: "artifact_new",
+          identity: "apt:new:1.0.0:amd64",
+          updatedAt: "2026-08-05T00:02:00.000Z",
+        }));
+        await state.repositoryArtifacts.upsert(repositoryArtifact({
+          id: "artifact_middle",
+          identity: "apt:middle:1.0.0:amd64",
+          updatedAt: "2026-08-05T00:01:00.000Z",
+        }));
+
+        await expect(state.repositoryArtifacts.listByRepositoryPage("debian-internal", {
+          limit: 2,
+          offset: 0,
+        })).resolves.toMatchObject({
+          records: [{ id: "artifact_new" }, { id: "artifact_middle" }],
+          total: 3,
+        });
+        await expect(state.repositoryArtifacts.listByRepositoryPage("debian-internal", {
+          limit: 2,
+          offset: 2,
+        })).resolves.toMatchObject({
+          records: [{ id: "artifact_old" }],
+          total: 3,
+        });
+      });
+
+      it("paginates repository artifact families instead of flat records", async () => {
+        const state = await store();
+        await state.repositoryArtifacts.upsert(repositoryArtifact({
+          id: "artifact_alpha_old",
+          family: "apt:alpha",
+          name: "alpha",
+          identity: "apt:alpha:1.0.0:amd64",
+          version: "1.0.0",
+          updatedAt: "2026-08-05T00:00:00.000Z",
+        }));
+        await state.repositoryArtifacts.upsert(repositoryArtifact({
+          id: "artifact_alpha_new",
+          family: "apt:alpha",
+          name: "alpha",
+          identity: "apt:alpha:2.0.0:amd64",
+          version: "2.0.0",
+          updatedAt: "2026-08-05T00:03:00.000Z",
+        }));
+        await state.repositoryArtifacts.upsert(repositoryArtifact({
+          id: "artifact_bravo",
+          family: "apt:bravo",
+          name: "bravo",
+          identity: "apt:bravo:1.0.0:amd64",
+          version: "1.0.0",
+          updatedAt: "2026-08-05T00:02:00.000Z",
+        }));
+
+        await expect(state.repositoryArtifacts.listFamiliesByRepositoryPage("debian-internal", {
+          limit: 1,
+          offset: 0,
+        })).resolves.toMatchObject({
+          records: [{
+            key: "apt:alpha",
+            name: "alpha",
+            artifactCount: 2,
+            versionCount: 2,
+            latestArtifact: { id: "artifact_alpha_new" },
+          }],
+          totalFamilies: 2,
+          totalArtifacts: 3,
+        });
+        await expect(state.repositoryArtifacts.listByRepositoryFamily("debian-internal", "apt:alpha"))
+          .resolves.toMatchObject([{ id: "artifact_alpha_new" }, { id: "artifact_alpha_old" }]);
+      });
+    });
+
+    describe("repository index jobs", () => {
+      it("persists one coalesced index job per repository and lists runnable work", async () => {
+        const state = await store();
+        await state.repositoryIndexJobs.save({
+          repositoryName: "debian-internal",
+          kind: "hosted-rebuild",
+          status: "pending",
+          requestedAt: "2026-08-05T00:00:00.000Z",
+          attempts: 0,
+        });
+        await state.repositoryIndexJobs.save({
+          repositoryName: "python-proxy",
+          kind: "proxy-refresh",
+          status: "ready",
+          requestedAt: "2026-08-05T00:01:00.000Z",
+          attempts: 1,
+          lastSuccessAt: "2026-08-05T00:02:00.000Z",
+        });
+
+        await expect(state.repositoryIndexJobs.getByRepository("debian-internal")).resolves.toMatchObject({
+          repositoryName: "debian-internal",
+          status: "pending",
+        });
+        await expect(state.repositoryIndexJobs.listRunnable()).resolves.toMatchObject([
+          { repositoryName: "debian-internal" },
+        ]);
+
+        await state.repositoryIndexJobs.save({
+          repositoryName: "debian-internal",
+          kind: "hosted-rebuild",
+          status: "running",
+          requestedAt: "2026-08-05T00:03:00.000Z",
+          attempts: 1,
+          startedAt: "2026-08-05T00:03:00.000Z",
+        });
+        await expect(state.repositoryIndexJobs.listRunnable()).resolves.toEqual([]);
+        await expect(state.repositoryIndexJobs.deleteByRepository("debian-internal")).resolves.toBe(true);
+        await expect(state.repositoryIndexJobs.getByRepository("debian-internal")).resolves.toBeNull();
+      });
+    });
+
+    describe("publish finalize jobs", () => {
+      it("persists one finalize job per session and lists runnable work", async () => {
+        const state = await store();
+        await state.publishFinalizeJobs.save({
+          sessionId: "pub_1",
+          repositoryName: "debian-internal",
+          status: "pending",
+          requestedAt: "2026-08-05T00:00:00.000Z",
+          attempts: 0,
+        });
+        await state.publishFinalizeJobs.save({
+          sessionId: "pub_2",
+          repositoryName: "debian-internal",
+          status: "ready",
+          requestedAt: "2026-08-05T00:01:00.000Z",
+          attempts: 1,
+          finishedAt: "2026-08-05T00:02:00.000Z",
+        });
+
+        await expect(state.publishFinalizeJobs.getBySession("pub_1")).resolves.toMatchObject({
+          sessionId: "pub_1",
+          repositoryName: "debian-internal",
+          status: "pending",
+        });
+        await expect(state.publishFinalizeJobs.listRunnable()).resolves.toMatchObject([
+          { sessionId: "pub_1" },
+        ]);
+
+        await state.publishFinalizeJobs.save({
+          sessionId: "pub_1",
+          repositoryName: "debian-internal",
+          status: "running",
+          requestedAt: "2026-08-05T00:03:00.000Z",
+          attempts: 1,
+          startedAt: "2026-08-05T00:03:00.000Z",
+        });
+        await expect(state.publishFinalizeJobs.listRunnable()).resolves.toEqual([]);
+        await expect(state.publishFinalizeJobs.deleteBySession("pub_1")).resolves.toBe(true);
+        await expect(state.publishFinalizeJobs.getBySession("pub_1")).resolves.toBeNull();
+      });
+    });
+
+    describe("background jobs", () => {
+      it("persists jobs, lists runnable work, and cancels pending jobs", async () => {
+        const state = await store();
+        await state.backgroundJobs.save({
+          id: "job_1",
+          type: "publish.finalize",
+          status: "pending",
+          subject: { type: "publish-session", id: "pub_1", repositoryName: "debian-internal" },
+          repositoryName: "debian-internal",
+          priority: 0,
+          attempts: 0,
+          requestedAt: "2026-08-05T00:00:00.000Z",
+          scheduledAt: "2026-08-05T00:00:00.000Z",
+        });
+        await state.backgroundJobs.save({
+          id: "job_2",
+          type: "repository.index.refresh",
+          status: "succeeded",
+          subject: { type: "repository", id: "python-proxy", repositoryName: "python-proxy" },
+          repositoryName: "python-proxy",
+          priority: 0,
+          attempts: 1,
+          requestedAt: "2026-08-05T00:01:00.000Z",
+          scheduledAt: "2026-08-05T00:01:00.000Z",
+          finishedAt: "2026-08-05T00:02:00.000Z",
+        });
+
+        await expect(state.backgroundJobs.get("job_1")).resolves.toMatchObject({
+          id: "job_1",
+          type: "publish.finalize",
+          status: "pending",
+        });
+        await expect(state.backgroundJobs.list({ repositoryName: "python-proxy" })).resolves.toMatchObject({
+          jobs: [{ id: "job_2" }],
+          total: 1,
+        });
+        await expect(state.backgroundJobs.listRunnable({ limit: 10 })).resolves.toMatchObject([
+          { id: "job_1" },
+        ]);
+
+        await expect(state.backgroundJobs.cancel("job_1", "2026-08-05T00:03:00.000Z")).resolves.toMatchObject({
+          id: "job_1",
+          status: "canceled",
+          cancelRequestedAt: "2026-08-05T00:03:00.000Z",
+          finishedAt: "2026-08-05T00:03:00.000Z",
+        });
+        await expect(state.backgroundJobs.listRunnable({ limit: 10 })).resolves.toEqual([]);
+      });
     });
 
     describe("repository plugin policies", () => {

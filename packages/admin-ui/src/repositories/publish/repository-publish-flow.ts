@@ -7,7 +7,10 @@ import {
   useVerifyAdminPublishUpload,
 } from "../../api/hooks";
 import type { CreatedPublishSession, PublishArtifact, Repository } from "../../api/schemas";
+import { useToast } from "../../components/ui/toast";
 import { publishSteps, type UploadProgress } from "./publish-progress-model";
+
+const FINALIZE_POLL_INTERVAL_MS = 1500;
 
 export interface RepositoryPublishFlowInput {
   repositoryName: string;
@@ -26,6 +29,7 @@ export interface RepositoryPublishFlowInput {
   ): Promise<void>;
   verifyUpload(input: { sessionId: string; uploadId: string }): Promise<unknown>;
   finalizeSession(sessionId: string): Promise<unknown>;
+  waitForFinalize(sessionId: string): Promise<unknown>;
   refresh(): Promise<unknown>;
   onPhase(phase: RepositoryPublishPhase): void;
   onUploadProgress?(progress: UploadProgress): void;
@@ -91,6 +95,7 @@ export async function publishRepositoryArtifacts(input: RepositoryPublishFlowInp
 
   input.onPhase("finalizing");
   await input.finalizeSession(session.id);
+  await input.waitForFinalize(session.id);
   await input.refresh();
   input.onPhase("published");
 }
@@ -98,6 +103,7 @@ export async function publishRepositoryArtifacts(input: RepositoryPublishFlowInp
 export function useRepositoryArtifactPublisher(repository: Repository) {
   const client = useAxisClient();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const createSession = useCreateAdminPublishSession();
   const verifyUpload = useVerifyAdminPublishUpload();
   const finalizeSession = useFinalizeAdminPublishSession();
@@ -128,7 +134,16 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
         createSession: (sessionInput) => createSession.mutateAsync(sessionInput),
         uploadArtifact: (target, file, onProgress) => client.uploadPublishArtifact(target, file, onProgress),
         verifyUpload: (verifyInput) => verifyUpload.mutateAsync(verifyInput),
-        finalizeSession: (sessionId) => finalizeSession.mutateAsync(sessionId),
+        finalizeSession: async (sessionId) => {
+          const result = await finalizeSession.mutateAsync(sessionId);
+          toast.notify({
+            title: "Publish finalization started",
+            description: "The job is running in the background.",
+            action: { label: "View jobs", to: "/ui/jobs" },
+          });
+          return result;
+        },
+        waitForFinalize: (sessionId) => waitForAdminFinalize(client, sessionId),
         refresh: async () => {
           await Promise.all([
             queryClient.invalidateQueries({ queryKey: ["publish-sessions"] }),
@@ -159,4 +174,26 @@ export function useRepositoryArtifactPublisher(repository: Repository) {
     error,
     isPublishing,
   };
+}
+
+async function waitForAdminFinalize(
+  client: ReturnType<typeof useAxisClient>,
+  sessionId: string,
+): Promise<void> {
+  for (;;) {
+    const session = await client.getAdminPublishSession(sessionId);
+    if (session.status === "finalized") {
+      return;
+    }
+    if (session.status === "finalize_failed" || session.status === "failed") {
+      throw new Error(session.failure?.message ?? "Publish finalize failed");
+    }
+    await delay(FINALIZE_POLL_INTERVAL_MS);
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

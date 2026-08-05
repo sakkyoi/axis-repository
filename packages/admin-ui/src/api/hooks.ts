@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAxisClient,
   type CreateAdminPublishSessionInput,
   type CreatePublishTokenInput,
+  type ListBackgroundJobsOptions,
   type CreateRepositoryInput,
   type UpdateRepositoryPluginPolicyInput,
   type UpdateRepositoryInput,
@@ -12,6 +13,7 @@ import { useAuth } from "../auth";
 import { getRuntimeConfig } from "../runtime-config";
 
 const REPOSITORY_ACTIVITY_PAGE_LIMIT = 10;
+const REPOSITORY_ARTIFACT_PAGE_LIMIT = 50;
 
 export function useAxisClient() {
   const { accessToken, refreshAccessToken } = useAuth();
@@ -42,6 +44,31 @@ export function useDeployment() {
     queryKey: ["deployment"],
     queryFn: () => client.getDeployment(),
     staleTime: Infinity,
+  });
+}
+
+export function useBackgroundJobs(options: ListBackgroundJobsOptions = {}) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["background-jobs", options],
+    queryFn: () => client.listBackgroundJobs(options),
+    refetchInterval: (query) =>
+      query.state.data?.jobs.some((job) => job.status === "pending" || job.status === "running" || job.status === "canceling")
+        ? 1500
+        : false,
+  });
+}
+
+export function useCancelBackgroundJob() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.cancelBackgroundJob(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["background-jobs"] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-index-job"] });
+      void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
+    },
   });
 }
 
@@ -136,13 +163,93 @@ export function useRepositoryArtifacts(repositoryName: string | undefined) {
   });
 }
 
+export function useRepositoryArtifactsPages(repositoryName: string | undefined) {
+  const client = useAxisClient();
+  return useInfiniteQuery({
+    queryKey: ["repository-artifacts", repositoryName, "pages"],
+    queryFn: ({ pageParam }) => client.listRepositoryArtifacts(repositoryName ?? "", {
+      limit: REPOSITORY_ARTIFACT_PAGE_LIMIT,
+      ...(pageParam ? { cursor: pageParam } : {}),
+    }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.cursor,
+    enabled: Boolean(repositoryName),
+  });
+}
+
+export function useRepositoryArtifactFamiliesPages(repositoryName: string | undefined) {
+  const client = useAxisClient();
+  return useInfiniteQuery({
+    queryKey: ["repository-artifact-families", repositoryName, "pages"],
+    queryFn: ({ pageParam }) => client.listRepositoryArtifactFamilies(repositoryName ?? "", {
+      limit: REPOSITORY_ARTIFACT_PAGE_LIMIT,
+      ...(pageParam ? { cursor: pageParam } : {}),
+    }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.cursor,
+    enabled: Boolean(repositoryName),
+  });
+}
+
+export function useRepositoryArtifactFamilyArtifacts(
+  repositoryName: string | undefined,
+  family: string | undefined,
+) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["repository-artifacts", repositoryName, "family", family],
+    queryFn: () => client.listRepositoryArtifacts(repositoryName ?? "", { family: family ?? "" }),
+    enabled: Boolean(repositoryName && family),
+  });
+}
+
+export function useRepositoryArtifactIndexJob(repositoryName: string | undefined) {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  const hadActiveJob = useRef(false);
+  const query = useQuery({
+    queryKey: ["repository-artifact-index-job", repositoryName],
+    queryFn: () => client.getRepositoryArtifactIndexJob(repositoryName ?? ""),
+    enabled: Boolean(repositoryName),
+    refetchInterval: (query) => {
+      const status = query.state.data?.job?.status;
+      return status === "pending" || status === "running" ? 1500 : false;
+    },
+  });
+
+  useEffect(() => {
+    const status = query.data?.job?.status;
+    const active = status === "pending" || status === "running";
+    if (active) {
+      hadActiveJob.current = true;
+      return;
+    }
+    if (!hadActiveJob.current || !repositoryName) {
+      return;
+    }
+    hadActiveJob.current = false;
+    void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
+    void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "pages"] });
+    void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "family"] });
+    void queryClient.invalidateQueries({ queryKey: ["repository-artifact-families", repositoryName, "pages"] });
+    void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
+    void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
+  }, [query.data?.job?.status, queryClient, repositoryName]);
+
+  return query;
+}
+
 export function useRebuildRepositoryArtifactIndex(repositoryName: string | undefined) {
   const client = useAxisClient();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => client.rebuildRepositoryArtifactIndex(repositoryName ?? ""),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-index-job", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["background-jobs"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "pages"] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-families", repositoryName, "pages"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
     },
@@ -155,7 +262,11 @@ export function useDeleteRepositoryArtifact(repositoryName: string | undefined) 
   return useMutation({
     mutationFn: (artifactId: string) => client.deleteRepositoryArtifact(repositoryName ?? "", artifactId),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-index-job", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "pages"] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "family"] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-families", repositoryName, "pages"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-object-detail", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
@@ -181,6 +292,7 @@ export function useDeleteRepositoryObject(repositoryName: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-object-detail", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "pages"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
     },
   });
@@ -220,6 +332,10 @@ export function usePublishSessions() {
   return useQuery({
     queryKey: ["publish-sessions"],
     queryFn: () => client.listPublishSessions(),
+    refetchInterval: (query) =>
+      query.state.data?.some((session) => session.status === "finalize_queued" || session.status === "finalizing")
+        ? 1500
+        : false,
   });
 }
 
@@ -255,8 +371,10 @@ export function useFinalizeAdminPublishSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (sessionId: string) => client.finalizeAdminPublishSession(sessionId),
-    onSuccess: (session) => {
+    onSuccess: (result) => {
+      const session = result.session;
       void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
+      void queryClient.invalidateQueries({ queryKey: ["background-jobs"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-objects", session.repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-object-detail", session.repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", session.repositoryName] });

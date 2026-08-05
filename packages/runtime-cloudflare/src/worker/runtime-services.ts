@@ -21,6 +21,7 @@ import {
   ValidationError,
   type VerifyPublishUploadInput,
   type VerifyPublishUploadResult,
+  type RequestFinalizePublishSessionResult,
 } from "@axis-repository/core";
 import { getRepositoryPluginCatalogEntry } from "@axis-repository/plugin-catalog";
 import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
@@ -190,6 +191,35 @@ export class PluginPublishSessionService {
 
   verifyUpload(input: VerifyPublishUploadInput): Promise<VerifyPublishUploadResult> {
     return this.options.publishSessionService.verifyUpload(input);
+  }
+
+  async requestFinalizeAsAdmin(input: Omit<FinalizePublishSessionInput, "principal">): Promise<RequestFinalizePublishSessionResult> {
+    const session = await this.getExistingSession(input.sessionId);
+    const repository = await this.options.repositoryService.getByName(session.repositoryName);
+    await this.ensurePluginEnabled(repository.ecosystem);
+    const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
+    const principal = adminPublishPrincipal(repository, plugin.publish.derivePrincipalScope?.(repository));
+    plugin.publish.authorize({
+      repository,
+      principal,
+      artifacts: session.artifacts,
+    });
+    return this.options.publishSessionService.requestFinalize({
+      ...input,
+      principal,
+    });
+  }
+
+  async requestFinalize(input: FinalizePublishSessionInput): Promise<RequestFinalizePublishSessionResult> {
+    const session = await this.getExistingSession(input.sessionId);
+    const repository = await this.options.repositoryService.getByName(session.repositoryName);
+    await this.ensurePluginEnabled(repository.ecosystem);
+    this.options.plugins.requirePlugin(repository.ecosystem).publish.authorize({
+      repository,
+      principal: input.principal,
+      artifacts: session.artifacts,
+    });
+    return this.options.publishSessionService.requestFinalize(input);
   }
 
   async finalizeAsAdmin(input: Omit<FinalizePublishSessionInput, "principal">): Promise<FinalizePublishSessionResult> {

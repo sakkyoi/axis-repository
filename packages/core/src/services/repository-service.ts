@@ -128,6 +128,9 @@ export class RepositoryService {
     await this.options.state.repositoryActivities.deleteByRepository(repository.name);
     await this.options.state.repositorySecrets.deleteByRepository(repository.name);
     await this.options.state.publishSessions.deleteByRepository(repository.name);
+    await this.options.state.backgroundJobs.deleteByRepository(repository.name);
+    await this.options.state.publishFinalizeJobs.deleteByRepository(repository.name);
+    await this.options.state.repositoryIndexJobs.deleteByRepository(repository.name);
 
     for (const token of await this.options.state.publishTokens.list()) {
       // Tokens persisted before signing key scopes existed have no

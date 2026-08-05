@@ -8,13 +8,16 @@ import {
   ErrorState,
   useErrorToast,
   Input,
+  repositoryIndexJobIsActive,
+  repositoryIndexJobStatusView,
+  useRepositoryArtifactIndexJob,
   useUpdateRepository,
   VisibilitySelect,
   type Repository,
   type RepositoryPlugin,
   type RepositoryVisibility,
 } from "@axis-repository/admin-ui/plugin-ui";
-import { usePypiClientInfo, usePypiProjects, useRefreshPypiProxyCache, useSetPypiFileYanked } from "./api";
+import { usePypiClientInfo, usePypiProject, usePypiProjects, useRefreshPypiProxyCache, useSetPypiFileYanked } from "./api";
 
 export function pypiSimpleIndexUrl(repository: Repository): string {
   return `/repositories/${repository.name}/simple/`;
@@ -103,6 +106,9 @@ export function PypiProxySettingsSection({
   pluginMetadata: RepositoryPlugin | undefined;
 }) {
   const refresh = useRefreshPypiProxyCache(repository.name);
+  const indexJob = useRepositoryArtifactIndexJob(repository.name);
+  const indexJobView = repositoryIndexJobStatusView(indexJob.data?.job);
+  const indexJobIsActive = repositoryIndexJobIsActive(indexJob.data?.job);
   useErrorToast("PyPI proxy cache refresh failed", refresh.error);
   return (
     <div className="grid gap-3">
@@ -115,9 +121,20 @@ export function PypiProxySettingsSection({
           copyable={Boolean(pypiProxyUpstreamUrl(repository))}
         />
       </div>
-      <Button type="button" variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+      {indexJobView && (
+        <div className={[
+          "rounded-md border px-3 py-2 text-xs",
+          indexJobView.failed
+            ? "border-destructive/40 bg-destructive/10 text-destructive"
+            : "border-border bg-muted/30 text-muted-foreground",
+        ].join(" ")}>
+          <span className="font-medium text-foreground">{indexJobView.label}</span>
+          <span className="ml-2">{indexJobView.description}</span>
+        </div>
+      )}
+      <Button type="button" variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending || indexJobIsActive}>
         <RotateCw className="mr-2 h-4 w-4" />
-        {refresh.isPending ? "Refreshing..." : "Refresh upstream cache"}
+        {refresh.isPending || indexJobIsActive ? "Refreshing..." : "Refresh upstream cache"}
       </Button>
     </div>
   );
@@ -195,7 +212,10 @@ export function PypiProjectFilesSection({
   useErrorToast("Could not change yank state", setYanked.error);
   const [pendingYank, setPendingYank] = useState<{ project: string; filename: string } | null>(null);
   const [reason, setReason] = useState("");
+  const [openProjectName, setOpenProjectName] = useState<string>();
+  const openProject = usePypiProject(repository.name, openProjectName);
   const canYank = repository.kind === "hosted";
+  const projectRows = projects.data?.pages.flatMap((page) => page.projects) ?? [];
 
   if (projects.isError) {
     return <ErrorState title="PyPI projects unavailable" error={projects.error} />;
@@ -203,61 +223,90 @@ export function PypiProjectFilesSection({
   if (!projects.data) {
     return <p className="text-sm text-muted-foreground">Loading...</p>;
   }
-  if (projects.data.length === 0) {
+  if (projectRows.length === 0) {
     return <EmptyState message="No projects published yet" />;
   }
 
   return (
     <div className="grid gap-4">
-      {projects.data.map((project) => (
+      {projectRows.map((project) => (
         <div key={project.name} className="grid gap-2">
-          <h4 className="text-sm font-medium">{project.name}</h4>
-          <ul className="grid gap-1">
-            {project.files.map((file) => (
-              <li key={file.filename} className="flex flex-wrap items-center gap-2 text-xs">
-                <span className={file.yanked === undefined ? "" : "text-muted-foreground line-through"}>
-                  {file.filename}
-                </span>
-                {file.yanked !== undefined && (
-                  <Badge variant="warning">
-                    {file.yanked === "" ? "yanked" : `yanked: ${file.yanked}`}
-                  </Badge>
-                )}
-                {canYank && (file.yanked === undefined ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={setYanked.isPending}
-                    onClick={() => {
-                      setReason("");
-                      setPendingYank({ project: project.name, filename: file.filename });
-                    }}
-                  >
-                    Yank
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={setYanked.isPending}
-                    onClick={() => setYanked.mutate({
-                      repositoryName: repository.name,
-                      project: project.name,
-                      filename: file.filename,
-                      reason: undefined,
-                      yanked: false,
-                    })}
-                  >
-                    Unyank
-                  </Button>
-                ))}
-              </li>
-            ))}
-          </ul>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-sm font-medium">{project.name}</h4>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setOpenProjectName(openProjectName === project.name ? undefined : project.name)}
+            >
+              {openProjectName === project.name ? "Hide files" : project.fileCount === undefined ? "Show files" : `Show ${project.fileCount} files`}
+            </Button>
+          </div>
+          {openProjectName === project.name && openProject.isLoading && (
+            <p className="text-xs text-muted-foreground">Loading files...</p>
+          )}
+          {openProjectName === project.name && openProject.isError && (
+            <ErrorState title="PyPI project unavailable" error={openProject.error} />
+          )}
+          {openProjectName === project.name && openProject.data && (
+            <ul className="grid gap-1">
+              {openProject.data.files.map((file) => (
+                <li key={file.filename} className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className={file.yanked === undefined ? "" : "text-muted-foreground line-through"}>
+                    {file.filename}
+                  </span>
+                  {file.yanked !== undefined && (
+                    <Badge variant="warning">
+                      {file.yanked === "" ? "yanked" : `yanked: ${file.yanked}`}
+                    </Badge>
+                  )}
+                  {canYank && (file.yanked === undefined ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={setYanked.isPending}
+                      onClick={() => {
+                        setReason("");
+                        setPendingYank({ project: project.name, filename: file.filename });
+                      }}
+                    >
+                      Yank
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={setYanked.isPending}
+                      onClick={() => setYanked.mutate({
+                        repositoryName: repository.name,
+                        project: project.name,
+                        filename: file.filename,
+                        reason: undefined,
+                        yanked: false,
+                      })}
+                    >
+                      Unyank
+                    </Button>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       ))}
+
+      {projects.hasNextPage && (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={projects.isFetchingNextPage}
+          onClick={() => void projects.fetchNextPage()}
+        >
+          {projects.isFetchingNextPage ? "Loading..." : "Load more"}
+        </Button>
+      )}
 
       {pendingYank && (
         <div className="grid gap-2 rounded-md border p-3">

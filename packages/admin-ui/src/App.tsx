@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router";
 import { AppLayout } from "./components/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
+import { JobsPage } from "./pages/JobsPage";
 import { NewRepositoryPage } from "./pages/NewRepositoryPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { RepositoriesPage } from "./pages/RepositoriesPage";
@@ -24,6 +25,7 @@ export default function App() {
           <Route path={ADMIN_UI_PATHS.repositoryWorkspace} element={<RepositoryWorkspacePage />} />
           <Route path={ADMIN_UI_PATHS.repositories} element={<RepositoriesPage />} />
           <Route path={ADMIN_UI_PATHS.tokens} element={<TokensPage />} />
+          <Route path={ADMIN_UI_PATHS.jobs} element={<JobsPage />} />
           <Route path={ADMIN_UI_PATHS.users} element={<UsersPage />} />
           <Route path={ADMIN_UI_PATHS.profile} element={<ProfilePage />} />
           <Route path={ADMIN_UI_PATHS.settings} element={<SettingsPage />} />

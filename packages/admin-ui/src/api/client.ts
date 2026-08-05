@@ -5,6 +5,7 @@ import {
   adminAuthResponseSchema,
   adminUsersResponseSchema,
   publishSessionsResponseSchema,
+  publishFinalizeResponseSchema,
   createdPublishSessionSchema,
   publishSessionSchema,
   deploymentResponseSchema,
@@ -15,7 +16,12 @@ import {
   repositoryPluginsResponseSchema,
   repositoryActivitiesResponseSchema,
   repositoryArtifactDeleteResponseSchema,
+  repositoryArtifactFamiliesResponseSchema,
   repositoryArtifactsResponseSchema,
+  backgroundJobResponseSchema,
+  backgroundJobsResponseSchema,
+  repositoryIndexJobResponseSchema,
+  repositoryIndexJobStatusResponseSchema,
   repositoryObjectDeleteResponseSchema,
   repositoryObjectDetailResponseSchema,
   repositoryObjectsResponseSchema,
@@ -29,6 +35,7 @@ import {
   type RepositoryPlugin,
   type RepositoryVisibility,
   type PublishSession,
+  type PublishFinalizeResponse,
   type PublishArtifact,
   type AdminAuthResponse,
   type AdminUser,
@@ -74,6 +81,20 @@ export interface ListRepositoryActivitiesOptions {
   cursor?: string;
 }
 
+export interface PageOptions {
+  limit?: number;
+  cursor?: string;
+  family?: string;
+}
+
+export interface ListBackgroundJobsOptions {
+  repositoryName?: string;
+  status?: string;
+  type?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface AxisClient {
   http: AxiosInstance;
   loginAdmin(input: { username: string; password: string }): Promise<AdminAuthResponse>;
@@ -84,6 +105,9 @@ export interface AxisClient {
   verifyAdminSession(): Promise<void>;
   listAdminUsers(): Promise<{ users: AdminUser[]; canCreateUsers: boolean }>;
   getDeployment(): Promise<ReturnType<typeof deploymentResponseSchema.parse>>;
+  listBackgroundJobs(options?: ListBackgroundJobsOptions): Promise<ReturnType<typeof backgroundJobsResponseSchema.parse>>;
+  getBackgroundJob(id: string): Promise<ReturnType<typeof backgroundJobResponseSchema.parse>["job"]>;
+  cancelBackgroundJob(id: string): Promise<ReturnType<typeof backgroundJobResponseSchema.parse>["job"]>;
   listRepositoryPlugins(): Promise<RepositoryPlugin[]>;
   updateRepositoryPluginPolicy(ecosystem: string, input: UpdateRepositoryPluginPolicyInput): Promise<RepositoryPlugin>;
   listRepositories(): Promise<Repository[]>;
@@ -92,16 +116,27 @@ export interface AxisClient {
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
   deleteRepository(name: string): Promise<void>;
   listRepositoryObjects(name: string, prefix: string): Promise<ReturnType<typeof repositoryObjectsResponseSchema.parse>>;
-  listRepositoryArtifacts(name: string): Promise<ReturnType<typeof repositoryArtifactsResponseSchema.parse>>;
-  rebuildRepositoryArtifactIndex(name: string): Promise<ReturnType<typeof repositoryArtifactsResponseSchema.parse>>;
+  listRepositoryArtifactFamilies(
+    name: string,
+    options?: PageOptions,
+  ): Promise<ReturnType<typeof repositoryArtifactFamiliesResponseSchema.parse>>;
+  listRepositoryArtifacts(name: string, options?: PageOptions): Promise<ReturnType<typeof repositoryArtifactsResponseSchema.parse>>;
+  rebuildRepositoryArtifactIndex(name: string): Promise<ReturnType<typeof repositoryIndexJobResponseSchema.parse>>;
+  getRepositoryArtifactIndexJob(name: string): Promise<ReturnType<typeof repositoryIndexJobStatusResponseSchema.parse>>;
   deleteRepositoryArtifact(name: string, artifactId: string): Promise<ReturnType<typeof repositoryArtifactDeleteResponseSchema.parse>>;
   getRepositoryObjectDetail(name: string, path: string): Promise<RepositoryObjectDetail>;
   deleteRepositoryObject(name: string, path: string): Promise<RepositoryActivity>;
   listRepositoryActivities(name: string, options?: ListRepositoryActivitiesOptions): Promise<ReturnType<typeof repositoryActivitiesResponseSchema.parse>>;
   getRepositoryClientHelper(name: string, namespace: string, action: string): Promise<unknown>;
-  getRepositoryPluginResource(name: string, namespace: string, path: readonly string[]): Promise<unknown>;
+  getRepositoryPluginResource(
+    name: string,
+    namespace: string,
+    path: readonly string[],
+    options?: { searchParams?: Record<string, string | number | undefined> },
+  ): Promise<unknown>;
   postRepositoryPluginResource(name: string, namespace: string, path: readonly string[], input?: unknown): Promise<unknown>;
   listPublishSessions(): Promise<PublishSession[]>;
+  getAdminPublishSession(sessionId: string): Promise<PublishSession>;
   createAdminPublishSession(input: CreateAdminPublishSessionInput): Promise<CreatedPublishSession>;
   uploadPublishArtifact(
     target: UploadTarget,
@@ -109,7 +144,7 @@ export interface AxisClient {
     onProgress?: (sent: { loaded: number; total?: number }) => void,
   ): Promise<void>;
   verifyAdminPublishUpload(sessionId: string, uploadId: string): Promise<PublishSession>;
-  finalizeAdminPublishSession(sessionId: string): Promise<PublishSession>;
+  finalizeAdminPublishSession(sessionId: string): Promise<PublishFinalizeResponse>;
   listPublishTokens(): Promise<ReturnType<typeof publishTokensResponseSchema.parse>["publishTokens"]>;
   getPublishToken(name: string): Promise<ReturnType<typeof publishTokenSchema.parse>>;
   createPublishToken(input: CreatePublishTokenInput): Promise<PublishTokenCreateResponse>;
@@ -118,10 +153,37 @@ export interface AxisClient {
   deletePublishToken(name: string): Promise<void>;
 }
 
-function repositoryPluginResourceUrl(name: string, namespace: string, path: readonly string[]): string {
+function repositoryPluginResourceUrl(
+  name: string,
+  namespace: string,
+  path: readonly string[],
+  options: { searchParams?: Record<string, string | number | undefined> } = {},
+): string {
   const encodedPath = path.map((segment) => encodeURIComponent(segment)).join("/");
   const suffix = encodedPath ? `/${encodedPath}` : "";
-  return `/admin/repositories/${encodeURIComponent(name)}/${encodeURIComponent(namespace)}${suffix}`;
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(options.searchParams ?? {})) {
+    if (value !== undefined) {
+      searchParams.set(key, String(value));
+    }
+  }
+  const query = searchParams.toString();
+  return `/admin/repositories/${encodeURIComponent(name)}/${encodeURIComponent(namespace)}${suffix}${query ? `?${query}` : ""}`;
+}
+
+function pageUrl(path: string, options: PageOptions = {}): string {
+  const searchParams = new URLSearchParams();
+  if (options.limit !== undefined) {
+    searchParams.set("limit", String(options.limit));
+  }
+  if (options.cursor !== undefined) {
+    searchParams.set("cursor", options.cursor);
+  }
+  if (options.family !== undefined) {
+    searchParams.set("family", options.family);
+  }
+  const query = searchParams.toString();
+  return `${path}${query ? `?${query}` : ""}`;
 }
 
 function repositoryActivityUrl(name: string, options: ListRepositoryActivitiesOptions = {}): string {
@@ -134,6 +196,17 @@ function repositoryActivityUrl(name: string, options: ListRepositoryActivitiesOp
   }
   const query = searchParams.toString();
   return `/admin/repositories/${encodeURIComponent(name)}/activity${query ? `?${query}` : ""}`;
+}
+
+function backgroundJobsUrl(options: ListBackgroundJobsOptions = {}): string {
+  const searchParams = new URLSearchParams();
+  if (options.repositoryName !== undefined) searchParams.set("repositoryName", options.repositoryName);
+  if (options.status !== undefined) searchParams.set("status", options.status);
+  if (options.type !== undefined) searchParams.set("type", options.type);
+  if (options.limit !== undefined) searchParams.set("limit", String(options.limit));
+  if (options.offset !== undefined) searchParams.set("offset", String(options.offset));
+  const query = searchParams.toString();
+  return `/admin/jobs${query ? `?${query}` : ""}`;
 }
 
 /**
@@ -199,6 +272,18 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.get("/admin/deployment");
       return deploymentResponseSchema.parse(response.data);
     },
+    async listBackgroundJobs(options: ListBackgroundJobsOptions = {}) {
+      const response = await http.get(backgroundJobsUrl(options));
+      return backgroundJobsResponseSchema.parse(response.data);
+    },
+    async getBackgroundJob(id: string) {
+      const response = await http.get(`/admin/jobs/${encodeURIComponent(id)}`);
+      return backgroundJobResponseSchema.parse(response.data).job;
+    },
+    async cancelBackgroundJob(id: string) {
+      const response = await http.post(`/admin/jobs/${encodeURIComponent(id)}/cancel`);
+      return backgroundJobResponseSchema.parse(response.data).job;
+    },
     async listRepositoryPlugins() {
       const response = await http.get("/admin/repository-plugins");
       return repositoryPluginsResponseSchema.parse(response.data).plugins;
@@ -228,8 +313,14 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       );
       return repositoryObjectsResponseSchema.parse(response.data);
     },
-    async listRepositoryArtifacts(name: string) {
-      const response = await http.get(`/admin/repositories/${encodeURIComponent(name)}/artifacts`);
+    async listRepositoryArtifactFamilies(name: string, options: PageOptions = {}) {
+      const response = await http.get(
+        pageUrl(`/admin/repositories/${encodeURIComponent(name)}/artifacts/families`, options),
+      );
+      return repositoryArtifactFamiliesResponseSchema.parse(response.data);
+    },
+    async listRepositoryArtifacts(name: string, options: PageOptions = {}) {
+      const response = await http.get(pageUrl(`/admin/repositories/${encodeURIComponent(name)}/artifacts`, options));
       return repositoryArtifactsResponseSchema.parse(response.data);
     },
     async rebuildRepositoryArtifactIndex(name: string) {
@@ -238,7 +329,13 @@ export function createAxisClient(options: HttpOptions): AxisClient {
         undefined,
         bulkRequest,
       );
-      return repositoryArtifactsResponseSchema.parse(response.data);
+      return repositoryIndexJobResponseSchema.parse(response.data);
+    },
+    async getRepositoryArtifactIndexJob(name: string) {
+      const response = await http.get(
+        `/admin/repositories/${encodeURIComponent(name)}/artifact-index-job`,
+      );
+      return repositoryIndexJobStatusResponseSchema.parse(response.data);
     },
     async deleteRepositoryArtifact(name: string, artifactId: string) {
       const response = await http.delete(
@@ -270,8 +367,13 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       );
       return response.data;
     },
-    async getRepositoryPluginResource(name: string, namespace: string, path: readonly string[]): Promise<unknown> {
-      const response = await http.get<unknown>(repositoryPluginResourceUrl(name, namespace, path));
+    async getRepositoryPluginResource(
+      name: string,
+      namespace: string,
+      path: readonly string[],
+      options: { searchParams?: Record<string, string | number | undefined> } = {},
+    ): Promise<unknown> {
+      const response = await http.get<unknown>(repositoryPluginResourceUrl(name, namespace, path, options));
       return response.data;
     },
     async postRepositoryPluginResource(
@@ -286,6 +388,10 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async listPublishSessions() {
       const response = await http.get("/admin/publish-sessions");
       return publishSessionsResponseSchema.parse(response.data).sessions;
+    },
+    async getAdminPublishSession(sessionId: string) {
+      const response = await http.get(`/admin/publish-sessions/${encodeURIComponent(sessionId)}`);
+      return publishSessionSchema.parse(response.data.session);
     },
     async createAdminPublishSession(input: CreateAdminPublishSessionInput) {
       const response = await http.post("/admin/publish-sessions", input);
@@ -327,12 +433,12 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       return publishSessionSchema.parse(response.data.session);
     },
     async finalizeAdminPublishSession(sessionId: string) {
-      const response = await http.post<{ session: unknown }>(
+      const response = await http.post(
         `/admin/publish-sessions/${encodeURIComponent(sessionId)}/finalize`,
         undefined,
         bulkRequest,
       );
-      return publishSessionSchema.parse(response.data.session);
+      return publishFinalizeResponseSchema.parse(response.data);
     },
     async listPublishTokens() {
       const response = await http.get("/admin/publish-tokens");

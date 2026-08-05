@@ -1,9 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAxisClient } from "@axis-repository/admin-ui/plugin-ui";
 import {
   pypiClientInfoSchema,
+  pypiProjectSchema,
   pypiProjectsSchema,
   type PypiClientInfo,
+  type PypiProject,
   type PypiProjects,
 } from "./schemas";
 
@@ -29,7 +31,12 @@ export function usePypiClientInfo(repositoryName: string | undefined, enabled: b
 }
 
 export interface PypiProjectsClient {
-  getRepositoryPluginResource(repositoryName: string, namespace: string, path: readonly string[]): Promise<unknown>;
+  getRepositoryPluginResource(
+    repositoryName: string,
+    namespace: string,
+    path: readonly string[],
+    options?: { searchParams?: Record<string, string | number | undefined> },
+  ): Promise<unknown>;
   postRepositoryPluginResource(
     repositoryName: string,
     namespace: string,
@@ -41,17 +48,52 @@ export interface PypiProjectsClient {
 export async function listPypiProjects(
   client: PypiProjectsClient,
   repositoryName: string,
-): Promise<PypiProjects["projects"]> {
-  const response = await client.getRepositoryPluginResource(repositoryName, pypiNamespace, ["projects"]);
-  return pypiProjectsSchema.parse(response).projects;
+  options: { limit?: number; cursor?: string } = {},
+): Promise<PypiProjects> {
+  const response = await client.getRepositoryPluginResource(repositoryName, pypiNamespace, ["projects"], {
+    searchParams: options,
+  });
+  return pypiProjectsSchema.parse(response);
 }
 
-export function usePypiProjects(repositoryName: string | undefined) {
+export async function getPypiProject(
+  client: PypiProjectsClient,
+  repositoryName: string,
+  project: string,
+): Promise<PypiProject> {
+  const response = await client.getRepositoryPluginResource(repositoryName, pypiNamespace, ["projects", project]);
+  return pypiProjectSchema.parse(response).project;
+}
+
+export function usePypiProjectsPage(repositoryName: string | undefined) {
   const client = useAxisClient();
   return useQuery({
     queryKey: [pypiProjectsQueryKey, repositoryName],
     queryFn: () => listPypiProjects(client, repositoryName ?? ""),
     enabled: Boolean(repositoryName),
+  });
+}
+
+export function usePypiProjects(repositoryName: string | undefined) {
+  const client = useAxisClient();
+  return useInfiniteQuery({
+    queryKey: [pypiProjectsQueryKey, repositoryName],
+    queryFn: ({ pageParam }) => listPypiProjects(client, repositoryName ?? "", {
+      limit: 50,
+      ...(pageParam ? { cursor: pageParam } : {}),
+    }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.cursor,
+    enabled: Boolean(repositoryName),
+  });
+}
+
+export function usePypiProject(repositoryName: string | undefined, project: string | undefined) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: [pypiProjectsQueryKey, repositoryName, "project", project],
+    queryFn: () => getPypiProject(client, repositoryName ?? "", project ?? ""),
+    enabled: Boolean(repositoryName && project),
   });
 }
 
@@ -92,6 +134,7 @@ export function useRefreshPypiProxyCache(repositoryName: string | undefined) {
   return useMutation({
     mutationFn: () => client.rebuildRepositoryArtifactIndex(repositoryName ?? ""),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-index-job", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: [pypiProjectsQueryKey, repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });

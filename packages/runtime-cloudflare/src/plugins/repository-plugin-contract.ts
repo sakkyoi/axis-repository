@@ -207,6 +207,50 @@ export interface RepositoryMaintenanceLifecycle {
   run(input: RepositoryMaintenanceInput): Promise<RepositoryMaintenanceResult>;
 }
 
+export interface RepositoryObjectBrowserItem {
+  name: string;
+  path: string;
+  size?: number;
+  contentType?: string;
+  etag?: string;
+}
+
+export interface RepositoryObjectBrowserDirectory {
+  name: string;
+  path: string;
+}
+
+export interface RepositoryObjectBrowserListing {
+  prefix: string;
+  directories: RepositoryObjectBrowserDirectory[];
+  objects: RepositoryObjectBrowserItem[];
+  cursor?: string;
+  truncated: boolean;
+}
+
+export interface RepositoryObjectBrowserDetail extends RepositoryObjectBrowserItem {
+  objectKey: string;
+  repositoryUrl: string;
+}
+
+export interface RepositoryObjectBrowserInput {
+  repository: Repository;
+  objectStore: RepositoryObjectStore;
+  prefix: string;
+}
+
+export interface RepositoryObjectBrowserDetailInput {
+  repository: Repository;
+  objectStore: RepositoryObjectStore;
+  path: string;
+  origin: string;
+}
+
+export interface RepositoryObjectBrowser {
+  listObjects(input: RepositoryObjectBrowserInput): Promise<RepositoryObjectBrowserListing | null>;
+  getObjectDetail?(input: RepositoryObjectBrowserDetailInput): Promise<RepositoryObjectBrowserDetail | null>;
+}
+
 export interface HostedRepositoryPlugin extends PublisherMetadata {
   kind: "hosted";
   publish: RepositoryPublishLifecycle;
@@ -221,6 +265,7 @@ export interface HostedRepositoryPlugin extends PublisherMetadata {
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;
+  objectBrowser?: RepositoryObjectBrowser;
 }
 
 export interface ProxyRepositoryPlugin extends PublisherMetadata {
@@ -233,6 +278,7 @@ export interface ProxyRepositoryPlugin extends PublisherMetadata {
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;
+  objectBrowser?: RepositoryObjectBrowser;
 }
 
 export interface GroupRepositoryPlugin extends PublisherMetadata {
@@ -244,6 +290,7 @@ export interface GroupRepositoryPlugin extends PublisherMetadata {
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;
+  objectBrowser?: RepositoryObjectBrowser;
 }
 
 /** @deprecated Use HostedRepositoryPlugin. */

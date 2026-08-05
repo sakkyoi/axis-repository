@@ -46,6 +46,10 @@ export interface FinalizePublishSessionResult {
   result: PublishResult;
 }
 
+export interface RequestFinalizePublishSessionResult {
+  session: PublishSession;
+}
+
 export interface PublishSessionServiceOptions {
   state: StateStore;
   uploadBroker: UploadBroker;
@@ -257,7 +261,7 @@ export class PublishSessionService {
     }
     this.requirePublishPermission(input.principal);
     this.requireSessionVisibility(input.principal, session, input.sessionId);
-    if (session.status !== "ready" && session.status !== "finalizing") {
+    if (session.status !== "ready" && session.status !== "finalize_queued" && session.status !== "finalizing") {
       throw new ValidationError(`Publish session is not ready: ${session.status}`);
     }
     const now = this.options.clock.now();
@@ -290,7 +294,7 @@ export class PublishSessionService {
           publishStartedAt: current.publishStartedAt ?? claimTime.toISOString(),
         };
       }
-      if (current.status !== "ready") {
+      if (current.status !== "ready" && current.status !== "finalize_queued") {
         throw new ValidationError(`Publish session is not ready: ${current.status}`);
       }
       if (isExpired(current, claimTime)) {
@@ -331,7 +335,7 @@ export class PublishSessionService {
     } catch (error) {
       const failedSession: PublishSession = {
         ...finalizingSession,
-        status: "failed",
+        status: "finalize_failed",
         failure: {
           message: errorMessage(error),
           failedAt: this.options.clock.now().toISOString(),
@@ -357,6 +361,45 @@ export class PublishSessionService {
       session: finalizedSession,
       result,
     };
+  }
+
+  async requestFinalize(input: FinalizePublishSessionInput): Promise<RequestFinalizePublishSessionResult> {
+    const session = await this.options.state.publishSessions.get(input.sessionId);
+    if (!session) {
+      throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
+    }
+    this.requirePublishPermission(input.principal);
+    this.requireSessionVisibility(input.principal, session, input.sessionId);
+    if (session.status === "finalized" || session.status === "finalize_queued" || session.status === "finalizing") {
+      return { session };
+    }
+    if (session.status !== "ready" && session.status !== "finalize_failed") {
+      throw new ValidationError(`Publish session is not ready: ${session.status}`);
+    }
+    const now = this.options.clock.now();
+    if (session.status === "ready" && isExpired(session, now)) {
+      throw new ValidationError("Publish session has expired");
+    }
+    const updated = await this.options.state.publishSessions.update(session.id, (current) => {
+      if (current.status === "finalized" || current.status === "finalize_queued" || current.status === "finalizing") {
+        return current;
+      }
+      if (current.status !== "ready" && current.status !== "finalize_failed") {
+        throw new ValidationError(`Publish session is not ready: ${current.status}`);
+      }
+      if (current.status === "ready" && isExpired(current, this.options.clock.now())) {
+        throw new ValidationError("Publish session has expired");
+      }
+      const { failure: _failure, ...withoutFailure } = current;
+      return {
+        ...withoutFailure,
+        status: "finalize_queued",
+      };
+    });
+    if (!updated) {
+      throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
+    }
+    return { session: updated };
   }
 
   private canRetryFinalizing(session: PublishSession, now: Date): boolean {

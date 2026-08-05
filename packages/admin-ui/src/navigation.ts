@@ -6,6 +6,7 @@ export const ADMIN_UI_PATHS = {
   repositoryWorkspace: "/ui/repositories/:name",
   repositorySettings: "/ui/repositories/:name/settings",
   tokens: "/ui/tokens",
+  jobs: "/ui/jobs",
   users: "/ui/users",
   profile: "/ui/profile",
   settings: "/ui/settings",
@@ -17,6 +18,7 @@ export const AXIS_SOURCE_URL = "https://github.com/sakkyoi/axis-repository";
 export const ADMIN_UI_NAV_ITEMS = [
   { id: "repositories", to: ADMIN_UI_PATHS.repositories, label: "Repositories" },
   { id: "tokens", to: ADMIN_UI_PATHS.tokens, label: "Tokens" },
+  { id: "jobs", to: ADMIN_UI_PATHS.jobs, label: "Jobs" },
   { id: "users", to: ADMIN_UI_PATHS.users, label: "Users" },
   { id: "settings", to: ADMIN_UI_PATHS.settings, label: "Settings" },
 ] as const;

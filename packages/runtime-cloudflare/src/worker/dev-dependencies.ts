@@ -21,6 +21,9 @@ import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import SameOriginUploadBroker from "../uploads/same-origin-upload-broker";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
+import { RepositoryIndexJobService } from "./repository-index-job-service";
+import { PublishFinalizeJobService } from "./publish-finalize-job-service";
+import { BackgroundJobService } from "./background-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import type { RepositoryObjectDownloadSigner } from "../storage/object-download-url";
@@ -36,9 +39,12 @@ export interface AppDependencies {
   repositoryService: PluginRepositoryService;
   publishTokenService: PublishTokenService;
   publishSessionService: PluginPublishSessionService;
+  backgroundJobService: BackgroundJobService;
+  publishFinalizeJobService: PublishFinalizeJobService;
   repositoryActivityService: RepositoryActivityService;
   repositoryArtifactStore: RepositoryArtifactStore;
   repositoryArtifactIndexService: PluginRepositoryArtifactIndexService;
+  repositoryIndexJobService: RepositoryIndexJobService;
   pluginPolicyService: PluginPolicyService;
   repositorySecrets: RepositorySecretService;
   repositoryObjectStore: RepositoryObjectStore;
@@ -53,6 +59,8 @@ export interface AppDependencies {
   repositoryWriteLock: RepositoryWriteLock;
   /** How long a publish session lives; what outlives one is nobody's. */
   publishSessionTtlMs: number;
+  scheduleRepositoryIndexJobs?: () => Promise<void>;
+  schedulePublishFinalizeJobs?: () => Promise<void>;
 }
 
 export interface DevDependencyHarness {
@@ -188,6 +196,29 @@ export function createDevDependencyHarness(
     clock,
     writeLock,
   });
+  const repositoryIndexJobService = new RepositoryIndexJobService({
+    state,
+    repositoryService,
+    repositoryActivityService,
+    repositoryArtifactIndexService,
+    clock,
+  });
+  const pluginPublishSessionService = new PluginPublishSessionService({
+    publishSessionService,
+    repositoryService,
+    plugins: repositoryRuntimePlugins,
+    pluginPolicyService,
+    repositoryActivityService,
+    repositoryArtifactStore: state.repositoryArtifacts,
+    repositoryObjectStore: objectStore,
+    writeLock,
+  });
+  const publishFinalizeJobService = new PublishFinalizeJobService({
+    state,
+    publishSessionService: pluginPublishSessionService,
+    clock,
+  });
+  const backgroundJobService = new BackgroundJobService({ state, clock });
 
   return {
     dependencies: {
@@ -199,21 +230,16 @@ export function createDevDependencyHarness(
         pluginPolicyService,
       }),
       publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
-      publishSessionService: new PluginPublishSessionService({
-        publishSessionService,
-        repositoryService,
-        plugins: repositoryRuntimePlugins,
-        pluginPolicyService,
-        repositoryActivityService,
-        repositoryArtifactStore: state.repositoryArtifacts,
-        writeLock,
-      }),
+      publishSessionService: pluginPublishSessionService,
+      backgroundJobService,
+      publishFinalizeJobService,
       repositoryActivityService,
       repositoryArtifactStore: state.repositoryArtifacts,
       pluginPolicyService,
       repositorySecrets,
       repositoryObjectStore: objectStore,
       repositoryArtifactIndexService,
+      repositoryIndexJobService,
       localUploadBroker: uploadBroker,
       repositoryRuntimePlugins,
       repositoryWriteLock: writeLock,

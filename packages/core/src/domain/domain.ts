@@ -124,8 +124,10 @@ export interface PublishArtifactRequest {
 export type PublishSessionStatus =
   | "pending_uploads"
   | "ready"
+  | "finalize_queued"
   | "finalizing"
   | "finalized"
+  | "finalize_failed"
   | "failed";
 
 export interface PublishSession {
@@ -206,6 +208,120 @@ export interface RepositoryArtifactRecord {
   publishedAt: string;
   updatedAt: string;
   publishSessionId?: string;
+}
+
+export interface RepositoryArtifactFamilyRecord {
+  key: string;
+  repositoryName: string;
+  ecosystem: Ecosystem;
+  name: string;
+  latestVersion?: string;
+  latestSummary: string;
+  latestPublishedAt: string;
+  updatedAt: string;
+  artifactCount: number;
+  versionCount: number;
+  latestArtifact: RepositoryArtifactRecord;
+}
+
+export type RepositoryIndexJobKind = "hosted-rebuild" | "proxy-refresh" | "group-refresh";
+export type RepositoryIndexJobStatus = "pending" | "running" | "ready" | "failed";
+
+export interface RepositoryIndexJobFailure {
+  message: string;
+  failedAt: string;
+}
+
+export interface RepositoryIndexJobRecord {
+  repositoryName: string;
+  kind: RepositoryIndexJobKind;
+  status: RepositoryIndexJobStatus;
+  requestedAt: string;
+  attempts: number;
+  startedAt?: string;
+  finishedAt?: string;
+  lastSuccessAt?: string;
+  rerunRequestedAt?: string;
+  lastFailure?: RepositoryIndexJobFailure;
+}
+
+export type PublishFinalizeJobStatus = "pending" | "running" | "ready" | "failed";
+
+export interface PublishFinalizeJobFailure {
+  message: string;
+  failedAt: string;
+}
+
+export interface PublishFinalizeJobRecord {
+  sessionId: string;
+  repositoryName: string;
+  status: PublishFinalizeJobStatus;
+  requestedAt: string;
+  attempts: number;
+  startedAt?: string;
+  finishedAt?: string;
+  lastFailure?: PublishFinalizeJobFailure;
+}
+
+export type BackgroundJobStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "canceling"
+  | "canceled";
+
+export type BackgroundJobType =
+  | "publish.finalize"
+  | "repository.index.hosted-rebuild"
+  | "repository.index.proxy-refresh"
+  | "repository.index.group-refresh"
+  | "repository.maintenance"
+  | (string & {});
+
+export type BackgroundJobSubjectType =
+  | "repository"
+  | "publish-session"
+  | "upload"
+  | "artifact"
+  | "system";
+
+export interface BackgroundJobSubject {
+  type: BackgroundJobSubjectType;
+  id: string;
+  repositoryName?: string;
+}
+
+export interface BackgroundJobProgress {
+  current?: number;
+  total?: number;
+  message?: string;
+}
+
+export interface BackgroundJobFailure {
+  message: string;
+  failedAt: string;
+  retryable: boolean;
+}
+
+export interface BackgroundJobRecord {
+  id: string;
+  type: BackgroundJobType;
+  status: BackgroundJobStatus;
+  subject: BackgroundJobSubject;
+  repositoryName?: string;
+  priority: number;
+  attempts: number;
+  maxAttempts?: number;
+  requestedAt: string;
+  scheduledAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  lastHeartbeatAt?: string;
+  progress?: BackgroundJobProgress;
+  result?: Record<string, unknown>;
+  failure?: BackgroundJobFailure;
+  cancelRequestedAt?: string;
 }
 
 export interface PublishFailure {

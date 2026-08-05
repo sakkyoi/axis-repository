@@ -21,9 +21,19 @@ export const pypiProjectFileSchema = z.object({
 export const pypiProjectsSchema = z.object({
   projects: z.array(z.object({
     name: z.string(),
-    files: z.array(pypiProjectFileSchema),
+    fileCount: z.number().optional(),
   })),
+  cursor: z.string().optional(),
+  truncated: z.boolean(),
+});
+
+export const pypiProjectSchema = z.object({
+  project: z.object({
+    name: z.string(),
+    files: z.array(pypiProjectFileSchema),
+  }),
 });
 
 export type PypiProjectFile = z.infer<typeof pypiProjectFileSchema>;
 export type PypiProjects = z.infer<typeof pypiProjectsSchema>;
+export type PypiProject = z.infer<typeof pypiProjectSchema>["project"];

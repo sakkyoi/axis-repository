@@ -10,7 +10,11 @@ import type {
   UploadTarget,
   Repository,
   RepositoryArtifactRecord,
+  RepositoryArtifactFamilyRecord,
   RepositoryActivityRecord,
+  PublishFinalizeJobRecord,
+  RepositoryIndexJobRecord,
+  BackgroundJobRecord,
   PublishArtifactRequest,
   PublishArtifactsInput,
   PublishResult,
@@ -222,13 +226,57 @@ export interface RepositoryActivityStore {
 
 export interface RepositoryArtifactStore {
   listByRepository(repositoryName: string): Promise<RepositoryArtifactRecord[]>;
+  listFamiliesByRepositoryPage(
+    repositoryName: string,
+    page: { limit: number; offset: number },
+  ): Promise<{ records: RepositoryArtifactFamilyRecord[]; totalFamilies: number; totalArtifacts: number }>;
+  listByRepositoryPage(
+    repositoryName: string,
+    page: { limit: number; offset: number },
+  ): Promise<{ records: RepositoryArtifactRecord[]; total: number }>;
+  listByRepositoryFamily(repositoryName: string, family: string): Promise<RepositoryArtifactRecord[]>;
   upsert(record: RepositoryArtifactRecord): Promise<void>;
   replaceByRepository(repositoryName: string, records: RepositoryArtifactRecord[]): Promise<void>;
+}
+
+export interface RepositoryIndexJobStore {
+  getByRepository(repositoryName: string): Promise<RepositoryIndexJobRecord | null>;
+  listRunnable(): Promise<RepositoryIndexJobRecord[]>;
+  save(record: RepositoryIndexJobRecord): Promise<void>;
+  deleteByRepository(repositoryName: string): Promise<boolean>;
+}
+
+export interface PublishFinalizeJobStore {
+  getBySession(sessionId: string): Promise<PublishFinalizeJobRecord | null>;
+  listRunnable(): Promise<PublishFinalizeJobRecord[]>;
+  save(record: PublishFinalizeJobRecord): Promise<void>;
+  deleteBySession(sessionId: string): Promise<boolean>;
+  deleteByRepository(repositoryName: string): Promise<number>;
+}
+
+export interface BackgroundJobListQuery {
+  repositoryName?: string;
+  status?: BackgroundJobRecord["status"];
+  type?: BackgroundJobRecord["type"];
+  limit?: number;
+  offset?: number;
+}
+
+export interface BackgroundJobStore {
+  get(id: string): Promise<BackgroundJobRecord | null>;
+  list(query?: BackgroundJobListQuery): Promise<{ jobs: BackgroundJobRecord[]; total: number }>;
+  listRunnable(input: { limit: number }): Promise<BackgroundJobRecord[]>;
+  save(record: BackgroundJobRecord): Promise<void>;
+  cancel(id: string, requestedAt: string): Promise<BackgroundJobRecord | null>;
+  deleteBySubject(subject: { type: string; id: string }): Promise<number>;
+  deleteByRepository(repositoryName: string): Promise<number>;
 }
 
 export interface StateStore {
   repositories: RepositoryStore;
   publishSessions: PublishSessionStore;
+  backgroundJobs: BackgroundJobStore;
+  publishFinalizeJobs: PublishFinalizeJobStore;
   publishTokens: PublishTokenStore;
   adminUsers: AdminUserStore;
   adminRefreshSessions: AdminRefreshSessionStore;
@@ -236,4 +284,5 @@ export interface StateStore {
   repositoryPluginPolicies: RepositoryPluginPolicyStore;
   repositoryActivities: RepositoryActivityStore;
   repositoryArtifacts: RepositoryArtifactStore;
+  repositoryIndexJobs: RepositoryIndexJobStore;
 }

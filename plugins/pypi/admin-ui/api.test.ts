@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPypiClientInfo, listPypiProjects, setPypiFileYanked } from "./api";
+import { getPypiClientInfo, getPypiProject, listPypiProjects, setPypiFileYanked } from "./api";
 
 describe("PyPI UI plugin API adapter", () => {
   it("uses generic repository client helpers for client info", async () => {
@@ -25,12 +25,24 @@ describe("PyPI UI plugin API adapter", () => {
 });
 
 describe("PyPI project files API adapter", () => {
-  function recordingClient(response: unknown = { projects: [] }) {
-    const calls: Array<{ path: readonly string[]; input?: unknown }> = [];
+  function recordingClient(response: unknown = { projects: [], truncated: false }) {
+    const calls: Array<{
+      path: readonly string[];
+      input?: unknown;
+      options?: { searchParams?: Record<string, string | number | undefined> };
+    }> = [];
     return {
       calls,
-      getRepositoryPluginResource: async (_repositoryName: string, _namespace: string, path: readonly string[]) => {
-        calls.push({ path });
+      getRepositoryPluginResource: async (
+        _repositoryName: string,
+        _namespace: string,
+        path: readonly string[],
+        options?: { searchParams?: Record<string, string | number | undefined> },
+      ) => {
+        calls.push({
+          path,
+          ...(options === undefined ? {} : { options }),
+        });
         return response;
       },
       postRepositoryPluginResource: async (
@@ -45,18 +57,36 @@ describe("PyPI project files API adapter", () => {
     };
   }
 
-  it("reads the published files of every project", async () => {
+  it("reads project summaries", async () => {
     const client = recordingClient({
       projects: [{
         name: "alpha",
-        files: [{ filename: "alpha-1.0.tar.gz", sha256: "a".repeat(64), yanked: "broken" }],
+        fileCount: 1,
       }],
+      truncated: false,
     });
 
-    const projects = await listPypiProjects(client, "python-internal");
+    const projects = await listPypiProjects(client, "python-internal", { limit: 50, cursor: "next" });
 
-    expect(projects[0]?.files[0]).toMatchObject({ filename: "alpha-1.0.tar.gz", yanked: "broken" });
-    expect(client.calls[0]?.path).toEqual(["projects"]);
+    expect(projects.projects[0]).toMatchObject({ name: "alpha", fileCount: 1 });
+    expect(client.calls[0]).toMatchObject({
+      path: ["projects"],
+      options: { searchParams: { limit: 50, cursor: "next" } },
+    });
+  });
+
+  it("reads the published files of one project", async () => {
+    const client = recordingClient({
+      project: {
+        name: "alpha",
+        files: [{ filename: "alpha-1.0.tar.gz", sha256: "a".repeat(64), yanked: "broken" }],
+      },
+    });
+
+    const project = await getPypiProject(client, "python-internal", "alpha");
+
+    expect(project.files[0]).toMatchObject({ filename: "alpha-1.0.tar.gz", yanked: "broken" });
+    expect(client.calls[0]).toMatchObject({ path: ["projects", "alpha"] });
   });
 
   it("sends a yank with its reason", async () => {

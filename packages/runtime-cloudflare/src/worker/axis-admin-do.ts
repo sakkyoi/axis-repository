@@ -18,6 +18,9 @@ import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
 import { R2PresignedDownloadSigner } from "../storage/object-download-url";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
+import { RepositoryIndexJobService } from "./repository-index-job-service";
+import { PublishFinalizeJobService } from "./publish-finalize-job-service";
+import { BackgroundJobService } from "./background-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import { RepositoryWriteLock } from "./repository-write-lock";
@@ -136,6 +139,10 @@ function bootstrapOwnerFromEnv(env: AxisEnv): { username: string; password?: str
 export function createDurableObjectDependencies(
   storage: DurableStorage,
   env: AxisEnv,
+  options: {
+    scheduleRepositoryIndexJobs?: () => Promise<void>;
+    schedulePublishFinalizeJobs?: () => Promise<void>;
+  } = {},
 ): AppDependencies {
   if (!env.TOKEN_HASH_PEPPER) {
     throw new Error("TOKEN_HASH_PEPPER is required for AxisAdminDO");
@@ -214,6 +221,29 @@ export function createDurableObjectDependencies(
     clock,
     writeLock,
   });
+  const repositoryIndexJobService = new RepositoryIndexJobService({
+    state,
+    repositoryService,
+    repositoryActivityService,
+    repositoryArtifactIndexService,
+    clock,
+  });
+  const pluginPublishSessionService = new PluginPublishSessionService({
+    publishSessionService,
+    repositoryService,
+    plugins: repositoryRuntimePlugins,
+    pluginPolicyService,
+    repositoryActivityService,
+    repositoryArtifactStore: state.repositoryArtifacts,
+    repositoryObjectStore: objectStore,
+    writeLock,
+  });
+  const publishFinalizeJobService = new PublishFinalizeJobService({
+    state,
+    publishSessionService: pluginPublishSessionService,
+    clock,
+  });
+  const backgroundJobService = new BackgroundJobService({ state, clock });
 
   const artifactOrigin = parseArtifactOrigin(env.AXIS_ARTIFACT_ORIGIN);
 
@@ -234,19 +264,13 @@ export function createDurableObjectDependencies(
       pluginPolicyService,
     }),
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
-    publishSessionService: new PluginPublishSessionService({
-      publishSessionService,
-      repositoryService,
-      plugins: repositoryRuntimePlugins,
-      pluginPolicyService,
-      repositoryActivityService,
-      repositoryArtifactStore: state.repositoryArtifacts,
-      repositoryObjectStore: objectStore,
-      writeLock,
-    }),
+    publishSessionService: pluginPublishSessionService,
+    backgroundJobService,
+    publishFinalizeJobService,
     repositoryActivityService,
     repositoryArtifactStore: state.repositoryArtifacts,
     repositoryArtifactIndexService,
+    repositoryIndexJobService,
     pluginPolicyService,
     repositorySecrets,
     repositoryObjectStore: objectStore,
@@ -255,6 +279,12 @@ export function createDurableObjectDependencies(
     repositoryRuntimePlugins,
     repositoryWriteLock: writeLock,
     publishSessionTtlMs: publishSessionService.ttlSeconds * 1000,
+    ...(options.scheduleRepositoryIndexJobs === undefined
+      ? {}
+      : { scheduleRepositoryIndexJobs: options.scheduleRepositoryIndexJobs }),
+    ...(options.schedulePublishFinalizeJobs === undefined
+      ? {}
+      : { schedulePublishFinalizeJobs: options.schedulePublishFinalizeJobs }),
   };
 }
 
@@ -266,6 +296,10 @@ export class AxisAdminDO {
     this.dependencies = createDurableObjectDependencies(
       state.storage as unknown as DurableStorage,
       env,
+      {
+        scheduleRepositoryIndexJobs: () => state.storage.setAlarm(Date.now()),
+        schedulePublishFinalizeJobs: () => state.storage.setAlarm(Date.now()),
+      },
     );
     this.app = createApp(this.dependencies);
 
@@ -286,6 +320,8 @@ export class AxisAdminDO {
   async alarm(): Promise<void> {
     let nextRunAt = new Date(Date.now() + MAINTENANCE_MAX_INTERVAL_MS);
     try {
+      const finalizeJobs = await this.dependencies.publishFinalizeJobService.drain({ limit: 1 });
+      const indexJobs = await this.dependencies.repositoryIndexJobService.drain({ limit: 1 });
       const run = await runRepositoryMaintenance({
         repositories: await this.dependencies.repositoryService.list(),
         plugins: this.dependencies.repositoryRuntimePlugins,
@@ -296,7 +332,14 @@ export class AxisAdminDO {
       });
       nextRunAt = run.nextRunAt;
       for (const failure of run.failures) {
-        console.error(`Repository maintenance failed for ${failure.repositoryName}: ${failure.message}`);
+        if (failure.kind === "staging") {
+          console.error(`Repository staging sweep failed: ${failure.message}`);
+        } else {
+          console.error(`Repository maintenance failed for ${failure.repositoryName}: ${failure.message}`);
+        }
+      }
+      if (finalizeJobs.remaining > 0 || indexJobs.remaining > 0) {
+        nextRunAt = new Date(Date.now() + 1000);
       }
     } catch (error) {
       // Whatever went wrong, the alarm has to be rearmed: dropping it would

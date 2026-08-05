@@ -5,7 +5,11 @@ import type {
   AdminRefreshSessionRecord,
   Repository,
   RepositoryArtifactRecord,
+  RepositoryArtifactFamilyRecord,
   RepositoryActivityRecord,
+  PublishFinalizeJobRecord,
+  RepositoryIndexJobRecord,
+  BackgroundJobRecord,
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
   SigningKeyRecord,
@@ -36,6 +40,8 @@ function clonePublishSession(session: PublishSession): PublishSession {
 export class MemoryStateStore implements StateStore {
   private readonly repositoryByName = new Map<string, Repository>();
   private readonly publishSessionById = new Map<string, PublishSession>();
+  private readonly backgroundJobById = new Map<string, BackgroundJobRecord>();
+  private readonly publishFinalizeJobBySession = new Map<string, PublishFinalizeJobRecord>();
   private readonly publishTokenById = new Map<string, PublishTokenRecord>();
   private readonly adminUserById = new Map<string, AdminUserRecord>();
   private readonly adminUserIdByUsername = new Map<string, string>();
@@ -47,6 +53,7 @@ export class MemoryStateStore implements StateStore {
   private readonly repositoryActivityById = new Map<string, RepositoryActivityRecord>();
   private readonly repositoryArtifactById = new Map<string, RepositoryArtifactRecord>();
   private readonly repositoryArtifactIdByIdentity = new Map<string, string>();
+  private readonly repositoryIndexJobByRepository = new Map<string, RepositoryIndexJobRecord>();
 
   readonly repositories = {
     getByName: async (name: string): Promise<Repository | null> => {
@@ -288,6 +295,32 @@ export class MemoryStateStore implements StateStore {
         .filter((artifact) => artifact.repositoryName === repositoryName)
         .sort(compareRepositoryArtifacts);
     },
+    listFamiliesByRepositoryPage: async (
+      repositoryName: string,
+      page: { limit: number; offset: number },
+    ): Promise<{ records: RepositoryArtifactFamilyRecord[]; totalFamilies: number; totalArtifacts: number }> => {
+      const artifacts = await this.repositoryArtifacts.listByRepository(repositoryName);
+      const families = repositoryArtifactFamilies(artifacts);
+      return {
+        records: families.slice(page.offset, page.offset + page.limit),
+        totalFamilies: families.length,
+        totalArtifacts: artifacts.length,
+      };
+    },
+    listByRepositoryPage: async (
+      repositoryName: string,
+      page: { limit: number; offset: number },
+    ): Promise<{ records: RepositoryArtifactRecord[]; total: number }> => {
+      const records = await this.repositoryArtifacts.listByRepository(repositoryName);
+      return {
+        records: records.slice(page.offset, page.offset + page.limit),
+        total: records.length,
+      };
+    },
+    listByRepositoryFamily: async (repositoryName: string, family: string): Promise<RepositoryArtifactRecord[]> => {
+      return (await this.repositoryArtifacts.listByRepository(repositoryName))
+        .filter((artifact) => (artifact.family ?? artifact.id) === family);
+    },
     upsert: async (record: RepositoryArtifactRecord): Promise<void> => {
       const identityIndex = repositoryArtifactIdentityIndex(record.repositoryName, record.identity);
       const existingId = this.repositoryArtifactIdByIdentity.get(identityIndex);
@@ -314,11 +347,143 @@ export class MemoryStateStore implements StateStore {
       }
     },
   };
+
+  readonly backgroundJobs = {
+    get: async (id: string): Promise<BackgroundJobRecord | null> => {
+      const record = this.backgroundJobById.get(id);
+      return record ? snapshot(record) : null;
+    },
+    list: async (query: {
+      repositoryName?: string;
+      status?: BackgroundJobRecord["status"];
+      type?: BackgroundJobRecord["type"];
+      limit?: number;
+      offset?: number;
+    } = {}): Promise<{ jobs: BackgroundJobRecord[]; total: number }> => {
+      const filtered = snapshotAll([...this.backgroundJobById.values()])
+        .filter((job) => query.repositoryName === undefined || job.repositoryName === query.repositoryName)
+        .filter((job) => query.status === undefined || job.status === query.status)
+        .filter((job) => query.type === undefined || job.type === query.type)
+        .sort(compareBackgroundJobs);
+      const offset = query.offset ?? 0;
+      const limit = query.limit ?? filtered.length;
+      return { jobs: filtered.slice(offset, offset + limit), total: filtered.length };
+    },
+    listRunnable: async (input: { limit: number }): Promise<BackgroundJobRecord[]> => {
+      return snapshotAll([...this.backgroundJobById.values()])
+        .filter((job) => job.status === "pending")
+        .sort(compareRunnableBackgroundJobs)
+        .slice(0, input.limit);
+    },
+    save: async (record: BackgroundJobRecord): Promise<void> => {
+      this.backgroundJobById.set(record.id, snapshot(record));
+    },
+    cancel: async (id: string, requestedAt: string): Promise<BackgroundJobRecord | null> => {
+      const existing = this.backgroundJobById.get(id);
+      if (!existing) return null;
+      const canceled: BackgroundJobRecord = existing.status === "pending"
+        ? {
+          ...existing,
+          status: "canceled",
+          cancelRequestedAt: requestedAt,
+          finishedAt: requestedAt,
+        }
+        : existing.status === "running"
+          ? {
+            ...existing,
+            status: "canceling",
+            cancelRequestedAt: requestedAt,
+          }
+          : existing;
+      this.backgroundJobById.set(id, snapshot(canceled));
+      return snapshot(canceled);
+    },
+    deleteBySubject: async (subject: { type: string; id: string }): Promise<number> => {
+      let deleted = 0;
+      for (const [id, job] of this.backgroundJobById.entries()) {
+        if (job.subject.type !== subject.type || job.subject.id !== subject.id) continue;
+        this.backgroundJobById.delete(id);
+        deleted += 1;
+      }
+      return deleted;
+    },
+    deleteByRepository: async (repositoryName: string): Promise<number> => {
+      let deleted = 0;
+      for (const [id, job] of this.backgroundJobById.entries()) {
+        if (job.repositoryName !== repositoryName) continue;
+        this.backgroundJobById.delete(id);
+        deleted += 1;
+      }
+      return deleted;
+    },
+  };
+
+  readonly publishFinalizeJobs = {
+    getBySession: async (sessionId: string): Promise<PublishFinalizeJobRecord | null> => {
+      const record = this.publishFinalizeJobBySession.get(sessionId);
+      return record ? snapshot(record) : null;
+    },
+    listRunnable: async (): Promise<PublishFinalizeJobRecord[]> => {
+      return snapshotAll([...this.publishFinalizeJobBySession.values()])
+        .filter((job) => job.status === "pending")
+        .sort(comparePublishFinalizeJobs);
+    },
+    save: async (record: PublishFinalizeJobRecord): Promise<void> => {
+      this.publishFinalizeJobBySession.set(record.sessionId, snapshot(record));
+    },
+    deleteBySession: async (sessionId: string): Promise<boolean> => {
+      return this.publishFinalizeJobBySession.delete(sessionId);
+    },
+    deleteByRepository: async (repositoryName: string): Promise<number> => {
+      let deleted = 0;
+      for (const [sessionId, job] of this.publishFinalizeJobBySession.entries()) {
+        if (job.repositoryName !== repositoryName) continue;
+        this.publishFinalizeJobBySession.delete(sessionId);
+        deleted += 1;
+      }
+      return deleted;
+    },
+  };
+
+  readonly repositoryIndexJobs = {
+    getByRepository: async (repositoryName: string): Promise<RepositoryIndexJobRecord | null> => {
+      const record = this.repositoryIndexJobByRepository.get(repositoryName);
+      return record ? snapshot(record) : null;
+    },
+    listRunnable: async (): Promise<RepositoryIndexJobRecord[]> => {
+      return snapshotAll([...this.repositoryIndexJobByRepository.values()])
+        .filter((job) => job.status === "pending")
+        .sort(compareRepositoryIndexJobs);
+    },
+    save: async (record: RepositoryIndexJobRecord): Promise<void> => {
+      this.repositoryIndexJobByRepository.set(record.repositoryName, snapshot(record));
+    },
+    deleteByRepository: async (repositoryName: string): Promise<boolean> => {
+      return this.repositoryIndexJobByRepository.delete(repositoryName);
+    },
+  };
 }
 
 function comparePublishSessions(left: PublishSession, right: PublishSession): number {
   const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
   return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
+}
+
+function compareBackgroundJobs(left: BackgroundJobRecord, right: BackgroundJobRecord): number {
+  const requestedAtOrder = right.requestedAt.localeCompare(left.requestedAt);
+  return requestedAtOrder === 0 ? left.id.localeCompare(right.id) : requestedAtOrder;
+}
+
+function compareRunnableBackgroundJobs(left: BackgroundJobRecord, right: BackgroundJobRecord): number {
+  const priorityOrder = right.priority - left.priority;
+  if (priorityOrder !== 0) return priorityOrder;
+  const scheduledAtOrder = left.scheduledAt.localeCompare(right.scheduledAt);
+  return scheduledAtOrder === 0 ? left.id.localeCompare(right.id) : scheduledAtOrder;
+}
+
+function comparePublishFinalizeJobs(left: PublishFinalizeJobRecord, right: PublishFinalizeJobRecord): number {
+  const requestedAtOrder = left.requestedAt.localeCompare(right.requestedAt);
+  return requestedAtOrder === 0 ? left.sessionId.localeCompare(right.sessionId) : requestedAtOrder;
 }
 
 function compareRepositoryActivities(left: RepositoryActivityRecord, right: RepositoryActivityRecord): number {
@@ -329,6 +494,42 @@ function compareRepositoryActivities(left: RepositoryActivityRecord, right: Repo
 function compareRepositoryArtifacts(left: RepositoryArtifactRecord, right: RepositoryArtifactRecord): number {
   const updatedAtOrder = right.updatedAt.localeCompare(left.updatedAt);
   return updatedAtOrder === 0 ? left.id.localeCompare(right.id) : updatedAtOrder;
+}
+
+function repositoryArtifactFamilies(artifacts: RepositoryArtifactRecord[]): RepositoryArtifactFamilyRecord[] {
+  const byFamily = new Map<string, RepositoryArtifactRecord[]>();
+  for (const artifact of artifacts) {
+    const key = artifact.family ?? artifact.id;
+    byFamily.set(key, [...(byFamily.get(key) ?? []), artifact]);
+  }
+  return [...byFamily.entries()]
+    .map(([key, members]) => {
+      const ordered = [...members].sort(compareRepositoryArtifacts);
+      const latestArtifact = ordered[0]!;
+      const versions = new Set(ordered.map((artifact) => artifact.version ?? ""));
+      return {
+        key,
+        repositoryName: latestArtifact.repositoryName,
+        ecosystem: latestArtifact.ecosystem,
+        name: latestArtifact.name,
+        ...(latestArtifact.version === undefined ? {} : { latestVersion: latestArtifact.version }),
+        latestSummary: latestArtifact.summary,
+        latestPublishedAt: latestArtifact.publishedAt,
+        updatedAt: latestArtifact.updatedAt,
+        artifactCount: ordered.length,
+        versionCount: versions.size,
+        latestArtifact,
+      };
+    })
+    .sort((left, right) => {
+      const updatedAtOrder = right.updatedAt.localeCompare(left.updatedAt);
+      return updatedAtOrder === 0 ? left.key.localeCompare(right.key) : updatedAtOrder;
+    });
+}
+
+function compareRepositoryIndexJobs(left: RepositoryIndexJobRecord, right: RepositoryIndexJobRecord): number {
+  const requestedAtOrder = left.requestedAt.localeCompare(right.requestedAt);
+  return requestedAtOrder === 0 ? left.repositoryName.localeCompare(right.repositoryName) : requestedAtOrder;
 }
 
 function repositoryArtifactIdentityIndex(repositoryName: string, identity: string): string {

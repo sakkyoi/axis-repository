@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router";
-import { Monitor, Moon, Package, PanelLeftClose, Settings, ShieldCheck, Sun, Users } from "lucide-react";
+import { ListChecks, Monitor, Moon, Package, PanelLeftClose, Settings, ShieldCheck, Sun, Users } from "lucide-react";
 import { AxisBrand, AxisLogoMark } from "./brand/axis-brand";
 import { useBootstrapCredentialsToast } from "./bootstrap-credentials";
 import { GithubMark } from "./brand/github-mark";
@@ -20,6 +20,7 @@ import { useTheme, type ThemePreference } from "../theme";
 const navIcons = {
   repositories: Package,
   tokens: ShieldCheck,
+  jobs: ListChecks,
   users: Users,
   settings: Settings,
 } as const;

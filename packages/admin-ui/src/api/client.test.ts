@@ -733,7 +733,7 @@ describe("createAxisClient", () => {
       };
     };
 
-    await expect(client.listRepositoryArtifacts("debian internal"))
+    await expect(client.listRepositoryArtifacts("debian internal", { limit: 50, cursor: "next" }))
       .resolves.toMatchObject({
         artifacts: [{
           identity: "apt:main:myapp:1.2.3:amd64",
@@ -741,11 +741,72 @@ describe("createAxisClient", () => {
         }],
       });
     expect(requests).toEqual([
-      "GET /admin/repositories/debian%20internal/artifacts",
+      "GET /admin/repositories/debian%20internal/artifacts?limit=50&cursor=next",
     ]);
   });
 
-  it("rebuilds repository artifact indexes through an admin-scoped endpoint", async () => {
+  it("lists repository artifact families through an admin-scoped endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      accessToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          families: [{
+            key: "apt:myapp",
+            repositoryName: "debian internal",
+            ecosystem: "apt",
+            name: "myapp",
+            latestVersion: "1.2.3",
+            latestSummary: "myapp 1.2.3 amd64",
+            latestPublishedAt: "2026-07-24T00:00:00.000Z",
+            updatedAt: "2026-07-24T00:00:00.000Z",
+            artifactCount: 2,
+            versionCount: 1,
+            latestArtifact: {
+              id: "artifact_1",
+              repositoryName: "debian internal",
+              ecosystem: "apt",
+              identity: "apt:main:myapp:1.2.3:amd64",
+              family: "apt:myapp",
+              name: "myapp",
+              version: "1.2.3",
+              summary: "myapp 1.2.3 amd64",
+              primaryObjectKey: "repositories/debian internal/pool/main/myapp/myapp_1.2.3_amd64.deb",
+              objectKeys: ["repositories/debian internal/pool/main/myapp/myapp_1.2.3_amd64.deb"],
+              metadata: { architecture: "amd64" },
+              publishedAt: "2026-07-24T00:00:00.000Z",
+              updatedAt: "2026-07-24T00:00:00.000Z",
+              publishSessionId: "pub_1",
+            },
+          }],
+          totalFamilies: 10,
+          totalArtifacts: 20,
+          truncated: true,
+          cursor: "next-family",
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.listRepositoryArtifactFamilies("debian internal", { limit: 50, cursor: "next" }))
+      .resolves.toMatchObject({
+        totalFamilies: 10,
+        totalArtifacts: 20,
+        families: [{ key: "apt:myapp", artifactCount: 2 }],
+      });
+    expect(requests).toEqual([
+      "GET /admin/repositories/debian%20internal/artifacts/families?limit=50&cursor=next",
+    ]);
+  });
+
+  it("lists repository artifacts for one family", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",
       accessToken: "admin-secret",
@@ -765,10 +826,118 @@ describe("createAxisClient", () => {
       };
     };
 
+    await expect(client.listRepositoryArtifacts("debian internal", { family: "apt:myapp" }))
+      .resolves.toMatchObject({ artifacts: [] });
+    expect(requests).toEqual([
+      "GET /admin/repositories/debian%20internal/artifacts?family=apt%3Amyapp",
+    ]);
+  });
+
+  it("rebuilds repository artifact indexes through an admin-scoped endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      accessToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          job: {
+            repositoryName: "debian internal",
+            kind: "hosted-rebuild",
+            status: "pending",
+            requestedAt: "2026-08-05T00:00:00.000Z",
+            attempts: 0,
+          },
+        },
+        status: 202,
+        statusText: "Accepted",
+        headers: {},
+        config,
+      };
+    };
+
     await expect(client.rebuildRepositoryArtifactIndex("debian internal"))
-      .resolves.toEqual({ artifacts: [], truncated: false });
+      .resolves.toMatchObject({ job: { repositoryName: "debian internal", status: "pending" } });
     expect(requests).toEqual([
       "POST /admin/repositories/debian%20internal/artifacts/rebuild-index",
+    ]);
+  });
+
+  it("reads repository artifact index job status through a lightweight endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      accessToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          job: {
+            repositoryName: "debian internal",
+            kind: "hosted-rebuild",
+            status: "running",
+            requestedAt: "2026-08-05T00:00:00.000Z",
+            attempts: 1,
+            startedAt: "2026-08-05T00:00:01.000Z",
+          },
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.getRepositoryArtifactIndexJob("debian internal"))
+      .resolves.toMatchObject({ job: { repositoryName: "debian internal", status: "running" } });
+    expect(requests).toEqual([
+      "GET /admin/repositories/debian%20internal/artifact-index-job",
+    ]);
+  });
+
+  it("lists, reads, and cancels background jobs through admin endpoints", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      accessToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    const job = {
+      id: "repository.index:python-proxy",
+      type: "repository.index.proxy-refresh",
+      status: "pending",
+      subject: { type: "repository", id: "python-proxy", repositoryName: "python-proxy" },
+      repositoryName: "python-proxy",
+      priority: 0,
+      attempts: 0,
+      requestedAt: "2026-08-05T00:00:00.000Z",
+      scheduledAt: "2026-08-05T00:00:00.000Z",
+    };
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: config.url === "/admin/jobs?repositoryName=python-proxy&status=pending"
+          ? { jobs: [job], total: 1 }
+          : { job: config.method === "post" ? { ...job, status: "canceled" } : job },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.listBackgroundJobs({ repositoryName: "python-proxy", status: "pending" }))
+      .resolves.toMatchObject({ jobs: [{ id: "repository.index:python-proxy" }], total: 1 });
+    await expect(client.getBackgroundJob("repository.index:python-proxy"))
+      .resolves.toMatchObject({ id: "repository.index:python-proxy", status: "pending" });
+    await expect(client.cancelBackgroundJob("repository.index:python-proxy"))
+      .resolves.toMatchObject({ id: "repository.index:python-proxy", status: "canceled" });
+    expect(requests).toEqual([
+      "GET /admin/jobs?repositoryName=python-proxy&status=pending",
+      "GET /admin/jobs/repository.index%3Apython-proxy",
+      "POST /admin/jobs/repository.index%3Apython-proxy/cancel",
     ]);
   });
 
@@ -924,7 +1093,9 @@ describe("createAxisClient", () => {
       };
     };
 
-    await expect(client.getRepositoryPluginResource("debian prod", "apt", ["signing-keys", "key 1"]))
+    await expect(client.getRepositoryPluginResource("debian prod", "apt", ["signing-keys", "key 1"], {
+      searchParams: { limit: 50, cursor: "next page" },
+    }))
       .resolves.toEqual({ ok: true });
     await expect(client.postRepositoryPluginResource("debian prod", "apt", ["signing-keys", "generate"], { name: "release" }))
       .resolves.toEqual({ ok: true });
@@ -932,7 +1103,7 @@ describe("createAxisClient", () => {
     expect(requests).toEqual([
       {
         method: "GET",
-        url: "/admin/repositories/debian%20prod/apt/signing-keys/key%201",
+        url: "/admin/repositories/debian%20prod/apt/signing-keys/key%201?limit=50&cursor=next+page",
         data: undefined,
       },
       {
@@ -986,6 +1157,41 @@ describe("createAxisClient", () => {
 
     expect(requests).toEqual(["GET /admin/publish-sessions"]);
     expect(sessions).toMatchObject([{ id: "pub_1", repositoryName: "debian-internal" }]);
+  });
+
+  it("gets one admin publish session", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      accessToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase()} ${config.url}`);
+      return {
+        data: {
+          session: {
+            id: "pub_1",
+            repositoryName: "debian-internal",
+            ecosystem: "apt",
+            status: "finalize_queued",
+            requestedBy: { tokenId: "admin", name: "admin" },
+            artifacts: [],
+            uploads: [],
+            verifiedUploads: [],
+            createdAt: "2026-07-23T00:00:00.000Z",
+            expiresAt: "2026-07-23T00:10:00.000Z",
+          },
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.getAdminPublishSession("pub_1"))
+      .resolves.toMatchObject({ id: "pub_1", status: "finalize_queued" });
+    expect(requests).toEqual(["GET /admin/publish-sessions/pub_1"]);
   });
 
   it("creates, uploads, verifies, and finalizes admin publish sessions", async () => {
@@ -1045,7 +1251,7 @@ describe("createAxisClient", () => {
             id: "pub_1",
             repositoryName: "debian-internal",
             ecosystem: "apt",
-            status: "finalized",
+            status: "finalize_queued",
             requestedBy: {
               tokenId: "admin",
               name: "admin",
@@ -1060,10 +1266,16 @@ describe("createAxisClient", () => {
             createdAt: "2026-07-23T00:00:00.000Z",
             expiresAt: "2026-07-23T00:10:00.000Z",
           },
-          result: { publishedAt: "2026-07-23T00:01:00.000Z", objects: [] },
+          job: {
+            sessionId: "pub_1",
+            repositoryName: "debian-internal",
+            status: "pending",
+            requestedAt: "2026-07-23T00:01:00.000Z",
+            attempts: 0,
+          },
         },
-        status: 200,
-        statusText: "OK",
+        status: 202,
+        statusText: "Accepted",
         headers: {},
         config,
       };
@@ -1082,7 +1294,8 @@ describe("createAxisClient", () => {
     });
     await client.uploadPublishArtifact(session.uploads[0]!, new Blob(["deb"]));
     await client.verifyAdminPublishUpload(session.id, "upl_1");
-    await client.finalizeAdminPublishSession(session.id);
+    await expect(client.finalizeAdminPublishSession(session.id))
+      .resolves.toMatchObject({ session: { status: "finalize_queued" }, job: { status: "pending" } });
 
     expect(requests.map((request) => `${request.method} ${request.url}`)).toEqual([
       "POST /admin/publish-sessions",

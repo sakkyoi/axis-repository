@@ -5,6 +5,14 @@ import { pypiPluginManifest } from "../manifest";
 import { listProjects, readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
 import { normalizeProjectName } from "../shared/names";
 
+const DEFAULT_PROJECT_PAGE_LIMIT = 50;
+const MAX_PROJECT_PAGE_LIMIT = 100;
+
+interface ProjectPageParams {
+  limit: number;
+  offset: number;
+}
+
 function pypiAdminResourceRoute(name: string) {
   const route = pypiPluginManifest.adminResources.routes.find((candidate) => candidate.name === name);
   if (!route) {
@@ -59,11 +67,15 @@ export function createPypiAdminResources(input: {
     routes: [
       {
         ...pypiAdminResourceRoute("list-projects"),
-        handle: async ({ repository, repositoryName }) => {
+        handle: async ({ repository, repositoryName, request }) => {
           const objectStore = input.objectStoreFor(repositoryName);
+          const pageParams = projectPageParams(new URL(request.url).searchParams);
           if (repository?.kind === "proxy") {
+            const projects = await readPypiProxyCachedProjects(objectStore, repositoryName);
             return pluginJsonResponse({
-              projects: await readPypiProxyCachedProjects(objectStore, repositoryName),
+              ...projectPage(projects
+                .slice(pageParams.offset, pageParams.offset + pageParams.limit)
+                .map((project) => ({ name: project.name, fileCount: project.files.length })), projects.length, pageParams),
             });
           }
           // Read from the published pages rather than the artifact index, so
@@ -71,10 +83,30 @@ export function createPypiAdminResources(input: {
           // included.
           const projects = await listProjects(objectStore, repositoryName);
           return pluginJsonResponse({
-            projects: await Promise.all(projects.map(async (project) => ({
+            ...projectPage(projects
+              .slice(pageParams.offset, pageParams.offset + pageParams.limit)
+              .map((project) => ({ name: project })), projects.length, pageParams),
+          });
+        },
+      },
+      {
+        ...pypiAdminResourceRoute("get-project"),
+        handle: async ({ repository, repositoryName, params }) => {
+          const objectStore = input.objectStoreFor(repositoryName);
+          const project = normalizeProjectName(requireParam(params.project));
+          if (repository?.kind === "proxy") {
+            const cached = (await readPypiProxyCachedProjects(objectStore, repositoryName))
+              .find((candidate) => normalizeProjectName(candidate.name) === project);
+            if (!cached) {
+              throw new NotFoundError();
+            }
+            return pluginJsonResponse({ project: cached });
+          }
+          return pluginJsonResponse({
+            project: {
               name: project,
               files: await readPublishedProjectFiles({ objectStore, repositoryName, project }),
-            }))),
+            },
           });
         },
       },
@@ -112,7 +144,52 @@ export function createPypiAdminResources(input: {
   };
 }
 
-async function readPypiProxyCachedProjects(
+function projectPage<T>(projects: T[], total: number, params: ProjectPageParams) {
+  const end = params.offset + params.limit;
+  const truncated = end < total;
+  return {
+    projects,
+    truncated,
+    ...(truncated ? { cursor: encodeOffsetCursor(end) } : {}),
+  };
+}
+
+function projectPageParams(searchParams: URLSearchParams): ProjectPageParams {
+  const limitParam = searchParams.get("limit");
+  const limit = limitParam === null ? DEFAULT_PROJECT_PAGE_LIMIT : Number(limitParam);
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PROJECT_PAGE_LIMIT) {
+    throw new ValidationError(`limit must be an integer between 1 and ${MAX_PROJECT_PAGE_LIMIT}`);
+  }
+  const cursor = searchParams.get("cursor");
+  return {
+    limit,
+    offset: cursor ? decodeOffsetCursor(cursor) : 0,
+  };
+}
+
+function encodeOffsetCursor(offset: number): string {
+  return btoa(JSON.stringify({ offset }))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
+}
+
+function decodeOffsetCursor(cursor: string): number {
+  try {
+    const normalized = cursor.replaceAll("-", "+").replaceAll("_", "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+    const parsed = JSON.parse(atob(padded)) as { offset?: unknown };
+    const offset = parsed.offset;
+    if (!Number.isSafeInteger(offset) || typeof offset !== "number" || offset < 0) {
+      throw new Error("invalid offset");
+    }
+    return offset;
+  } catch {
+    throw new ValidationError("cursor is invalid");
+  }
+}
+
+export async function readPypiProxyCachedProjects(
   objectStore: RepositoryObjectStore,
   repositoryName: string,
 ): Promise<Array<{ name: string; files: unknown[] }>> {

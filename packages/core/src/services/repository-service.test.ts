@@ -248,6 +248,24 @@ describe("RepositoryService", () => {
     await state.repositorySecrets.save(secret({ id: "repository_secret_other", repositoryName: "python-internal" }));
     await state.publishSessions.save(session({ repositoryName: "debian-internal" }));
     await state.publishSessions.save(session({ id: "pub_other", repositoryName: "python-internal" }));
+    await state.repositoryIndexJobs.save({
+      repositoryName: "debian-internal",
+      kind: "hosted-rebuild",
+      status: "pending",
+      requestedAt: "2026-07-13T00:00:00.000Z",
+      attempts: 0,
+    });
+    await state.backgroundJobs.save({
+      id: "repository.index:debian-internal",
+      type: "repository.index.hosted-rebuild",
+      status: "pending",
+      subject: { type: "repository", id: "debian-internal", repositoryName: "debian-internal" },
+      repositoryName: "debian-internal",
+      priority: 0,
+      attempts: 0,
+      requestedAt: "2026-07-13T00:00:00.000Z",
+      scheduledAt: "2026-07-13T00:00:00.000Z",
+    });
     await state.publishTokens.save(publishToken({
       name: "multi",
       repositories: ["debian-internal", "python-internal"],
@@ -266,6 +284,8 @@ describe("RepositoryService", () => {
     await expect(state.repositoryActivities.listByRepository("debian-internal")).resolves.toEqual([]);
     await expect(state.repositorySecrets.getByName("release", "debian-internal", "apt.signing-key")).resolves.toBeNull();
     await expect(state.publishSessions.list()).resolves.toMatchObject([{ id: "pub_other" }]);
+    await expect(state.repositoryIndexJobs.getByRepository("debian-internal")).resolves.toBeNull();
+    await expect(state.backgroundJobs.get("repository.index:debian-internal")).resolves.toBeNull();
     const multiToken = await state.publishTokens.getByName("multi");
     expect(multiToken).toMatchObject({
       repositories: ["python-internal"],

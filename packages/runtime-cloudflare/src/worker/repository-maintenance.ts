@@ -20,7 +20,10 @@ export const MAINTENANCE_MIN_INTERVAL_MS = 60 * 1000;
 
 export interface RepositoryMaintenanceRun {
   refreshed: Array<{ repositoryName: string; details: string[] }>;
-  failures: Array<{ repositoryName: string; message: string }>;
+  failures: Array<
+    | { kind: "repository"; repositoryName: string; message: string }
+    | { kind: "staging"; message: string }
+  >;
   /** Staged uploads discarded because no session could still finish them. */
   staged: string[];
   /** When the caller should run maintenance again. */
@@ -67,6 +70,7 @@ export async function runRepositoryMaintenance(input: {
       // One repository with a revoked signing key must not stop the rest, and
       // must not stop the timer either, or a fixable problem becomes permanent.
       failures.push({
+        kind: "repository",
         repositoryName: repository.name,
         message: error instanceof Error ? error.message : String(error),
       });
@@ -87,7 +91,7 @@ export async function runRepositoryMaintenance(input: {
     }
   } catch (error) {
     failures.push({
-      repositoryName: "_staging",
+      kind: "staging",
       message: error instanceof Error ? error.message : String(error),
     });
   }

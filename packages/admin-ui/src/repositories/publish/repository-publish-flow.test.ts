@@ -62,6 +62,9 @@ describe("repository publish flow", () => {
       finalizeSession: vi.fn(async () => {
         calls.push("finalize");
       }),
+      waitForFinalize: vi.fn(async () => {
+        calls.push("wait");
+      }),
       refresh,
       onPhase: (phase) => calls.push(`phase:${phase}`),
     });
@@ -77,6 +80,7 @@ describe("repository publish flow", () => {
       "verify",
       "phase:finalizing",
       "finalize",
+      "wait",
       "refresh",
       "phase:published",
     ]);
@@ -93,6 +97,7 @@ describe("repository publish flow", () => {
         uploadArtifact: async () => undefined,
         verifyUpload: async () => undefined,
         finalizeSession: async () => undefined,
+        waitForFinalize: async () => undefined,
         refresh: async () => undefined,
         onPhase: () => undefined,
       }),
