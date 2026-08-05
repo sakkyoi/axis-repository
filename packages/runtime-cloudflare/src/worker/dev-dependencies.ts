@@ -21,7 +21,7 @@ import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import SameOriginUploadBroker from "../uploads/same-origin-upload-broker";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
-import { RepositoryIndexJobService } from "./repository-index-job-service";
+import { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
 import { BackgroundJobDispatcher } from "./background-job-dispatcher";
@@ -48,7 +48,6 @@ export interface AppDependencies {
   repositoryActivityService: RepositoryActivityService;
   repositoryArtifactStore: RepositoryArtifactStore;
   repositoryArtifactIndexService: PluginRepositoryArtifactIndexService;
-  repositoryIndexJobService: RepositoryIndexJobService;
   pluginPolicyService: PluginPolicyService;
   repositorySecrets: RepositorySecretService;
   repositoryObjectStore: RepositoryObjectStore;
@@ -199,7 +198,7 @@ export function createDevDependencyHarness(
     clock,
     writeLock,
   });
-  const repositoryIndexJobService = new RepositoryIndexJobService({
+  const repositoryIndexJobService = new RepositoryIndexBackgroundJobService({
     state,
     repositoryService,
     repositoryActivityService,
@@ -237,10 +236,6 @@ export function createDevDependencyHarness(
   const backgroundJobDispatcher = new BackgroundJobDispatcher({
     state,
     clock,
-    migrators: [
-      () => publishFinalizeJobService.migrateLegacyPendingJobs(),
-      () => repositoryIndexJobService.migrateLegacyPendingJobs(),
-    ],
     runners: [
       {
         supports: (job) => job.type === "publish.finalize",
@@ -280,7 +275,6 @@ export function createDevDependencyHarness(
       repositorySecrets,
       repositoryObjectStore: objectStore,
       repositoryArtifactIndexService,
-      repositoryIndexJobService,
       localUploadBroker: uploadBroker,
       repositoryRuntimePlugins,
       repositoryWriteLock: writeLock,

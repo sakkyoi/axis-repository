@@ -2,7 +2,6 @@ import type {
   BackgroundJobRecord,
   Clock,
   FinalizePublishSessionInput,
-  PublishFinalizeJobRecord,
   PublishSession,
   PublishSessionService,
   StateStore,
@@ -25,10 +24,6 @@ export interface RequestPublishFinalizeJobResult {
 
 export class PublishFinalizeJobService {
   constructor(private readonly options: PublishFinalizeJobServiceOptions) {}
-
-  async getBySession(sessionId: string): Promise<PublishFinalizeJobRecord | null> {
-    return this.options.state.publishFinalizeJobs.getBySession(sessionId);
-  }
 
   async request(input: RequestPublishFinalizeJobInput): Promise<RequestPublishFinalizeJobResult> {
     const result = await this.options.publishSessionService.requestFinalize(input);
@@ -53,150 +48,79 @@ export class PublishFinalizeJobService {
   }
 
   private async saveRequestedJob(session: PublishSession): Promise<RequestPublishFinalizeJobResult> {
-    const existing = await this.options.state.publishFinalizeJobs.getBySession(session.id);
+    const id = publishFinalizeBackgroundJobId(session.id);
+    const existing = await this.options.state.backgroundJobs.get(id);
     const requestedAt = this.options.clock.now().toISOString();
     if (existing?.status === "running") {
-      return { session, job: backgroundJobFromPublishFinalizeJob(existing) };
+      return { session, job: existing };
     }
     if (existing?.status === "pending") {
-      return { session, job: backgroundJobFromPublishFinalizeJob(existing) };
+      return { session, job: existing };
     }
-    const job: PublishFinalizeJobRecord = {
-      sessionId: session.id,
+    const job: BackgroundJobRecord = {
+      id,
+      type: "publish.finalize",
+      status: session.status === "finalized" ? "succeeded" : "pending",
+      subject: { type: "publish-session", id: session.id, repositoryName: session.repositoryName },
       repositoryName: session.repositoryName,
-      status: session.status === "finalized" ? "ready" : "pending",
+      priority: 0,
       requestedAt,
+      scheduledAt: requestedAt,
       attempts: existing?.attempts ?? 0,
-      ...(existing?.lastFailure === undefined ? {} : { lastFailure: existing.lastFailure }),
+      ...(existing?.failure === undefined ? {} : { failure: existing.failure }),
       ...(session.status === "finalized" ? { finishedAt: requestedAt } : {}),
     };
-    await this.options.state.publishFinalizeJobs.save(job);
-    const backgroundJob = backgroundJobFromPublishFinalizeJob(job);
-    await this.options.state.backgroundJobs.save(backgroundJob);
-    return { session, job: backgroundJob };
-  }
-
-  async migrateLegacyPendingJobs(): Promise<number> {
-    let migrated = 0;
-    for (const job of await this.options.state.publishFinalizeJobs.listRunnable()) {
-      const id = publishFinalizeBackgroundJobId(job.sessionId);
-      if (await this.options.state.backgroundJobs.get(id)) continue;
-      await this.options.state.backgroundJobs.save(backgroundJobFromPublishFinalizeJob(job));
-      migrated += 1;
-    }
-    return migrated;
+    await this.options.state.backgroundJobs.save(job);
+    return { session, job };
   }
 
   async runBackgroundJob(job: BackgroundJobRecord): Promise<void> {
-    const projection = await this.options.state.publishFinalizeJobs.getBySession(job.subject.id)
-      ?? publishFinalizeJobFromBackgroundJob(job);
-    await this.run(projection);
-  }
-
-  private async run(job: PublishFinalizeJobRecord): Promise<PublishFinalizeJobRecord> {
     const startedAt = this.options.clock.now().toISOString();
-    const running: PublishFinalizeJobRecord = {
-      sessionId: job.sessionId,
-      repositoryName: job.repositoryName,
+    const repositoryName = job.repositoryName ?? job.subject.repositoryName;
+    const { finishedAt: _finishedAt, ...jobWithoutFinish } = job;
+    const running: BackgroundJobRecord = {
+      ...jobWithoutFinish,
       status: "running",
-      requestedAt: job.requestedAt,
       attempts: job.attempts + 1,
       startedAt,
-      ...(job.lastFailure === undefined ? {} : { lastFailure: job.lastFailure }),
     };
-    await this.options.state.publishFinalizeJobs.save(running);
-    await this.options.state.backgroundJobs.save(backgroundJobFromPublishFinalizeJob(running));
+    await this.options.state.backgroundJobs.save(running);
     try {
-      const session = await this.options.state.publishSessions.get(running.sessionId);
+      const session = await this.options.state.publishSessions.get(job.subject.id);
       if (!session) {
-        throw new Error(`Publish session not found: ${running.sessionId}`);
+        throw new Error(`Publish session not found: ${job.subject.id}`);
       }
       await this.options.publishSessionService.finalize({
         sessionId: session.id,
         principal: session.requestedBy,
       });
       const finishedAt = this.options.clock.now().toISOString();
-      const completed: PublishFinalizeJobRecord = {
-        sessionId: running.sessionId,
-        repositoryName: running.repositoryName,
-        status: "ready",
-        requestedAt: running.requestedAt,
-        attempts: running.attempts,
-        startedAt,
+      const { failure: _failure, ...runningWithoutFailure } = running;
+      const completed: BackgroundJobRecord = {
+        ...runningWithoutFailure,
+        status: "succeeded",
         finishedAt,
       };
-      await this.options.state.publishFinalizeJobs.save(completed);
-      await this.options.state.backgroundJobs.save(backgroundJobFromPublishFinalizeJob(completed));
-      return completed;
+      await this.options.state.backgroundJobs.save(completed);
+      return;
     } catch (error) {
       const finishedAt = this.options.clock.now().toISOString();
-      const failed: PublishFinalizeJobRecord = {
-        sessionId: running.sessionId,
-        repositoryName: running.repositoryName,
+      const failed: BackgroundJobRecord = {
+        ...running,
+        ...(repositoryName === undefined ? {} : { repositoryName }),
         status: "failed",
-        requestedAt: running.requestedAt,
-        attempts: running.attempts,
-        startedAt,
         finishedAt,
-        lastFailure: {
+        failure: {
           message: error instanceof Error ? error.message : String(error),
           failedAt: finishedAt,
+          retryable: true,
         },
       };
-      await this.options.state.publishFinalizeJobs.save(failed);
-      await this.options.state.backgroundJobs.save(backgroundJobFromPublishFinalizeJob(failed));
-      return failed;
+      await this.options.state.backgroundJobs.save(failed);
     }
   }
 }
 
 export function publishFinalizeBackgroundJobId(sessionId: string): string {
   return `publish.finalize:${sessionId}`;
-}
-
-function backgroundJobFromPublishFinalizeJob(job: PublishFinalizeJobRecord): BackgroundJobRecord {
-  const status = backgroundStatusFromPublishFinalizeStatus(job.status);
-  return {
-    id: publishFinalizeBackgroundJobId(job.sessionId),
-    type: "publish.finalize",
-    status,
-    subject: { type: "publish-session", id: job.sessionId, repositoryName: job.repositoryName },
-    repositoryName: job.repositoryName,
-    priority: 0,
-    attempts: job.attempts,
-    requestedAt: job.requestedAt,
-    scheduledAt: job.requestedAt,
-    ...(job.startedAt === undefined ? {} : { startedAt: job.startedAt }),
-    ...(job.finishedAt === undefined ? {} : { finishedAt: job.finishedAt }),
-    ...(job.lastFailure === undefined ? {} : {
-      failure: {
-        message: job.lastFailure.message,
-        failedAt: job.lastFailure.failedAt,
-        retryable: true,
-      },
-    }),
-  };
-}
-
-function backgroundStatusFromPublishFinalizeStatus(status: PublishFinalizeJobRecord["status"]): BackgroundJobRecord["status"] {
-  if (status === "ready") return "succeeded";
-  return status;
-}
-
-function publishFinalizeJobFromBackgroundJob(job: BackgroundJobRecord): PublishFinalizeJobRecord {
-  return {
-    sessionId: job.subject.id,
-    repositoryName: job.repositoryName ?? job.subject.repositoryName ?? "",
-    status: "pending",
-    requestedAt: job.requestedAt,
-    attempts: job.attempts,
-    ...(job.startedAt === undefined ? {} : { startedAt: job.startedAt }),
-    ...(job.finishedAt === undefined ? {} : { finishedAt: job.finishedAt }),
-    ...(job.failure === undefined ? {} : {
-      lastFailure: {
-        message: job.failure.message,
-        failedAt: job.failure.failedAt,
-      },
-    }),
-  };
 }

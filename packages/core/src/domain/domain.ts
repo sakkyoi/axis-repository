@@ -224,45 +224,6 @@ export interface RepositoryArtifactFamilyRecord {
   latestArtifact: RepositoryArtifactRecord;
 }
 
-export type RepositoryIndexJobKind = "hosted-rebuild" | "proxy-refresh" | "group-refresh";
-export type RepositoryIndexJobStatus = "pending" | "running" | "ready" | "failed";
-
-export interface RepositoryIndexJobFailure {
-  message: string;
-  failedAt: string;
-}
-
-export interface RepositoryIndexJobRecord {
-  repositoryName: string;
-  kind: RepositoryIndexJobKind;
-  status: RepositoryIndexJobStatus;
-  requestedAt: string;
-  attempts: number;
-  startedAt?: string;
-  finishedAt?: string;
-  lastSuccessAt?: string;
-  rerunRequestedAt?: string;
-  lastFailure?: RepositoryIndexJobFailure;
-}
-
-export type PublishFinalizeJobStatus = "pending" | "running" | "ready" | "failed";
-
-export interface PublishFinalizeJobFailure {
-  message: string;
-  failedAt: string;
-}
-
-export interface PublishFinalizeJobRecord {
-  sessionId: string;
-  repositoryName: string;
-  status: PublishFinalizeJobStatus;
-  requestedAt: string;
-  attempts: number;
-  startedAt?: string;
-  finishedAt?: string;
-  lastFailure?: PublishFinalizeJobFailure;
-}
-
 export type BackgroundJobStatus =
   | "pending"
   | "running"

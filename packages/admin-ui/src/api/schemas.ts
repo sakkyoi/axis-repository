@@ -120,25 +120,8 @@ export const repositoryArtifactSchema = z.object({
   publishSessionId: z.string().optional(),
 });
 
-export const repositoryIndexJobSchema = z.object({
-    repositoryName: z.string(),
-    kind: z.enum(["hosted-rebuild", "proxy-refresh", "group-refresh"]),
-    status: z.enum(["pending", "running", "ready", "failed"]),
-    requestedAt: z.string(),
-    attempts: z.number(),
-    startedAt: z.string().optional(),
-    finishedAt: z.string().optional(),
-    lastSuccessAt: z.string().optional(),
-    rerunRequestedAt: z.string().optional(),
-    lastFailure: z.object({
-      message: z.string(),
-      failedAt: z.string(),
-    }).optional(),
-});
-
 export const repositoryArtifactsResponseSchema = z.object({
   artifacts: z.array(repositoryArtifactSchema),
-  indexJob: repositoryIndexJobSchema.nullable().optional(),
   cursor: z.string().optional(),
   truncated: z.boolean(),
 });
@@ -161,7 +144,6 @@ export const repositoryArtifactFamiliesResponseSchema = z.object({
   families: z.array(repositoryArtifactFamilySchema),
   totalFamilies: z.number(),
   totalArtifacts: z.number(),
-  indexJob: repositoryIndexJobSchema.nullable().optional(),
   cursor: z.string().optional(),
   truncated: z.boolean(),
 });
@@ -484,7 +466,6 @@ export type RepositoryArtifact = z.infer<typeof repositoryArtifactSchema>;
 export type RepositoryArtifactFamily = z.infer<typeof repositoryArtifactFamilySchema>;
 export type RepositoryArtifactsResponse = z.infer<typeof repositoryArtifactsResponseSchema>;
 export type RepositoryArtifactFamiliesResponse = z.infer<typeof repositoryArtifactFamiliesResponseSchema>;
-export type RepositoryIndexJob = z.infer<typeof repositoryIndexJobSchema>;
 export type BackgroundJob = z.infer<typeof backgroundJobSchema>;
 export type RepositoryClientHelperAction = PluginClientHelperActionManifest;
 export type RepositoryPlugin = z.infer<typeof repositoryPluginSchema>;

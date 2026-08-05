@@ -6,15 +6,19 @@ import {
   type StateStore,
 } from "@axis-repository/core";
 import type { PublishFinalizeJobService } from "./publish-finalize-job-service";
-import type { RepositoryIndexJobService } from "./repository-index-job-service";
+import type { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
 import type { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 
 export interface BackgroundJobServiceOptions {
   state: StateStore;
   clock: Clock;
-  repositoryIndexJobService?: Pick<RepositoryIndexJobService, "request">;
+  repositoryIndexJobService?: Pick<RepositoryIndexBackgroundJobService, "request">;
   publishFinalizeJobService?: Pick<PublishFinalizeJobService, "requestAsAdmin">;
   stagingUploadGcJobService?: Pick<StagingUploadGcJobService, "request">;
+}
+
+export interface RequestRepositoryIndexBackgroundJobInput {
+  repositoryName: string;
 }
 
 export class BackgroundJobService {
@@ -28,13 +32,16 @@ export class BackgroundJobService {
     return this.options.state.backgroundJobs.list(query);
   }
 
-  async cancel(id: string): Promise<BackgroundJobRecord | null> {
-    const canceled = await this.options.state.backgroundJobs.cancel(id, this.options.clock.now().toISOString());
-    if (!canceled) return null;
-    if (canceled.status === "canceled") {
-      await this.cancelLegacyPendingJob(canceled);
+  async requestRepositoryIndex(input: RequestRepositoryIndexBackgroundJobInput): Promise<BackgroundJobRecord> {
+    const runner = this.options.repositoryIndexJobService;
+    if (!runner) {
+      throw new ValidationError("Background job runner is not configured for type: repository.index");
     }
-    return canceled;
+    return runner.request(input);
+  }
+
+  async cancel(id: string): Promise<BackgroundJobRecord | null> {
+    return this.options.state.backgroundJobs.cancel(id, this.options.clock.now().toISOString());
   }
 
   async retry(id: string): Promise<BackgroundJobRecord | null> {
@@ -50,9 +57,8 @@ export class BackgroundJobService {
       return this.options.state.backgroundJobs.get(id);
     }
     if (job.type.startsWith("repository.index.") && job.subject.type === "repository") {
-      const runner = this.options.repositoryIndexJobService;
-      if (!runner) throw missingRunnerError(job);
-      await runner.request({ repositoryName: job.subject.id });
+      if (!this.options.repositoryIndexJobService) throw missingRunnerError(job);
+      await this.requestRepositoryIndex({ repositoryName: job.subject.id });
       return this.options.state.backgroundJobs.get(id);
     }
     if (job.type === "storage.staging-upload-gc") {
@@ -64,15 +70,6 @@ export class BackgroundJobService {
     throw new ValidationError(`Background job retry is not supported for type: ${job.type}`);
   }
 
-  private async cancelLegacyPendingJob(job: BackgroundJobRecord): Promise<void> {
-    if (job.type === "publish.finalize" && job.subject.type === "publish-session") {
-      await this.options.state.publishFinalizeJobs.deleteBySession(job.subject.id);
-      return;
-    }
-    if (job.type.startsWith("repository.index.") && job.subject.type === "repository") {
-      await this.options.state.repositoryIndexJobs.deleteByRepository(job.subject.id);
-    }
-  }
 }
 
 function missingRunnerError(job: BackgroundJobRecord): ValidationError {

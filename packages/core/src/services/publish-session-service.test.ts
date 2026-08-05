@@ -842,7 +842,6 @@ describe("PublishSessionService", () => {
       },
       publishTokens: backingState.publishTokens,
       backgroundJobs: backingState.backgroundJobs,
-      publishFinalizeJobs: backingState.publishFinalizeJobs,
       adminUsers: backingState.adminUsers,
       adminRefreshSessions: backingState.adminRefreshSessions,
       publishSessions: backingState.publishSessions,
@@ -850,7 +849,6 @@ describe("PublishSessionService", () => {
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,
       repositoryArtifacts: backingState.repositoryArtifacts,
-      repositoryIndexJobs: backingState.repositoryIndexJobs,
     };
     const service = new PublishSessionService({
       state,
@@ -1000,14 +998,12 @@ describe("PublishSessionService", () => {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
       backgroundJobs: backingState.backgroundJobs,
-      publishFinalizeJobs: backingState.publishFinalizeJobs,
       adminUsers: backingState.adminUsers,
       adminRefreshSessions: backingState.adminRefreshSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,
       repositoryArtifacts: backingState.repositoryArtifacts,
-      repositoryIndexJobs: backingState.repositoryIndexJobs,
       publishSessions: {
         ...backingState.publishSessions,
         save: async (session: PublishSession) => {
@@ -1095,14 +1091,12 @@ describe("PublishSessionService", () => {
       repositories: backingState.repositories,
       publishTokens: backingState.publishTokens,
       backgroundJobs: backingState.backgroundJobs,
-      publishFinalizeJobs: backingState.publishFinalizeJobs,
       adminUsers: backingState.adminUsers,
       adminRefreshSessions: backingState.adminRefreshSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
       repositoryActivities: backingState.repositoryActivities,
       repositoryArtifacts: backingState.repositoryArtifacts,
-      repositoryIndexJobs: backingState.repositoryIndexJobs,
       publishSessions: {
         ...backingState.publishSessions,
         update: async (id, updater) => {

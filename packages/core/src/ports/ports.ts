@@ -12,8 +12,6 @@ import type {
   RepositoryArtifactRecord,
   RepositoryArtifactFamilyRecord,
   RepositoryActivityRecord,
-  PublishFinalizeJobRecord,
-  RepositoryIndexJobRecord,
   BackgroundJobRecord,
   PublishArtifactRequest,
   PublishArtifactsInput,
@@ -239,21 +237,6 @@ export interface RepositoryArtifactStore {
   replaceByRepository(repositoryName: string, records: RepositoryArtifactRecord[]): Promise<void>;
 }
 
-export interface RepositoryIndexJobStore {
-  getByRepository(repositoryName: string): Promise<RepositoryIndexJobRecord | null>;
-  listRunnable(): Promise<RepositoryIndexJobRecord[]>;
-  save(record: RepositoryIndexJobRecord): Promise<void>;
-  deleteByRepository(repositoryName: string): Promise<boolean>;
-}
-
-export interface PublishFinalizeJobStore {
-  getBySession(sessionId: string): Promise<PublishFinalizeJobRecord | null>;
-  listRunnable(): Promise<PublishFinalizeJobRecord[]>;
-  save(record: PublishFinalizeJobRecord): Promise<void>;
-  deleteBySession(sessionId: string): Promise<boolean>;
-  deleteByRepository(repositoryName: string): Promise<number>;
-}
-
 export interface BackgroundJobListQuery {
   repositoryName?: string;
   status?: BackgroundJobRecord["status"];
@@ -276,7 +259,6 @@ export interface StateStore {
   repositories: RepositoryStore;
   publishSessions: PublishSessionStore;
   backgroundJobs: BackgroundJobStore;
-  publishFinalizeJobs: PublishFinalizeJobStore;
   publishTokens: PublishTokenStore;
   adminUsers: AdminUserStore;
   adminRefreshSessions: AdminRefreshSessionStore;
@@ -284,5 +266,4 @@ export interface StateStore {
   repositoryPluginPolicies: RepositoryPluginPolicyStore;
   repositoryActivities: RepositoryActivityStore;
   repositoryArtifacts: RepositoryArtifactStore;
-  repositoryIndexJobs: RepositoryIndexJobStore;
 }

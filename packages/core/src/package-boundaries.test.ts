@@ -234,6 +234,35 @@ describe("package boundaries", () => {
     }
   });
 
+  test("repository index work uses only the generic background job contract", () => {
+    const checkedFiles = [
+      ...listSourceFiles("packages/core/src"),
+      ...listSourceFiles("packages/runtime-cloudflare/src/worker"),
+      ...listSourceFiles("packages/runtime-cloudflare/src/storage"),
+    ].filter((filePath) => !filePath.endsWith("package-boundaries.test.ts"));
+    const forbiddenLegacyTerms = [
+      "RepositoryIndexJobRecord",
+      "RepositoryIndexJobStore",
+      "repositoryIndexJobs",
+      "RepositoryIndexJobService",
+      "repository-index-job-service",
+      "PublishFinalizeJobRecord",
+      "PublishFinalizeJobStore",
+      "publishFinalizeJobs",
+      "migrateLegacyPendingJobs",
+      "BackgroundJobMigrator",
+      "migrators",
+    ];
+
+    for (const filePath of checkedFiles) {
+      const source = readFileSync(path.join(rootDir, filePath), "utf8");
+
+      for (const term of forbiddenLegacyTerms) {
+        expect(source, `${filePath} must not use legacy repository index job contract ${term}`).not.toContain(term);
+      }
+    }
+  });
+
 
 
 

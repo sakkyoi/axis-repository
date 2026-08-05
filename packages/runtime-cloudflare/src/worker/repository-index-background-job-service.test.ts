@@ -7,7 +7,7 @@ import {
   type RandomId,
   type RepositoryArtifactRecord,
 } from "@axis-repository/core";
-import { RepositoryIndexJobService } from "./repository-index-job-service";
+import { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
 
 const clockValues = [
   "2026-08-05T00:00:00.000Z",
@@ -27,12 +27,12 @@ const randomId: RandomId = {
   create: (prefix: string) => `${prefix}_fixed`,
 };
 
-describe("RepositoryIndexJobService", () => {
-  it("coalesces pending repository index jobs by repository", async () => {
+describe("RepositoryIndexBackgroundJobService", () => {
+  it("coalesces pending repository index background jobs by repository", async () => {
     const state = new MemoryStateStore();
     const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
     await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
-    const service = new RepositoryIndexJobService({
+    const service = new RepositoryIndexBackgroundJobService({
       state,
       repositoryService,
       repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
@@ -41,27 +41,20 @@ describe("RepositoryIndexJobService", () => {
     });
 
     await expect(service.request({ repositoryName: "python-proxy" })).resolves.toMatchObject({
-      repositoryName: "python-proxy",
-      kind: "proxy-refresh",
+      id: "repository.index:python-proxy",
+      type: "repository.index.proxy-refresh",
       status: "pending",
       attempts: 0,
+      subject: { type: "repository", id: "python-proxy" },
     });
     await service.request({ repositoryName: "python-proxy" });
 
-    await expect(state.repositoryIndexJobs.listRunnable()).resolves.toHaveLength(1);
-    await expect(state.repositoryIndexJobs.getByRepository("python-proxy")).resolves.toMatchObject({
-      repositoryName: "python-proxy",
-      kind: "proxy-refresh",
-      status: "pending",
-      attempts: 0,
-      requestedAt: "2026-08-05T00:00:01.000Z",
-    });
     await expect(state.backgroundJobs.list({ repositoryName: "python-proxy" })).resolves.toMatchObject({
       jobs: [{
         id: "repository.index:python-proxy",
         type: "repository.index.proxy-refresh",
         status: "pending",
-        subject: { type: "repository", id: "python-proxy" },
+        requestedAt: "2026-08-05T00:00:00.000Z",
       }],
       total: 1,
     });
@@ -84,24 +77,17 @@ describe("RepositoryIndexJobService", () => {
       publishedAt: "2026-08-05T00:00:00.000Z",
       updatedAt: "2026-08-05T00:00:00.000Z",
     };
-    const service = new RepositoryIndexJobService({
+    const service = new RepositoryIndexBackgroundJobService({
       state,
       repositoryService,
       repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
       repositoryArtifactIndexService: { rebuild: async () => ({ artifacts: [artifact] }) },
       clock: testClock(),
     });
-    await service.request({ repositoryName: "debian-internal" });
-    const job = await state.backgroundJobs.get("repository.index:debian-internal");
-    expect(job).not.toBeNull();
+    const job = await service.request({ repositoryName: "debian-internal" });
 
-    await expect(service.runBackgroundJob(job!)).resolves.toBeUndefined();
+    await expect(service.runBackgroundJob(job)).resolves.toBeUndefined();
 
-    await expect(state.repositoryIndexJobs.getByRepository("debian-internal")).resolves.toMatchObject({
-      status: "ready",
-      attempts: 1,
-      lastSuccessAt: "2026-08-05T00:00:02.000Z",
-    });
     await expect(state.backgroundJobs.get("repository.index:debian-internal")).resolves.toMatchObject({
       status: "succeeded",
       attempts: 1,
@@ -116,7 +102,7 @@ describe("RepositoryIndexJobService", () => {
     ]);
   });
 
-  it("marks failed background jobs without deleting the previous artifact index", async () => {
+  it("marks failed repository index background jobs without deleting the previous artifact index", async () => {
     const state = new MemoryStateStore();
     const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
     await repositoryService.create({ name: "debian-internal", ecosystem: "apt", kind: "hosted", config: {} });
@@ -134,56 +120,22 @@ describe("RepositoryIndexJobService", () => {
       updatedAt: "2026-08-05T00:00:00.000Z",
     };
     await state.repositoryArtifacts.upsert(previousArtifact);
-    const service = new RepositoryIndexJobService({
+    const service = new RepositoryIndexBackgroundJobService({
       state,
       repositoryService,
       repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
       repositoryArtifactIndexService: { rebuild: async () => { throw new Error("upstream unavailable"); } },
       clock: testClock(),
     });
-    await service.request({ repositoryName: "debian-internal" });
-    const job = await state.backgroundJobs.get("repository.index:debian-internal");
-    expect(job).not.toBeNull();
+    const job = await service.request({ repositoryName: "debian-internal" });
 
-    await expect(service.runBackgroundJob(job!)).resolves.toBeUndefined();
+    await expect(service.runBackgroundJob(job)).resolves.toBeUndefined();
 
-    await expect(state.repositoryIndexJobs.getByRepository("debian-internal")).resolves.toMatchObject({
-      status: "failed",
-      attempts: 1,
-      lastFailure: { message: "upstream unavailable" },
-    });
     await expect(state.backgroundJobs.get("repository.index:debian-internal")).resolves.toMatchObject({
       status: "failed",
       attempts: 1,
       failure: { message: "upstream unavailable", retryable: true },
     });
     await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toEqual([previousArtifact]);
-  });
-
-  it("migrates legacy pending repository index jobs into background jobs", async () => {
-    const state = new MemoryStateStore();
-    const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
-    await repositoryService.create({ name: "debian-internal", ecosystem: "apt", kind: "hosted", config: {} });
-    await state.repositoryIndexJobs.save({
-      repositoryName: "debian-internal",
-      kind: "hosted-rebuild",
-      status: "pending",
-      requestedAt: "2026-08-05T00:00:00.000Z",
-      attempts: 0,
-    });
-    const service = new RepositoryIndexJobService({
-      state,
-      repositoryService,
-      repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
-      repositoryArtifactIndexService: { rebuild: async () => ({ artifacts: [] }) },
-      clock: testClock(),
-    });
-
-    await expect(service.migrateLegacyPendingJobs()).resolves.toBe(1);
-    await expect(state.backgroundJobs.get("repository.index:debian-internal")).resolves.toMatchObject({
-      id: "repository.index:debian-internal",
-      type: "repository.index.hosted-rebuild",
-      status: "pending",
-    });
   });
 });

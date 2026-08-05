@@ -20,18 +20,13 @@ function job(id: string, type = "test.job"): BackgroundJobRecord {
 }
 
 describe("BackgroundJobDispatcher", () => {
-  it("runs legacy migrators before dispatching runnable background jobs", async () => {
+  it("dispatches runnable background jobs", async () => {
     const state = new MemoryStateStore();
+    await state.backgroundJobs.save(job("queued"));
     const ran: string[] = [];
     const dispatcher = new BackgroundJobDispatcher({
       state,
       clock,
-      migrators: [
-        async () => {
-          await state.backgroundJobs.save(job("migrated"));
-          return 1;
-        },
-      ],
       runners: [{
         supports: (candidate) => candidate.type === "test.job",
         run: async (candidate) => {
@@ -48,12 +43,11 @@ describe("BackgroundJobDispatcher", () => {
     });
 
     await expect(dispatcher.drain({ limit: 1 })).resolves.toMatchObject({
-      migrated: 1,
       processed: 1,
       failed: 0,
       remaining: 0,
     });
-    expect(ran).toEqual(["migrated"]);
+    expect(ran).toEqual(["queued"]);
   });
 
   it("uses background job runnable ordering and reports remaining work", async () => {

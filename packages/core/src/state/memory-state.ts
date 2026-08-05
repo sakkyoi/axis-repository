@@ -7,8 +7,6 @@ import type {
   RepositoryArtifactRecord,
   RepositoryArtifactFamilyRecord,
   RepositoryActivityRecord,
-  PublishFinalizeJobRecord,
-  RepositoryIndexJobRecord,
   BackgroundJobRecord,
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
@@ -41,7 +39,6 @@ export class MemoryStateStore implements StateStore {
   private readonly repositoryByName = new Map<string, Repository>();
   private readonly publishSessionById = new Map<string, PublishSession>();
   private readonly backgroundJobById = new Map<string, BackgroundJobRecord>();
-  private readonly publishFinalizeJobBySession = new Map<string, PublishFinalizeJobRecord>();
   private readonly publishTokenById = new Map<string, PublishTokenRecord>();
   private readonly adminUserById = new Map<string, AdminUserRecord>();
   private readonly adminUserIdByUsername = new Map<string, string>();
@@ -53,7 +50,6 @@ export class MemoryStateStore implements StateStore {
   private readonly repositoryActivityById = new Map<string, RepositoryActivityRecord>();
   private readonly repositoryArtifactById = new Map<string, RepositoryArtifactRecord>();
   private readonly repositoryArtifactIdByIdentity = new Map<string, string>();
-  private readonly repositoryIndexJobByRepository = new Map<string, RepositoryIndexJobRecord>();
 
   readonly repositories = {
     getByName: async (name: string): Promise<Repository | null> => {
@@ -418,50 +414,6 @@ export class MemoryStateStore implements StateStore {
     },
   };
 
-  readonly publishFinalizeJobs = {
-    getBySession: async (sessionId: string): Promise<PublishFinalizeJobRecord | null> => {
-      const record = this.publishFinalizeJobBySession.get(sessionId);
-      return record ? snapshot(record) : null;
-    },
-    listRunnable: async (): Promise<PublishFinalizeJobRecord[]> => {
-      return snapshotAll([...this.publishFinalizeJobBySession.values()])
-        .filter((job) => job.status === "pending")
-        .sort(comparePublishFinalizeJobs);
-    },
-    save: async (record: PublishFinalizeJobRecord): Promise<void> => {
-      this.publishFinalizeJobBySession.set(record.sessionId, snapshot(record));
-    },
-    deleteBySession: async (sessionId: string): Promise<boolean> => {
-      return this.publishFinalizeJobBySession.delete(sessionId);
-    },
-    deleteByRepository: async (repositoryName: string): Promise<number> => {
-      let deleted = 0;
-      for (const [sessionId, job] of this.publishFinalizeJobBySession.entries()) {
-        if (job.repositoryName !== repositoryName) continue;
-        this.publishFinalizeJobBySession.delete(sessionId);
-        deleted += 1;
-      }
-      return deleted;
-    },
-  };
-
-  readonly repositoryIndexJobs = {
-    getByRepository: async (repositoryName: string): Promise<RepositoryIndexJobRecord | null> => {
-      const record = this.repositoryIndexJobByRepository.get(repositoryName);
-      return record ? snapshot(record) : null;
-    },
-    listRunnable: async (): Promise<RepositoryIndexJobRecord[]> => {
-      return snapshotAll([...this.repositoryIndexJobByRepository.values()])
-        .filter((job) => job.status === "pending")
-        .sort(compareRepositoryIndexJobs);
-    },
-    save: async (record: RepositoryIndexJobRecord): Promise<void> => {
-      this.repositoryIndexJobByRepository.set(record.repositoryName, snapshot(record));
-    },
-    deleteByRepository: async (repositoryName: string): Promise<boolean> => {
-      return this.repositoryIndexJobByRepository.delete(repositoryName);
-    },
-  };
 }
 
 function comparePublishSessions(left: PublishSession, right: PublishSession): number {
@@ -479,11 +431,6 @@ function compareRunnableBackgroundJobs(left: BackgroundJobRecord, right: Backgro
   if (priorityOrder !== 0) return priorityOrder;
   const scheduledAtOrder = left.scheduledAt.localeCompare(right.scheduledAt);
   return scheduledAtOrder === 0 ? left.id.localeCompare(right.id) : scheduledAtOrder;
-}
-
-function comparePublishFinalizeJobs(left: PublishFinalizeJobRecord, right: PublishFinalizeJobRecord): number {
-  const requestedAtOrder = left.requestedAt.localeCompare(right.requestedAt);
-  return requestedAtOrder === 0 ? left.sessionId.localeCompare(right.sessionId) : requestedAtOrder;
 }
 
 function compareRepositoryActivities(left: RepositoryActivityRecord, right: RepositoryActivityRecord): number {
@@ -525,11 +472,6 @@ function repositoryArtifactFamilies(artifacts: RepositoryArtifactRecord[]): Repo
       const updatedAtOrder = right.updatedAt.localeCompare(left.updatedAt);
       return updatedAtOrder === 0 ? left.key.localeCompare(right.key) : updatedAtOrder;
     });
-}
-
-function compareRepositoryIndexJobs(left: RepositoryIndexJobRecord, right: RepositoryIndexJobRecord): number {
-  const requestedAtOrder = left.requestedAt.localeCompare(right.requestedAt);
-  return requestedAtOrder === 0 ? left.repositoryName.localeCompare(right.repositoryName) : requestedAtOrder;
 }
 
 function repositoryArtifactIdentityIndex(repositoryName: string, identity: string): string {

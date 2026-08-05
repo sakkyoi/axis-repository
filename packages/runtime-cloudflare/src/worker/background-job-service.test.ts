@@ -20,6 +20,35 @@ const baseJob: BackgroundJobRecord = {
 };
 
 describe("BackgroundJobService", () => {
+  it("requests repository index work through the generic job service", async () => {
+    const state = new MemoryStateStore();
+    const service = new BackgroundJobService({
+      state,
+      clock,
+      repositoryIndexJobService: {
+        request: async ({ repositoryName }) => {
+          const job: BackgroundJobRecord = {
+            ...baseJob,
+            id: `repository.index:${repositoryName}`,
+            subject: { type: "repository", id: repositoryName, repositoryName },
+            repositoryName,
+            status: "pending",
+            attempts: 0,
+          };
+          await state.backgroundJobs.save(job);
+          return job;
+        },
+      },
+    });
+
+    await expect(service.requestRepositoryIndex({ repositoryName: "python-proxy" })).resolves.toMatchObject({
+      id: "repository.index:python-proxy",
+      type: "repository.index.proxy-refresh",
+      status: "pending",
+      subject: { type: "repository", id: "python-proxy" },
+    });
+  });
+
   it("fails retry explicitly when a repository index runner is not configured", async () => {
     const state = new MemoryStateStore();
     await state.backgroundJobs.save(baseJob);

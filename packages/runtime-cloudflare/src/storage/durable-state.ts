@@ -7,8 +7,6 @@ import type {
   RepositoryArtifactRecord,
   RepositoryArtifactFamilyRecord,
   RepositoryActivityRecord,
-  PublishFinalizeJobRecord,
-  RepositoryIndexJobRecord,
   BackgroundJobRecord,
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
@@ -41,8 +39,6 @@ const repositoryArtifactKey = (id: string) => `repository-artifact:${id}`;
 const repositoryArtifactIdentityKey = (repositoryName: string, identity: string) =>
   `repository-artifact-identity:${repositoryName}:${identity}`;
 const backgroundJobKey = (id: string) => `background-job:${id}`;
-const publishFinalizeJobKey = (sessionId: string) => `publish-finalize-job:${sessionId}`;
-const repositoryIndexJobKey = (repositoryName: string) => `repository-index-job:${repositoryName}`;
 
 function clonePublishSession(session: PublishSession): PublishSession {
   return JSON.parse(JSON.stringify(session)) as PublishSession;
@@ -198,39 +194,6 @@ export class DurableStateStore implements StateStore {
       for (const job of values.values()) {
         if (job.repositoryName !== repositoryName) continue;
         if (await this.storage.delete(backgroundJobKey(job.id))) {
-          deleted++;
-        }
-      }
-      return deleted;
-    },
-  };
-
-  readonly publishFinalizeJobs = {
-    getBySession: async (sessionId: string): Promise<PublishFinalizeJobRecord | null> => {
-      return (await this.storage.get<PublishFinalizeJobRecord>(publishFinalizeJobKey(sessionId))) ?? null;
-    },
-    listRunnable: async (): Promise<PublishFinalizeJobRecord[]> => {
-      const values = await this.storage.list<PublishFinalizeJobRecord>({
-        prefix: "publish-finalize-job:",
-      });
-      return [...values.values()]
-        .filter((job) => job.status === "pending")
-        .sort(comparePublishFinalizeJobs);
-    },
-    save: async (record: PublishFinalizeJobRecord): Promise<void> => {
-      await this.storage.put(publishFinalizeJobKey(record.sessionId), record);
-    },
-    deleteBySession: async (sessionId: string): Promise<boolean> => {
-      return this.storage.delete(publishFinalizeJobKey(sessionId));
-    },
-    deleteByRepository: async (repositoryName: string): Promise<number> => {
-      const values = await this.storage.list<PublishFinalizeJobRecord>({
-        prefix: "publish-finalize-job:",
-      });
-      let deleted = 0;
-      for (const job of values.values()) {
-        if (job.repositoryName !== repositoryName) continue;
-        if (await this.storage.delete(publishFinalizeJobKey(job.sessionId))) {
           deleted++;
         }
       }
@@ -521,25 +484,6 @@ export class DurableStateStore implements StateStore {
     },
   };
 
-  readonly repositoryIndexJobs = {
-    getByRepository: async (repositoryName: string): Promise<RepositoryIndexJobRecord | null> => {
-      return (await this.storage.get<RepositoryIndexJobRecord>(repositoryIndexJobKey(repositoryName))) ?? null;
-    },
-    listRunnable: async (): Promise<RepositoryIndexJobRecord[]> => {
-      const values = await this.storage.list<RepositoryIndexJobRecord>({
-        prefix: "repository-index-job:",
-      });
-      return [...values.values()]
-        .filter((job) => job.status === "pending")
-        .sort(compareRepositoryIndexJobs);
-    },
-    save: async (record: RepositoryIndexJobRecord): Promise<void> => {
-      await this.storage.put(repositoryIndexJobKey(record.repositoryName), record);
-    },
-    deleteByRepository: async (repositoryName: string): Promise<boolean> => {
-      return this.storage.delete(repositoryIndexJobKey(repositoryName));
-    },
-  };
 }
 
 function comparePublishSessions(left: PublishSession, right: PublishSession): number {
@@ -557,11 +501,6 @@ function compareRunnableBackgroundJobs(left: BackgroundJobRecord, right: Backgro
   if (priorityOrder !== 0) return priorityOrder;
   const scheduledAtOrder = left.scheduledAt.localeCompare(right.scheduledAt);
   return scheduledAtOrder === 0 ? left.id.localeCompare(right.id) : scheduledAtOrder;
-}
-
-function comparePublishFinalizeJobs(left: PublishFinalizeJobRecord, right: PublishFinalizeJobRecord): number {
-  const requestedAtOrder = left.requestedAt.localeCompare(right.requestedAt);
-  return requestedAtOrder === 0 ? left.sessionId.localeCompare(right.sessionId) : requestedAtOrder;
 }
 
 function compareRepositoryActivities(left: RepositoryActivityRecord, right: RepositoryActivityRecord): number {
@@ -603,9 +542,4 @@ function repositoryArtifactFamilies(artifacts: RepositoryArtifactRecord[]): Repo
       const updatedAtOrder = right.updatedAt.localeCompare(left.updatedAt);
       return updatedAtOrder === 0 ? left.key.localeCompare(right.key) : updatedAtOrder;
     });
-}
-
-function compareRepositoryIndexJobs(left: RepositoryIndexJobRecord, right: RepositoryIndexJobRecord): number {
-  const requestedAtOrder = left.requestedAt.localeCompare(right.requestedAt);
-  return requestedAtOrder === 0 ? left.repositoryName.localeCompare(right.repositoryName) : requestedAtOrder;
 }

@@ -9,13 +9,10 @@ export interface BackgroundJobRunner {
   run(job: BackgroundJobRecord): Promise<void>;
 }
 
-export type BackgroundJobMigrator = () => Promise<number>;
-
 export interface BackgroundJobDispatcherOptions {
   state: StateStore;
   clock: Clock;
   runners: BackgroundJobRunner[];
-  migrators?: BackgroundJobMigrator[];
 }
 
 export interface DrainBackgroundJobsInput {
@@ -23,7 +20,6 @@ export interface DrainBackgroundJobsInput {
 }
 
 export interface DrainBackgroundJobsResult {
-  migrated: number;
   processed: number;
   failed: number;
   remaining: number;
@@ -34,11 +30,6 @@ export class BackgroundJobDispatcher {
 
   async drain(input: DrainBackgroundJobsInput = {}): Promise<DrainBackgroundJobsResult> {
     const limit = input.limit ?? 10;
-    let migrated = 0;
-    for (const migrator of this.options.migrators ?? []) {
-      migrated += await migrator();
-    }
-
     let processed = 0;
     let failed = 0;
     for (const job of await this.options.state.backgroundJobs.listRunnable({ limit })) {
@@ -60,7 +51,6 @@ export class BackgroundJobDispatcher {
     }
 
     return {
-      migrated,
       processed,
       failed,
       remaining: (await this.options.state.backgroundJobs.listRunnable({ limit: 1 })).length,

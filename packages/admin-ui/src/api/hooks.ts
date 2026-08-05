@@ -66,7 +66,7 @@ export function useCancelBackgroundJob() {
     mutationFn: (id: string) => client.cancelBackgroundJob(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["background-jobs"] });
-      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-index-job"] });
+      void queryClient.invalidateQueries({ queryKey: ["background-job"] });
       void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
     },
   });
@@ -79,7 +79,7 @@ export function useRetryBackgroundJob() {
     mutationFn: (id: string) => client.retryBackgroundJob(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["background-jobs"] });
-      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-index-job"] });
+      void queryClient.invalidateQueries({ queryKey: ["background-job"] });
       void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
     },
   });
@@ -220,12 +220,13 @@ export function useRepositoryArtifactIndexJob(repositoryName: string | undefined
   const client = useAxisClient();
   const queryClient = useQueryClient();
   const hadActiveJob = useRef(false);
+  const jobId = repositoryName ? repositoryIndexBackgroundJobId(repositoryName) : undefined;
   const query = useQuery({
-    queryKey: ["repository-artifact-index-job", repositoryName],
+    queryKey: ["background-job", jobId],
     queryFn: async () => {
-      if (!repositoryName) return { job: null };
+      if (!jobId) return { job: null };
       try {
-        return { job: await client.getBackgroundJob(repositoryIndexBackgroundJobId(repositoryName)) };
+        return { job: await client.getBackgroundJob(jobId) };
       } catch (error) {
         if (errorResponseStatus(error) === 404) return { job: null };
         throw error;
@@ -281,7 +282,9 @@ export function useRebuildRepositoryArtifactIndex(repositoryName: string | undef
   return useMutation({
     mutationFn: () => client.rebuildRepositoryArtifactIndex(repositoryName ?? ""),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-index-job", repositoryName] });
+      if (repositoryName) {
+        void queryClient.invalidateQueries({ queryKey: ["background-job", repositoryIndexBackgroundJobId(repositoryName)] });
+      }
       void queryClient.invalidateQueries({ queryKey: ["background-jobs"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "pages"] });
@@ -298,7 +301,9 @@ export function useDeleteRepositoryArtifact(repositoryName: string | undefined) 
   return useMutation({
     mutationFn: (artifactId: string) => client.deleteRepositoryArtifact(repositoryName ?? "", artifactId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-index-job", repositoryName] });
+      if (repositoryName) {
+        void queryClient.invalidateQueries({ queryKey: ["background-job", repositoryIndexBackgroundJobId(repositoryName)] });
+      }
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "pages"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "family"] });

@@ -7,7 +7,6 @@ export {
   type PublishArtifact,
   type PublishSession,
   type Repository,
-  type RepositoryIndexJob,
   type RepositoryPlugin,
   type RepositoryVisibility,
   type SigningKey,

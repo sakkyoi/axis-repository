@@ -124,7 +124,6 @@ describe("PublishFinalizeJobService", () => {
     });
 
     expect(calls).toHaveLength(0);
-    await expect(state.publishFinalizeJobs.listRunnable()).resolves.toMatchObject([{ sessionId: "pub_fixed" }]);
     await expect(state.backgroundJobs.get("publish.finalize:pub_fixed")).resolves.toMatchObject({
       id: "publish.finalize:pub_fixed",
       type: "publish.finalize",
@@ -156,11 +155,6 @@ describe("PublishFinalizeJobService", () => {
 
     await expect(service.runBackgroundJob(job!)).resolves.toBeUndefined();
 
-    await expect(state.publishFinalizeJobs.getBySession("pub_fixed")).resolves.toMatchObject({
-      status: "ready",
-      attempts: 1,
-      finishedAt: "2026-08-05T00:00:02.000Z",
-    });
     await expect(state.backgroundJobs.get("publish.finalize:pub_fixed")).resolves.toMatchObject({
       status: "succeeded",
       attempts: 1,
@@ -190,11 +184,6 @@ describe("PublishFinalizeJobService", () => {
 
     await expect(service.runBackgroundJob(job!)).resolves.toBeUndefined();
 
-    await expect(state.publishFinalizeJobs.getBySession("pub_fixed")).resolves.toMatchObject({
-      status: "failed",
-      attempts: 1,
-      lastFailure: { message: "write failed" },
-    });
     await expect(state.backgroundJobs.get("publish.finalize:pub_fixed")).resolves.toMatchObject({
       status: "failed",
       attempts: 1,
@@ -203,32 +192,6 @@ describe("PublishFinalizeJobService", () => {
     await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
       status: "finalize_failed",
       failure: { message: "write failed" },
-    });
-  });
-
-  it("migrates legacy pending publish finalize jobs into background jobs", async () => {
-    const state = new MemoryStateStore();
-    const publishSessionService = await readySession(state, {
-      publish: async () => ({ publishedAt: "2026-08-05T00:00:00.000Z", objects: [] }),
-    });
-    await state.publishFinalizeJobs.save({
-      sessionId: "pub_fixed",
-      repositoryName: "debian-internal",
-      status: "pending",
-      requestedAt: "2026-08-05T00:00:00.000Z",
-      attempts: 0,
-    });
-    const service = new PublishFinalizeJobService({
-      state,
-      publishSessionService,
-      clock: testClock(),
-    });
-
-    await expect(service.migrateLegacyPendingJobs()).resolves.toBe(1);
-    await expect(state.backgroundJobs.get("publish.finalize:pub_fixed")).resolves.toMatchObject({
-      id: "publish.finalize:pub_fixed",
-      type: "publish.finalize",
-      status: "pending",
     });
   });
 });

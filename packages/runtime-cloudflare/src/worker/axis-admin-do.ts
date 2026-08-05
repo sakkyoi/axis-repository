@@ -18,7 +18,7 @@ import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
 import { R2PresignedDownloadSigner } from "../storage/object-download-url";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
-import { RepositoryIndexJobService } from "./repository-index-job-service";
+import { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
 import { BackgroundJobDispatcher } from "./background-job-dispatcher";
@@ -222,7 +222,7 @@ export function createDurableObjectDependencies(
     clock,
     writeLock,
   });
-  const repositoryIndexJobService = new RepositoryIndexJobService({
+  const repositoryIndexJobService = new RepositoryIndexBackgroundJobService({
     state,
     repositoryService,
     repositoryActivityService,
@@ -260,10 +260,6 @@ export function createDurableObjectDependencies(
   const backgroundJobDispatcher = new BackgroundJobDispatcher({
     state,
     clock,
-    migrators: [
-      () => publishFinalizeJobService.migrateLegacyPendingJobs(),
-      () => repositoryIndexJobService.migrateLegacyPendingJobs(),
-    ],
     runners: [
       {
         supports: (job) => job.type === "publish.finalize",
@@ -309,7 +305,6 @@ export function createDurableObjectDependencies(
     repositoryActivityService,
     repositoryArtifactStore: state.repositoryArtifacts,
     repositoryArtifactIndexService,
-    repositoryIndexJobService,
     pluginPolicyService,
     repositorySecrets,
     repositoryObjectStore: objectStore,

@@ -42,7 +42,6 @@ import {
   renderRepositoryDirectoryHtml,
   trailingSlashRedirectLocation,
 } from "./repository-directory";
-import { repositoryIndexBackgroundJobId } from "./repository-index-job-service";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;
@@ -1768,7 +1767,6 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         totalFamilies: page.totalFamilies,
         totalArtifacts: page.totalArtifacts,
       }, pageParams),
-      indexJob: await dependencies.repositoryIndexJobService.getByRepository(repository.name),
     });
   }
   const adminRepositoryArtifactsName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.artifacts);
@@ -1784,15 +1782,11 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       return jsonResponse({
         artifacts: await dependencies.repositoryArtifactStore.listByRepositoryFamily(repository.name, family),
         truncated: false,
-        indexJob: await dependencies.repositoryIndexJobService.getByRepository(repository.name),
       });
     }
     const pageParams = repositoryArtifactPageParams(url.searchParams);
     const page = await dependencies.repositoryArtifactStore.listByRepositoryPage(repository.name, pageParams);
-    return jsonResponse({
-      ...repositoryArtifactPage(page.records, page.total, pageParams),
-      indexJob: await dependencies.repositoryIndexJobService.getByRepository(repository.name),
-    });
+    return jsonResponse(repositoryArtifactPage(page.records, page.total, pageParams));
   }
   const adminRepositoryArtifactsRebuildName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.artifactsRebuildIndex);
   if (adminRepositoryArtifactsRebuildName) {
@@ -1802,10 +1796,8 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactsRebuildName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
-    await dependencies.repositoryIndexJobService.request({ repositoryName: repository.name });
+    const job = await dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: repository.name });
     await dependencies.scheduleBackgroundJobs?.();
-    const job = await dependencies.backgroundJobService.get(repositoryIndexBackgroundJobId(repository.name));
-    if (!job) throw new NotFoundError();
     return jsonResponse({ job }, { status: 202 });
   }
   const adminRepositoryArtifactPath = parseAdminRepositoryArtifactPath(url.pathname);

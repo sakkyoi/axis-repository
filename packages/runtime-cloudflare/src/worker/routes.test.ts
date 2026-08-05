@@ -3012,11 +3012,12 @@ describe("Cloudflare runtime routes", () => {
         status: "pending",
       },
     });
-    await expect(artifacts.json()).resolves.toMatchObject({
+    const artifactsBody = await artifacts.json() as { indexJob?: unknown };
+    expect(artifactsBody).toMatchObject({
       artifacts: [],
-      indexJob: { repositoryName: "debian-internal", status: "ready" },
       truncated: false,
     });
+    expect(artifactsBody.indexJob).toBeUndefined();
   });
 
   it("does not expose the legacy repository artifact index job endpoint", async () => {
@@ -3027,7 +3028,7 @@ describe("Cloudflare runtime routes", () => {
       ecosystem: "apt",
       visibility: "private",
     });
-    await harness.dependencies.repositoryIndexJobService.request({ repositoryName: "debian-internal" });
+    await harness.dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: "debian-internal" });
 
     const response = await app.fetch(new Request(
       "https://axis.example/admin/repositories/debian-internal/artifact-index-job",
@@ -3050,7 +3051,7 @@ describe("Cloudflare runtime routes", () => {
       visibility: "private",
       config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
     });
-    await harness.dependencies.repositoryIndexJobService.request({ repositoryName: "python-proxy" });
+    await harness.dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: "python-proxy" });
 
     const listResponse = await app.fetch(new Request(
       "https://axis.example/admin/jobs?repositoryName=python-proxy",
@@ -3088,7 +3089,8 @@ describe("Cloudflare runtime routes", () => {
         status: "canceled",
       },
     });
-    await expect(harness.dependencies.repositoryIndexJobService.getByRepository("python-proxy")).resolves.toBeNull();
+    await expect(harness.dependencies.backgroundJobService.get("repository.index:python-proxy"))
+      .resolves.toMatchObject({ status: "canceled" });
   });
 
   it("retries failed background jobs through admin routes", async () => {
@@ -3101,7 +3103,7 @@ describe("Cloudflare runtime routes", () => {
       visibility: "private",
       config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
     });
-    await harness.dependencies.repositoryIndexJobService.request({ repositoryName: "python-proxy" });
+    await harness.dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: "python-proxy" });
     await harness.dependencies.backgroundJobService.cancel("repository.index:python-proxy");
 
     const response = await app.fetch(new Request(
@@ -3117,8 +3119,8 @@ describe("Cloudflare runtime routes", () => {
         status: "pending",
       },
     });
-    await expect(harness.dependencies.repositoryIndexJobService.getByRepository("python-proxy"))
-      .resolves.toMatchObject({ repositoryName: "python-proxy", status: "pending" });
+    await expect(harness.dependencies.backgroundJobService.get("repository.index:python-proxy"))
+      .resolves.toMatchObject({ id: "repository.index:python-proxy", status: "pending" });
   });
 
   it("records repository activity when rebuilding artifact indexes", async () => {
