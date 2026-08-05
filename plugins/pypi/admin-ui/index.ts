@@ -59,7 +59,6 @@ const pypiProxyRepositoryConfig: PluginRepositoryConfigManifest = {
       kind: "text",
       step: "config",
       required: true,
-      defaultValue: "https://pypi.org/",
       placeholder: "https://pypi.org/",
       description: "The PyPI-compatible upstream base URL this proxy reads from.",
     },
@@ -74,7 +73,7 @@ const pypiProxyRepositoryCreatePlugin: ProxyRepositoryCreatePlugin = {
   defaults: {
     name: "",
     visibility: "private",
-    config: { upstreamUrl: "https://pypi.org/" },
+    config: { upstreamUrl: "" },
     setup: {},
   },
   validateStep: (step, state) => {
@@ -135,7 +134,6 @@ const pypiProxyRepositoryDetailPlugin: ProxyRepositoryDetailPlugin = {
   ecosystem: pypiPluginManifest.ecosystem,
   sections: [
     { id: "install-hints", title: "Install hints", placement: "workspace", summary: true, Component: PypiInstallHintsSection },
-    { id: "project-files", title: "Upstream files", placement: "workspace", Component: PypiProjectFilesSection },
     { id: "proxy-settings", title: "PyPI proxy settings", placement: "settings", Component: PypiProxySettingsSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],

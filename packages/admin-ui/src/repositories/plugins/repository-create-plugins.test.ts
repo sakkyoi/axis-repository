@@ -101,6 +101,11 @@ describe("repository create plugins", () => {
 
     expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step, field.required]))
       .toEqual([["upstreamUrl", "text", "config", true]]);
+    expect(plugin.repositoryConfig.fields[0]).toMatchObject({
+      placeholder: "https://pypi.org/",
+    });
+    expect(plugin.repositoryConfig.fields[0]).not.toHaveProperty("defaultValue");
+    expect(plugin.defaults.config).toEqual({ upstreamUrl: "" });
     expect(plugin.steps).toEqual(["plugin", "basics", "config", "review"]);
     expect(plugin.validateStep("config", {
       name: "python-proxy",

@@ -1613,6 +1613,10 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         config: optionalObjectField(body, "config") ?? {},
         ...(provisioning === undefined ? {} : { provisioning }),
       });
+      if (repository.kind === "proxy") {
+        await dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: repository.name });
+        await dependencies.scheduleBackgroundJobs?.();
+      }
       return jsonResponse(repository, { status: 201 });
     }
   }

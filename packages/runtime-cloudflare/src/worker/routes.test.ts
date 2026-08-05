@@ -3093,6 +3093,31 @@ describe("Cloudflare runtime routes", () => {
       .resolves.toMatchObject({ status: "canceled" });
   });
 
+  it("queues an initial artifact index job when a proxy repository is created", async () => {
+    const harness = createDevDependencyHarness();
+    let scheduledJobs = 0;
+    harness.dependencies.scheduleBackgroundJobs = async () => {
+      scheduledJobs += 1;
+    };
+    const app = createApp(harness.dependencies);
+
+    await createRepository(app, {
+      name: "python-proxy",
+      ecosystem: "pypi",
+      kind: "proxy",
+      visibility: "private",
+      config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
+    });
+
+    await expect(harness.dependencies.backgroundJobService.get("repository.index:python-proxy"))
+      .resolves.toMatchObject({
+        id: "repository.index:python-proxy",
+        type: "repository.index.proxy-refresh",
+        status: "pending",
+      });
+    expect(scheduledJobs).toBe(1);
+  });
+
   it("retries failed background jobs through admin routes", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
