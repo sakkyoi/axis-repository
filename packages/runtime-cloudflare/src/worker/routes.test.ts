@@ -7,6 +7,7 @@ import { sdistBytes, wheelBytes } from "@axis-repository/plugin-pypi/test-suppor
 import type { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.doUnmock("./app");
   vi.resetModules();
 });
@@ -416,10 +417,17 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
-  it("rejects repository kinds that are not implemented yet", async () => {
+  it("proxies PyPI Simple API repository paths to the configured upstream", async () => {
+    const upstreamRequests: Request[] = [];
+    vi.stubGlobal("fetch", async (request: Request) => {
+      upstreamRequests.push(request);
+      return new Response("<html>proxied</html>", {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    });
     const app = createApp(createDevDependencies());
 
-    const response = await app.fetch(
+    const createResponse = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
         method: "POST",
         headers: {
@@ -427,19 +435,33 @@ describe("Cloudflare runtime routes", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          name: "debian-proxy",
-          ecosystem: "apt",
+          name: "python-proxy",
+          ecosystem: "pypi",
           kind: "proxy",
-          visibility: "private",
-          config: validAptConfig(),
+          visibility: "public",
+          config: {
+            pypi: {
+              upstreamUrl: "https://pypi.example/root/",
+            },
+          },
         }),
       }),
     );
+    expect(createResponse.status).toBe(201);
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { message: "Repository kind is not supported yet: proxy" },
-    });
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-proxy/simple/demo/", {
+        headers: { accept: "text/html" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(upstreamRequests.map((request) => request.url)).toEqual([
+      "https://pypi.example/root/simple/demo/",
+    ]);
+    expect(upstreamRequests[0]?.headers.get("accept")).toBe("text/html");
+    await expect(response.text()).resolves.toBe("<html>proxied</html>");
   });
 
   it("deletes repositories, repository objects, and affected publish token scopes", async () => {

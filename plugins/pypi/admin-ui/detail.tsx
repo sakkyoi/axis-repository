@@ -87,6 +87,36 @@ export function PypiSettingsSection({
   );
 }
 
+export function pypiProxyUpstreamUrl(repository: Repository): string {
+  const pypi = repository.config.pypi;
+  if (!pypi || typeof pypi !== "object" || Array.isArray(pypi)) {
+    return "";
+  }
+  const upstreamUrl = (pypi as Record<string, unknown>).upstreamUrl;
+  return typeof upstreamUrl === "string" ? upstreamUrl : "";
+}
+
+export function PypiProxySettingsSection({
+  repository,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  return (
+    <div className="grid gap-2">
+      <div className="grid gap-1">
+        <span className="text-xs font-medium uppercase text-muted-foreground">Upstream URL</span>
+        <CodeBlock
+          className="max-w-full whitespace-pre-wrap break-words"
+          language="text"
+          code={pypiProxyUpstreamUrl(repository) || "(not configured)"}
+          copyable={Boolean(pypiProxyUpstreamUrl(repository))}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function pypiUploadUrl(repository: Repository, origin = globalThis.location?.origin): string {
   const path = `/repositories/${repository.name}/legacy/`;
   return origin ? `${origin.replace(/\/+$/g, "")}${path}` : path;

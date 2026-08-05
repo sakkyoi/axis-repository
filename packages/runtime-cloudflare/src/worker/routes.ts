@@ -1026,6 +1026,25 @@ async function repositoryDirectoryResponse(input: {
   });
 }
 
+async function pluginRepositoryPathResponse(input: {
+  dependencies: AppDependencies;
+  repository: Repository;
+  request: Request;
+  relativePath: string;
+  accept?: string;
+}): Promise<Response | null> {
+  const plugin = input.dependencies.repositoryRuntimePlugins.getPluginForRepository(input.repository);
+  if (plugin?.kind !== "proxy" || !plugin.serveRepositoryPath) {
+    return null;
+  }
+  return plugin.serveRepositoryPath({
+    repository: input.repository,
+    request: input.request,
+    relativePath: input.relativePath,
+    ...(input.accept ? { accept: input.accept } : {}),
+  });
+}
+
 function requireSafeRelativePath(objectPath: string): string {
   // A directory path keeps its trailing slash; every other empty segment, and
   // any traversal, is refused.
@@ -1968,6 +1987,16 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       });
       if (listing) {
         return listing;
+      }
+      const pluginResponse = await pluginRepositoryPathResponse({
+        dependencies,
+        repository,
+        request,
+        relativePath,
+        ...(accept ? { accept } : {}),
+      });
+      if (pluginResponse) {
+        return pluginResponse;
       }
       throw new NotFoundError();
     }

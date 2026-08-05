@@ -59,6 +59,13 @@ export type RepositoryPathResolver = (
   context: RepositoryServingContext,
 ) => RepositoryPathResolution | null;
 
+export interface ServeRepositoryPathInput extends RepositoryServingContext {
+  repository: Repository;
+  request: Request;
+}
+
+export type RepositoryPathHandler = (input: ServeRepositoryPathInput) => Promise<Response | null>;
+
 export interface ValidateRepositoryConfigInput {
   ecosystem: Ecosystem;
   config: Record<string, unknown>;
@@ -221,6 +228,7 @@ export interface ProxyRepositoryPlugin extends PublisherMetadata {
   canServeRepositoryPath: RepositoryPathServingRule;
   /** Defaults to serving the requested path as the object key once proxy fetching exists. */
   resolveRepositoryPath?: RepositoryPathResolver;
+  serveRepositoryPath?: RepositoryPathHandler;
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dispatchRepositoryClientHelper } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { createPypiPlugin } from "./runtime";
+import { createPypiPlugin, createPypiProxyPlugin, pypiProxyUpstreamUrl } from "./runtime";
 
 function repositoryFixture() {
   return {
@@ -145,5 +145,47 @@ describe("PyPI plugin lifecycle", () => {
         "",
       ].join("\n"),
     });
+  });
+
+  it("resolves proxy Simple API paths against the configured upstream", () => {
+    expect(pypiProxyUpstreamUrl("https://pypi.example/root/", "simple/"))
+      .toBe("https://pypi.example/root/simple/");
+    expect(pypiProxyUpstreamUrl("https://pypi.example/root/", "simple/demo/"))
+      .toBe("https://pypi.example/root/simple/demo/");
+    expect(pypiProxyUpstreamUrl("https://pypi.example/root/", "packages/demo/demo-1.0.whl"))
+      .toBeNull();
+  });
+
+  it("forwards proxy Simple API requests to the configured upstream", async () => {
+    const upstreamRequests: Request[] = [];
+    const plugin = createPypiProxyPlugin({
+      fetch: async (request) => {
+        upstreamRequests.push(request);
+        return new Response("<html>demo</html>", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      },
+    });
+
+    const response = await plugin.serveRepositoryPath?.({
+      repository: {
+        ...repositoryFixture(),
+        kind: "proxy",
+        config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      },
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/", {
+        headers: { accept: "text/html" },
+      }),
+      relativePath: "simple/demo/",
+      accept: "text/html",
+    });
+
+    expect(upstreamRequests.map((request) => request.url)).toEqual([
+      "https://pypi.example/root/simple/demo/",
+    ]);
+    expect(upstreamRequests[0]?.headers.get("accept")).toBe("text/html");
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    await expect(response?.text()).resolves.toBe("<html>demo</html>");
   });
 });

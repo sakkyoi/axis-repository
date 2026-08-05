@@ -7,6 +7,7 @@ import {
 } from "./repository-create-plugins";
 import {
   getHostedRepositoryCreatePlugin,
+  getRepositoryCreatePlugin,
 } from "./repository-ui-plugins";
 
 describe("repository create plugins", () => {
@@ -91,6 +92,36 @@ describe("repository create plugins", () => {
       visibility: "private",
       config: {
         pypi: {},
+      },
+    });
+  });
+
+  it("builds a PyPI proxy repository create payload with an upstream URL", () => {
+    const plugin = getRepositoryCreatePlugin({ ecosystem: "pypi", kind: "proxy" })!;
+
+    expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step, field.required]))
+      .toEqual([["upstreamUrl", "text", "config", true]]);
+    expect(plugin.steps).toEqual(["plugin", "basics", "config", "review"]);
+    expect(plugin.validateStep("config", {
+      name: "python-proxy",
+      visibility: "private",
+      config: { upstreamUrl: "" },
+      setup: {},
+    })).toEqual(["Upstream URL is required"]);
+    expect(plugin.buildCreateInput({
+      name: "python-proxy",
+      visibility: "public",
+      config: { upstreamUrl: " https://pypi.org/simple/../ " },
+      setup: {},
+    })).toEqual({
+      name: "python-proxy",
+      ecosystem: "pypi",
+      kind: "proxy",
+      visibility: "public",
+      config: {
+        pypi: {
+          upstreamUrl: "https://pypi.org/simple/../",
+        },
       },
     });
   });

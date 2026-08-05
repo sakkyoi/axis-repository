@@ -23,7 +23,7 @@ export interface RepositoryServiceOptions {
 
 const REPOSITORY_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const REPOSITORY_NAME_MAX_LENGTH = 100;
-const SUPPORTED_REPOSITORY_KINDS = new Set<RepositoryKind>(["hosted"]);
+const SUPPORTED_REPOSITORY_KINDS = new Set<RepositoryKind>(["hosted", "proxy", "group"]);
 
 /**
  * Repository names are concatenated into object keys (`repositories/<name>/...`),

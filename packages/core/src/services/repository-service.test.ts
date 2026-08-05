@@ -97,7 +97,7 @@ describe("RepositoryService", () => {
     await expect(service.list()).resolves.toEqual([repository]);
   });
 
-  it("accepts hosted as the only repository kind for now", async () => {
+  it("accepts repository kinds that have runtime contracts", async () => {
     const state = new MemoryStateStore();
     const service = new RepositoryService({ state, clock, randomId });
 
@@ -115,7 +115,15 @@ describe("RepositoryService", () => {
       kind: "proxy",
       visibility: "private",
       config: {},
-    })).rejects.toThrow("Repository kind is not supported yet: proxy");
+    })).resolves.toMatchObject({ kind: "proxy" });
+
+    await expect(service.create({
+      name: "debian-group",
+      ecosystem: "apt",
+      kind: "group",
+      visibility: "private",
+      config: {},
+    })).resolves.toMatchObject({ kind: "group" });
   });
 
   it("rejects duplicate repository names", async () => {

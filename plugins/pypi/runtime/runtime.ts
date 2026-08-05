@@ -19,7 +19,7 @@ import {
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { createPypiAdminResources } from "./admin-resources";
 import { createPypiClientHelpers } from "./client-helpers";
-import { validatePypiRepositoryConfig } from "./config";
+import { parsePypiProxyRepositoryConfig, validatePypiRepositoryConfig } from "./config";
 import { readDistributionMetadata } from "./distribution-source";
 import {
   CORE_METADATA_CONTENT_TYPE,
@@ -82,7 +82,10 @@ export function createPypiPlugin(input?: {
   };
 }
 
-export function createPypiProxyPlugin(): ProxyRepositoryPlugin {
+type FetchLike = (request: Request) => Promise<Response>;
+
+export function createPypiProxyPlugin(input: { fetch?: FetchLike } = {}): ProxyRepositoryPlugin {
+  const fetchImpl = input.fetch ?? ((request: Request) => fetch(request));
   return {
     kind: "proxy",
     ecosystem: "pypi",
@@ -90,9 +93,53 @@ export function createPypiProxyPlugin(): ProxyRepositoryPlugin {
     version: pypiPluginManifest.version,
     repositoryKinds: ["proxy"],
     capabilities: ["pypi", "proxy"],
-    canServeRepositoryPath: () => false,
-    validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
+    canServeRepositoryPath: createPrefixServingPredicate([SIMPLE_PREFIX]),
+    resolveRepositoryPath: ({ relativePath, accept }) => resolveSimplePath(relativePath, accept),
+    serveRepositoryPath: async ({ repository, request, relativePath }) => {
+      const upstream = parsePypiProxyRepositoryConfig(repository.config);
+      const upstreamUrl = pypiProxyUpstreamUrl(upstream.upstreamUrl, relativePath);
+      if (!upstreamUrl) {
+        return null;
+      }
+      const headers = new Headers();
+      const accept = request.headers.get("accept");
+      if (accept) {
+        headers.set("accept", accept);
+      }
+      const upstreamResponse = await fetchImpl(new Request(upstreamUrl, {
+        method: request.method,
+        headers,
+      }));
+      return new Response(request.method === "HEAD" ? null : upstreamResponse.body, {
+        status: upstreamResponse.status,
+        statusText: upstreamResponse.statusText,
+        headers: proxyResponseHeaders(upstreamResponse.headers),
+      });
+    },
+    validateRepositoryConfig: ({ config }) => {
+      parsePypiProxyRepositoryConfig(config);
+    },
   };
+}
+
+export function pypiProxyUpstreamUrl(upstreamBaseUrl: string, relativePath: string): string | null {
+  const path = relativePath.replace(/^\/+|\/+$/g, "");
+  if (path === SIMPLE_PREFIX) {
+    return new URL(`${SIMPLE_PREFIX}/`, upstreamBaseUrl).toString();
+  }
+  const project = /^simple\/([^/]+)$/.exec(path)?.[1];
+  if (!project) {
+    return null;
+  }
+  return new URL(`${SIMPLE_PREFIX}/${project}/`, upstreamBaseUrl).toString();
+}
+
+function proxyResponseHeaders(upstreamHeaders: Headers): Headers {
+  const headers = new Headers(upstreamHeaders);
+  for (const name of ["connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade"]) {
+    headers.delete(name);
+  }
+  return headers;
 }
 
 export function createPypiGroupPlugin(): GroupRepositoryPlugin {

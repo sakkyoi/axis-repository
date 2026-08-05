@@ -1,4 +1,5 @@
 import { pypiPluginManifest } from "../manifest";
+import type { PluginRepositoryConfigManifest } from "@axis-repository/core/plugin-manifests";
 import type {
   GroupRepositoryCreatePlugin,
   GroupRepositoryDetailPlugin,
@@ -14,8 +15,10 @@ import { pypiHostedRepositoryCreatePlugin } from "./create";
 import {
   PypiInstallHintsSection,
   PypiProjectFilesSection,
+  PypiProxySettingsSection,
   PypiSettingsSection,
 } from "./detail";
+import { repositoryCreateStepsForConfig } from "@axis-repository/admin-ui/plugin-ui";
 import { PypiPublishArtifactPreview, PypiPublishSessionDetail, pypiPublishSessionArtifactSummary } from "./publish";
 import { pypiIsAcceptedFile } from "./publish-model";
 
@@ -47,23 +50,39 @@ export const pypiHostedRepositoryUiPlugin: HostedRepositoryUiPlugin = {
   },
 };
 
+const pypiProxyRepositoryConfig: PluginRepositoryConfigManifest = {
+  namespace: pypiPluginManifest.repositoryConfig.namespace,
+  fields: [
+    {
+      name: "upstreamUrl",
+      label: "Upstream URL",
+      kind: "text",
+      step: "config",
+      required: true,
+      defaultValue: "https://pypi.org/",
+      placeholder: "https://pypi.org/",
+      description: "The PyPI-compatible upstream base URL this proxy reads from.",
+    },
+  ],
+};
+
 const pypiProxyRepositoryCreatePlugin: ProxyRepositoryCreatePlugin = {
   kind: "proxy",
   ecosystem: pypiPluginManifest.ecosystem,
-  repositoryConfig: {
-    namespace: pypiPluginManifest.repositoryConfig.namespace,
-    fields: [],
-  },
-  steps: ["plugin", "basics", "review"],
+  repositoryConfig: pypiProxyRepositoryConfig,
+  steps: repositoryCreateStepsForConfig(pypiProxyRepositoryConfig),
   defaults: {
     name: "",
     visibility: "private",
-    config: {},
+    config: { upstreamUrl: "https://pypi.org/" },
     setup: {},
   },
   validateStep: (step, state) => {
     if (step === "basics") {
       return state.name.trim() ? [] : ["Repository name is required"];
+    }
+    if (step === "config" && !state.config.upstreamUrl?.trim()) {
+      return ["Upstream URL is required"];
     }
     return [];
   },
@@ -73,7 +92,9 @@ const pypiProxyRepositoryCreatePlugin: ProxyRepositoryCreatePlugin = {
     kind: "proxy",
     visibility: state.visibility,
     config: {
-      [pypiPluginManifest.repositoryConfig.namespace]: {},
+      [pypiPluginManifest.repositoryConfig.namespace]: {
+        upstreamUrl: state.config.upstreamUrl?.trim() ?? "",
+      },
     },
   }),
 };
@@ -113,6 +134,7 @@ const pypiProxyRepositoryDetailPlugin: ProxyRepositoryDetailPlugin = {
   kind: "proxy",
   ecosystem: pypiPluginManifest.ecosystem,
   sections: [
+    { id: "proxy-settings", title: "PyPI proxy settings", placement: "settings", Component: PypiProxySettingsSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],
 };
