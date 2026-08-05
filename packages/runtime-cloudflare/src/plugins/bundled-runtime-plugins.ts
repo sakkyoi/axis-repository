@@ -53,7 +53,7 @@ const bundledRuntimePluginFactories: Record<string, RuntimePluginFactory> = {
   },
   pypi: (input) => [
     createPypiPlugin({ objectStoreFor: input.objectStoreFor }),
-    createPypiProxyPlugin(),
+    createPypiProxyPlugin({ objectStoreFor: input.objectStoreFor }),
     createPypiGroupPlugin(),
   ],
 };

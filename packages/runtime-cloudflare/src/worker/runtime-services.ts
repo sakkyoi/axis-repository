@@ -325,7 +325,12 @@ export class PluginRepositoryArtifactIndexService {
 
   private async rebuildUnlocked(input: { repositoryName: string }): Promise<{ artifacts: RepositoryArtifactRecord[] }> {
     const repository = await this.options.repositoryService.getByName(input.repositoryName);
-    const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
+    const plugin = this.options.plugins.getPluginForRepository(repository);
+    if (!plugin) {
+      throw new ValidationError(
+        `Artifact index plugin is not configured for repository kind and ecosystem: ${repository.kind} ${repository.ecosystem}`,
+      );
+    }
     const artifacts = await plugin.artifacts?.rebuildIndex({
       repository,
       objectStore: scopeObjectStoreToRepository(this.options.repositoryObjectStore, repository.name),
@@ -356,7 +361,12 @@ export class PluginRepositoryArtifactIndexService {
     artifacts: RepositoryArtifactRecord[];
   }> {
     const repository = await this.options.repositoryService.getByName(input.repositoryName);
-    const plugin = this.options.plugins.requirePlugin(repository.ecosystem);
+    const plugin = this.options.plugins.getPluginForRepository(repository);
+    if (!plugin) {
+      throw new ValidationError(
+        `Artifact index plugin is not configured for repository kind and ecosystem: ${repository.kind} ${repository.ecosystem}`,
+      );
+    }
     const artifacts = await this.options.repositoryArtifactStore.listByRepository(repository.name);
     const artifact = artifacts.find((candidate) => candidate.id === input.artifactId);
     if (!artifact) {

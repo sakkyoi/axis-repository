@@ -98,6 +98,7 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
     if (
       descriptor.adminResources &&
       Array.from(this.plugins.values()).some((plugin) =>
+        plugin.ecosystem !== descriptor.ecosystem &&
         plugin.adminResources?.namespace === descriptor.adminResources?.namespace,
       )
     ) {

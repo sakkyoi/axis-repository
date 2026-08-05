@@ -225,6 +225,7 @@ export interface HostedRepositoryPlugin extends PublisherMetadata {
 
 export interface ProxyRepositoryPlugin extends PublisherMetadata {
   kind: "proxy";
+  artifacts?: RepositoryArtifactIndexLifecycle;
   canServeRepositoryPath: RepositoryPathServingRule;
   /** Defaults to serving the requested path as the object key once proxy fetching exists. */
   resolveRepositoryPath?: RepositoryPathResolver;
@@ -236,6 +237,7 @@ export interface ProxyRepositoryPlugin extends PublisherMetadata {
 
 export interface GroupRepositoryPlugin extends PublisherMetadata {
   kind: "group";
+  artifacts?: RepositoryArtifactIndexLifecycle;
   canServeRepositoryPath: RepositoryPathServingRule;
   /** Defaults to serving the requested path as the object key once group resolution exists. */
   resolveRepositoryPath?: RepositoryPathResolver;

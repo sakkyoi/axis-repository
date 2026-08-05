@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
-import { parseProjectFilesHtml, readPublishedProjectFiles } from "./index-store";
+import { parseProjectFilesHtml, parseProjectListHtml, readPublishedProjectFiles } from "./index-store";
 import { resolveSimplePath } from "./layout";
 import {
   renderProjectFilesHtml,
@@ -72,6 +72,16 @@ describe("renderProjectFilesHtml", () => {
 });
 
 describe("the index reading itself back", () => {
+  it("recovers project names from a root Simple API page", () => {
+    const html = [
+      "<!doctype html>",
+      "<a href=\"Demo/\">Demo</a>",
+      "<a href=\"other-project/\">other-project</a>",
+    ].join("\n");
+
+    expect(parseProjectListHtml(html)).toEqual(["Demo", "other-project"]);
+  });
+
   it("recovers every field it wrote", async () => {
     // Publishing merges into what is already listed, so a page has to survive
     // a round trip: anything lost here is dropped from the next publish.

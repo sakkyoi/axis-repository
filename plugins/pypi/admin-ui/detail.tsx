@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Save } from "lucide-react";
+import { RotateCw, Save } from "lucide-react";
 import {
   Badge,
   Button,
@@ -14,7 +14,7 @@ import {
   type RepositoryPlugin,
   type RepositoryVisibility,
 } from "@axis-repository/admin-ui/plugin-ui";
-import { usePypiClientInfo, usePypiProjects, useSetPypiFileYanked } from "./api";
+import { usePypiClientInfo, usePypiProjects, useRefreshPypiProxyCache, useSetPypiFileYanked } from "./api";
 
 export function pypiSimpleIndexUrl(repository: Repository): string {
   return `/repositories/${repository.name}/simple/`;
@@ -102,8 +102,10 @@ export function PypiProxySettingsSection({
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
 }) {
+  const refresh = useRefreshPypiProxyCache(repository.name);
+  useErrorToast("PyPI proxy cache refresh failed", refresh.error);
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-3">
       <div className="grid gap-1">
         <span className="text-xs font-medium uppercase text-muted-foreground">Upstream URL</span>
         <CodeBlock
@@ -113,6 +115,10 @@ export function PypiProxySettingsSection({
           copyable={Boolean(pypiProxyUpstreamUrl(repository))}
         />
       </div>
+      <Button type="button" variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+        <RotateCw className="mr-2 h-4 w-4" />
+        {refresh.isPending ? "Refreshing..." : "Refresh upstream cache"}
+      </Button>
     </div>
   );
 }
@@ -189,6 +195,7 @@ export function PypiProjectFilesSection({
   useErrorToast("Could not change yank state", setYanked.error);
   const [pendingYank, setPendingYank] = useState<{ project: string; filename: string } | null>(null);
   const [reason, setReason] = useState("");
+  const canYank = repository.kind === "hosted";
 
   if (projects.isError) {
     return <ErrorState title="PyPI projects unavailable" error={projects.error} />;
@@ -216,7 +223,7 @@ export function PypiProjectFilesSection({
                     {file.yanked === "" ? "yanked" : `yanked: ${file.yanked}`}
                   </Badge>
                 )}
-                {file.yanked === undefined ? (
+                {canYank && (file.yanked === undefined ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -245,7 +252,7 @@ export function PypiProjectFilesSection({
                   >
                     Unyank
                   </Button>
-                )}
+                ))}
               </li>
             ))}
           </ul>

@@ -129,6 +129,7 @@ describe("repository detail plugins", () => {
       "repository-artifacts",
       "repository-browser",
       "install-hints",
+      "project-files",
     ]);
     expect(repositorySummarySectionsFor(repository({ ecosystem: "pypi", kind: "proxy" })).map((section) => section.id)).toEqual([
       "install-hints",

@@ -48,7 +48,7 @@ export async function readPublishedProjectFiles(input: {
   return parseProjectFilesHtml(new TextDecoder().decode(await objectBytes(stored)));
 }
 
-export function parseProjectFilesHtml(html: string): SimpleProjectFile[] {
+export function parseProjectFilesHtml(html: string, options: { includeUrl?: boolean } = {}): SimpleProjectFile[] {
   const files: SimpleProjectFile[] = [];
 
   for (const match of html.matchAll(anchorPattern)) {
@@ -66,6 +66,7 @@ export function parseProjectFilesHtml(html: string): SimpleProjectFile[] {
     const yanked = attributeValues.get("data-yanked");
     files.push({
       filename,
+      ...(options.includeUrl ? { url: href } : {}),
       sha256,
       ...(requiresPython ? { requiresPython: unescapeHtml(requiresPython) } : {}),
       ...(coreMetadata ? { coreMetadataSha256: coreMetadata } : {}),
@@ -76,6 +77,18 @@ export function parseProjectFilesHtml(html: string): SimpleProjectFile[] {
   }
 
   return files;
+}
+
+export function parseProjectListHtml(html: string): string[] {
+  const projects = new Set<string>();
+  for (const match of html.matchAll(anchorPattern)) {
+    const [, href = "", , label = ""] = match;
+    const project = unescapeHtml(label).trim() || (href.replace(/\/+$/g, "").split("/").pop() ?? "");
+    if (project) {
+      projects.add(project);
+    }
+  }
+  return [...projects].sort((left, right) => left.localeCompare(right));
 }
 
 function unescapeHtml(value: string): string {

@@ -26,6 +26,8 @@ const API_VERSION = "1.0";
 
 export interface SimpleProjectFile {
   filename: string;
+  /** The link the upstream Simple API page gave for this file, when proxied. */
+  url?: string;
   sha256: string;
   /** The `Requires-Python` marker, when the distribution declares one. */
   requiresPython?: string;

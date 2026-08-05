@@ -1,6 +1,6 @@
 import { NotFoundError, ValidationError, type RepositoryObjectStore } from "@axis-repository/core";
 import type { RepositoryAdminResources } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { pluginJsonResponse, readJsonObject } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { objectBytes, pluginJsonResponse, readJsonObject } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { pypiPluginManifest } from "../manifest";
 import { listProjects, readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
 import { normalizeProjectName } from "../shared/names";
@@ -59,11 +59,16 @@ export function createPypiAdminResources(input: {
     routes: [
       {
         ...pypiAdminResourceRoute("list-projects"),
-        handle: async ({ repositoryName }) => {
+        handle: async ({ repository, repositoryName }) => {
+          const objectStore = input.objectStoreFor(repositoryName);
+          if (repository?.kind === "proxy") {
+            return pluginJsonResponse({
+              projects: await readPypiProxyCachedProjects(objectStore, repositoryName),
+            });
+          }
           // Read from the published pages rather than the artifact index, so
           // what an operator sees is what clients are being served, yank state
           // included.
-          const objectStore = input.objectStoreFor(repositoryName);
           const projects = await listProjects(objectStore, repositoryName);
           return pluginJsonResponse({
             projects: await Promise.all(projects.map(async (project) => ({
@@ -105,6 +110,24 @@ export function createPypiAdminResources(input: {
       },
     ],
   };
+}
+
+async function readPypiProxyCachedProjects(
+  objectStore: RepositoryObjectStore,
+  repositoryName: string,
+): Promise<Array<{ name: string; files: unknown[] }>> {
+  const object = await objectStore.getObject(`repositories/${repositoryName}/_proxy-cache/pypi/projects.json`);
+  if (!object) {
+    return [];
+  }
+  const raw = JSON.parse(new TextDecoder().decode(await objectBytes(object))) as {
+    projects?: Array<{ name?: unknown; files?: unknown[] }>;
+  };
+  return (raw.projects ?? [])
+    .filter((project): project is { name: string; files: unknown[] } =>
+      typeof project.name === "string" && Array.isArray(project.files),
+    )
+    .map((project) => ({ name: project.name, files: project.files }));
 }
 
 function requireParam(value: string | undefined): string {

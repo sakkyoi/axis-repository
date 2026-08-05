@@ -85,3 +85,17 @@ export function useSetPypiFileYanked() {
       queryClient.invalidateQueries({ queryKey: [pypiProjectsQueryKey, variables.repositoryName] }),
   });
 }
+
+export function useRefreshPypiProxyCache(repositoryName: string | undefined) {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => client.rebuildRepositoryArtifactIndex(repositoryName ?? ""),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [pypiProjectsQueryKey, repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
+    },
+  });
+}

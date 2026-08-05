@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { dispatchRepositoryClientHelper } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { dispatchRepositoryAdminResource, dispatchRepositoryClientHelper } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
 import { createPypiPlugin, createPypiProxyPlugin, pypiProxyUpstreamUrl } from "./runtime";
 
 function repositoryFixture() {
@@ -210,6 +211,90 @@ describe("PyPI plugin lifecycle", () => {
       ecosystem: "pypi",
       simpleUrl: "https://axis.example/repositories/python-internal/simple/",
       pipIndexUrl: "https://axis.example/repositories/python-internal/simple/",
+    });
+  });
+
+  it("rebuilds a proxy cache into artifact records", async () => {
+    const upstreamHtml = new Map([
+      ["https://pypi.example/simple/", "<a href=\"demo/\">demo</a>"],
+      [
+        "https://pypi.example/simple/demo/",
+        `<a href="https://files.example/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}">demo-1.0-py3-none-any.whl</a>`,
+      ],
+    ]);
+    const objectStore = new MemoryRepositoryObjectStore();
+    const plugin = createPypiProxyPlugin({
+      fetch: async (request) => new Response(upstreamHtml.get(request.url) ?? "", {
+        status: upstreamHtml.has(request.url) ? 200 : 404,
+        headers: { "content-type": "text/html" },
+      }),
+      objectStoreFor: () => objectStore,
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.example/" } },
+    };
+
+    const artifacts = await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:00.000Z"),
+    });
+
+    expect(artifacts).toEqual([
+      expect.objectContaining({
+        repositoryName: "python-internal",
+        ecosystem: "pypi",
+        identity: "pypi:demo:demo-1.0-py3-none-any.whl",
+        family: "pypi:demo",
+        name: "demo",
+        version: "1.0",
+        summary: "demo 1.0",
+        primaryObjectKey: `https://files.example/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}`,
+        objectKeys: [`https://files.example/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}`],
+        publishedAt: "2026-08-05T00:00:00.000Z",
+        updatedAt: "2026-08-05T00:00:00.000Z",
+      }),
+    ]);
+
+    const projectsResponse = await dispatchRepositoryAdminResource(plugin.adminResources!, {
+      repositoryName: repository.name,
+      repository,
+      request: new Request("https://axis.example/admin/repositories/python-internal/pypi/projects"),
+      path: ["projects"],
+      services: {
+        secrets: {
+          createSecretValue: () => "secret",
+          create: async () => {
+            throw new Error("unused");
+          },
+          list: async () => [],
+          get: async () => {
+            throw new Error("unused");
+          },
+          getActive: async () => {
+            throw new Error("unused");
+          },
+          revoke: async () => {
+            throw new Error("unused");
+          },
+        },
+      },
+    });
+
+    await expect(projectsResponse.json()).resolves.toEqual({
+      projects: [
+        {
+          name: "demo",
+          files: [
+            expect.objectContaining({
+              filename: "demo-1.0-py3-none-any.whl",
+              sha256: "a".repeat(64),
+            }),
+          ],
+        },
+      ],
     });
   });
 });

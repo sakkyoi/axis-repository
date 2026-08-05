@@ -135,6 +135,7 @@ const pypiProxyRepositoryDetailPlugin: ProxyRepositoryDetailPlugin = {
   ecosystem: pypiPluginManifest.ecosystem,
   sections: [
     { id: "install-hints", title: "Install hints", placement: "workspace", summary: true, Component: PypiInstallHintsSection },
+    { id: "project-files", title: "Upstream files", placement: "workspace", Component: PypiProjectFilesSection },
     { id: "proxy-settings", title: "PyPI proxy settings", placement: "settings", Component: PypiProxySettingsSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],

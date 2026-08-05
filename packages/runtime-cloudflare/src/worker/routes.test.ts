@@ -464,6 +464,60 @@ describe("Cloudflare runtime routes", () => {
     await expect(response.text()).resolves.toBe("<html>proxied</html>");
   });
 
+  it("rebuilds PyPI proxy artifacts from the upstream Simple API cache", async () => {
+    const upstreamHtml = new Map([
+      ["https://pypi.example/simple/", "<a href=\"demo/\">demo</a>"],
+      [
+        "https://pypi.example/simple/demo/",
+        `<a href="https://files.example/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}">demo-1.0-py3-none-any.whl</a>`,
+      ],
+    ]);
+    vi.stubGlobal("fetch", async (request: Request) => new Response(upstreamHtml.get(request.url) ?? "", {
+      status: upstreamHtml.has(request.url) ? 200 : 404,
+      headers: { "content-type": "text/html" },
+    }));
+    const app = createApp(createDevDependencies());
+
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-proxy",
+          ecosystem: "pypi",
+          kind: "proxy",
+          visibility: "public",
+          config: { pypi: { upstreamUrl: "https://pypi.example/" } },
+        }),
+      }),
+    );
+    expect(createResponse.status).toBe(201);
+
+    const rebuildResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-proxy/artifacts/rebuild-index", {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(rebuildResponse.status).toBe(200);
+    await expect(rebuildResponse.json()).resolves.toMatchObject({
+      artifacts: [expect.objectContaining({ identity: "pypi:demo:demo-1.0-py3-none-any.whl" })],
+    });
+
+    const projectsResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-proxy/pypi/projects", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(projectsResponse.status).toBe(200);
+    await expect(projectsResponse.json()).resolves.toMatchObject({
+      projects: [{ name: "demo", files: [expect.objectContaining({ filename: "demo-1.0-py3-none-any.whl" })] }],
+    });
+  });
+
   it("deletes repositories, repository objects, and affected publish token scopes", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

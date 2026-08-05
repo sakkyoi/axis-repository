@@ -679,6 +679,34 @@ describe("RepositoryRuntimePluginRegistry", () => {
     ).toThrow(new ValidationError("Admin resource namespace is already registered: packages"));
   });
 
+  it("allows repository kinds in one ecosystem to share an admin resource namespace", () => {
+    const registry = new RepositoryRuntimePluginRegistry();
+    registry.register({
+      kind: "hosted",
+      ecosystem: "apt",
+      name: "apt-hosted",
+      version: "0.0.0",
+      capabilities: ["admin-resources"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: publishLifecycle(publisherReturning("hosted.json").publisher),
+      adminResources: { namespace: "apt", routes: [] },
+    });
+
+    expect(() =>
+      registry.register({
+        kind: "proxy",
+        ecosystem: "apt",
+        name: "apt-proxy",
+        version: "0.0.0",
+        capabilities: ["admin-resources"],
+        canServeRepositoryPath: () => false,
+        validateRepositoryConfig: () => {},
+        adminResources: { namespace: "apt", routes: [] },
+      }),
+    ).not.toThrow();
+  });
+
   it("finds plugins by admin resource namespace", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const publisher = publisherReturning("apt.json");

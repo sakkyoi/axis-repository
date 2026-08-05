@@ -1,4 +1,4 @@
-import type { RepositoryArtifactRecord, RepositoryObjectStore } from "@axis-repository/core";
+import type { Repository, RepositoryArtifactRecord, RepositoryObjectStore } from "@axis-repository/core";
 import { ValidationError } from "@axis-repository/core";
 import { pypiPluginManifest } from "../manifest";
 import type {
@@ -31,10 +31,11 @@ import {
   parsePackageRelativePath,
   resolveSimplePath,
 } from "./layout";
-import { readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
+import { parseProjectFilesHtml, parseProjectListHtml, readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
 import { parseCoreMetadata, type PypiCoreMetadata } from "../shared/metadata";
 import {
   parseDistributionFilename,
+  normalizeProjectName,
   requireDistributionFilename,
   type PypiDistributionFilename,
 } from "../shared/names";
@@ -84,7 +85,10 @@ export function createPypiPlugin(input?: {
 
 type FetchLike = (request: Request) => Promise<Response>;
 
-export function createPypiProxyPlugin(input: { fetch?: FetchLike } = {}): ProxyRepositoryPlugin {
+export function createPypiProxyPlugin(input: {
+  fetch?: FetchLike;
+  objectStoreFor?: (repositoryName: string) => RepositoryObjectStore;
+} = {}): ProxyRepositoryPlugin {
   const fetchImpl = input.fetch ?? ((request: Request) => fetch(request));
   return {
     kind: "proxy",
@@ -96,6 +100,13 @@ export function createPypiProxyPlugin(input: { fetch?: FetchLike } = {}): ProxyR
     canServeRepositoryPath: createPrefixServingPredicate([SIMPLE_PREFIX]),
     resolveRepositoryPath: ({ relativePath, accept }) => resolveSimplePath(relativePath, accept),
     clientHelpers: createPypiClientHelpers({ includeUpload: false }),
+    ...(input.objectStoreFor ? { adminResources: createPypiAdminResources({ objectStoreFor: input.objectStoreFor }) } : {}),
+    artifacts: {
+      rebuildIndex: (rebuildInput) => rebuildPypiProxyArtifactIndex({
+        ...rebuildInput,
+        fetch: fetchImpl,
+      }),
+    },
     serveRepositoryPath: async ({ repository, request, relativePath }) => {
       const upstream = parsePypiProxyRepositoryConfig(repository.config);
       const upstreamUrl = pypiProxyUpstreamUrl(upstream.upstreamUrl, relativePath);
@@ -121,6 +132,102 @@ export function createPypiProxyPlugin(input: { fetch?: FetchLike } = {}): ProxyR
       parsePypiProxyRepositoryConfig(config);
     },
   };
+}
+
+async function rebuildPypiProxyArtifactIndex(input: RebuildRepositoryArtifactIndexInput & {
+  fetch: FetchLike;
+}): Promise<RepositoryArtifactRecord[]> {
+  const upstream = parsePypiProxyRepositoryConfig(input.repository.config);
+  const rootUrl = pypiProxyUpstreamUrl(upstream.upstreamUrl, `${SIMPLE_PREFIX}/`);
+  if (!rootUrl) {
+    return [];
+  }
+  const rootResponse = await input.fetch(new Request(rootUrl, {
+    headers: { accept: "text/html" },
+  }));
+  if (!rootResponse.ok) {
+    throw new ValidationError(`PyPI proxy upstream root returned ${rootResponse.status}`);
+  }
+  const projects = parseProjectListHtml(await rootResponse.text());
+  const artifacts: RepositoryArtifactRecord[] = [];
+  const cachedProjects: Array<{ name: string; files: SimpleProjectFile[] }> = [];
+
+  for (const project of projects) {
+    const projectUrl = pypiProxyUpstreamUrl(upstream.upstreamUrl, `${SIMPLE_PREFIX}/${project}/`);
+    if (!projectUrl) {
+      continue;
+    }
+    const projectResponse = await input.fetch(new Request(projectUrl, {
+      headers: { accept: "text/html" },
+    }));
+    if (!projectResponse.ok) {
+      continue;
+    }
+    const files = parseProjectFilesHtml(await projectResponse.text(), { includeUrl: true });
+    const normalizedProject = normalizeProjectName(project);
+    cachedProjects.push({ name: normalizedProject, files });
+    for (const file of files) {
+      const distribution = parseDistributionFilename(file.filename);
+      if (!distribution) {
+        continue;
+      }
+      const objectKey = file.url
+        ? new URL(file.url, projectUrl).toString()
+        : new URL(file.filename, projectUrl).toString();
+      artifacts.push(proxyArtifactRecord({
+        repository: input.repository,
+        file,
+        distribution,
+        objectKey,
+        indexedAt: input.now.toISOString(),
+      }));
+    }
+  }
+
+  await input.objectStore.putJson(proxyCacheKey(input.repository.name), {
+    upstreamUrl: upstream.upstreamUrl,
+    refreshedAt: input.now.toISOString(),
+    projects: cachedProjects,
+  });
+  return artifacts;
+}
+
+function proxyArtifactRecord(input: {
+  repository: Repository;
+  file: SimpleProjectFile;
+  distribution: PypiDistributionFilename;
+  objectKey: string;
+  indexedAt: string;
+}): RepositoryArtifactRecord {
+  return {
+    id: `artifact_${input.repository.name}_pypi_proxy_${input.distribution.normalizedName}_${input.file.filename}`,
+    repositoryName: input.repository.name,
+    ecosystem: input.repository.ecosystem,
+    identity: `pypi:${input.distribution.normalizedName}:${input.file.filename}`,
+    family: `pypi:${input.distribution.normalizedName}`,
+    name: input.distribution.normalizedName,
+    version: input.distribution.version,
+    summary: `${input.distribution.normalizedName} ${input.distribution.version}`,
+    primaryObjectKey: input.objectKey,
+    objectKeys: [input.objectKey],
+    metadata: {
+      source: "proxy",
+      upstreamUrl: input.objectKey,
+      sha256: input.file.sha256,
+      filename: input.file.filename,
+      project: input.distribution.normalizedName,
+      version: input.distribution.version,
+      ...(input.file.requiresPython ? { requiresPython: input.file.requiresPython } : {}),
+      ...(input.file.coreMetadataSha256 ? { coreMetadataSha256: input.file.coreMetadataSha256 } : {}),
+      ...(input.file.yanked === undefined ? {} : { yanked: input.file.yanked }),
+    },
+    publishedAt: input.indexedAt,
+    updatedAt: input.indexedAt,
+  };
+}
+
+function proxyCacheKey(repositoryName: string): string {
+  return `repositories/${repositoryName}/_proxy-cache/pypi/projects.json`;
 }
 
 export function pypiProxyUpstreamUrl(upstreamBaseUrl: string, relativePath: string): string | null {
