@@ -21,6 +21,7 @@ import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, Plug
 import { RepositoryIndexJobService } from "./repository-index-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
+import { BackgroundJobDispatcher } from "./background-job-dispatcher";
 import { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
@@ -141,8 +142,7 @@ export function createDurableObjectDependencies(
   storage: DurableStorage,
   env: AxisEnv,
   options: {
-    scheduleRepositoryIndexJobs?: () => Promise<void>;
-    schedulePublishFinalizeJobs?: () => Promise<void>;
+    scheduleBackgroundJobs?: () => Promise<void>;
   } = {},
 ): AppDependencies {
   if (!env.TOKEN_HASH_PEPPER) {
@@ -257,6 +257,30 @@ export function createDurableObjectDependencies(
     publishFinalizeJobService,
     stagingUploadGcJobService,
   });
+  const backgroundJobDispatcher = new BackgroundJobDispatcher({
+    state,
+    clock,
+    migrators: [
+      () => publishFinalizeJobService.migrateLegacyPendingJobs(),
+      () => repositoryIndexJobService.migrateLegacyPendingJobs(),
+    ],
+    runners: [
+      {
+        supports: (job) => job.type === "publish.finalize",
+        run: (job) => publishFinalizeJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type.startsWith("repository.index."),
+        run: (job) => repositoryIndexJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type === "storage.staging-upload-gc",
+        run: async (job) => {
+          await stagingUploadGcJobService.runBackgroundJob(job);
+        },
+      },
+    ],
+  });
 
   const artifactOrigin = parseArtifactOrigin(env.AXIS_ARTIFACT_ORIGIN);
 
@@ -279,6 +303,7 @@ export function createDurableObjectDependencies(
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
     publishSessionService: pluginPublishSessionService,
     backgroundJobService,
+    backgroundJobDispatcher,
     stagingUploadGcJobService,
     publishFinalizeJobService,
     repositoryActivityService,
@@ -293,12 +318,9 @@ export function createDurableObjectDependencies(
     repositoryRuntimePlugins,
     repositoryWriteLock: writeLock,
     publishSessionTtlMs: publishSessionService.ttlSeconds * 1000,
-    ...(options.scheduleRepositoryIndexJobs === undefined
+    ...(options.scheduleBackgroundJobs === undefined
       ? {}
-      : { scheduleRepositoryIndexJobs: options.scheduleRepositoryIndexJobs }),
-    ...(options.schedulePublishFinalizeJobs === undefined
-      ? {}
-      : { schedulePublishFinalizeJobs: options.schedulePublishFinalizeJobs }),
+      : { scheduleBackgroundJobs: options.scheduleBackgroundJobs }),
   };
 }
 
@@ -311,8 +333,7 @@ export class AxisAdminDO {
       state.storage as unknown as DurableStorage,
       env,
       {
-        scheduleRepositoryIndexJobs: () => state.storage.setAlarm(Date.now()),
-        schedulePublishFinalizeJobs: () => state.storage.setAlarm(Date.now()),
+        scheduleBackgroundJobs: () => state.storage.setAlarm(Date.now()),
       },
     );
     this.app = createApp(this.dependencies);
@@ -334,9 +355,8 @@ export class AxisAdminDO {
   async alarm(): Promise<void> {
     let nextRunAt = new Date(Date.now() + MAINTENANCE_MAX_INTERVAL_MS);
     try {
-      const finalizeJobs = await this.dependencies.publishFinalizeJobService.drain({ limit: 1 });
-      const indexJobs = await this.dependencies.repositoryIndexJobService.drain({ limit: 1 });
-      await this.dependencies.stagingUploadGcJobService.run();
+      await this.dependencies.stagingUploadGcJobService.request();
+      const jobs = await this.dependencies.backgroundJobDispatcher.drain({ limit: 3 });
       const run = await runRepositoryMaintenance({
         repositories: await this.dependencies.repositoryService.list(),
         plugins: this.dependencies.repositoryRuntimePlugins,
@@ -348,7 +368,7 @@ export class AxisAdminDO {
       for (const failure of run.failures) {
         console.error(`Repository maintenance failed for ${failure.repositoryName}: ${failure.message}`);
       }
-      if (finalizeJobs.remaining > 0 || indexJobs.remaining > 0) {
+      if (jobs.remaining > 0) {
         nextRunAt = new Date(Date.now() + 1000);
       }
     } catch (error) {

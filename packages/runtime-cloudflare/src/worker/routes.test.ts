@@ -259,7 +259,7 @@ async function drainPublishFinalizeJobs(
   harness: ReturnType<typeof createDevDependencyHarness>,
   limit = 1,
 ) {
-  return harness.dependencies.publishFinalizeJobService.drain({ limit });
+  return harness.dependencies.backgroundJobDispatcher.drain({ limit });
 }
 
 function basicAuth(secret: string, username = "axis"): string {
@@ -533,9 +533,13 @@ describe("Cloudflare runtime routes", () => {
     );
     expect(rebuildResponse.status).toBe(202);
     await expect(rebuildResponse.json()).resolves.toMatchObject({
-      job: { repositoryName: "python-proxy", kind: "proxy-refresh", status: "pending" },
+      job: {
+        id: "repository.index:python-proxy",
+        type: "repository.index.proxy-refresh",
+        status: "pending",
+      },
     });
-    await expect(harness.dependencies.repositoryIndexJobService.drain({ limit: 1 }))
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
       .resolves.toMatchObject({ processed: 1, remaining: 0 });
 
     const projectsResponse = await app.fetch(
@@ -2967,7 +2971,7 @@ describe("Cloudflare runtime routes", () => {
   it("rebuilds repository artifact indexes from current storage", async () => {
     const harness = createDevDependencyHarness();
     let scheduledIndexJobs = 0;
-    harness.dependencies.scheduleRepositoryIndexJobs = async () => {
+    harness.dependencies.scheduleBackgroundJobs = async () => {
       scheduledIndexJobs += 1;
     };
     const app = createApp(harness.dependencies);
@@ -2983,6 +2987,7 @@ describe("Cloudflare runtime routes", () => {
       { method: "POST", headers: { authorization: `Bearer ${token}` } },
     ));
     await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 0 });
+    scheduledIndexJobs = 0;
     await harness.repositoryObjectStore.deleteObject(
       "repositories/debian-internal/pool/main/myapp/myapp_1.2.3_amd64.deb",
     );
@@ -2991,7 +2996,7 @@ describe("Cloudflare runtime routes", () => {
       "https://axis.example/admin/repositories/debian-internal/artifacts/rebuild-index",
       { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
     ));
-    await expect(harness.dependencies.repositoryIndexJobService.drain({ limit: 1 }))
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
       .resolves.toMatchObject({ processed: 1, remaining: 0 });
     const artifacts = await app.fetch(new Request(
       "https://axis.example/admin/repositories/debian-internal/artifacts",
@@ -3001,7 +3006,11 @@ describe("Cloudflare runtime routes", () => {
     expect(rebuild.status).toBe(202);
     expect(scheduledIndexJobs).toBe(1);
     await expect(rebuild.json()).resolves.toMatchObject({
-      job: { repositoryName: "debian-internal", kind: "hosted-rebuild", status: "pending" },
+      job: {
+        id: "repository.index:debian-internal",
+        type: "repository.index.hosted-rebuild",
+        status: "pending",
+      },
     });
     await expect(artifacts.json()).resolves.toMatchObject({
       artifacts: [],
@@ -3125,7 +3134,7 @@ describe("Cloudflare runtime routes", () => {
       "https://axis.example/admin/repositories/debian-private/artifacts/rebuild-index",
       { method: "POST", headers: { authorization: "Bearer dev-admin-token" } },
     ));
-    await expect(harness.dependencies.repositoryIndexJobService.drain({ limit: 1 }))
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
       .resolves.toMatchObject({ processed: 1, remaining: 0 });
     const activity = await app.fetch(new Request(
       "https://axis.example/admin/repositories/debian-private/activity",
@@ -4853,7 +4862,7 @@ describe("Cloudflare runtime routes", () => {
       },
       job: { id: `publish.finalize:${session.id}`, type: "publish.finalize", status: "pending" },
     });
-    await expect(harness.dependencies.publishFinalizeJobService.drain({ limit: 1 }))
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
       .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
     const finalizedSession = await harness.dependencies.publishSessionService.get({ sessionId: session.id, principal: {
       tokenId: "tok_1",

@@ -1,4 +1,4 @@
-import type { Clock, RepositoryObjectStore, StateStore } from "@axis-repository/core";
+import type { BackgroundJobRecord, Clock, RepositoryObjectStore, StateStore } from "@axis-repository/core";
 import { discardExpiredStagedUploads } from "./staging-sweep";
 
 export const STAGING_UPLOAD_GC_JOB_ID = "storage.staging-upload-gc";
@@ -17,20 +17,35 @@ export interface StagingUploadGcRunResult {
 export class StagingUploadGcJobService {
   constructor(private readonly options: StagingUploadGcJobServiceOptions) {}
 
-  async run(): Promise<StagingUploadGcRunResult> {
-    const startedAt = this.options.clock.now().toISOString();
+  async request(): Promise<BackgroundJobRecord> {
     const existing = await this.options.state.backgroundJobs.get(STAGING_UPLOAD_GC_JOB_ID);
-    await this.options.state.backgroundJobs.save({
+    if (existing?.status === "pending" || existing?.status === "running") {
+      return existing;
+    }
+    const requestedAt = this.options.clock.now().toISOString();
+    const job: BackgroundJobRecord = {
       id: STAGING_UPLOAD_GC_JOB_ID,
       type: "storage.staging-upload-gc",
-      status: "running",
+      status: "pending",
       subject: { type: "system", id: "staging-uploads" },
       priority: -10,
-      attempts: (existing?.attempts ?? 0) + 1,
-      requestedAt: startedAt,
-      scheduledAt: startedAt,
+      attempts: existing?.attempts ?? 0,
+      requestedAt,
+      scheduledAt: requestedAt,
+    };
+    await this.options.state.backgroundJobs.save(job);
+    return job;
+  }
+
+  async runBackgroundJob(job: BackgroundJobRecord): Promise<StagingUploadGcRunResult> {
+    const startedAt = this.options.clock.now().toISOString();
+    const running: BackgroundJobRecord = {
+      ...job,
+      status: "running",
+      attempts: job.attempts + 1,
       startedAt,
-    });
+    };
+    await this.options.state.backgroundJobs.save(running);
     try {
       const discardedObjectKeys = await discardExpiredStagedUploads({
         objectStore: this.options.objectStore,
@@ -39,14 +54,8 @@ export class StagingUploadGcJobService {
       });
       const finishedAt = this.options.clock.now().toISOString();
       await this.options.state.backgroundJobs.save({
-        id: STAGING_UPLOAD_GC_JOB_ID,
-        type: "storage.staging-upload-gc",
+        ...running,
         status: "succeeded",
-        subject: { type: "system", id: "staging-uploads" },
-        priority: -10,
-        attempts: (existing?.attempts ?? 0) + 1,
-        requestedAt: startedAt,
-        scheduledAt: startedAt,
         startedAt,
         finishedAt,
         result: {
@@ -57,14 +66,8 @@ export class StagingUploadGcJobService {
     } catch (error) {
       const finishedAt = this.options.clock.now().toISOString();
       await this.options.state.backgroundJobs.save({
-        id: STAGING_UPLOAD_GC_JOB_ID,
-        type: "storage.staging-upload-gc",
+        ...running,
         status: "failed",
-        subject: { type: "system", id: "staging-uploads" },
-        priority: -10,
-        attempts: (existing?.attempts ?? 0) + 1,
-        requestedAt: startedAt,
-        scheduledAt: startedAt,
         startedAt,
         finishedAt,
         failure: {

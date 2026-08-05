@@ -23,16 +23,6 @@ export interface RequestPublishFinalizeJobResult {
   job: BackgroundJobRecord;
 }
 
-export interface DrainPublishFinalizeJobsInput {
-  limit?: number;
-}
-
-export interface DrainPublishFinalizeJobsResult {
-  processed: number;
-  failed: number;
-  remaining: number;
-}
-
 export class PublishFinalizeJobService {
   constructor(private readonly options: PublishFinalizeJobServiceOptions) {}
 
@@ -86,24 +76,21 @@ export class PublishFinalizeJobService {
     return { session, job: backgroundJob };
   }
 
-  async drain(input: DrainPublishFinalizeJobsInput = {}): Promise<DrainPublishFinalizeJobsResult> {
-    const limit = input.limit ?? 10;
-    let processed = 0;
-    let failed = 0;
-    for (let index = 0; index < limit; index += 1) {
-      const job = (await this.options.state.publishFinalizeJobs.listRunnable())[0];
-      if (!job) break;
-      processed += 1;
-      const result = await this.run(job);
-      if (result.status === "failed") {
-        failed += 1;
-      }
+  async migrateLegacyPendingJobs(): Promise<number> {
+    let migrated = 0;
+    for (const job of await this.options.state.publishFinalizeJobs.listRunnable()) {
+      const id = publishFinalizeBackgroundJobId(job.sessionId);
+      if (await this.options.state.backgroundJobs.get(id)) continue;
+      await this.options.state.backgroundJobs.save(backgroundJobFromPublishFinalizeJob(job));
+      migrated += 1;
     }
-    return {
-      processed,
-      failed,
-      remaining: (await this.options.state.publishFinalizeJobs.listRunnable()).length,
-    };
+    return migrated;
+  }
+
+  async runBackgroundJob(job: BackgroundJobRecord): Promise<void> {
+    const projection = await this.options.state.publishFinalizeJobs.getBySession(job.subject.id)
+      ?? publishFinalizeJobFromBackgroundJob(job);
+    await this.run(projection);
   }
 
   private async run(job: PublishFinalizeJobRecord): Promise<PublishFinalizeJobRecord> {
@@ -194,4 +181,22 @@ function backgroundJobFromPublishFinalizeJob(job: PublishFinalizeJobRecord): Bac
 function backgroundStatusFromPublishFinalizeStatus(status: PublishFinalizeJobRecord["status"]): BackgroundJobRecord["status"] {
   if (status === "ready") return "succeeded";
   return status;
+}
+
+function publishFinalizeJobFromBackgroundJob(job: BackgroundJobRecord): PublishFinalizeJobRecord {
+  return {
+    sessionId: job.subject.id,
+    repositoryName: job.repositoryName ?? job.subject.repositoryName ?? "",
+    status: "pending",
+    requestedAt: job.requestedAt,
+    attempts: job.attempts,
+    ...(job.startedAt === undefined ? {} : { startedAt: job.startedAt }),
+    ...(job.finishedAt === undefined ? {} : { finishedAt: job.finishedAt }),
+    ...(job.failure === undefined ? {} : {
+      lastFailure: {
+        message: job.failure.message,
+        failedAt: job.failure.failedAt,
+      },
+    }),
+  };
 }

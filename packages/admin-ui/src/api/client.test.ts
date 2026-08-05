@@ -844,10 +844,14 @@ describe("createAxisClient", () => {
       return {
         data: {
           job: {
+            id: "repository.index:debian internal",
+            type: "repository.index.hosted-rebuild",
+            subject: { type: "repository", id: "debian internal", repositoryName: "debian internal" },
             repositoryName: "debian internal",
-            kind: "hosted-rebuild",
             status: "pending",
+            priority: 0,
             requestedAt: "2026-08-05T00:00:00.000Z",
+            scheduledAt: "2026-08-05T00:00:00.000Z",
             attempts: 0,
           },
         },
@@ -859,7 +863,13 @@ describe("createAxisClient", () => {
     };
 
     await expect(client.rebuildRepositoryArtifactIndex("debian internal"))
-      .resolves.toMatchObject({ job: { repositoryName: "debian internal", status: "pending" } });
+      .resolves.toMatchObject({
+        job: {
+          id: "repository.index:debian internal",
+          type: "repository.index.hosted-rebuild",
+          status: "pending",
+        },
+      });
     expect(requests).toEqual([
       "POST /admin/repositories/debian%20internal/artifacts/rebuild-index",
     ]);

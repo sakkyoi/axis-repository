@@ -14,7 +14,7 @@ export interface BackgroundJobServiceOptions {
   clock: Clock;
   repositoryIndexJobService?: Pick<RepositoryIndexJobService, "request">;
   publishFinalizeJobService?: Pick<PublishFinalizeJobService, "requestAsAdmin">;
-  stagingUploadGcJobService?: Pick<StagingUploadGcJobService, "run">;
+  stagingUploadGcJobService?: Pick<StagingUploadGcJobService, "request">;
 }
 
 export class BackgroundJobService {
@@ -58,7 +58,7 @@ export class BackgroundJobService {
     if (job.type === "storage.staging-upload-gc") {
       const runner = this.options.stagingUploadGcJobService;
       if (!runner) throw missingRunnerError(job);
-      await runner.run();
+      await runner.request();
       return this.options.state.backgroundJobs.get(id);
     }
     throw new ValidationError(`Background job retry is not supported for type: ${job.type}`);

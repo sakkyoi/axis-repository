@@ -166,10 +166,6 @@ export const repositoryArtifactFamiliesResponseSchema = z.object({
   truncated: z.boolean(),
 });
 
-export const repositoryIndexJobResponseSchema = z.object({
-  job: repositoryIndexJobSchema,
-});
-
 export const backgroundJobSchema = z.object({
   id: z.string(),
   type: z.string(),
@@ -208,6 +204,10 @@ export const backgroundJobsResponseSchema = z.object({
 });
 
 export const backgroundJobResponseSchema = z.object({
+  job: backgroundJobSchema,
+});
+
+export const repositoryIndexJobResponseSchema = z.object({
   job: backgroundJobSchema,
 });
 

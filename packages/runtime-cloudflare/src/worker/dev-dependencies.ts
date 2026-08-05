@@ -24,6 +24,7 @@ import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, Plug
 import { RepositoryIndexJobService } from "./repository-index-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
+import { BackgroundJobDispatcher } from "./background-job-dispatcher";
 import { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
@@ -41,6 +42,7 @@ export interface AppDependencies {
   publishTokenService: PublishTokenService;
   publishSessionService: PluginPublishSessionService;
   backgroundJobService: BackgroundJobService;
+  backgroundJobDispatcher: BackgroundJobDispatcher;
   stagingUploadGcJobService: StagingUploadGcJobService;
   publishFinalizeJobService: PublishFinalizeJobService;
   repositoryActivityService: RepositoryActivityService;
@@ -61,8 +63,7 @@ export interface AppDependencies {
   repositoryWriteLock: RepositoryWriteLock;
   /** How long a publish session lives; what outlives one is nobody's. */
   publishSessionTtlMs: number;
-  scheduleRepositoryIndexJobs?: () => Promise<void>;
-  schedulePublishFinalizeJobs?: () => Promise<void>;
+  scheduleBackgroundJobs?: () => Promise<void>;
 }
 
 export interface DevDependencyHarness {
@@ -233,6 +234,30 @@ export function createDevDependencyHarness(
     publishFinalizeJobService,
     stagingUploadGcJobService,
   });
+  const backgroundJobDispatcher = new BackgroundJobDispatcher({
+    state,
+    clock,
+    migrators: [
+      () => publishFinalizeJobService.migrateLegacyPendingJobs(),
+      () => repositoryIndexJobService.migrateLegacyPendingJobs(),
+    ],
+    runners: [
+      {
+        supports: (job) => job.type === "publish.finalize",
+        run: (job) => publishFinalizeJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type.startsWith("repository.index."),
+        run: (job) => repositoryIndexJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type === "storage.staging-upload-gc",
+        run: async (job) => {
+          await stagingUploadGcJobService.runBackgroundJob(job);
+        },
+      },
+    ],
+  });
 
   return {
     dependencies: {
@@ -246,6 +271,7 @@ export function createDevDependencyHarness(
       publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
       publishSessionService: pluginPublishSessionService,
       backgroundJobService,
+      backgroundJobDispatcher,
       stagingUploadGcJobService,
       publishFinalizeJobService,
       repositoryActivityService,

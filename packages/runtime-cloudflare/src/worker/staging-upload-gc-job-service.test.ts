@@ -19,7 +19,7 @@ async function objectStoreWith(input: Record<string, number>): Promise<MemoryRep
 }
 
 describe("StagingUploadGcJobService", () => {
-  it("records a system background job when staging uploads are garbage-collected", async () => {
+  it("queues and runs a staging upload garbage collection background job", async () => {
     const state = new MemoryStateStore();
     const objectStore = await objectStoreWith({
       "_staging/uploads/debian-internal/pub_1/upl_1/app.deb": SESSION_TTL_MS + STAGING_SWEEP_GRACE_MS + 1000,
@@ -28,7 +28,14 @@ describe("StagingUploadGcJobService", () => {
     });
     const service = new StagingUploadGcJobService({ state, objectStore, clock, sessionTtlMs: SESSION_TTL_MS });
 
-    await expect(service.run()).resolves.toMatchObject({
+    await expect(service.request()).resolves.toMatchObject({
+      id: "storage.staging-upload-gc",
+      status: "pending",
+    });
+    const job = await state.backgroundJobs.get("storage.staging-upload-gc");
+    expect(job).not.toBeNull();
+
+    await expect(service.runBackgroundJob(job!)).resolves.toMatchObject({
       discardedObjectKeys: ["_staging/uploads/debian-internal/pub_1/upl_1/app.deb"],
     });
 
@@ -53,8 +60,11 @@ describe("StagingUploadGcJobService", () => {
       throw new Error("Network connection lost.");
     };
     const service = new StagingUploadGcJobService({ state, objectStore, clock, sessionTtlMs: SESSION_TTL_MS });
+    await service.request();
+    const job = await state.backgroundJobs.get("storage.staging-upload-gc");
+    expect(job).not.toBeNull();
 
-    await expect(service.run()).rejects.toThrow("Network connection lost.");
+    await expect(service.runBackgroundJob(job!)).rejects.toThrow("Network connection lost.");
 
     await expect(state.backgroundJobs.get("storage.staging-upload-gc")).resolves.toMatchObject({
       status: "failed",

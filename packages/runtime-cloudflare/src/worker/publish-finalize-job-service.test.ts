@@ -134,7 +134,7 @@ describe("PublishFinalizeJobService", () => {
     });
   });
 
-  it("drains queued finalize jobs and records completion", async () => {
+  it("runs a publish finalize background job and records completion", async () => {
     const state = new MemoryStateStore();
     const publishSessionService = await readySession(state, {
       publish: async (input) => ({
@@ -151,8 +151,10 @@ describe("PublishFinalizeJobService", () => {
       clock: testClock(),
     });
     await service.request({ sessionId: "pub_fixed", principal });
+    const job = await state.backgroundJobs.get("publish.finalize:pub_fixed");
+    expect(job).not.toBeNull();
 
-    await expect(service.drain({ limit: 1 })).resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
+    await expect(service.runBackgroundJob(job!)).resolves.toBeUndefined();
 
     await expect(state.publishFinalizeJobs.getBySession("pub_fixed")).resolves.toMatchObject({
       status: "ready",
@@ -170,7 +172,7 @@ describe("PublishFinalizeJobService", () => {
     });
   });
 
-  it("marks finalize jobs failed when publishing fails", async () => {
+  it("marks publish finalize background jobs failed when publishing fails", async () => {
     const state = new MemoryStateStore();
     const publishSessionService = await readySession(state, {
       publish: async () => {
@@ -183,8 +185,10 @@ describe("PublishFinalizeJobService", () => {
       clock: testClock(),
     });
     await service.request({ sessionId: "pub_fixed", principal });
+    const job = await state.backgroundJobs.get("publish.finalize:pub_fixed");
+    expect(job).not.toBeNull();
 
-    await expect(service.drain({ limit: 1 })).resolves.toMatchObject({ processed: 1, failed: 1, remaining: 0 });
+    await expect(service.runBackgroundJob(job!)).resolves.toBeUndefined();
 
     await expect(state.publishFinalizeJobs.getBySession("pub_fixed")).resolves.toMatchObject({
       status: "failed",
@@ -199,6 +203,32 @@ describe("PublishFinalizeJobService", () => {
     await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
       status: "finalize_failed",
       failure: { message: "write failed" },
+    });
+  });
+
+  it("migrates legacy pending publish finalize jobs into background jobs", async () => {
+    const state = new MemoryStateStore();
+    const publishSessionService = await readySession(state, {
+      publish: async () => ({ publishedAt: "2026-08-05T00:00:00.000Z", objects: [] }),
+    });
+    await state.publishFinalizeJobs.save({
+      sessionId: "pub_fixed",
+      repositoryName: "debian-internal",
+      status: "pending",
+      requestedAt: "2026-08-05T00:00:00.000Z",
+      attempts: 0,
+    });
+    const service = new PublishFinalizeJobService({
+      state,
+      publishSessionService,
+      clock: testClock(),
+    });
+
+    await expect(service.migrateLegacyPendingJobs()).resolves.toBe(1);
+    await expect(state.backgroundJobs.get("publish.finalize:pub_fixed")).resolves.toMatchObject({
+      id: "publish.finalize:pub_fixed",
+      type: "publish.finalize",
+      status: "pending",
     });
   });
 });

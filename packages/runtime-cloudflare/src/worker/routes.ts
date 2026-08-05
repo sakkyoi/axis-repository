@@ -42,6 +42,7 @@ import {
   renderRepositoryDirectoryHtml,
   trailingSlashRedirectLocation,
 } from "./repository-directory";
+import { repositoryIndexBackgroundJobId } from "./repository-index-job-service";
 
 export interface AxisApp {
   fetch(request: Request): Promise<Response>;
@@ -1801,8 +1802,10 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactsRebuildName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
-    const job = await dependencies.repositoryIndexJobService.request({ repositoryName: repository.name });
-    await dependencies.scheduleRepositoryIndexJobs?.();
+    await dependencies.repositoryIndexJobService.request({ repositoryName: repository.name });
+    await dependencies.scheduleBackgroundJobs?.();
+    const job = await dependencies.backgroundJobService.get(repositoryIndexBackgroundJobId(repository.name));
+    if (!job) throw new NotFoundError();
     return jsonResponse({ job }, { status: 202 });
   }
   const adminRepositoryArtifactPath = parseAdminRepositoryArtifactPath(url.pathname);
@@ -2036,7 +2039,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const result = await dependencies.publishFinalizeJobService.requestAsAdmin({
       sessionId,
     });
-    await dependencies.schedulePublishFinalizeJobs?.();
+    await dependencies.scheduleBackgroundJobs?.();
     return jsonResponse({ ...result, session: readablePublishSession(result.session) }, { status: 202 });
   }
   if (url.pathname === "/api/publish-sessions" && request.method === "GET") {
@@ -2098,7 +2101,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       sessionId,
       principal,
     });
-    await dependencies.schedulePublishFinalizeJobs?.();
+    await dependencies.scheduleBackgroundJobs?.();
     return jsonResponse({ ...result, session: readablePublishSession(result.session) }, { status: 202 });
   }
   const clientHelperPath = servesArtifacts ? parseRepositoryClientHelperPath(request.url) : null;

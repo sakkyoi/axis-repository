@@ -23,16 +23,6 @@ export interface RequestRepositoryIndexJobInput {
   repositoryName: string;
 }
 
-export interface DrainRepositoryIndexJobsInput {
-  limit?: number;
-}
-
-export interface DrainRepositoryIndexJobsResult {
-  processed: number;
-  failed: number;
-  remaining: number;
-}
-
 export class RepositoryIndexJobService {
   constructor(private readonly options: RepositoryIndexJobServiceOptions) {}
 
@@ -70,24 +60,21 @@ export class RepositoryIndexJobService {
     return pending;
   }
 
-  async drain(input: DrainRepositoryIndexJobsInput = {}): Promise<DrainRepositoryIndexJobsResult> {
-    const limit = input.limit ?? 10;
-    let processed = 0;
-    let failed = 0;
-    for (let index = 0; index < limit; index += 1) {
-      const job = (await this.options.state.repositoryIndexJobs.listRunnable())[0];
-      if (!job) break;
-      processed += 1;
-      const result = await this.run(job);
-      if (result.status === "failed") {
-        failed += 1;
-      }
+  async migrateLegacyPendingJobs(): Promise<number> {
+    let migrated = 0;
+    for (const job of await this.options.state.repositoryIndexJobs.listRunnable()) {
+      const id = repositoryIndexBackgroundJobId(job.repositoryName);
+      if (await this.options.state.backgroundJobs.get(id)) continue;
+      await this.options.state.backgroundJobs.save(backgroundJobFromRepositoryIndexJob(job));
+      migrated += 1;
     }
-    return {
-      processed,
-      failed,
-      remaining: (await this.options.state.repositoryIndexJobs.listRunnable()).length,
-    };
+    return migrated;
+  }
+
+  async runBackgroundJob(job: BackgroundJobRecord): Promise<void> {
+    const projection = await this.options.state.repositoryIndexJobs.getByRepository(job.subject.id)
+      ?? repositoryIndexJobFromBackgroundJob(job);
+    await this.run(projection);
   }
 
   private async run(job: RepositoryIndexJobRecord): Promise<RepositoryIndexJobRecord> {
@@ -194,6 +181,30 @@ function backgroundTypeFromRepositoryIndexKind(kind: RepositoryIndexJobKind): Ba
   if (kind === "hosted-rebuild") return "repository.index.hosted-rebuild";
   if (kind === "proxy-refresh") return "repository.index.proxy-refresh";
   return "repository.index.group-refresh";
+}
+
+function repositoryIndexJobFromBackgroundJob(job: BackgroundJobRecord): RepositoryIndexJobRecord {
+  return {
+    repositoryName: job.subject.id,
+    kind: repositoryIndexKindFromBackgroundType(job.type),
+    status: "pending",
+    requestedAt: job.requestedAt,
+    attempts: job.attempts,
+    ...(job.startedAt === undefined ? {} : { startedAt: job.startedAt }),
+    ...(job.finishedAt === undefined ? {} : { finishedAt: job.finishedAt }),
+    ...(job.failure === undefined ? {} : {
+      lastFailure: {
+        message: job.failure.message,
+        failedAt: job.failure.failedAt,
+      },
+    }),
+  };
+}
+
+function repositoryIndexKindFromBackgroundType(type: BackgroundJobType): RepositoryIndexJobKind {
+  if (type === "repository.index.proxy-refresh") return "proxy-refresh";
+  if (type === "repository.index.group-refresh") return "group-refresh";
+  return "hosted-rebuild";
 }
 
 function repositoryIndexJobKind(repository: Repository): RepositoryIndexJobKind {
