@@ -1,5 +1,5 @@
 import type { Repository } from "@axis-repository/core";
-import type { RepositoryClientHelpers } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import type { RepositoryClientHelperActionDescriptor, RepositoryClientHelpers } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { pypiPluginManifest } from "../manifest";
 
 function jsonResponse(value: unknown): Response {
@@ -26,45 +26,49 @@ function uploadUrl(origin: string, repository: Repository): string {
   return `${origin.replace(/\/+$/g, "")}/repositories/${repository.name}/legacy/`;
 }
 
-export function createPypiClientHelpers(): RepositoryClientHelpers {
+export function createPypiClientHelpers(input: { includeUpload?: boolean } = {}): RepositoryClientHelpers {
+  const includeUpload = input.includeUpload ?? true;
+  const actions: RepositoryClientHelperActionDescriptor[] = [
+    {
+      ...pypiClientHelperAction("simple-url"),
+      handle: async ({ repository, origin }) => {
+        const url = simpleUrl(origin, repository);
+        return jsonResponse({
+          repository: repository.name,
+          ecosystem: "pypi",
+          simpleUrl: url,
+          pipIndexUrl: url,
+        });
+      },
+    },
+  ];
+  if (includeUpload) {
+    actions.push({
+      ...pypiClientHelperAction("twine-config"),
+      handle: async ({ repository, origin }) => {
+        const url = uploadUrl(origin, repository);
+        return jsonResponse({
+          repository: repository.name,
+          ecosystem: "pypi",
+          uploadUrl: url,
+          // twine reads ~/.pypirc; Axis publish tokens use this fixed
+          // username and put the token in as the password.
+          pypirc: [
+            "[distutils]",
+            `index-servers = ${repository.name}`,
+            "",
+            `[${repository.name}]`,
+            `repository = ${url}`,
+            "username = axis",
+            "password = <PUBLISH_TOKEN>",
+            "",
+          ].join("\n"),
+        });
+      },
+    });
+  }
   return {
     namespace: pypiPluginManifest.clientHelpers.namespace,
-    actions: [
-      {
-        ...pypiClientHelperAction("simple-url"),
-        handle: async ({ repository, origin }) => {
-          const url = simpleUrl(origin, repository);
-          return jsonResponse({
-            repository: repository.name,
-            ecosystem: "pypi",
-            simpleUrl: url,
-            pipIndexUrl: url,
-          });
-        },
-      },
-      {
-        ...pypiClientHelperAction("twine-config"),
-        handle: async ({ repository, origin }) => {
-          const url = uploadUrl(origin, repository);
-          return jsonResponse({
-            repository: repository.name,
-            ecosystem: "pypi",
-            uploadUrl: url,
-            // twine reads ~/.pypirc; Axis publish tokens use this fixed
-            // username and put the token in as the password.
-            pypirc: [
-              "[distutils]",
-              `index-servers = ${repository.name}`,
-              "",
-              `[${repository.name}]`,
-              `repository = ${url}`,
-              "username = axis",
-              "password = <PUBLISH_TOKEN>",
-              "",
-            ].join("\n"),
-          });
-        },
-      },
-    ],
+    actions,
   };
 }

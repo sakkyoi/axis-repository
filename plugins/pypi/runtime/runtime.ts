@@ -95,6 +95,7 @@ export function createPypiProxyPlugin(input: { fetch?: FetchLike } = {}): ProxyR
     capabilities: ["pypi", "proxy"],
     canServeRepositoryPath: createPrefixServingPredicate([SIMPLE_PREFIX]),
     resolveRepositoryPath: ({ relativePath, accept }) => resolveSimplePath(relativePath, accept),
+    clientHelpers: createPypiClientHelpers({ includeUpload: false }),
     serveRepositoryPath: async ({ repository, request, relativePath }) => {
       const upstream = parsePypiProxyRepositoryConfig(repository.config);
       const upstreamUrl = pypiProxyUpstreamUrl(upstream.upstreamUrl, relativePath);

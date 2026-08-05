@@ -188,4 +188,28 @@ describe("PyPI plugin lifecycle", () => {
     expect(response?.headers.get("content-type")).toBe("text/html; charset=utf-8");
     await expect(response?.text()).resolves.toBe("<html>demo</html>");
   });
+
+  it("serves a Simple API URL client helper for proxy repositories", async () => {
+    const plugin = createPypiProxyPlugin({
+      fetch: async () => new Response(null),
+    });
+
+    expect(plugin.clientHelpers?.actions.map((action) => action.name)).toEqual(["simple-url"]);
+    const response = await dispatchRepositoryClientHelper(plugin.clientHelpers!, {
+      repository: {
+        ...repositoryFixture(),
+        kind: "proxy",
+        config: { pypi: { upstreamUrl: "https://pypi.example/" } },
+      },
+      action: "simple-url",
+      origin: "https://axis.example",
+    });
+
+    await expect(response?.json()).resolves.toEqual({
+      repository: "python-internal",
+      ecosystem: "pypi",
+      simpleUrl: "https://axis.example/repositories/python-internal/simple/",
+      pipIndexUrl: "https://axis.example/repositories/python-internal/simple/",
+    });
+  });
 });

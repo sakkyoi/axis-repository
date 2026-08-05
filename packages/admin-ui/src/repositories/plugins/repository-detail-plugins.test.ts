@@ -124,6 +124,21 @@ describe("repository detail plugins", () => {
     expect(repositorySummarySectionsFor(repository({ kind: "proxy" })).map((section) => section.id)).toEqual([]);
   });
 
+  it("shows PyPI install hints for proxy repositories", () => {
+    expect(repositoryWorkspaceSectionsFor(repository({ ecosystem: "pypi", kind: "proxy" })).map((section) => section.id)).toEqual([
+      "repository-artifacts",
+      "repository-browser",
+      "install-hints",
+    ]);
+    expect(repositorySummarySectionsFor(repository({ ecosystem: "pypi", kind: "proxy" })).map((section) => section.id)).toEqual([
+      "install-hints",
+    ]);
+    expect(repositorySettingsSectionsFor(repository({ ecosystem: "pypi", kind: "proxy" })).map((section) => section.id)).toEqual([
+      "proxy-settings",
+      "advanced-json",
+    ]);
+  });
+
   it("builds PyPI client setup text from a repository", () => {
     const repository = {
       id: "repo_1",
