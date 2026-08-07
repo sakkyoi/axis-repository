@@ -13,6 +13,31 @@
       "bucket_name": "axis-repository"
     }
   ],
+  "d1_databases": [
+    {
+      // Wrangler can provision this automatically on deploy when database_id is
+      // omitted. Once provisioned locally, Wrangler writes the id back here.
+      "binding": "AXIS_SHARED_STATE",
+      "database_name": "axis-repository-state",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "AXIS_BACKGROUND_JOBS",
+        "queue": "axis-background-jobs"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "axis-background-jobs",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 3
+      }
+    ]
+  },
   // Values a deployment supplies that are not credentials.
   //
   // Deploy to Cloudflare asks for these the same way it asks for the secrets in

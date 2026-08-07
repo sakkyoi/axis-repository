@@ -16,6 +16,12 @@
       "AXIS_OBJECTS": {
         "description": "Where published artifacts and the generated indexes are stored. This is the repository: losing the bucket loses everything served from it."
       },
+      "AXIS_SHARED_STATE": {
+        "description": "D1 database shared by the admin Durable Object and Queue consumers. Required for queue-based background jobs because job state, repository metadata, sessions, and artifact indexes must be readable without calling back into the admin Durable Object."
+      },
+      "AXIS_BACKGROUND_JOBS": {
+        "description": "Cloudflare Queue used to wake background job consumers. Bind it only with AXIS_SHARED_STATE; messages are wake-ups and all durable job state lives in D1."
+      },
       "AXIS_ADMIN_USERNAME": {
         "description": "Username for the first admin account, created on first run. Nothing else creates an account, so a deployment without this has no way in. Once that account exists this is no longer read, and can be dropped from `vars` at your convenience — renaming it here does not rename the account."
       },

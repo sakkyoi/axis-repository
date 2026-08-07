@@ -367,9 +367,29 @@ export class MemoryStateStore implements StateStore {
     },
     listRunnable: async (input: { limit: number }): Promise<BackgroundJobRecord[]> => {
       return snapshotAll([...this.backgroundJobById.values()])
-        .filter((job) => job.status === "pending")
+        .filter((job) => isRunnableBackgroundJob(job, new Date().toISOString()))
         .sort(compareRunnableBackgroundJobs)
         .slice(0, input.limit);
+    },
+    acquireRunnable: async (input: {
+      leaseId: string;
+      leaseExpiresAt: string;
+      now: string;
+    }): Promise<BackgroundJobRecord | null> => {
+      const candidate = snapshotAll([...this.backgroundJobById.values()])
+        .filter((job) => isRunnableBackgroundJob(job, input.now))
+        .sort(compareRunnableBackgroundJobs)[0];
+      if (!candidate) return null;
+      const leased: BackgroundJobRecord = {
+        ...candidate,
+        status: "running",
+        startedAt: candidate.startedAt ?? input.now,
+        lastHeartbeatAt: input.now,
+        leaseId: input.leaseId,
+        leaseExpiresAt: input.leaseExpiresAt,
+      };
+      this.backgroundJobById.set(leased.id, snapshot(leased));
+      return snapshot(leased);
     },
     save: async (record: BackgroundJobRecord): Promise<void> => {
       this.backgroundJobById.set(record.id, snapshot(record));
@@ -433,6 +453,10 @@ function compareRunnableBackgroundJobs(left: BackgroundJobRecord, right: Backgro
   return scheduledAtOrder === 0 ? left.id.localeCompare(right.id) : scheduledAtOrder;
 }
 
+function isRunnableBackgroundJob(job: BackgroundJobRecord, now: string): boolean {
+  return job.status === "pending" || (job.status === "running" && job.leaseExpiresAt !== undefined && job.leaseExpiresAt < now);
+}
+
 function compareRepositoryActivities(left: RepositoryActivityRecord, right: RepositoryActivityRecord): number {
   const createdAtOrder = right.createdAt.localeCompare(left.createdAt);
   return createdAtOrder === 0 ? left.id.localeCompare(right.id) : createdAtOrder;
@@ -452,8 +476,10 @@ function repositoryArtifactFamilies(artifacts: RepositoryArtifactRecord[]): Repo
   return [...byFamily.entries()]
     .map(([key, members]) => {
       const ordered = [...members].sort(compareRepositoryArtifacts);
-      const latestArtifact = ordered[0]!;
-      const versions = new Set(ordered.map((artifact) => artifact.version ?? ""));
+      const latestArtifact = ordered.find((artifact) => artifact.version !== undefined) ?? ordered[0]!;
+      const latestMember = ordered[0]!;
+      const versions = new Set(ordered.flatMap((artifact) =>
+        artifact.version === undefined ? [] : [artifact.version]));
       return {
         key,
         repositoryName: latestArtifact.repositoryName,
@@ -462,7 +488,7 @@ function repositoryArtifactFamilies(artifacts: RepositoryArtifactRecord[]): Repo
         ...(latestArtifact.version === undefined ? {} : { latestVersion: latestArtifact.version }),
         latestSummary: latestArtifact.summary,
         latestPublishedAt: latestArtifact.publishedAt,
-        updatedAt: latestArtifact.updatedAt,
+        updatedAt: latestMember.updatedAt,
         artifactCount: ordered.length,
         versionCount: versions.size,
         latestArtifact,

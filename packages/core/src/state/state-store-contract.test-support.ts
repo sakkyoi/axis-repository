@@ -520,6 +520,49 @@ export function describeStateStoreContract(
         await expect(state.repositoryArtifacts.listByRepositoryFamily("debian-internal", "apt:alpha"))
           .resolves.toMatchObject([{ id: "artifact_alpha_new" }, { id: "artifact_alpha_old" }]);
       });
+
+      it("uses versioned artifacts to summarize families when newer markers are unversioned", async () => {
+        const state = await store();
+        await state.repositoryArtifacts.upsert(repositoryArtifact({
+          id: "artifact_file",
+          repositoryName: "python-proxy",
+          ecosystem: "pypi",
+          family: "pypi:proxy-project:demo",
+          identity: "pypi:proxy-file:demo:demo-1.0.tar.gz",
+          name: "demo",
+          version: "1.0",
+          summary: "demo 1.0",
+          primaryObjectKey: "https://files.example/demo-1.0.tar.gz",
+          objectKeys: ["https://files.example/demo-1.0.tar.gz"],
+          updatedAt: "2026-08-05T00:01:00.000Z",
+        }));
+        await state.repositoryArtifacts.upsert(repositoryArtifact({
+          id: "artifact_marker",
+          repositoryName: "python-proxy",
+          ecosystem: "pypi",
+          family: "pypi:proxy-project:demo",
+          identity: "pypi:proxy-project:demo",
+          name: "demo",
+          summary: "demo",
+          objectKeys: [],
+          updatedAt: "2026-08-05T00:02:00.000Z",
+        }));
+
+        await expect(state.repositoryArtifacts.listFamiliesByRepositoryPage("python-proxy", {
+          limit: 10,
+          offset: 0,
+        })).resolves.toMatchObject({
+          records: [{
+            key: "pypi:proxy-project:demo",
+            latestVersion: "1.0",
+            latestArtifact: { id: "artifact_file" },
+            versionCount: 1,
+            artifactCount: 2,
+          }],
+          totalFamilies: 1,
+          totalArtifacts: 2,
+        });
+      });
     });
 
     describe("background jobs", () => {
@@ -569,6 +612,71 @@ export function describeStateStoreContract(
           finishedAt: "2026-08-05T00:03:00.000Z",
         });
         await expect(state.backgroundJobs.listRunnable({ limit: 10 })).resolves.toEqual([]);
+      });
+
+      it("atomically leases one runnable job", async () => {
+        const state = await store();
+        await state.backgroundJobs.save({
+          id: "job_1",
+          type: "publish.finalize",
+          status: "pending",
+          subject: { type: "publish-session", id: "pub_1", repositoryName: "debian-internal" },
+          repositoryName: "debian-internal",
+          priority: 0,
+          attempts: 0,
+          requestedAt: "2026-08-05T00:00:00.000Z",
+          scheduledAt: "2026-08-05T00:00:00.000Z",
+        });
+
+        await expect(state.backgroundJobs.acquireRunnable({
+          leaseId: "lease_1",
+          leaseExpiresAt: "2026-08-05T00:05:00.000Z",
+          now: "2026-08-05T00:00:00.000Z",
+        })).resolves.toMatchObject({
+          id: "job_1",
+          status: "running",
+          leaseId: "lease_1",
+          leaseExpiresAt: "2026-08-05T00:05:00.000Z",
+          startedAt: "2026-08-05T00:00:00.000Z",
+          lastHeartbeatAt: "2026-08-05T00:00:00.000Z",
+        });
+        await expect(state.backgroundJobs.acquireRunnable({
+          leaseId: "lease_2",
+          leaseExpiresAt: "2026-08-05T00:06:00.000Z",
+          now: "2026-08-05T00:01:00.000Z",
+        })).resolves.toBeNull();
+      });
+
+      it("reclaims a runnable job whose lease expired", async () => {
+        const state = await store();
+        await state.backgroundJobs.save({
+          id: "job_1",
+          type: "publish.finalize",
+          status: "running",
+          subject: { type: "publish-session", id: "pub_1", repositoryName: "debian-internal" },
+          repositoryName: "debian-internal",
+          priority: 0,
+          attempts: 1,
+          requestedAt: "2026-08-05T00:00:00.000Z",
+          scheduledAt: "2026-08-05T00:00:00.000Z",
+          startedAt: "2026-08-05T00:00:00.000Z",
+          lastHeartbeatAt: "2026-08-05T00:00:00.000Z",
+          leaseId: "lease_old",
+          leaseExpiresAt: "2026-08-05T00:01:00.000Z",
+        });
+
+        await expect(state.backgroundJobs.acquireRunnable({
+          leaseId: "lease_new",
+          leaseExpiresAt: "2026-08-05T00:10:00.000Z",
+          now: "2026-08-05T00:02:00.000Z",
+        })).resolves.toMatchObject({
+          id: "job_1",
+          status: "running",
+          leaseId: "lease_new",
+          leaseExpiresAt: "2026-08-05T00:10:00.000Z",
+          startedAt: "2026-08-05T00:00:00.000Z",
+          lastHeartbeatAt: "2026-08-05T00:02:00.000Z",
+        });
       });
     });
 

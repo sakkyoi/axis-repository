@@ -279,6 +279,8 @@ export interface BackgroundJobRecord {
   startedAt?: string;
   finishedAt?: string;
   lastHeartbeatAt?: string;
+  leaseId?: string;
+  leaseExpiresAt?: string;
   progress?: BackgroundJobProgress;
   result?: Record<string, unknown>;
   failure?: BackgroundJobFailure;

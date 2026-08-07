@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { AxisAdminDO, type AxisEnv } from "./axis-admin-do";
+import { AxisAdminDO, axisAdminAlarmPlanAfterBackgroundJobs, createDurableObjectDependencies, type AxisEnv } from "./axis-admin-do";
 import { debArchive } from "@axis-repository/plugin-apt/test-support";
 import { FakeDurableObjectStorage, fakeDurableObjectState } from "./durable-object.test-support";
 import { digestHex } from "../storage/digest";
+import { D1RepositoryArtifactStore } from "../storage/d1-state";
 
 class FakeR2Bucket {
   readonly objects = new Map<string, {
@@ -214,6 +215,7 @@ function basicAuth(secret: string, username = "axis"): string {
 
 type TestAxisEnv = {
   AXIS_ADMIN?: DurableObjectNamespace | undefined;
+  AXIS_SHARED_STATE?: D1Database | undefined;
   AXIS_OBJECTS?: R2Bucket | undefined;
   AXIS_ADMIN_USERNAME?: string | undefined;
   AXIS_ADMIN_PASSWORD_HASH?: string | undefined;
@@ -261,6 +263,24 @@ async function adminAuthorizationHeader(object: AxisAdminDO): Promise<string> {
 }
 
 describe("AxisAdminDO", () => {
+  it("uses the shared D1 index stores when AXIS_SHARED_STATE is bound", () => {
+    const dependencies = createDurableObjectDependencies(new FakeDurableObjectStorage(), {
+      AXIS_SHARED_STATE: {} as D1Database,
+      AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
+      AXIS_ADMIN_USERNAME: "admin",
+      AXIS_ADMIN_PASSWORD: "admin-password",
+      AXIS_SESSION_SECRET: "test-session-secret",
+      TOKEN_HASH_PEPPER: "pepper",
+      SIGNING_KEY_ENCRYPTION_SECRET: "local-signing-secret",
+      R2_ACCOUNT_ID: "account123",
+      R2_BUCKET_NAME: "axis-repository",
+      R2_ACCESS_KEY_ID: "access",
+      R2_SECRET_ACCESS_KEY: "secret",
+    });
+
+    expect(dependencies.repositoryArtifactStore).toBeInstanceOf(D1RepositoryArtifactStore);
+  });
+
   it("rejects an AXIS_ARTIFACT_ORIGIN that is not a bare origin", () => {
     for (const value of [
       "cdn.axis.example",
@@ -1106,6 +1126,25 @@ describe("AxisAdminDO", () => {
 });
 
 describe("AxisAdminDO maintenance alarm", () => {
+  it("defers repository maintenance after processing background job work", () => {
+    const now = new Date("2026-08-05T00:00:00.000Z");
+
+    expect(axisAdminAlarmPlanAfterBackgroundJobs({
+      jobs: { processed: 1, failed: 0, remaining: 0 },
+      now,
+    })).toEqual({
+      runMaintenance: false,
+      nextRunAt: new Date("2026-08-05T00:01:00.000Z"),
+    });
+    expect(axisAdminAlarmPlanAfterBackgroundJobs({
+      jobs: { processed: 1, failed: 0, remaining: 1 },
+      now,
+    })).toEqual({
+      runMaintenance: false,
+      nextRunAt: new Date("2026-08-05T00:00:01.000Z"),
+    });
+  });
+
   it("arms an alarm on construction, so expiring metadata is renewed without traffic", async () => {
     const storage = new FakeDurableObjectStorage();
     createObject({}, storage);

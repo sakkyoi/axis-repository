@@ -12,6 +12,7 @@ import { WebCryptoRandomId, Sha256SecretHasher, Pbkdf2PasswordHasher } from "../
 import { HmacAdminAccessTokenCodec } from "../auth/admin-auth";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import { DurableStateStore, type DurableStorage } from "../storage/durable-state";
+import { createD1StateStore } from "../storage/d1-state";
 import type { AppDependencies } from "./dev-dependencies";
 import { SameOriginUploadBroker } from "../uploads/same-origin-upload-broker";
 import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
@@ -21,11 +22,12 @@ import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, Plug
 import { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
-import { BackgroundJobDispatcher } from "./background-job-dispatcher";
+import { BackgroundJobDispatcher, type DrainBackgroundJobsResult } from "./background-job-dispatcher";
 import { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import { RepositoryWriteLock } from "./repository-write-lock";
+import { assertBackgroundJobQueueConfiguration, enqueueBackgroundJobWakeup } from "./background-job-queue";
 import {
   MAINTENANCE_MAX_INTERVAL_MS,
   MAINTENANCE_MIN_INTERVAL_MS,
@@ -34,6 +36,8 @@ import {
 
 export interface AxisEnv {
   AXIS_ADMIN?: DurableObjectNamespace;
+  AXIS_SHARED_STATE?: D1Database;
+  AXIS_BACKGROUND_JOBS?: Queue;
   AXIS_OBJECTS?: R2Bucket;
   AXIS_ADMIN_USERNAME?: string;
   AXIS_ADMIN_PASSWORD_HASH?: string;
@@ -50,6 +54,27 @@ export interface AxisEnv {
   UPLOAD_BACKEND?: string;
   ADMIN_UI_API_BASE_URL?: string;
   AXIS_ARTIFACT_ORIGIN?: string;
+}
+
+export interface AxisAdminAlarmPlan {
+  runMaintenance: boolean;
+  nextRunAt: Date;
+}
+
+export function axisAdminAlarmPlanAfterBackgroundJobs(input: {
+  jobs: DrainBackgroundJobsResult;
+  now: Date;
+}): AxisAdminAlarmPlan {
+  if (input.jobs.processed === 0) {
+    return {
+      runMaintenance: true,
+      nextRunAt: new Date(input.now.getTime() + MAINTENANCE_MAX_INTERVAL_MS),
+    };
+  }
+  return {
+    runMaintenance: false,
+    nextRunAt: new Date(input.now.getTime() + (input.jobs.remaining > 0 ? 1000 : MAINTENANCE_MIN_INTERVAL_MS)),
+  };
 }
 
 type UploadBackend = "r2" | "local-r2" | "memory";
@@ -145,6 +170,7 @@ export function createDurableObjectDependencies(
     scheduleBackgroundJobs?: () => Promise<void>;
   } = {},
 ): AppDependencies {
+  assertBackgroundJobQueueConfiguration(env);
   if (!env.TOKEN_HASH_PEPPER) {
     throw new Error("TOKEN_HASH_PEPPER is required for AxisAdminDO");
   }
@@ -152,7 +178,9 @@ export function createDurableObjectDependencies(
     throw new Error("SIGNING_KEY_ENCRYPTION_SECRET is required for AxisAdminDO");
   }
 
-  const state = new DurableStateStore(storage);
+  const state = env.AXIS_SHARED_STATE === undefined
+    ? new DurableStateStore(storage)
+    : createD1StateStore(env.AXIS_SHARED_STATE);
   const clock: Clock = { now: () => new Date() };
   const randomId = new WebCryptoRandomId();
   const hasher = new Sha256SecretHasher(env.TOKEN_HASH_PEPPER);
@@ -328,7 +356,9 @@ export class AxisAdminDO {
       state.storage as unknown as DurableStorage,
       env,
       {
-        scheduleBackgroundJobs: () => state.storage.setAlarm(Date.now()),
+        scheduleBackgroundJobs: env.AXIS_BACKGROUND_JOBS === undefined
+          ? () => state.storage.setAlarm(Date.now())
+          : () => enqueueBackgroundJobWakeup(env),
       },
     );
     this.app = createApp(this.dependencies);
@@ -349,9 +379,20 @@ export class AxisAdminDO {
 
   async alarm(): Promise<void> {
     let nextRunAt = new Date(Date.now() + MAINTENANCE_MAX_INTERVAL_MS);
+    let remainingBackgroundJobs = 0;
     try {
-      await this.dependencies.stagingUploadGcJobService.request();
-      const jobs = await this.dependencies.backgroundJobDispatcher.drain({ limit: 3 });
+      await this.dependencies.stagingUploadGcJobService.request({ deferIfRepositoryIndexActive: true });
+      if (this.env.AXIS_BACKGROUND_JOBS === undefined) {
+        const jobs = await this.dependencies.backgroundJobDispatcher.drain({ limit: 1 });
+        remainingBackgroundJobs = jobs.remaining;
+        const backgroundJobPlan = axisAdminAlarmPlanAfterBackgroundJobs({ jobs, now: new Date() });
+        if (!backgroundJobPlan.runMaintenance) {
+          await this.state.storage.setAlarm(backgroundJobPlan.nextRunAt);
+          return;
+        }
+      } else {
+        await this.dependencies.scheduleBackgroundJobs?.();
+      }
       const run = await runRepositoryMaintenance({
         repositories: await this.dependencies.repositoryService.list(),
         plugins: this.dependencies.repositoryRuntimePlugins,
@@ -363,7 +404,7 @@ export class AxisAdminDO {
       for (const failure of run.failures) {
         console.error(`Repository maintenance failed for ${failure.repositoryName}: ${failure.message}`);
       }
-      if (jobs.remaining > 0) {
+      if (remainingBackgroundJobs > 0) {
         nextRunAt = new Date(Date.now() + 1000);
       }
     } catch (error) {

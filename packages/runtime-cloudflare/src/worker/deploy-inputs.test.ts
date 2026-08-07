@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { D1_SHARED_INDEX_SCHEMA } from "../storage/d1-state";
 import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
 
 /**
@@ -36,6 +37,22 @@ function wranglerVars(): Record<string, string> {
   );
 }
 
+function wranglerConfig(): {
+  d1_databases?: Array<{ binding?: string; database_name?: string; database_id?: string }>;
+  queues?: {
+    producers?: Array<{ binding?: string; queue?: string }>;
+    consumers?: Array<{ queue?: string }>;
+  };
+} {
+  return parseJsonc(readFileSync(`${repositoryRoot}wrangler.jsonc`, "utf8")) as {
+    d1_databases?: Array<{ binding?: string; database_name?: string; database_id?: string }>;
+    queues?: {
+      producers?: Array<{ binding?: string; queue?: string }>;
+      consumers?: Array<{ queue?: string }>;
+    };
+  };
+}
+
 /** Everything a deployment is prompted for, however it is shown. */
 function promptedNames(): string[] {
   return [...exampleSecretNames(), ...Object.keys(wranglerVars())];
@@ -48,6 +65,40 @@ function describedBindingNames(): string[] {
   return Object.entries(manifest.cloudflare?.bindings ?? {})
     .filter(([, binding]) => (binding.description ?? "").trim() !== "")
     .map(([name]) => name);
+}
+
+function parseJsonc(text: string): unknown {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      out += char;
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === "\"") inString = false;
+      continue;
+    }
+    if (char === "\"") {
+      inString = true;
+      out += char;
+      continue;
+    }
+    if (char === "/" && text[index + 1] === "/") {
+      while (index < text.length && text[index] !== "\n") index += 1;
+      out += "\n";
+      continue;
+    }
+    if (char === "/" && text[index + 1] === "*") {
+      index += 2;
+      while (index < text.length && !(text[index] === "*" && text[index + 1] === "/")) index += 1;
+      index += 1;
+      continue;
+    }
+    out += char;
+  }
+  return JSON.parse(out.replace(/,(\s*[}\]])/g, "$1"));
 }
 
 describe("what a deploy is asked to supply", () => {
@@ -176,4 +227,54 @@ describe("what a deploy is asked to supply", () => {
 
     expect(undescribed).toEqual([]);
   });
+
+  it("describes the resource bindings needed for queue-based jobs", () => {
+    expect(describedBindingNames()).toEqual(
+      expect.arrayContaining(["AXIS_SHARED_STATE", "AXIS_BACKGROUND_JOBS"]),
+    );
+    expect(promptedNames()).not.toEqual(
+      expect.arrayContaining(["AXIS_SHARED_STATE", "AXIS_BACKGROUND_JOBS"]),
+    );
+  });
+
+  it("declares queue-based job resources without placeholder ids", () => {
+    const config = wranglerConfig();
+
+    expect(config.d1_databases).toEqual([
+      {
+        binding: "AXIS_SHARED_STATE",
+        database_name: "axis-repository-state",
+        migrations_dir: "migrations",
+      },
+    ]);
+    expect(config.queues?.producers).toEqual([
+      {
+        binding: "AXIS_BACKGROUND_JOBS",
+        queue: "axis-background-jobs",
+      },
+    ]);
+    expect(config.queues?.consumers).toEqual([
+      {
+        queue: "axis-background-jobs",
+        max_batch_size: 1,
+        max_batch_timeout: 1,
+        max_retries: 3,
+      },
+    ]);
+    expect(config.d1_databases?.[0]).not.toHaveProperty("database_id", "");
+  });
+
+  it("keeps the D1 shared state migration aligned with the runtime schema", () => {
+    const migration = readFileSync(`${repositoryRoot}migrations/0001_axis_shared_state.sql`, "utf8");
+
+    expect(normalizeSql(migration)).toBe(normalizeSql(D1_SHARED_INDEX_SCHEMA));
+  });
 });
+
+function normalizeSql(sql: string): string {
+  return sql
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("--"))
+    .join("\n");
+}

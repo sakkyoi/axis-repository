@@ -1,4 +1,7 @@
 import { AxisAdminDO, type AxisEnv } from "./worker/axis-admin-do";
+import { createDurableObjectDependencies } from "./worker/axis-admin-do";
+import { drainBackgroundJobQueue, type BackgroundJobQueueMessage } from "./worker/background-job-queue";
+import type { DurableStorage } from "./storage/durable-state";
 
 export { AxisAdminDO };
 
@@ -31,5 +34,37 @@ export default {
     }
     const id = env.AXIS_ADMIN.idFromName("global");
     return env.AXIS_ADMIN.get(id).fetch(request);
+  },
+  async queue(batch: MessageBatch<BackgroundJobQueueMessage>, env: AxisEnv): Promise<void> {
+    if (!env.AXIS_SHARED_STATE || !env.AXIS_BACKGROUND_JOBS) {
+      throw new Error("AXIS_SHARED_STATE and AXIS_BACKGROUND_JOBS are required for background job queue consumers");
+    }
+    const dependencies = createDurableObjectDependencies(unavailableDurableStorage, env, {
+      scheduleBackgroundJobs: () => drainBackgroundJobQueue({
+        dependencies,
+        queue: env.AXIS_BACKGROUND_JOBS!,
+      }),
+    });
+    for (const _message of batch.messages) {
+      await drainBackgroundJobQueue({
+        dependencies,
+        queue: env.AXIS_BACKGROUND_JOBS,
+      });
+    }
+  },
+};
+
+const unavailableDurableStorage: DurableStorage = {
+  get: async () => {
+    throw new Error("Durable Object storage is unavailable in the background job queue consumer");
+  },
+  put: async () => {
+    throw new Error("Durable Object storage is unavailable in the background job queue consumer");
+  },
+  delete: async () => {
+    throw new Error("Durable Object storage is unavailable in the background job queue consumer");
+  },
+  list: async () => {
+    throw new Error("Durable Object storage is unavailable in the background job queue consumer");
   },
 };

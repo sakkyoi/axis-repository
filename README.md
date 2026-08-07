@@ -63,8 +63,9 @@ yourself.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sakkyoi/axis-repository)
 
-The button creates the Worker, Durable Object, and R2 bucket, then asks for the
-values the deployment cannot safely invent.
+The button creates the Worker, Durable Object, R2 bucket, D1 database, and
+background job Queue, then asks for the values the deployment cannot safely
+invent.
 
 Prepare these before deploying:
 
@@ -125,6 +126,20 @@ development-only values. Non-secret values such as `AXIS_ADMIN_USERNAME`,
 `R2_BUCKET_NAME` must match the bucket bound to `AXIS_OBJECTS`. The R2 access
 key should have object read and write access to that bucket; it is used only to
 sign direct upload and download URLs.
+
+Queue-based background jobs require a D1 database bound as `AXIS_SHARED_STATE`
+and a Queue bound as `AXIS_BACKGROUND_JOBS`. `wrangler.jsonc` declares both
+bindings without resource IDs so Wrangler can provision them on first deploy and
+write the IDs back to the config. For controlled deployments, apply the shared
+state migration explicitly:
+
+```bash
+pnpm wrangler d1 migrations apply axis-repository-state --remote
+```
+
+The Worker also initializes the D1 schema on first use with idempotent
+`CREATE TABLE IF NOT EXISTS` statements, so GitHub/Dashboard deploys that create
+the database but do not run migrations can still start safely.
 
 After the first successful sign-in, remove the bootstrap password from the
 deployment. The seeded admin account no longer reads it, and leaving it in the

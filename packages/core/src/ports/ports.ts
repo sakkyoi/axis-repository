@@ -249,6 +249,7 @@ export interface BackgroundJobStore {
   get(id: string): Promise<BackgroundJobRecord | null>;
   list(query?: BackgroundJobListQuery): Promise<{ jobs: BackgroundJobRecord[]; total: number }>;
   listRunnable(input: { limit: number }): Promise<BackgroundJobRecord[]>;
+  acquireRunnable(input: { leaseId: string; leaseExpiresAt: string; now: string }): Promise<BackgroundJobRecord | null>;
   save(record: BackgroundJobRecord): Promise<void>;
   cancel(id: string, requestedAt: string): Promise<BackgroundJobRecord | null>;
   deleteBySubject(subject: { type: string; id: string }): Promise<number>;
