@@ -20,6 +20,10 @@ import { R2PresignedDownloadSigner } from "../storage/object-download-url";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
 import { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
+import {
+  RepositoryMaintenanceJobService,
+  repositoryMaintenanceNextRunAt,
+} from "./repository-maintenance-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
 import { BackgroundJobDispatcher, type DrainBackgroundJobsResult } from "./background-job-dispatcher";
@@ -31,7 +35,6 @@ import { assertBackgroundJobQueueConfiguration, enqueueBackgroundJobWakeup } fro
 import {
   MAINTENANCE_MAX_INTERVAL_MS,
   MAINTENANCE_MIN_INTERVAL_MS,
-  runRepositoryMaintenance,
 } from "./repository-maintenance";
 
 export interface AxisEnv {
@@ -257,6 +260,14 @@ export function createDurableObjectDependencies(
     repositoryArtifactIndexService,
     clock,
   });
+  const repositoryMaintenanceJobService = new RepositoryMaintenanceJobService({
+    state,
+    repositoryService,
+    plugins: repositoryRuntimePlugins,
+    repositoryObjectStore: objectStore,
+    writeLock,
+    clock,
+  });
   const pluginPublishSessionService = new PluginPublishSessionService({
     publishSessionService,
     repositoryService,
@@ -282,6 +293,7 @@ export function createDurableObjectDependencies(
     state,
     clock,
     repositoryIndexJobService,
+    repositoryMaintenanceJobService,
     publishFinalizeJobService,
     stagingUploadGcJobService,
   });
@@ -296,6 +308,10 @@ export function createDurableObjectDependencies(
       {
         supports: (job) => job.type.startsWith("repository.index."),
         run: (job) => repositoryIndexJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type === "repository.maintenance",
+        run: (job) => repositoryMaintenanceJobService.runBackgroundJob(job),
       },
       {
         supports: (job) => job.type === "storage.staging-upload-gc",
@@ -329,6 +345,7 @@ export function createDurableObjectDependencies(
     backgroundJobService,
     backgroundJobDispatcher,
     stagingUploadGcJobService,
+    repositoryMaintenanceJobService,
     publishFinalizeJobService,
     repositoryActivityService,
     repositoryArtifactStore: state.repositoryArtifacts,
@@ -378,10 +395,12 @@ export class AxisAdminDO {
   }
 
   async alarm(): Promise<void> {
-    let nextRunAt = new Date(Date.now() + MAINTENANCE_MAX_INTERVAL_MS);
+    const now = new Date();
+    let nextRunAt = new Date(now.getTime() + MAINTENANCE_MAX_INTERVAL_MS);
     let remainingBackgroundJobs = 0;
     try {
       await this.dependencies.stagingUploadGcJobService.request({ deferIfRepositoryIndexActive: true });
+      const maintenanceJob = await this.dependencies.repositoryMaintenanceJobService.request();
       if (this.env.AXIS_BACKGROUND_JOBS === undefined) {
         const jobs = await this.dependencies.backgroundJobDispatcher.drain({ limit: 1 });
         remainingBackgroundJobs = jobs.remaining;
@@ -393,17 +412,10 @@ export class AxisAdminDO {
       } else {
         await this.dependencies.scheduleBackgroundJobs?.();
       }
-      const run = await runRepositoryMaintenance({
-        repositories: await this.dependencies.repositoryService.list(),
-        plugins: this.dependencies.repositoryRuntimePlugins,
-        repositoryObjectStore: this.dependencies.repositoryObjectStore,
-        writeLock: this.dependencies.repositoryWriteLock,
-        clock: { now: () => new Date() },
-      });
-      nextRunAt = run.nextRunAt;
-      for (const failure of run.failures) {
-        console.error(`Repository maintenance failed for ${failure.repositoryName}: ${failure.message}`);
-      }
+      const maintenanceFallback = maintenanceJob.status === "succeeded"
+        ? nextRunAt
+        : new Date(now.getTime() + MAINTENANCE_MIN_INTERVAL_MS);
+      nextRunAt = repositoryMaintenanceNextRunAt(maintenanceJob, maintenanceFallback);
       if (remainingBackgroundJobs > 0) {
         nextRunAt = new Date(Date.now() + 1000);
       }

@@ -7,12 +7,14 @@ import {
 } from "@axis-repository/core";
 import type { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import type { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
+import type { RepositoryMaintenanceJobService } from "./repository-maintenance-job-service";
 import type { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 
 export interface BackgroundJobServiceOptions {
   state: StateStore;
   clock: Clock;
   repositoryIndexJobService?: Pick<RepositoryIndexBackgroundJobService, "request">;
+  repositoryMaintenanceJobService?: Pick<RepositoryMaintenanceJobService, "request">;
   publishFinalizeJobService?: Pick<PublishFinalizeJobService, "requestAsAdmin">;
   stagingUploadGcJobService?: Pick<StagingUploadGcJobService, "request">;
 }
@@ -61,10 +63,16 @@ export class BackgroundJobService {
       await this.requestRepositoryIndex({ repositoryName: job.subject.id });
       return this.options.state.backgroundJobs.get(id);
     }
+    if (job.type === "repository.maintenance") {
+      const runner = this.options.repositoryMaintenanceJobService;
+      if (!runner) throw missingRunnerError(job);
+      await runner.request({ force: true });
+      return this.options.state.backgroundJobs.get(id);
+    }
     if (job.type === "storage.staging-upload-gc") {
       const runner = this.options.stagingUploadGcJobService;
       if (!runner) throw missingRunnerError(job);
-      await runner.request();
+      await runner.request({ force: true });
       return this.options.state.backgroundJobs.get(id);
     }
     throw new ValidationError(`Background job retry is not supported for type: ${job.type}`);

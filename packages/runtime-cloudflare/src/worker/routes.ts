@@ -1592,6 +1592,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     if (request.method === "POST") {
       const job = await dependencies.backgroundJobService.retry(decodeURIComponent(adminRetryJobMatch[1] ?? ""));
       if (!job) throw new NotFoundError();
+      await dependencies.scheduleBackgroundJobs?.();
       return jsonResponse({ job });
     }
     throw new NotFoundError();

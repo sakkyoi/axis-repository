@@ -3120,6 +3120,10 @@ describe("Cloudflare runtime routes", () => {
 
   it("retries failed background jobs through admin routes", async () => {
     const harness = createDevDependencyHarness();
+    let scheduledJobs = 0;
+    harness.dependencies.scheduleBackgroundJobs = async () => {
+      scheduledJobs += 1;
+    };
     const app = createApp(harness.dependencies);
     await createRepository(app, {
       name: "python-proxy",
@@ -3130,6 +3134,7 @@ describe("Cloudflare runtime routes", () => {
     });
     await harness.dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: "python-proxy" });
     await harness.dependencies.backgroundJobService.cancel("repository.index:python-proxy");
+    scheduledJobs = 0;
 
     const response = await app.fetch(new Request(
       "https://axis.example/admin/jobs/repository.index%3Apython-proxy/retry",
@@ -3146,6 +3151,7 @@ describe("Cloudflare runtime routes", () => {
     });
     await expect(harness.dependencies.backgroundJobService.get("repository.index:python-proxy"))
       .resolves.toMatchObject({ id: "repository.index:python-proxy", status: "pending" });
+    expect(scheduledJobs).toBe(1);
   });
 
   it("records repository activity when rebuilding artifact indexes", async () => {

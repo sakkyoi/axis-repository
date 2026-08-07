@@ -22,6 +22,7 @@ import SameOriginUploadBroker from "../uploads/same-origin-upload-broker";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
 import { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
+import { RepositoryMaintenanceJobService } from "./repository-maintenance-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
 import { BackgroundJobDispatcher } from "./background-job-dispatcher";
@@ -44,6 +45,7 @@ export interface AppDependencies {
   backgroundJobService: BackgroundJobService;
   backgroundJobDispatcher: BackgroundJobDispatcher;
   stagingUploadGcJobService: StagingUploadGcJobService;
+  repositoryMaintenanceJobService: RepositoryMaintenanceJobService;
   publishFinalizeJobService: PublishFinalizeJobService;
   repositoryActivityService: RepositoryActivityService;
   repositoryArtifactStore: RepositoryArtifactStore;
@@ -205,6 +207,14 @@ export function createDevDependencyHarness(
     repositoryArtifactIndexService,
     clock,
   });
+  const repositoryMaintenanceJobService = new RepositoryMaintenanceJobService({
+    state,
+    repositoryService,
+    plugins: repositoryRuntimePlugins,
+    repositoryObjectStore: objectStore,
+    writeLock,
+    clock,
+  });
   const pluginPublishSessionService = new PluginPublishSessionService({
     publishSessionService,
     repositoryService,
@@ -230,6 +240,7 @@ export function createDevDependencyHarness(
     state,
     clock,
     repositoryIndexJobService,
+    repositoryMaintenanceJobService,
     publishFinalizeJobService,
     stagingUploadGcJobService,
   });
@@ -244,6 +255,10 @@ export function createDevDependencyHarness(
       {
         supports: (job) => job.type.startsWith("repository.index."),
         run: (job) => repositoryIndexJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type === "repository.maintenance",
+        run: (job) => repositoryMaintenanceJobService.runBackgroundJob(job),
       },
       {
         supports: (job) => job.type === "storage.staging-upload-gc",
@@ -268,6 +283,7 @@ export function createDevDependencyHarness(
       backgroundJobService,
       backgroundJobDispatcher,
       stagingUploadGcJobService,
+      repositoryMaintenanceJobService,
       publishFinalizeJobService,
       repositoryActivityService,
       repositoryArtifactStore: state.repositoryArtifacts,

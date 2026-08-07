@@ -89,4 +89,64 @@ describe("BackgroundJobService", () => {
       "Background job runner is not configured for type: storage.staging-upload-gc",
     );
   });
+
+  it("requeues staging upload cleanup through an explicit forced retry", async () => {
+    const state = new MemoryStateStore();
+    const { repositoryName: _repositoryName, ...systemJob } = baseJob;
+    await state.backgroundJobs.save({
+      ...systemJob,
+      id: "storage.staging-upload-gc",
+      type: "storage.staging-upload-gc",
+      status: "failed",
+      subject: { type: "system", id: "storage" },
+    });
+    let forced = false;
+    const service = new BackgroundJobService({
+      state,
+      clock,
+      stagingUploadGcJobService: {
+        request: async (input) => {
+          forced = input?.force === true;
+          const job = (await state.backgroundJobs.get("storage.staging-upload-gc"))!;
+          await state.backgroundJobs.save({ ...job, status: "pending" });
+          return (await state.backgroundJobs.get("storage.staging-upload-gc"))!;
+        },
+      },
+    });
+
+    await expect(service.retry("storage.staging-upload-gc")).resolves.toMatchObject({
+      status: "pending",
+    });
+    expect(forced).toBe(true);
+  });
+
+  it("requeues repository maintenance through an explicit forced retry", async () => {
+    const state = new MemoryStateStore();
+    const { repositoryName: _repositoryName, ...systemJob } = baseJob;
+    await state.backgroundJobs.save({
+      ...systemJob,
+      id: "repository.maintenance",
+      type: "repository.maintenance",
+      status: "failed",
+      subject: { type: "system", id: "repositories" },
+    });
+    let forced = false;
+    const service = new BackgroundJobService({
+      state,
+      clock,
+      repositoryMaintenanceJobService: {
+        request: async (input) => {
+          forced = input?.force === true;
+          const job = (await state.backgroundJobs.get("repository.maintenance"))!;
+          await state.backgroundJobs.save({ ...job, status: "pending" });
+          return (await state.backgroundJobs.get("repository.maintenance"))!;
+        },
+      },
+    });
+
+    await expect(service.retry("repository.maintenance")).resolves.toMatchObject({
+      status: "pending",
+    });
+    expect(forced).toBe(true);
+  });
 });

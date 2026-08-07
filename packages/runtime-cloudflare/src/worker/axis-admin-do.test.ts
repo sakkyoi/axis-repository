@@ -3,7 +3,8 @@ import { AxisAdminDO, axisAdminAlarmPlanAfterBackgroundJobs, createDurableObject
 import { debArchive } from "@axis-repository/plugin-apt/test-support";
 import { FakeDurableObjectStorage, fakeDurableObjectState } from "./durable-object.test-support";
 import { digestHex } from "../storage/digest";
-import { D1RepositoryArtifactStore } from "../storage/d1-state";
+import { D1RepositoryArtifactStore, createD1StateStore } from "../storage/d1-state";
+import type { BackgroundJobQueueMessage } from "./background-job-queue";
 
 class FakeR2Bucket {
   readonly objects = new Map<string, {
@@ -157,6 +158,190 @@ class FakeR2Bucket {
   }
 }
 
+class FakeQueue {
+  readonly messages: BackgroundJobQueueMessage[] = [];
+
+  async send(message: BackgroundJobQueueMessage): Promise<QueueSendResponse> {
+    this.messages.push(message);
+    return {} as QueueSendResponse;
+  }
+
+  sendBatch(): Promise<QueueSendBatchResponse> {
+    throw new Error("Not implemented");
+  }
+}
+
+class FakeD1Database {
+  private readonly backgroundJobs = new Map<string, Record<string, unknown>>();
+  private readonly stateKv = new Map<string, string>();
+
+  backgroundJobIds(): string[] {
+    return [...this.backgroundJobs.keys()];
+  }
+
+  backgroundJobRecord(id: string): Record<string, unknown> | undefined {
+    const row = this.backgroundJobs.get(id);
+    return row && typeof row.record_json === "string"
+      ? JSON.parse(row.record_json) as Record<string, unknown>
+      : undefined;
+  }
+
+  prepare(query: string): D1PreparedStatement {
+    return new FakeD1PreparedStatement(query, {
+      backgroundJobs: this.backgroundJobs,
+      stateKv: this.stateKv,
+    }) as unknown as D1PreparedStatement;
+  }
+
+  async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
+    const results: D1Result<T>[] = [];
+    for (const statement of statements) {
+      results.push(await statement.run<T>());
+    }
+    return results;
+  }
+
+  async exec(): Promise<D1ExecResult> {
+    return { count: 0, duration: 0 };
+  }
+
+  dump(): Promise<ArrayBuffer> {
+    throw new Error("Not implemented");
+  }
+}
+
+interface FakeD1Tables {
+  backgroundJobs: Map<string, Record<string, unknown>>;
+  stateKv: Map<string, string>;
+}
+
+class FakeD1PreparedStatement {
+  private bindings: unknown[] = [];
+  private changes = 0;
+
+  constructor(private readonly query: string, private readonly tables: FakeD1Tables) {}
+
+  bind(...values: unknown[]): this {
+    this.bindings = values;
+    return this;
+  }
+
+  async first<T = unknown>(): Promise<T | null> {
+    return (await this.all<T>()).results[0] ?? null;
+  }
+
+  async all<T = unknown>(): Promise<D1Result<T>> {
+    return {
+      results: this.selectRows() as T[],
+      success: true,
+      meta: fakeD1Meta(),
+    };
+  }
+
+  async run<T = unknown>(): Promise<D1Result<T>> {
+    this.changes = 0;
+    this.applyMutation();
+    return { results: [], success: true, meta: fakeD1Meta(this.changes) };
+  }
+
+  raw<T = unknown>(): Promise<T[]> {
+    throw new Error("Not implemented");
+  }
+
+  private selectRows(): Record<string, unknown>[] {
+    if (this.query.includes("FROM axis_background_jobs")) {
+      return selectBackgroundJobs(this.tables.backgroundJobs, this.query, this.bindings);
+    }
+    if (this.query.includes("FROM axis_state_kv")) {
+      return selectStateKv(this.tables.stateKv, this.query, this.bindings);
+    }
+    return [];
+  }
+
+  private applyMutation(): void {
+    if (this.query.startsWith("CREATE TABLE") || this.query.startsWith("CREATE INDEX")) return;
+    if (this.query.startsWith("INSERT INTO axis_state_kv")) {
+      const [key, valueJson] = this.bindings;
+      this.tables.stateKv.set(String(key), String(valueJson));
+      this.changes = 1;
+      return;
+    }
+    if (this.query.startsWith("INSERT INTO axis_background_jobs")) {
+      const [id, type, status, subjectType, subjectId, subjectRepositoryName, repositoryName, priority, attempts, maxAttempts, requestedAt, scheduledAt, startedAt, finishedAt, lastHeartbeatAt, leaseId, leaseExpiresAt, progressJson, resultJson, failureJson, cancelRequestedAt, recordJson] = this.bindings;
+      this.tables.backgroundJobs.set(String(id), {
+        id,
+        type,
+        status,
+        subject_type: subjectType,
+        subject_id: subjectId,
+        subject_repository_name: subjectRepositoryName,
+        repository_name: repositoryName,
+        priority,
+        attempts,
+        max_attempts: maxAttempts,
+        requested_at: requestedAt,
+        scheduled_at: scheduledAt,
+        started_at: startedAt,
+        finished_at: finishedAt,
+        last_heartbeat_at: lastHeartbeatAt,
+        lease_id: leaseId,
+        lease_expires_at: leaseExpiresAt,
+        progress_json: progressJson,
+        result_json: resultJson,
+        failure_json: failureJson,
+        cancel_requested_at: cancelRequestedAt,
+        record_json: recordJson,
+      });
+      this.changes = 1;
+    }
+  }
+}
+
+function fakeD1Meta(changes = 0): D1Meta & Record<string, unknown> {
+  return {
+    served_by: "fake",
+    duration: 0,
+    changes,
+    last_row_id: 0,
+    changed_db: false,
+    size_after: 0,
+    rows_read: 0,
+    rows_written: 0,
+  };
+}
+
+function selectBackgroundJobs(
+  table: Map<string, Record<string, unknown>>,
+  query: string,
+  bindings: unknown[],
+): Record<string, unknown>[] {
+  if (query.includes("COUNT(*) AS total")) {
+    return [{ total: selectBackgroundJobs(table, query.replace("SELECT COUNT(*) AS total", "SELECT record_json"), bindings).length }];
+  }
+  let rows = [...table.values()];
+  let bindingIndex = 0;
+  if (query.includes("id = ?")) rows = rows.filter((row) => row.id === bindings[bindingIndex++]);
+  if (query.includes("repository_name = ?")) {
+    const repositoryName = bindings[bindingIndex++];
+    rows = rows.filter((row) => row.repository_name === repositoryName || row.subject_repository_name === repositoryName);
+  }
+  if (query.includes("status = ?")) rows = rows.filter((row) => row.status === bindings[bindingIndex++]);
+  if (query.includes("type = ?")) rows = rows.filter((row) => row.type === bindings[bindingIndex++]);
+  return rows;
+}
+
+function selectStateKv(table: Map<string, string>, query: string, bindings: unknown[]): Record<string, unknown>[] {
+  let rows = [...table.entries()].map(([key, valueJson]) => ({ key, value_json: valueJson }));
+  if (query.includes("key LIKE ?")) {
+    const prefix = String(bindings[0]).replace(/%$/, "").replaceAll("\\%", "%").replaceAll("\\_", "_").replaceAll("\\\\", "\\");
+    rows = rows.filter((row) => row.key.startsWith(prefix));
+  }
+  if (query.includes("key = ?")) {
+    rows = rows.filter((row) => row.key === bindings[0]);
+  }
+  return rows;
+}
+
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(copy).set(bytes);
@@ -216,6 +401,7 @@ function basicAuth(secret: string, username = "axis"): string {
 type TestAxisEnv = {
   AXIS_ADMIN?: DurableObjectNamespace | undefined;
   AXIS_SHARED_STATE?: D1Database | undefined;
+  AXIS_BACKGROUND_JOBS?: Queue | undefined;
   AXIS_OBJECTS?: R2Bucket | undefined;
   AXIS_ADMIN_USERNAME?: string | undefined;
   AXIS_ADMIN_PASSWORD_HASH?: string | undefined;
@@ -1176,5 +1362,34 @@ describe("AxisAdminDO maintenance alarm", () => {
 
     expect(storage.alarm).not.toBeNull();
     expect(storage.alarm!).toBeGreaterThan(Date.now());
+  });
+
+  it("wakes the Queue instead of running repository jobs when a Queue binding is configured", async () => {
+    const database = new FakeD1Database();
+    const queue = new FakeQueue();
+    const state = createD1StateStore(database as unknown as D1Database);
+    await state.backgroundJobs.save({
+      id: "repository.index:python-proxy",
+      type: "repository.index.proxy-refresh",
+      status: "pending",
+      subject: { type: "repository", id: "python-proxy", repositoryName: "python-proxy" },
+      repositoryName: "python-proxy",
+      priority: 0,
+      attempts: 0,
+      requestedAt: "2026-08-05T00:00:00.000Z",
+      scheduledAt: "2026-08-05T00:00:00.000Z",
+    });
+    const object = createObject({
+      AXIS_SHARED_STATE: database as unknown as D1Database,
+      AXIS_BACKGROUND_JOBS: queue as unknown as Queue,
+    });
+    await Promise.resolve();
+
+    await object.alarm();
+
+    await expect(state.backgroundJobs.get("repository.index:python-proxy"))
+      .resolves.toMatchObject({ status: "pending", attempts: 0 });
+    expect(database.backgroundJobRecord("repository.maintenance")).toMatchObject({ status: "pending", attempts: 0 });
+    expect(queue.messages).toHaveLength(1);
   });
 });
