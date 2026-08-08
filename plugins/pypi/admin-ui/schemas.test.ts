@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pypiClientInfoSchema, pypiProjectSchema } from "./schemas";
+import { pypiClientInfoSchema, pypiProjectSchema, pypiProxyCachePurgeSchema, pypiProxyCacheSchema } from "./schemas";
 
 describe("PyPI UI plugin schemas", () => {
   it("parses PyPI client helper information", () => {
@@ -49,5 +49,17 @@ describe("PyPI project file schema", () => {
       requiresPython: ">=3.9",
       coreMetadataSha256: "c".repeat(64),
     });
+  });
+});
+
+describe("PyPI proxy cache schemas", () => {
+  it("parses byte cache stats and purge results", () => {
+    expect(pypiProxyCacheSchema.parse({
+      cache: { fileCount: 2, byteCount: 18 },
+    }).cache).toEqual({ fileCount: 2, byteCount: 18 });
+    expect(pypiProxyCachePurgeSchema.parse({
+      purged: { objectCount: 3, byteCount: 18 },
+      cache: { fileCount: 0, byteCount: 0 },
+    }).purged).toEqual({ objectCount: 3, byteCount: 18 });
   });
 });

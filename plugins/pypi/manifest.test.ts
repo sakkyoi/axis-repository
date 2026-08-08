@@ -31,6 +31,19 @@ describe("PyPI plugin manifest", () => {
     expect(publicActions).toEqual(["simple-url"]);
   });
 
+  it("declares proxy cache management admin resources", () => {
+    const routes = manifest.adminResources.routes.map((route) => ({
+      name: route.name,
+      method: route.method,
+      path: route.path,
+    }));
+
+    expect(routes).toEqual(expect.arrayContaining([
+      { name: "get-proxy-cache", method: "GET", path: ["proxy-cache"] },
+      { name: "purge-proxy-cache", method: "POST", path: ["proxy-cache", "purge"] },
+    ]));
+  });
+
   it("provides a plugin-owned ecosystem icon", () => {
     expect(manifest.icon?.title).toBe("PyPI");
     expect(manifest.icon?.accentColor).toBe("#3775A9");

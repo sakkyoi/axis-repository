@@ -1,6 +1,6 @@
 import { NotFoundError, ValidationError, type RepositoryArtifactStore, type RepositoryObjectStore } from "@axis-repository/core";
 import type { RepositoryAdminResources } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { objectBytes, pluginJsonResponse, readJsonObject } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { listAllObjects, objectBytes, pluginJsonResponse, readJsonObject } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { pypiPluginManifest } from "../manifest";
 import { listProjects, readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
 import { normalizeProjectName } from "../shared/names";
@@ -155,6 +155,24 @@ export function createPypiAdminResources(input: {
           ));
         },
       },
+      {
+        ...pypiAdminResourceRoute("get-proxy-cache"),
+        handle: async ({ repositoryName }) => {
+          const objectStore = input.objectStoreFor(repositoryName);
+          return pluginJsonResponse({ cache: await pypiProxyByteCacheStats(objectStore, repositoryName) });
+        },
+      },
+      {
+        ...pypiAdminResourceRoute("purge-proxy-cache"),
+        handle: async ({ repositoryName }) => {
+          const objectStore = input.objectStoreFor(repositoryName);
+          const purged = await purgePypiProxyByteCache(objectStore, repositoryName);
+          return pluginJsonResponse({
+            purged,
+            cache: await pypiProxyByteCacheStats(objectStore, repositoryName),
+          });
+        },
+      },
     ],
   };
 }
@@ -202,6 +220,37 @@ function decodeOffsetCursor(cursor: string): number {
   } catch {
     throw new ValidationError("cursor is invalid");
   }
+}
+
+async function pypiProxyByteCacheStats(
+  objectStore: RepositoryObjectStore,
+  repositoryName: string,
+): Promise<{ fileCount: number; byteCount: number }> {
+  const objects = await listAllObjects(objectStore, pypiProxyByteCachePrefix(repositoryName));
+  const files = objects.filter((object) => !object.key.endsWith(".json"));
+  return {
+    fileCount: files.length,
+    byteCount: files.reduce((sum, object) => sum + (object.contentLength ?? 0), 0),
+  };
+}
+
+async function purgePypiProxyByteCache(
+  objectStore: RepositoryObjectStore,
+  repositoryName: string,
+): Promise<{ objectCount: number; byteCount: number }> {
+  const objects = await listAllObjects(objectStore, pypiProxyByteCachePrefix(repositoryName));
+  const byteCount = objects
+    .filter((object) => !object.key.endsWith(".json"))
+    .reduce((sum, object) => sum + (object.contentLength ?? 0), 0);
+  await objectStore.deleteObjects(objects.map((object) => object.key));
+  return {
+    objectCount: objects.length,
+    byteCount,
+  };
+}
+
+function pypiProxyByteCachePrefix(repositoryName: string): string {
+  return `repositories/${repositoryName}/_proxy-cache/pypi/files/`;
 }
 
 export async function readPypiProxyCachedProjects(

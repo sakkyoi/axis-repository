@@ -50,6 +50,18 @@ export const pypiPluginManifest = {
         path: ["projects", ":project", "files", ":filename", "unyank"],
         responseKind: "json",
       },
+      {
+        name: "get-proxy-cache",
+        method: "GET",
+        path: ["proxy-cache"],
+        responseKind: "json",
+      },
+      {
+        name: "purge-proxy-cache",
+        method: "POST",
+        path: ["proxy-cache", "purge"],
+        responseKind: "json",
+      },
     ],
   },
   clientHelpers: {

@@ -1041,6 +1041,98 @@ describe("PyPI plugin lifecycle", () => {
     await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects/demo.json")).resolves.not.toBeNull();
   });
 
+  it("reports PyPI proxy byte cache stats without counting metadata objects", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putBytes(
+      "repositories/python-internal/_proxy-cache/pypi/files/file-a",
+      new Uint8Array(11),
+      "application/octet-stream",
+    );
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/files/file-a.json", {
+      upstreamUrl: "https://files.example/a.whl",
+    });
+    await objectStore.putBytes(
+      "repositories/python-internal/_proxy-cache/pypi/files/file-b",
+      new Uint8Array(7),
+      "application/octet-stream",
+    );
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects.json", {
+      projects: [{ name: "demo", fileCount: 1 }],
+    });
+    const plugin = createPypiProxyPlugin({ objectStoreFor: () => objectStore });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+    };
+
+    const response = await dispatchRepositoryAdminResource(plugin.adminResources!, {
+      repositoryName: repository.name,
+      repository,
+      request: new Request("https://axis.example/admin/repositories/python-internal/pypi/proxy-cache"),
+      path: ["proxy-cache"],
+      services: { secrets: unusedSecrets() },
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      cache: {
+        fileCount: 2,
+        byteCount: 18,
+      },
+    });
+  });
+
+  it("purges only PyPI proxy byte cache objects", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putBytes(
+      "repositories/python-internal/_proxy-cache/pypi/files/file-a",
+      new Uint8Array(11),
+      "application/octet-stream",
+    );
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/files/file-a.json", {
+      upstreamUrl: "https://files.example/a.whl",
+    });
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects.json", {
+      projects: [{ name: "demo", fileCount: 1 }],
+    });
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [],
+    });
+    const plugin = createPypiProxyPlugin({ objectStoreFor: () => objectStore });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+    };
+
+    const response = await dispatchRepositoryAdminResource(plugin.adminResources!, {
+      repositoryName: repository.name,
+      repository,
+      request: new Request("https://axis.example/admin/repositories/python-internal/pypi/proxy-cache/purge", {
+        method: "POST",
+      }),
+      path: ["proxy-cache", "purge"],
+      services: { secrets: unusedSecrets() },
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      purged: {
+        objectCount: 2,
+        byteCount: 11,
+      },
+      cache: {
+        fileCount: 0,
+        byteCount: 0,
+      },
+    });
+    await expect(objectStore.listObjects({
+      prefix: "repositories/python-internal/_proxy-cache/pypi/files/",
+    })).resolves.toMatchObject({ objects: [] });
+    await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects.json")).resolves.not.toBeNull();
+    await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects/demo.json")).resolves.not.toBeNull();
+  });
+
   it("refreshes proxy catalogs in a single root index fetch", async () => {
     const projectNames = Array.from({ length: 7 }, (_, index) => `demo-${String(index + 1).padStart(2, "0")}`);
     const upstreamHtml = new Map<string, string>([

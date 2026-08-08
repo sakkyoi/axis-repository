@@ -4,9 +4,13 @@ import {
   pypiClientInfoSchema,
   pypiProjectSchema,
   pypiProjectsSchema,
+  pypiProxyCachePurgeSchema,
+  pypiProxyCacheSchema,
   type PypiClientInfo,
   type PypiProject,
   type PypiProjects,
+  type PypiProxyCachePurge,
+  type PypiProxyCacheStats,
 } from "./schemas";
 
 const pypiNamespace = "pypi";
@@ -65,6 +69,22 @@ export async function getPypiProject(
   return pypiProjectSchema.parse(response).project;
 }
 
+export async function getPypiProxyCache(
+  client: PypiProjectsClient,
+  repositoryName: string,
+): Promise<PypiProxyCacheStats> {
+  const response = await client.getRepositoryPluginResource(repositoryName, pypiNamespace, ["proxy-cache"]);
+  return pypiProxyCacheSchema.parse(response).cache;
+}
+
+export async function purgePypiProxyCache(
+  client: PypiProjectsClient,
+  repositoryName: string,
+): Promise<PypiProxyCachePurge["purged"]> {
+  const response = await client.postRepositoryPluginResource(repositoryName, pypiNamespace, ["proxy-cache", "purge"]);
+  return pypiProxyCachePurgeSchema.parse(response).purged;
+}
+
 export function usePypiProjectsPage(repositoryName: string | undefined) {
   const client = useAxisClient();
   return useQuery({
@@ -94,6 +114,27 @@ export function usePypiProject(repositoryName: string | undefined, project: stri
     queryKey: [pypiProjectsQueryKey, repositoryName, "project", project],
     queryFn: () => getPypiProject(client, repositoryName ?? "", project ?? ""),
     enabled: Boolean(repositoryName && project),
+  });
+}
+
+export function usePypiProxyCache(repositoryName: string | undefined, enabled: boolean) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["pypi-proxy-cache", repositoryName],
+    queryFn: () => getPypiProxyCache(client, repositoryName ?? ""),
+    enabled: Boolean(repositoryName) && enabled,
+  });
+}
+
+export function usePurgePypiProxyCache(repositoryName: string | undefined) {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => purgePypiProxyCache(client, repositoryName ?? ""),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["pypi-proxy-cache", repositoryName] });
+      void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
+    },
   });
 }
 

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { getPypiClientInfo, getPypiProject, listPypiProjects, setPypiFileYanked } from "./api";
+import {
+  getPypiClientInfo,
+  getPypiProject,
+  getPypiProxyCache,
+  listPypiProjects,
+  purgePypiProxyCache,
+  setPypiFileYanked,
+} from "./api";
 
 describe("PyPI UI plugin API adapter", () => {
   it("uses generic repository client helpers for client info", async () => {
@@ -25,7 +32,10 @@ describe("PyPI UI plugin API adapter", () => {
 });
 
 describe("PyPI project files API adapter", () => {
-  function recordingClient(response: unknown = { projects: [], truncated: false }) {
+  function recordingClient(
+    response: unknown = { projects: [], truncated: false },
+    postResponse: unknown = {},
+  ) {
     const calls: Array<{
       path: readonly string[];
       input?: unknown;
@@ -52,7 +62,7 @@ describe("PyPI project files API adapter", () => {
         input?: unknown,
       ) => {
         calls.push({ path, input });
-        return {};
+        return postResponse;
       },
     };
   }
@@ -136,6 +146,28 @@ describe("PyPI project files API adapter", () => {
 
     expect(client.calls[0]).toEqual({
       path: ["projects", "alpha", "files", "alpha-1.0.tar.gz", "unyank"],
+      input: undefined,
+    });
+  });
+
+  it("reads and purges proxy byte cache through plugin resources", async () => {
+    const client = recordingClient(
+      { cache: { fileCount: 2, byteCount: 18 } },
+      {
+        purged: { objectCount: 3, byteCount: 18 },
+        cache: { fileCount: 0, byteCount: 0 },
+      },
+    );
+
+    await expect(getPypiProxyCache(client, "python-internal"))
+      .resolves.toEqual({ fileCount: 2, byteCount: 18 });
+    expect(client.calls[0]).toMatchObject({ path: ["proxy-cache"] });
+
+    client.calls.length = 0;
+    await expect(purgePypiProxyCache(client, "python-internal"))
+      .resolves.toEqual({ objectCount: 3, byteCount: 18 });
+    expect(client.calls[0]).toEqual({
+      path: ["proxy-cache", "purge"],
       input: undefined,
     });
   });
