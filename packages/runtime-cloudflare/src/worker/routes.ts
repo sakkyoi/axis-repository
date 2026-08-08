@@ -966,6 +966,7 @@ async function repositoryDirectoryResponse(input: {
   relativePath: string;
   method: string;
   virtual?: boolean;
+  browsePathPrefix?: string;
 }): Promise<Response | null> {
   const directoryPageLimit = 200;
   const plugin = input.dependencies.repositoryRuntimePlugins.getPluginForRepository(input.repository);
@@ -1021,6 +1022,7 @@ async function repositoryDirectoryResponse(input: {
     repositoryEcosystem: input.repository.ecosystem,
     pluginIcon: repositoryPluginIcon(input.repository),
     listing,
+    ...(input.browsePathPrefix !== undefined ? { browsePathPrefix: input.browsePathPrefix } : {}),
   };
   const body = input.method === "HEAD"
     ? null
@@ -1124,6 +1126,31 @@ function repositoryObjectBrowserDirectoryListing(listing: RepositoryObjectBrowse
     ],
     ...(listing.cursor !== undefined ? { cursor: listing.cursor } : {}),
     truncated: listing.truncated,
+  };
+}
+
+function parseRepositoryBrowsePath(requestUrl: string): { repositoryName: string; relativePath: string } | null {
+  const rawPath = rawPathname(requestUrl);
+  const prefix = "/repositories/";
+  if (!rawPath.startsWith(prefix)) {
+    return null;
+  }
+  const rawRest = rawPath.slice(prefix.length);
+  const rawSegments = rawRest.split("/");
+  const trailingSlash = rawSegments.length > 1 && rawSegments[rawSegments.length - 1] === "";
+  const namedSegments = trailingSlash ? rawSegments.slice(0, -1) : rawSegments;
+  if (namedSegments.length < 2 || namedSegments[1] !== "_browse") {
+    return null;
+  }
+  const [rawRepositoryName, _browse, ...rawRelativeSegments] = namedSegments;
+  const repositoryName = requireSafePathSegment(rawRepositoryName ?? "");
+  const relativeSegments = rawRelativeSegments.map(requireSafePathSegment);
+  if (relativeSegments.length === 0) {
+    return { repositoryName, relativePath: "" };
+  }
+  return {
+    repositoryName,
+    relativePath: `${relativeSegments.join("/")}${trailingSlash ? "/" : ""}`,
   };
 }
 
@@ -2264,6 +2291,41 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         origin: publicArtifactOrigin(url, dependencies),
       });
     }
+  }
+  const repositoryBrowsePath = servesArtifacts ? parseRepositoryBrowsePath(request.url) : null;
+  if (repositoryBrowsePath) {
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      throw new NotFoundError();
+    }
+    const { repositoryName, relativePath } = repositoryBrowsePath;
+    const repository = await dependencies.repositoryService.getByName(repositoryName);
+    await authorizeRepositoryRead(request, dependencies, repository);
+    if (url.searchParams.get(REPOSITORY_BROWSER_PAGE_QUERY_PARAM) === "1") {
+      const listing = await repositoryDirectoryPageJsonResponse({
+        dependencies,
+        repository,
+        requestUrl: request.url,
+        relativePath,
+        virtual: true,
+      });
+      if (listing) {
+        return listing;
+      }
+      throw new NotFoundError();
+    }
+    const listing = await repositoryDirectoryResponse({
+      dependencies,
+      repository,
+      requestUrl: request.url,
+      relativePath,
+      method: request.method,
+      virtual: true,
+      browsePathPrefix: "_browse/",
+    });
+    if (listing) {
+      return listing;
+    }
+    throw new NotFoundError();
   }
   const uploadProtocolPath = servesArtifacts ? parseRepositoryObjectPath(request.url) : null;
   if (uploadProtocolPath && request.method === "POST") {

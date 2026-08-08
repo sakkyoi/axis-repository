@@ -889,6 +889,91 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("serves explicit repository browse pages and pages them through the browse endpoint", async () => {
+    const harness = createDevDependencyHarness();
+    const listObjects = vi.fn(async ({ prefix, cursor, limit }: { prefix: string; cursor?: string; limit?: number }) => ({
+      prefix,
+      directories: cursor
+        ? [{ name: "bravo", path: "simple/bravo/" }]
+        : [{ name: "alpha", path: "simple/alpha/" }],
+      objects: cursor ? [{ name: "bravo-1.0.0.whl", path: "simple/bravo/bravo-1.0.0.whl", size: 1024 }] : [],
+      ...(cursor ? {} : { cursor: "page_2" }),
+      truncated: !cursor,
+      limit,
+    }));
+    harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "hosted",
+      ecosystem: "streamed",
+      name: "streamed-hosted",
+      version: "0.1.0",
+      repositoryKinds: ["hosted"],
+      capabilities: ["hosted"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: "2026-08-05T00:00:00.000Z", objects: [] }),
+      },
+    });
+    harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "proxy",
+      ecosystem: "streamed",
+      name: "streamed-proxy",
+      version: "0.1.0",
+      repositoryKinds: ["proxy"],
+      capabilities: ["proxy"],
+      canServeRepositoryPath: ({ relativePath }) => relativePath === "simple/" || relativePath.startsWith("simple/"),
+      validateRepositoryConfig: () => {},
+      objectBrowser: {
+        listObjects,
+      },
+    });
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "streamed-proxy",
+      ecosystem: "streamed",
+      kind: "proxy",
+      visibility: "public",
+      config: {},
+    });
+
+    const response = await app.fetch(new Request("https://axis.example/repositories/streamed-proxy/_browse/simple/"));
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(listObjects).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      prefix: "simple/",
+      limit: 200,
+    }));
+    expect(html).toContain("alpha/");
+    expect(html).not.toContain("bravo/");
+    expect(html).toContain("data-next-cursor=\"page_2\"");
+    expect(html).toContain("axis-repository-browser-page");
+
+    const pageResponse = await app.fetch(new Request(
+      "https://axis.example/repositories/streamed-proxy/_browse/simple/?axis-repository-browser-page=1&cursor=page_2",
+      { headers: { accept: "application/json" } },
+    ));
+
+    expect(pageResponse.status).toBe(200);
+    expect(listObjects).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      prefix: "simple/",
+      cursor: "page_2",
+      limit: 200,
+    }));
+    await expect(pageResponse.json()).resolves.toMatchObject({
+      listing: {
+        relativePath: "simple/",
+        entries: [
+          { name: "bravo/", relativePath: "simple/bravo/", directory: true },
+          { name: "bravo-1.0.0.whl", relativePath: "simple/bravo/bravo-1.0.0.whl", directory: false, size: 1024 },
+        ],
+        truncated: false,
+      },
+    });
+  });
+
   it("pages stored browser directory listings through the same JSON endpoint", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);

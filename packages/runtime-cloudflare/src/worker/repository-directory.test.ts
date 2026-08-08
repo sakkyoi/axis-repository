@@ -95,12 +95,14 @@ describe("renderRepositoryDirectoryHtml", () => {
     repositoryEcosystem?: string;
     pluginIcon?: typeof pluginIcon;
     listing?: typeof listing;
+    browsePathPrefix?: string;
   } = {}) {
     return renderRepositoryDirectoryHtml({
       repositoryName: input.repositoryName ?? "a",
       repositoryEcosystem: input.repositoryEcosystem ?? "apt",
       pluginIcon: input.pluginIcon ?? pluginIcon,
       listing: input.listing ?? listing,
+      ...(input.browsePathPrefix !== undefined ? { browsePathPrefix: input.browsePathPrefix } : {}),
     });
   }
 
@@ -143,6 +145,19 @@ describe("renderRepositoryDirectoryHtml", () => {
       .find((candidate) => candidate.includes("alpha"))!;
 
     expect(resolved(href, at))
+      .toBe("https://axis.example/repositories/a/pool/main/alpha_1%3A1.0.0_amd64.deb");
+  });
+
+  it("keeps explicit browse directory links in browse mode while file links target protocol paths", () => {
+    const at = "https://axis.example/repositories/a/_browse/pool/main/";
+    const html = render({ browsePathPrefix: "_browse/" });
+    const hrefs = entryHrefs(html);
+    const directoryHref = hrefs.find((href) => href.includes("pkg"))!;
+    const fileHref = hrefs.find((href) => href.includes("alpha"))!;
+
+    expect(resolved(directoryHref, at))
+      .toBe("https://axis.example/repositories/a/_browse/pool/main/pkg%3A1.0/");
+    expect(resolved(fileHref, at))
       .toBe("https://axis.example/repositories/a/pool/main/alpha_1%3A1.0.0_amd64.deb");
   });
 

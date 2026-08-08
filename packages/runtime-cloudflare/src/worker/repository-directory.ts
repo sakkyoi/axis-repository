@@ -460,6 +460,7 @@ export function renderRepositoryDirectoryHtml(input: {
   repositoryEcosystem: string;
   pluginIcon: ResolvedPluginIconAssets;
   listing: RepositoryDirectoryListing;
+  browsePathPrefix?: string;
 }): string {
   if (input.listing.entries.length === 0 && !input.listing.truncated) {
     return [
@@ -471,23 +472,41 @@ export function renderRepositoryDirectoryHtml(input: {
   return [
     renderRepositoryDirectoryHtmlHead(input),
     renderRepositoryDirectoryTableOpen(input.listing),
-    ...input.listing.entries.map(renderRepositoryDirectoryRow),
+    ...input.listing.entries.map((entry) => renderRepositoryDirectoryRow(entry, {
+      listingRelativePath: input.listing.relativePath,
+      ...(input.browsePathPrefix !== undefined ? { browsePathPrefix: input.browsePathPrefix } : {}),
+    })),
     renderRepositoryDirectoryHtmlFoot(input.listing.entries.length, { tableOpen: true }),
   ].join("\n");
 }
 
-function renderRepositoryDirectoryRow(entry: RepositoryDirectoryEntry): string {
+function renderRepositoryDirectoryRow(entry: RepositoryDirectoryEntry, options: {
+  browsePathPrefix?: string;
+  listingRelativePath: string;
+}): string {
   // Links are relative to the listing, so the same page works whatever
   // origin or prefix the repository is reached through - and prefixed, so a
   // name carrying a colon cannot read as a scheme.
-  const href = escapeHtml(relativeReference(encodeURIComponent(entry.name.replace(/\/$/, ""))
-    + (entry.directory ? "/" : "")));
+  const href = escapeHtml(repositoryDirectoryEntryHref(entry, options));
   return [
     `          <tr${entry.directory ? " class=\"is-folder\"" : ""}>`,
     `<td><a href="${href}">${icon(iconFor(entry))}`,
     `<span class="name">${escapeHtml(entry.name)}</span></a></td>`,
     `<td class="size">${entry.directory ? "" : formatSize(entry.size)}</td></tr>`,
   ].join("");
+}
+
+function repositoryDirectoryEntryHref(entry: RepositoryDirectoryEntry, options: {
+  browsePathPrefix?: string;
+  listingRelativePath: string;
+}): string {
+  const relativeEntryName = encodeURIComponent(entry.name.replace(/\/$/, "")) + (entry.directory ? "/" : "");
+  if (!options.browsePathPrefix || entry.directory) {
+    return relativeReference(relativeEntryName);
+  }
+  const listingDepth = options.listingRelativePath.split("/").filter(Boolean).length;
+  const upToRepositoryRoot = "../".repeat(listingDepth + options.browsePathPrefix.split("/").filter(Boolean).length);
+  return `${upToRepositoryRoot}${entry.relativePath.split("/").map(encodeURIComponent).join("/")}`;
 }
 
 function renderRepositoryDirectoryHtmlHead(input: {
@@ -616,7 +635,14 @@ const DIRECTORY_PAGINATION_SCRIPT = `
     if (entry.directory) tr.className = "is-folder";
     const nameCell = document.createElement("td");
     const link = document.createElement("a");
-    link.href = "./" + encodeURIComponent(String(entry.name || "").replace(/\\/$/, "")) + (entry.directory ? "/" : "");
+    if (entry.directory || !window.location.pathname.split("/").includes("_browse")) {
+      link.href = "./" + encodeURIComponent(String(entry.name || "").replace(/\\/$/, "")) + (entry.directory ? "/" : "");
+    } else {
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      const browseIndex = parts.indexOf("_browse");
+      const up = "../".repeat(Math.max(1, parts.length - browseIndex));
+      link.href = up + String(entry.relativePath || "").split("/").map(encodeURIComponent).join("/");
+    }
     link.innerHTML = icon(iconFor(entry));
     const name = document.createElement("span");
     name.className = "name";
