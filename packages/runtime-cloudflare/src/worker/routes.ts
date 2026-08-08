@@ -1175,6 +1175,9 @@ async function pluginRepositoryPathResponse(input: {
     request: input.request,
     relativePath: input.relativePath,
     ...(input.accept ? { accept: input.accept } : {}),
+    ...(input.dependencies.scheduleBackgroundTask
+      ? { scheduleBackgroundTask: input.dependencies.scheduleBackgroundTask }
+      : {}),
   });
 }
 

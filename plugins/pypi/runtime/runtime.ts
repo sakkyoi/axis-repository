@@ -107,6 +107,7 @@ export function createPypiProxyPlugin(input: {
   objectStoreFor?: (repositoryName: string) => RepositoryObjectStore;
 } = {}): ProxyRepositoryPlugin {
   const fetchImpl = input.fetch ?? ((request: Request) => fetch(request));
+  const fileCacheWrites = new Map<string, Promise<void>>();
   return {
     kind: "proxy",
     ecosystem: "pypi",
@@ -142,7 +143,7 @@ export function createPypiProxyPlugin(input: {
         fetch: fetchImpl,
       }),
     },
-    serveRepositoryPath: async ({ repository, request, relativePath }) => {
+    serveRepositoryPath: async ({ repository, request, relativePath, scheduleBackgroundTask }) => {
       const upstream = parsePypiProxyRepositoryConfig(repository.config);
       const objectStore = input.objectStoreFor?.(repository.name);
       const upstreamUrl = await pypiProxyServeUpstreamUrl({
@@ -169,6 +170,19 @@ export function createPypiProxyPlugin(input: {
         if (cached) {
           return cached;
         }
+        const write = fileCacheWrites.get(pypiProxyFileCacheLeaseKey(repository.name, upstreamUrl));
+        if (write) {
+          await write;
+          const completed = await readPypiProxyFileCache({
+            objectStore: objectStore!,
+            repositoryName: repository.name,
+            upstreamUrl,
+            method: request.method,
+          });
+          if (completed) {
+            return completed;
+          }
+        }
       }
       const headers = new Headers();
       for (const name of PYPI_PROXY_UPSTREAM_REQUEST_HEADERS) {
@@ -186,11 +200,13 @@ export function createPypiProxyPlugin(input: {
         if (cacheableFileRequest
           && upstreamResponse.status === 200
           && pypiProxyFileResponseCanBeCached(upstreamResponse.headers)) {
-          return cachePypiProxyFileResponse({
+          return streamAndCachePypiProxyFileResponse({
             objectStore: objectStore!,
             repositoryName: repository.name,
             upstreamUrl,
             response: upstreamResponse,
+            fileCacheWrites,
+            ...(scheduleBackgroundTask ? { scheduleBackgroundTask } : {}),
           });
         }
         return new Response(upstreamResponse.body, {
@@ -1199,6 +1215,10 @@ async function pypiProxyFileCacheMetadataKey(repositoryName: string, upstreamUrl
   return `${await pypiProxyFileCacheObjectKey(repositoryName, upstreamUrl)}.json`;
 }
 
+function pypiProxyFileCacheLeaseKey(repositoryName: string, upstreamUrl: string): string {
+  return `${repositoryName}\0${upstreamUrl}`;
+}
+
 async function readPypiProxyFileCache(input: {
   objectStore: RepositoryObjectStore;
   repositoryName: string;
@@ -1219,6 +1239,51 @@ async function readPypiProxyFileCache(input: {
   return new Response(input.method === "HEAD" ? null : objectStream(object), {
     status: 200,
     headers,
+  });
+}
+
+async function streamAndCachePypiProxyFileResponse(input: {
+  objectStore: RepositoryObjectStore;
+  repositoryName: string;
+  upstreamUrl: string;
+  response: Response;
+  fileCacheWrites: Map<string, Promise<void>>;
+  scheduleBackgroundTask?: (task: Promise<unknown>) => void;
+}): Promise<Response> {
+  if (!input.response.body || !input.scheduleBackgroundTask) {
+    return cachePypiProxyFileResponse({
+      objectStore: input.objectStore,
+      repositoryName: input.repositoryName,
+      upstreamUrl: input.upstreamUrl,
+      response: input.response,
+    });
+  }
+  const [clientBody, cacheBody] = input.response.body.tee();
+  const cacheResponse = new Response(cacheBody, {
+    status: input.response.status,
+    statusText: input.response.statusText,
+    headers: input.response.headers,
+  });
+  const leaseKey = pypiProxyFileCacheLeaseKey(input.repositoryName, input.upstreamUrl);
+  const task = cachePypiProxyFileResponse({
+    objectStore: input.objectStore,
+    repositoryName: input.repositoryName,
+    upstreamUrl: input.upstreamUrl,
+    response: cacheResponse,
+  })
+    .then(() => undefined)
+    .catch((error) => {
+      console.error(`PyPI proxy file cache write failed: ${error instanceof Error ? error.message : String(error)}`);
+    })
+    .finally(() => {
+      input.fileCacheWrites.delete(leaseKey);
+    });
+  input.fileCacheWrites.set(leaseKey, task);
+  input.scheduleBackgroundTask(task);
+  return new Response(clientBody, {
+    status: input.response.status,
+    statusText: input.response.statusText,
+    headers: proxyResponseHeaders(input.response.headers),
   });
 }
 

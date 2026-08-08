@@ -36,6 +36,20 @@ function unusedSecrets() {
   };
 }
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("PyPI plugin lifecycle", () => {
   it("allows empty PyPI repository config", () => {
     const plugin = createPypiPlugin();
@@ -304,6 +318,143 @@ describe("PyPI plugin lifecycle", () => {
     expect(second?.headers.get("content-length")).toBe("11");
     await expect(first?.text()).resolves.toBe("wheel bytes");
     await expect(second?.text()).resolves.toBe("wheel bytes");
+  });
+
+  it("streams first PyPI proxy file downloads while caching in a background task", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "https://files.example/packages/demo-1.0-py3-none-any.whl",
+      }],
+    });
+    const writes = deferred<void>();
+    objectStore.createPartWriter = async (key, contentType) => {
+      const writer = await MemoryRepositoryObjectStore.prototype.createPartWriter.call(objectStore, key, contentType);
+      return {
+        ...writer,
+        write: async (chunk) => {
+          await writes.promise;
+          await writer.write(chunk);
+        },
+      };
+    };
+    const backgroundTasks: Promise<unknown>[] = [];
+    const plugin = createPypiProxyPlugin({
+      objectStoreFor: () => objectStore,
+      fetch: async () => new Response("wheel bytes", {
+        headers: {
+          "content-type": "application/octet-stream",
+          "content-length": "11",
+          etag: "\"cached-etag\"",
+        },
+      }),
+    });
+
+    const served = plugin.serveRepositoryPath?.({
+      repository: {
+        ...repositoryFixture(),
+        kind: "proxy",
+        config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      },
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+      scheduleBackgroundTask: (task) => {
+        backgroundTasks.push(task);
+      },
+    });
+
+    const response = await Promise.race([
+      served,
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 20)),
+    ]);
+
+    expect(response).not.toBe("pending");
+    expect(backgroundTasks).toHaveLength(1);
+    expect((response as Response | null)?.headers.get("etag")).toBe("\"cached-etag\"");
+    await expect((response as Response | null)?.text()).resolves.toBe("wheel bytes");
+    writes.resolve();
+    await expect(backgroundTasks[0]).resolves.toBeUndefined();
+    await expect(objectStore.listObjects({
+      prefix: "repositories/python-internal/_proxy-cache/pypi/files/",
+    })).resolves.toMatchObject({ objects: expect.arrayContaining([expect.objectContaining({
+      key: expect.not.stringMatching(/\.json$/),
+    })]) });
+  });
+
+  it("waits for an in-flight PyPI proxy file cache write instead of fetching the same file twice", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "https://files.example/packages/demo-1.0-py3-none-any.whl",
+      }],
+    });
+    const writes = deferred<void>();
+    objectStore.createPartWriter = async (key, contentType) => {
+      const writer = await MemoryRepositoryObjectStore.prototype.createPartWriter.call(objectStore, key, contentType);
+      return {
+        ...writer,
+        write: async (chunk) => {
+          await writes.promise;
+          await writer.write(chunk);
+        },
+      };
+    };
+    const backgroundTasks: Promise<unknown>[] = [];
+    const upstreamRequests: Request[] = [];
+    const plugin = createPypiProxyPlugin({
+      objectStoreFor: () => objectStore,
+      fetch: async (request) => {
+        upstreamRequests.push(request);
+        return new Response("wheel bytes", {
+          headers: {
+            "content-type": "application/octet-stream",
+            "content-length": "11",
+          },
+        });
+      },
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+    };
+
+    const first = plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+      scheduleBackgroundTask: (task) => backgroundTasks.push(task),
+    });
+    const firstBeforeCacheCompletes = await Promise.race([
+      first,
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 20)),
+    ]);
+    if (firstBeforeCacheCompletes === "pending") {
+      throw new Error("first proxy response waited for the cache writer");
+    }
+    const second = plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+      scheduleBackgroundTask: (task) => backgroundTasks.push(task),
+    });
+    const secondBeforeCacheCompletes = await Promise.race([
+      second,
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 20)),
+    ]);
+
+    expect(firstBeforeCacheCompletes?.status).toBe(200);
+    expect(secondBeforeCacheCompletes).toBe("pending");
+    expect(upstreamRequests).toHaveLength(1);
+    writes.resolve();
+    await expect(backgroundTasks[0]).resolves.toBeUndefined();
+    const secondResponse = await second;
+    expect(upstreamRequests).toHaveLength(1);
+    await expect(secondResponse?.text()).resolves.toBe("wheel bytes");
   });
 
   it("serves cached PyPI proxy file metadata for HEAD requests", async () => {

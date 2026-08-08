@@ -171,6 +171,7 @@ export function createDurableObjectDependencies(
   env: AxisEnv,
   options: {
     scheduleBackgroundJobs?: () => Promise<void>;
+    scheduleBackgroundTask?: (task: Promise<unknown>) => void;
   } = {},
 ): AppDependencies {
   assertBackgroundJobQueueConfiguration(env);
@@ -358,6 +359,9 @@ export function createDurableObjectDependencies(
     repositoryRuntimePlugins,
     repositoryWriteLock: writeLock,
     publishSessionTtlMs: publishSessionService.ttlSeconds * 1000,
+    ...(options.scheduleBackgroundTask === undefined
+      ? {}
+      : { scheduleBackgroundTask: options.scheduleBackgroundTask }),
     ...(options.scheduleBackgroundJobs === undefined
       ? {}
       : { scheduleBackgroundJobs: options.scheduleBackgroundJobs }),
@@ -376,6 +380,9 @@ export class AxisAdminDO {
         scheduleBackgroundJobs: env.AXIS_BACKGROUND_JOBS === undefined
           ? () => state.storage.setAlarm(Date.now())
           : () => enqueueBackgroundJobWakeup(env),
+        scheduleBackgroundTask: (task) => {
+          void (state as unknown as { waitUntil?: (promise: Promise<unknown>) => void }).waitUntil?.(task);
+        },
       },
     );
     this.app = createApp(this.dependencies);

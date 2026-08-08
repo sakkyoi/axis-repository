@@ -65,6 +65,7 @@ export interface AppDependencies {
   /** How long a publish session lives; what outlives one is nobody's. */
   publishSessionTtlMs: number;
   scheduleBackgroundJobs?: () => Promise<void>;
+  scheduleBackgroundTask?: (task: Promise<unknown>) => void;
 }
 
 export interface DevDependencyHarness {

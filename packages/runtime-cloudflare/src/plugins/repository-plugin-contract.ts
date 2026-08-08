@@ -64,6 +64,7 @@ export type RepositoryPathResolver = (
 export interface ServeRepositoryPathInput extends RepositoryServingContext {
   repository: Repository;
   request: Request;
+  scheduleBackgroundTask?: (task: Promise<unknown>) => void;
 }
 
 export type RepositoryPathHandler = (input: ServeRepositoryPathInput) => Promise<Response | null>;
