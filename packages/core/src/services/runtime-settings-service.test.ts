@@ -25,9 +25,14 @@ describe("RuntimeSettingsService", () => {
       operationalPolicy: {
         proxy: {
           upstreamFetchTimeoutMs: 5000,
+          upstreamRequestRetries: 2,
+          upstreamRetryBaseDelayMs: 250,
+          upstreamRetryMaxDelayMs: 1000,
           fileByteCache: {
             enabled: false,
             maxBytes: 1024,
+            maxTotalBytes: 4096,
+            ttlSeconds: 60,
             respectUpstreamCacheControl: false,
           },
         },
@@ -38,10 +43,15 @@ describe("RuntimeSettingsService", () => {
       operationalPolicy: {
         proxy: {
           upstreamFetchTimeoutMs: 5000,
+          upstreamRequestRetries: 2,
+          upstreamRetryBaseDelayMs: 250,
+          upstreamRetryMaxDelayMs: 1000,
           indexCatalogBatchSize: DEFAULT_PROXY_OPERATIONAL_POLICY.indexCatalogBatchSize,
           fileByteCache: {
             enabled: false,
             maxBytes: 1024,
+            maxTotalBytes: 4096,
+            ttlSeconds: 60,
             respectUpstreamCacheControl: false,
           },
         },
@@ -81,6 +91,10 @@ describe("resolveProxyOperationalPolicy", () => {
     expect(resolved.upstreamFetchTimeoutMs).toEqual({ value: 4000, source: "global" });
     expect(resolved.fileByteCache.enabled).toEqual({ value: false, source: "global" });
     expect(resolved.fileByteCache.maxBytes).toEqual({ value: 20, source: "repository" });
+    expect(resolved.fileByteCache.ttlSeconds).toEqual({
+      value: DEFAULT_PROXY_OPERATIONAL_POLICY.fileByteCache.ttlSeconds,
+      source: "default",
+    });
     expect(resolved.indexCatalogBatchSize).toEqual({
       value: DEFAULT_PROXY_OPERATIONAL_POLICY.indexCatalogBatchSize,
       source: "default",

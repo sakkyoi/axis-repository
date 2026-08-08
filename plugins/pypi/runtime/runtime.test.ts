@@ -701,6 +701,103 @@ describe("PyPI plugin lifecycle", () => {
     await expect(cached?.text()).resolves.toBe("wheel bytes");
   });
 
+  it("treats expired PyPI proxy file byte cache entries as misses", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "https://files.example/packages/demo-1.0-py3-none-any.whl",
+      }],
+    });
+    const upstreamRequests: Request[] = [];
+    const plugin = createPypiProxyPlugin({
+      objectStoreFor: () => objectStore,
+      fetch: async (request) => {
+        upstreamRequests.push(request);
+        return new Response(`wheel bytes ${upstreamRequests.length}`, {
+          headers: {
+            "content-type": "application/octet-stream",
+            "content-length": "13",
+          },
+        });
+      },
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: {
+        pypi: {
+          upstreamUrl: "https://pypi.example/root/",
+          proxyPolicy: { fileByteCache: { ttlSeconds: 1 } },
+        },
+      },
+    };
+
+    await plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+    });
+    const metadata = objectStore.objects.find((object) => object.key.endsWith(".json") && object.key.includes("_proxy-cache/pypi/files/"));
+    if (metadata && typeof metadata.value === "object" && metadata.value) {
+      (metadata.value as { cachedAt: string }).cachedAt = "2026-08-05T00:00:00.000Z";
+    }
+    const second = await plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+    });
+
+    expect(upstreamRequests).toHaveLength(2);
+    await expect(second?.text()).resolves.toBe("wheel bytes 2");
+  });
+
+  it("evicts old PyPI proxy file byte cache entries over the total byte budget", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/alpha.json", {
+      name: "alpha",
+      files: [{ filename: "alpha-1.0-py3-none-any.whl", url: "https://files.example/alpha.whl" }],
+    });
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/bravo.json", {
+      name: "bravo",
+      files: [{ filename: "bravo-1.0-py3-none-any.whl", url: "https://files.example/bravo.whl" }],
+    });
+    const plugin = createPypiProxyPlugin({
+      objectStoreFor: () => objectStore,
+      fetch: async (request) => new Response(request.url.includes("alpha") ? "alpha bytes" : "bravo bytes", {
+        headers: {
+          "content-type": "application/octet-stream",
+          "content-length": "11",
+        },
+      }),
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: {
+        pypi: {
+          upstreamUrl: "https://pypi.example/root/",
+          proxyPolicy: { fileByteCache: { maxTotalBytes: 11 } },
+        },
+      },
+    };
+
+    await plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/alpha/alpha-1.0-py3-none-any.whl"),
+      relativePath: "simple/alpha/alpha-1.0-py3-none-any.whl",
+    });
+    await plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/bravo/bravo-1.0-py3-none-any.whl"),
+      relativePath: "simple/bravo/bravo-1.0-py3-none-any.whl",
+    });
+
+    const cacheObjects = await objectStore.listObjects({ prefix: "repositories/python-internal/_proxy-cache/pypi/files/" });
+    expect(cacheObjects.objects.filter((object) => !object.key.endsWith(".json"))).toHaveLength(1);
+  });
+
   it("bypasses the PyPI proxy file byte cache for conditional requests", async () => {
     const objectStore = new MemoryRepositoryObjectStore();
     await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
@@ -1505,6 +1602,58 @@ describe("PyPI plugin lifecycle", () => {
         expect.objectContaining({ project: "rate-limited", status: 429, retryable: true }),
         expect.objectContaining({ project: "missing", status: 404, retryable: false }),
       ]),
+    });
+  });
+
+  it("retries retryable proxy project upstream failures before recording a partial failure", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    let projectAttempts = 0;
+    const plugin = createPypiProxyPlugin({
+      fetch: async (request) => {
+        if (request.url === "https://pypi.org/simple/") {
+          return new Response("<a href=\"flaky/\">flaky</a>", {
+            headers: { "content-type": "text/html" },
+          });
+        }
+        projectAttempts += 1;
+        return new Response(projectAttempts === 1 ? "temporarily unavailable" : "<a href=\"flaky-1.0-py3-none-any.whl\">flaky-1.0-py3-none-any.whl</a>", {
+          status: projectAttempts === 1 ? 503 : 200,
+          headers: { "content-type": "text/html" },
+        });
+      },
+      objectStoreFor: () => objectStore,
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: {
+        pypi: {
+          upstreamUrl: "https://pypi.org/",
+          proxyPolicy: {
+            upstreamRequestRetries: 1,
+            upstreamRetryBaseDelayMs: 0,
+            upstreamRetryMaxDelayMs: 0,
+          },
+        },
+      },
+    };
+
+    await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:00.000Z"),
+    });
+    const details = await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:01.000Z"),
+      continuation: { projectDetailOffset: 0 },
+    });
+
+    expect(projectAttempts).toBe(2);
+    expect(Array.isArray(details) ? undefined : details?.result?.proxyIndex).toMatchObject({
+      phase: "complete",
+      failedProjectCount: 0,
     });
   });
 

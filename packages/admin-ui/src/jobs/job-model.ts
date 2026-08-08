@@ -46,6 +46,25 @@ export function backgroundJobResultLabel(job: BackgroundJob): string {
   return "-";
 }
 
+export function backgroundJobDetailLines(job: BackgroundJob): string[] {
+  const details: string[] = [];
+  const proxyIndex = proxyIndexResult(job.result);
+  if (proxyIndex.phase) {
+    details.push(`Phase: ${proxyIndex.phase}`);
+  }
+  if (proxyIndex.failedProjectSample) {
+    details.push(`Sample: ${proxyIndex.failedProjectSample}`);
+  }
+  const nextRetryAt = nextRetryAtResult(job.result);
+  if ((job.status === "pending" || job.status === "running") && nextRetryAt) {
+    details.push(`Next retry: ${formatDate(nextRetryAt)}`);
+  }
+  if (job.lastHeartbeatAt) {
+    details.push(`Heartbeat: ${formatDate(job.lastHeartbeatAt)}`);
+  }
+  return details;
+}
+
 function lastFailureResult(result: Record<string, unknown> | undefined): { message: string } | null {
   const lastFailure = result?.lastFailure;
   if (!lastFailure || typeof lastFailure !== "object" || Array.isArray(lastFailure)) {
@@ -55,15 +74,38 @@ function lastFailureResult(result: Record<string, unknown> | undefined): { messa
   return typeof message === "string" && message.length > 0 ? { message } : null;
 }
 
-function proxyIndexResult(result: Record<string, unknown> | undefined): { failedProjectCount: number } {
+function proxyIndexResult(result: Record<string, unknown> | undefined): {
+  failedProjectCount: number;
+  phase?: string;
+  failedProjectSample?: string;
+} {
   const proxyIndex = result?.proxyIndex;
   if (!proxyIndex || typeof proxyIndex !== "object" || Array.isArray(proxyIndex)) {
     return { failedProjectCount: 0 };
   }
-  const failedProjectCount = (proxyIndex as Record<string, unknown>).failedProjectCount;
+  const record = proxyIndex as Record<string, unknown>;
+  const failedProjectCount = record.failedProjectCount;
+  const phase = typeof record.phase === "string" ? record.phase : undefined;
+  const failedProjects = Array.isArray(record.failedProjects) ? record.failedProjects : [];
+  const first = failedProjects.find((project) =>
+    project && typeof project === "object" && !Array.isArray(project)) as Record<string, unknown> | undefined;
+  const project = typeof first?.project === "string" ? first.project : undefined;
+  const message = typeof first?.message === "string" ? first.message : undefined;
   return {
     failedProjectCount: typeof failedProjectCount === "number" && Number.isFinite(failedProjectCount)
       ? failedProjectCount
       : 0,
+    ...(phase ? { phase } : {}),
+    ...(project && message ? { failedProjectSample: `${project}: ${message}` } : {}),
   };
+}
+
+function nextRetryAtResult(result: Record<string, unknown> | undefined): string | null {
+  const nextRetryAt = result?.nextRetryAt;
+  return typeof nextRetryAt === "string" && nextRetryAt.length > 0 ? nextRetryAt : null;
+}
+
+function formatDate(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }

@@ -230,11 +230,16 @@ export const deploymentResponseSchema = z.object({
 export const proxyFileByteCacheSettingsSchema = z.object({
   enabled: z.boolean().optional(),
   maxBytes: z.number().optional(),
+  maxTotalBytes: z.number().optional(),
+  ttlSeconds: z.number().optional(),
   respectUpstreamCacheControl: z.boolean().optional(),
 });
 
 export const proxyOperationalPolicySettingsSchema = z.object({
   upstreamFetchTimeoutMs: z.number().optional(),
+  upstreamRequestRetries: z.number().optional(),
+  upstreamRetryBaseDelayMs: z.number().optional(),
+  upstreamRetryMaxDelayMs: z.number().optional(),
   indexCatalogBatchSize: z.number().optional(),
   indexProjectDetailBatchSize: z.number().optional(),
   failedProjectSampleLimit: z.number().optional(),
@@ -251,12 +256,17 @@ export const runtimeSettingsSchema = z.object({
   operationalPolicy: z.object({
     proxy: z.object({
       upstreamFetchTimeoutMs: z.number(),
+      upstreamRequestRetries: z.number(),
+      upstreamRetryBaseDelayMs: z.number(),
+      upstreamRetryMaxDelayMs: z.number(),
       indexCatalogBatchSize: z.number(),
       indexProjectDetailBatchSize: z.number(),
       failedProjectSampleLimit: z.number(),
       fileByteCache: z.object({
         enabled: z.boolean(),
         maxBytes: z.number(),
+        maxTotalBytes: z.number(),
+        ttlSeconds: z.number(),
         respectUpstreamCacheControl: z.boolean(),
       }),
     }),

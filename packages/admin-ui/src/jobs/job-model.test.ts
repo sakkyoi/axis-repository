@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { BackgroundJob } from "../api/schemas";
-import { backgroundJobResultLabel, backgroundJobStatusLabel, backgroundJobTypeLabel } from "./job-model";
+import {
+  backgroundJobDetailLines,
+  backgroundJobResultLabel,
+  backgroundJobStatusLabel,
+  backgroundJobTypeLabel,
+} from "./job-model";
 
 const job: BackgroundJob = {
   id: "repository.index:python-proxy",
@@ -76,5 +81,26 @@ describe("background job display model", () => {
       },
     })).toBe("Completed with 2 cache warnings");
     expect(backgroundJobResultLabel({ ...job, status: "succeeded" })).toBe("Completed");
+  });
+
+  it("formats operational detail lines for retries, heartbeats, and proxy partial failures", () => {
+    expect(backgroundJobDetailLines({
+      ...job,
+      status: "pending",
+      lastHeartbeatAt: "2026-08-05T00:00:02.000Z",
+      result: {
+        nextRetryAt: "2026-08-05T00:00:32.000Z",
+        proxyIndex: {
+          phase: "warming-project-details",
+          failedProjectCount: 1,
+          failedProjects: [{ project: "broken", message: "upstream returned 503", retryable: true }],
+        },
+      },
+    })).toEqual([
+      "Phase: warming-project-details",
+      "Sample: broken: upstream returned 503",
+      expect.stringContaining("Next retry:"),
+      expect.stringContaining("Heartbeat:"),
+    ]);
   });
 });

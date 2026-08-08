@@ -415,6 +415,10 @@ const DIRECTORY_STYLES = `
     font-size: 0.75rem;
     padding: 0.7rem 1.1rem;
   }
+  .load-sentinel td {
+    height: 1px;
+    padding: 0;
+  }
   /*
    * :link and :visited both, because the browser's own :visited rule outranks
    * a bare selector and would otherwise repaint half the listing purple.
@@ -584,6 +588,7 @@ function renderRepositoryDirectoryHtmlFoot(entryCount: number, options: { tableO
     ...(options.tableOpen
       ? [
         "          <tr class=\"load-row\" data-load-row hidden><td colspan=\"2\">Loading more...</td></tr>",
+        "          <tr class=\"load-sentinel\" data-load-sentinel><td colspan=\"2\"></td></tr>",
         "          </tbody>",
         "        </table>",
         "        </div>",
@@ -604,12 +609,14 @@ const DIRECTORY_PAGINATION_SCRIPT = `
   const root = document.querySelector(".file-list[data-browser-page-param]");
   const rows = document.querySelector("[data-directory-rows]");
   const loadRow = document.querySelector("[data-load-row]");
+  const sentinel = document.querySelector("[data-load-sentinel]");
   const countNode = document.querySelector("[data-entry-count]");
   const labelNode = document.querySelector("[data-entry-label]");
   if (!root || !rows) return;
   let cursor = root.getAttribute("data-next-cursor") || "";
   let loading = false;
   let count = Number(countNode?.textContent || "0");
+  let observer = null;
   const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="#' + name + '"></use></svg>';
   const iconFor = (entry) => {
     if (entry.directory) return "i-folder";
@@ -653,7 +660,7 @@ const DIRECTORY_PAGINATION_SCRIPT = `
     sizeCell.className = "size";
     sizeCell.textContent = entry.directory ? "" : formatSize(entry.size);
     tr.append(nameCell, sizeCell);
-    rows.insertBefore(tr, loadRow);
+    rows.insertBefore(tr, loadRow || sentinel);
     count += 1;
   };
   const updateCount = () => {
@@ -673,17 +680,26 @@ const DIRECTORY_PAGINATION_SCRIPT = `
       const data = await response.json();
       for (const entry of data.listing?.entries || []) appendEntry(entry);
       updateCount();
-      cursor = data.listing?.cursor || "";
+      cursor = data.cursor || data.listing?.cursor || "";
       root.setAttribute("data-next-cursor", cursor);
+      if (!cursor && observer) observer.disconnect();
     } finally {
       loading = false;
       if (loadRow) loadRow.hidden = true;
     }
   };
-  root.addEventListener("scroll", () => {
+  const loadWhenNearBottom = () => {
     if (root.scrollTop + root.clientHeight >= root.scrollHeight - 64) void loadMore();
-  });
-  if (root.scrollHeight <= root.clientHeight + 64) void loadMore();
+  };
+  if (sentinel && "IntersectionObserver" in window) {
+    observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadMore();
+    }, { root, rootMargin: "128px 0px" });
+    observer.observe(sentinel);
+  } else {
+    root.addEventListener("scroll", loadWhenNearBottom);
+  }
+  loadWhenNearBottom();
 })();
 `;
 

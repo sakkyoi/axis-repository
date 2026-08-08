@@ -55,6 +55,15 @@
       "AXIS_PROXY_UPSTREAM_FETCH_TIMEOUT_MS": {
         "description": "Deployment default timeout for proxy repository upstream metadata requests, in milliseconds. Admin runtime settings can override it without redeploying."
       },
+      "AXIS_PROXY_UPSTREAM_REQUEST_RETRIES": {
+        "description": "Deployment default number of retry attempts after a proxy upstream metadata request fails with a retryable network, 429, or 5xx error. Admin runtime settings can override it without redeploying."
+      },
+      "AXIS_PROXY_UPSTREAM_RETRY_BASE_DELAY_MS": {
+        "description": "Deployment default base delay for proxy upstream metadata retries, in milliseconds. Admin runtime settings can override it without redeploying."
+      },
+      "AXIS_PROXY_UPSTREAM_RETRY_MAX_DELAY_MS": {
+        "description": "Deployment default maximum delay for proxy upstream metadata retries, in milliseconds. Admin runtime settings can override it without redeploying."
+      },
       "AXIS_PROXY_INDEX_CATALOG_BATCH_SIZE": {
         "description": "Deployment default number of proxy catalog entries one index job slice records before yielding. Admin runtime settings can override it without redeploying."
       },
@@ -69,6 +78,12 @@
       },
       "AXIS_PROXY_FILE_BYTE_CACHE_MAX_BYTES": {
         "description": "Deployment default maximum size of a proxy artifact response that may be cached, in bytes. Admin runtime settings can override it without redeploying."
+      },
+      "AXIS_PROXY_FILE_BYTE_CACHE_MAX_TOTAL_BYTES": {
+        "description": "Deployment default total proxy artifact byte cache budget per repository, in bytes. `0` leaves total-size eviction disabled; admin runtime settings can override it without redeploying."
+      },
+      "AXIS_PROXY_FILE_BYTE_CACHE_TTL_SECONDS": {
+        "description": "Deployment default TTL for proxy artifact byte cache entries, in seconds. `0` leaves TTL expiry disabled; admin runtime settings can override it without redeploying."
       },
       "AXIS_PROXY_RESPECT_UPSTREAM_CACHE_CONTROL": {
         "description": "Deployment default toggle for respecting upstream `Cache-Control` when proxy artifact byte caching decides whether to store a response. Set to `true` or `false`; admin runtime settings can override it without redeploying."

@@ -10,6 +10,7 @@ import {
   readRepositoryDirectory,
   renderRepositoryDirectoryHtml,
   trailingSlashRedirectLocation,
+  type RepositoryDirectoryListing,
 } from "./repository-directory";
 
 /** Resolves a link the way a client does, so the assertions are about that. */
@@ -94,7 +95,7 @@ describe("renderRepositoryDirectoryHtml", () => {
     repositoryName?: string;
     repositoryEcosystem?: string;
     pluginIcon?: typeof pluginIcon;
-    listing?: typeof listing;
+    listing?: RepositoryDirectoryListing;
     browsePathPrefix?: string;
   } = {}) {
     return renderRepositoryDirectoryHtml({
@@ -201,6 +202,21 @@ describe("renderRepositoryDirectoryHtml", () => {
     expect(html).toContain("top: 0;");
     expect(html).toContain("z-index: 1;");
     expect(html).toContain("background: hsl(var(--panel));");
+  });
+
+  it("loads additional directory pages from a sentinel inside the file list", () => {
+    const html = render({
+      listing: {
+        ...listing,
+        cursor: "page_2",
+        truncated: true,
+      },
+    });
+
+    expect(html).toContain("data-load-sentinel");
+    expect(html).toContain("IntersectionObserver");
+    expect(html).toContain("rootMargin: \"128px 0px\"");
+    expect(html).toContain("data-next-cursor=\"page_2\"");
   });
 
   it("uses the light and dark logo assets in the directory header", () => {

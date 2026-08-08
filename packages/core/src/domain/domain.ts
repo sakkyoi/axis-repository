@@ -23,12 +23,17 @@ export interface RuntimeSettingsRecord {
   operationalPolicy?: {
     proxy?: {
       upstreamFetchTimeoutMs?: number;
+      upstreamRequestRetries?: number;
+      upstreamRetryBaseDelayMs?: number;
+      upstreamRetryMaxDelayMs?: number;
       indexCatalogBatchSize?: number;
       indexProjectDetailBatchSize?: number;
       failedProjectSampleLimit?: number;
       fileByteCache?: {
         enabled?: boolean;
         maxBytes?: number;
+        maxTotalBytes?: number;
+        ttlSeconds?: number;
         respectUpstreamCacheControl?: boolean;
       };
     };

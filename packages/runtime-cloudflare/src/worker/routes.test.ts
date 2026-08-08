@@ -886,6 +886,8 @@ describe("Cloudflare runtime routes", () => {
         }],
         truncated: false,
       },
+      cursor: null,
+      truncated: false,
     });
   });
 
@@ -971,6 +973,8 @@ describe("Cloudflare runtime routes", () => {
         ],
         truncated: false,
       },
+      cursor: null,
+      truncated: false,
     });
   });
 
@@ -1030,9 +1034,13 @@ describe("Cloudflare runtime routes", () => {
     expect(pageResponse.status).toBe(200);
     const page = await pageResponse.json() as {
       listing: { entries: Array<{ name: string; directory: boolean; size?: number }>; truncated: boolean };
+      cursor: string | null;
+      truncated: boolean;
     };
     expect(page.listing.entries.map((entry) => entry.name)).toContain("demo-204-py3-none-any.whl");
     expect(page.listing.truncated).toBe(false);
+    expect(page.cursor).toBeNull();
+    expect(page.truncated).toBe(false);
   });
 
   it("refreshes a PyPI proxy catalog and lazily reads project details", async () => {
@@ -1691,9 +1699,14 @@ describe("Cloudflare runtime routes", () => {
         operationalPolicy: {
           proxy: {
             upstreamFetchTimeoutMs: 5000,
+            upstreamRequestRetries: 2,
+            upstreamRetryBaseDelayMs: 250,
+            upstreamRetryMaxDelayMs: 2000,
             fileByteCache: {
               enabled: false,
               maxBytes: 1024,
+              maxTotalBytes: 0,
+              ttlSeconds: 0,
               respectUpstreamCacheControl: true,
             },
           },

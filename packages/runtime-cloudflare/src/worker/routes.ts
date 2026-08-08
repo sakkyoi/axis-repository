@@ -1086,7 +1086,11 @@ async function repositoryDirectoryPageJsonResponse(input: {
   if (!listing) {
     return null;
   }
-  return jsonResponse({ listing }, {
+  return jsonResponse({
+    listing,
+    cursor: listing.cursor ?? null,
+    truncated: listing.truncated ?? false,
+  }, {
     headers: { "cache-control": repositoryCacheControl(input.repository) },
   });
 }

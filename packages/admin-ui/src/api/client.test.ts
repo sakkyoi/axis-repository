@@ -649,12 +649,17 @@ describe("createAxisClient", () => {
         operationalPolicy: {
           proxy: {
             upstreamFetchTimeoutMs: 5000,
+            upstreamRequestRetries: 2,
+            upstreamRetryBaseDelayMs: 250,
+            upstreamRetryMaxDelayMs: 1000,
             indexCatalogBatchSize: 200,
             indexProjectDetailBatchSize: 50,
             failedProjectSampleLimit: 20,
             fileByteCache: {
               enabled: true,
               maxBytes: 1024,
+              maxTotalBytes: 4096,
+              ttlSeconds: 60,
               respectUpstreamCacheControl: true,
             },
           },

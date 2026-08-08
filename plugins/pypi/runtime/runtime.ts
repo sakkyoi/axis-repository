@@ -177,6 +177,7 @@ export function createPypiProxyPlugin(input: {
           repositoryName: repository.name,
           upstreamUrl,
           method: request.method,
+          policy: proxyPolicy.fileByteCache,
         });
         if (cached) {
           return cached;
@@ -189,6 +190,7 @@ export function createPypiProxyPlugin(input: {
             repositoryName: repository.name,
             upstreamUrl,
             method: request.method,
+            policy: proxyPolicy.fileByteCache,
           });
           if (completed) {
             return completed;
@@ -217,6 +219,7 @@ export function createPypiProxyPlugin(input: {
             upstreamUrl,
             response: upstreamResponse,
             fileCacheWrites,
+            policy: proxyPolicy.fileByteCache,
             ...(scheduleBackgroundTask ? { scheduleBackgroundTask } : {}),
           });
         }
@@ -1007,14 +1010,32 @@ async function fetchPypiProxyProjects(
 ): Promise<string[]> {
   const rootResponse = await fetchWithTimeout(fetchImpl, new Request(rootUrl, {
     headers: { accept: "text/html" },
-  }), proxyPolicy.upstreamFetchTimeoutMs);
+  }), proxyPolicy);
   if (!rootResponse.ok) {
     throw new ValidationError(`PyPI proxy upstream root returned ${rootResponse.status}`);
   }
   return parseProjectListHtml(await rootResponse.text());
 }
 
-async function fetchWithTimeout(fetchImpl: FetchLike, request: Request, timeoutMs: number): Promise<Response> {
+async function fetchWithTimeout(fetchImpl: FetchLike, request: Request, proxyPolicy: ProxyOperationalPolicy): Promise<Response> {
+  const maxAttempts = proxyPolicy.upstreamRequestRetries + 1;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetchOnceWithTimeout(fetchImpl, request, proxyPolicy.upstreamFetchTimeoutMs);
+      if (!pypiProxyResponseStatusIsRetryable(response.status) || attempt >= maxAttempts) {
+        return response;
+      }
+    } catch (error) {
+      if (attempt >= maxAttempts) {
+        throw error;
+      }
+    }
+    await delay(pypiProxyRetryDelayMs(attempt, proxyPolicy));
+  }
+  throw new Error("PyPI proxy upstream retry loop ended unexpectedly");
+}
+
+async function fetchOnceWithTimeout(fetchImpl: FetchLike, request: Request, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => {
     controller.abort(new Error(`PyPI proxy upstream request timed out after ${timeoutMs}ms`));
@@ -1056,11 +1077,11 @@ async function fetchAndCachePypiProxyProject(input: {
   }
   const project = await fetchAndStorePypiProxyProject({
     fetch: input.fetch,
-    objectStore: input.objectStore,
-    repositoryName: input.repositoryName,
-    projectName,
-    projectUrl,
-    proxyPolicy: input.proxyPolicy,
+      objectStore: input.objectStore,
+      repositoryName: input.repositoryName,
+      projectName,
+      projectUrl,
+      proxyPolicy: input.proxyPolicy,
   }).catch(() => undefined);
   if (!project) {
     return undefined;
@@ -1124,7 +1145,7 @@ async function fetchAndStorePypiProxyProject(input: {
 }): Promise<{ name: string; files: unknown[] }> {
   const projectResponse = await fetchWithTimeout(input.fetch, new Request(input.projectUrl, {
     headers: { accept: "text/html" },
-  }), input.proxyPolicy.upstreamFetchTimeoutMs).catch((error: unknown) => {
+  }), input.proxyPolicy).catch((error: unknown) => {
     throw new PypiProxyUpstreamError(
       `PyPI proxy upstream project ${input.projectName} request failed: ${error instanceof Error ? error.message : String(error)}`,
       true,
@@ -1147,6 +1168,21 @@ async function fetchAndStorePypiProxyProject(input: {
     fileCount: files.length,
   });
   return project;
+}
+
+function pypiProxyResponseStatusIsRetryable(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+function pypiProxyRetryDelayMs(attempt: number, proxyPolicy: ProxyOperationalPolicy): number {
+  return Math.min(
+    proxyPolicy.upstreamRetryBaseDelayMs * 2 ** Math.max(0, attempt - 1),
+    proxyPolicy.upstreamRetryMaxDelayMs,
+  );
+}
+
+function delay(ms: number): Promise<void> {
+  return ms <= 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 class PypiProxyUpstreamError extends Error {
@@ -1272,11 +1308,16 @@ function pypiProxyFileCacheLeaseKey(repositoryName: string, upstreamUrl: string)
   return `${repositoryName}\0${upstreamUrl}`;
 }
 
+function pypiProxyByteCachePrefix(repositoryName: string): string {
+  return `repositories/${repositoryName}/_proxy-cache/pypi/files/`;
+}
+
 async function readPypiProxyFileCache(input: {
   objectStore: RepositoryObjectStore;
   repositoryName: string;
   upstreamUrl: string;
   method: string;
+  policy: ProxyFileByteCachePolicy;
 }): Promise<Response | null> {
   const objectKey = await pypiProxyFileCacheObjectKey(input.repositoryName, input.upstreamUrl);
   const object = await input.objectStore.getObject(objectKey);
@@ -1288,6 +1329,13 @@ async function readPypiProxyFileCache(input: {
     repositoryName: input.repositoryName,
     upstreamUrl: input.upstreamUrl,
   });
+  if (pypiProxyFileCacheIsExpired(metadata, input.policy)) {
+    await input.objectStore.deleteObjects([
+      objectKey,
+      await pypiProxyFileCacheMetadataKey(input.repositoryName, input.upstreamUrl),
+    ]);
+    return null;
+  }
   const headers = pypiProxyFileCacheHeaders(metadata, object);
   return new Response(input.method === "HEAD" ? null : objectStream(object), {
     status: 200,
@@ -1301,6 +1349,7 @@ async function streamAndCachePypiProxyFileResponse(input: {
   upstreamUrl: string;
   response: Response;
   fileCacheWrites: Map<string, Promise<void>>;
+  policy: ProxyFileByteCachePolicy;
   scheduleBackgroundTask?: (task: Promise<unknown>) => void;
 }): Promise<Response> {
   if (!input.response.body || !input.scheduleBackgroundTask) {
@@ -1309,6 +1358,7 @@ async function streamAndCachePypiProxyFileResponse(input: {
       repositoryName: input.repositoryName,
       upstreamUrl: input.upstreamUrl,
       response: input.response,
+      policy: input.policy,
     });
   }
   const [clientBody, cacheBody] = input.response.body.tee();
@@ -1323,6 +1373,7 @@ async function streamAndCachePypiProxyFileResponse(input: {
     repositoryName: input.repositoryName,
     upstreamUrl: input.upstreamUrl,
     response: cacheResponse,
+    policy: input.policy,
   })
     .then(() => undefined)
     .catch((error) => {
@@ -1345,6 +1396,7 @@ async function cachePypiProxyFileResponse(input: {
   repositoryName: string;
   upstreamUrl: string;
   response: Response;
+  policy: ProxyFileByteCachePolicy;
 }): Promise<Response> {
   const contentType = input.response.headers.get("content-type") ?? "application/octet-stream";
   const objectKey = await pypiProxyFileCacheObjectKey(input.repositoryName, input.upstreamUrl);
@@ -1368,11 +1420,13 @@ async function cachePypiProxyFileResponse(input: {
       await pypiProxyFileCacheMetadataKey(input.repositoryName, input.upstreamUrl),
       metadata,
     );
+    await enforcePypiProxyFileCacheBudget(input.objectStore, input.repositoryName, input.policy);
     const cached = await readPypiProxyFileCache({
       objectStore: input.objectStore,
       repositoryName: input.repositoryName,
       upstreamUrl: input.upstreamUrl,
       method: "GET",
+      policy: input.policy,
     });
     if (cached) {
       return cached;
@@ -1417,14 +1471,19 @@ async function readPypiProxyFileCacheMetadata(input: {
   if (!object) {
     return null;
   }
-  const parsed = parseJsonObject(new TextDecoder().decode(await objectBytes(object)));
-  if (parsed.upstreamUrl !== input.upstreamUrl) {
+  const metadata = parsePypiProxyFileCacheMetadataObject(new TextDecoder().decode(await objectBytes(object)));
+  if (metadata.upstreamUrl !== input.upstreamUrl) {
     return null;
   }
+  return metadata;
+}
+
+function parsePypiProxyFileCacheMetadataObject(value: string | Record<string, unknown>): PypiProxyFileCacheMetadata {
+  const parsed = typeof value === "string" ? parseJsonObject(value) : value;
   const contentType = typeof parsed.contentType === "string" ? parsed.contentType : "application/octet-stream";
   const contentLength = typeof parsed.contentLength === "number" ? parsed.contentLength : 0;
   return {
-    upstreamUrl: input.upstreamUrl,
+    upstreamUrl: typeof parsed.upstreamUrl === "string" ? parsed.upstreamUrl : "",
     contentType,
     contentLength,
     cachedAt: typeof parsed.cachedAt === "string" ? parsed.cachedAt : "",
@@ -1462,6 +1521,58 @@ function pypiProxyFileCacheHeaders(
     headers.set("cache-control", metadata.cacheControl);
   }
   return headers;
+}
+
+function pypiProxyFileCacheIsExpired(
+  metadata: PypiProxyFileCacheMetadata | null,
+  policy: ProxyFileByteCachePolicy,
+): boolean {
+  if (policy.ttlSeconds <= 0 || !metadata?.cachedAt) {
+    return false;
+  }
+  const cachedAt = new Date(metadata.cachedAt).getTime();
+  if (!Number.isFinite(cachedAt)) {
+    return true;
+  }
+  return Date.now() - cachedAt > policy.ttlSeconds * 1000;
+}
+
+async function enforcePypiProxyFileCacheBudget(
+  objectStore: RepositoryObjectStore,
+  repositoryName: string,
+  policy: ProxyFileByteCachePolicy,
+): Promise<void> {
+  if (policy.maxTotalBytes <= 0) {
+    return;
+  }
+  const listing = await listAllObjects(objectStore, pypiProxyByteCachePrefix(repositoryName));
+  const files = await Promise.all(listing
+    .filter((object) => !object.key.endsWith(".json"))
+    .map(async (object) => {
+      const metadataObject = await objectStore.getObject(`${object.key}.json`);
+      const metadata = metadataObject
+        ? parsePypiProxyFileCacheMetadataObject(new TextDecoder().decode(await objectBytes(metadataObject)))
+        : null;
+      return {
+        key: object.key,
+        metadataKey: `${object.key}.json`,
+        byteCount: object.contentLength ?? metadata?.contentLength ?? 0,
+        cachedAt: metadata?.cachedAt ? new Date(metadata.cachedAt).getTime() : object.uploadedAt?.getTime() ?? 0,
+      };
+    }));
+  let total = files.reduce((sum, file) => sum + file.byteCount, 0);
+  if (total <= policy.maxTotalBytes) {
+    return;
+  }
+  const deleting: string[] = [];
+  for (const file of files.sort((left, right) => left.cachedAt - right.cachedAt)) {
+    if (total <= policy.maxTotalBytes) break;
+    deleting.push(file.key, file.metadataKey);
+    total -= file.byteCount;
+  }
+  if (deleting.length > 0) {
+    await objectStore.deleteObjects(deleting);
+  }
 }
 
 function hasPypiProxyConditionalRequestHeaders(headers: Headers): boolean {

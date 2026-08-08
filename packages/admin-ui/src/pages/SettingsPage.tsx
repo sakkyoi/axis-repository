@@ -214,11 +214,16 @@ type RuntimeSettingsUpdate = ReturnType<typeof useUpdateRuntimeSettings>;
 
 interface RuntimePolicyFormState {
   upstreamFetchTimeoutMs: string;
+  upstreamRequestRetries: string;
+  upstreamRetryBaseDelayMs: string;
+  upstreamRetryMaxDelayMs: string;
   indexCatalogBatchSize: string;
   indexProjectDetailBatchSize: string;
   failedProjectSampleLimit: string;
   fileByteCacheEnabled: boolean;
   fileByteCacheMaxBytes: string;
+  fileByteCacheMaxTotalBytes: string;
+  fileByteCacheTtlSeconds: string;
   respectUpstreamCacheControl: boolean;
 }
 
@@ -261,12 +266,17 @@ function RuntimeOperationalPolicyCard({
               operationalPolicy: {
                 proxy: {
                   upstreamFetchTimeoutMs: integerFormValue(form.upstreamFetchTimeoutMs),
+                  upstreamRequestRetries: integerFormValue(form.upstreamRequestRetries),
+                  upstreamRetryBaseDelayMs: integerFormValue(form.upstreamRetryBaseDelayMs),
+                  upstreamRetryMaxDelayMs: integerFormValue(form.upstreamRetryMaxDelayMs),
                   indexCatalogBatchSize: integerFormValue(form.indexCatalogBatchSize),
                   indexProjectDetailBatchSize: integerFormValue(form.indexProjectDetailBatchSize),
                   failedProjectSampleLimit: integerFormValue(form.failedProjectSampleLimit),
                   fileByteCache: {
                     enabled: form.fileByteCacheEnabled,
                     maxBytes: integerFormValue(form.fileByteCacheMaxBytes),
+                    maxTotalBytes: integerFormValue(form.fileByteCacheMaxTotalBytes),
+                    ttlSeconds: integerFormValue(form.fileByteCacheTtlSeconds),
                     respectUpstreamCacheControl: form.respectUpstreamCacheControl,
                   },
                 },
@@ -299,10 +309,39 @@ function RuntimeOperationalPolicyCard({
               onChange={(failedProjectSampleLimit) => setForm((current) => ({ ...current, failedProjectSampleLimit }))}
             />
             <RuntimeNumberField
+              label="Upstream retries"
+              value={form.upstreamRequestRetries}
+              onChange={(upstreamRequestRetries) => setForm((current) => ({ ...current, upstreamRequestRetries }))}
+            />
+            <RuntimeNumberField
+              label="Retry base delay"
+              suffix="ms"
+              value={form.upstreamRetryBaseDelayMs}
+              onChange={(upstreamRetryBaseDelayMs) => setForm((current) => ({ ...current, upstreamRetryBaseDelayMs }))}
+            />
+            <RuntimeNumberField
+              label="Retry max delay"
+              suffix="ms"
+              value={form.upstreamRetryMaxDelayMs}
+              onChange={(upstreamRetryMaxDelayMs) => setForm((current) => ({ ...current, upstreamRetryMaxDelayMs }))}
+            />
+            <RuntimeNumberField
               label="Byte cache limit"
               suffix="bytes"
               value={form.fileByteCacheMaxBytes}
               onChange={(fileByteCacheMaxBytes) => setForm((current) => ({ ...current, fileByteCacheMaxBytes }))}
+            />
+            <RuntimeNumberField
+              label="Byte cache total"
+              suffix="bytes"
+              value={form.fileByteCacheMaxTotalBytes}
+              onChange={(fileByteCacheMaxTotalBytes) => setForm((current) => ({ ...current, fileByteCacheMaxTotalBytes }))}
+            />
+            <RuntimeNumberField
+              label="Byte cache TTL"
+              suffix="seconds"
+              value={form.fileByteCacheTtlSeconds}
+              onChange={(fileByteCacheTtlSeconds) => setForm((current) => ({ ...current, fileByteCacheTtlSeconds }))}
             />
             <label className="flex min-h-16 items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
               <input
@@ -378,11 +417,16 @@ function runtimePolicyFormState(
 ): RuntimePolicyFormState {
   return {
     upstreamFetchTimeoutMs: String(policy?.upstreamFetchTimeoutMs ?? ""),
+    upstreamRequestRetries: String(policy?.upstreamRequestRetries ?? ""),
+    upstreamRetryBaseDelayMs: String(policy?.upstreamRetryBaseDelayMs ?? ""),
+    upstreamRetryMaxDelayMs: String(policy?.upstreamRetryMaxDelayMs ?? ""),
     indexCatalogBatchSize: String(policy?.indexCatalogBatchSize ?? ""),
     indexProjectDetailBatchSize: String(policy?.indexProjectDetailBatchSize ?? ""),
     failedProjectSampleLimit: String(policy?.failedProjectSampleLimit ?? ""),
     fileByteCacheEnabled: policy?.fileByteCache.enabled ?? true,
     fileByteCacheMaxBytes: String(policy?.fileByteCache.maxBytes ?? ""),
+    fileByteCacheMaxTotalBytes: String(policy?.fileByteCache.maxTotalBytes ?? ""),
+    fileByteCacheTtlSeconds: String(policy?.fileByteCache.ttlSeconds ?? ""),
     respectUpstreamCacheControl: policy?.fileByteCache.respectUpstreamCacheControl ?? true,
   };
 }

@@ -129,6 +129,7 @@ export class BackgroundJobDispatcher {
       result: {
         ...(job.result ?? {}),
         lastFailure: failure,
+        nextRetryAt: scheduledAt,
       },
     });
     return true;

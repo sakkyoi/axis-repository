@@ -132,6 +132,7 @@ export class RepositoryIndexBackgroundJobService {
               ...(running.result ?? {}),
               continuation,
               retryCount,
+              nextRetryAt: scheduledAt,
               lastFailure: {
                 message,
                 failedAt: finishedAt,

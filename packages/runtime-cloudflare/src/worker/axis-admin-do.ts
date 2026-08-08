@@ -60,11 +60,16 @@ export interface AxisEnv {
   ADMIN_UI_API_BASE_URL?: string;
   AXIS_ARTIFACT_ORIGIN?: string;
   AXIS_PROXY_UPSTREAM_FETCH_TIMEOUT_MS?: string;
+  AXIS_PROXY_UPSTREAM_REQUEST_RETRIES?: string;
+  AXIS_PROXY_UPSTREAM_RETRY_BASE_DELAY_MS?: string;
+  AXIS_PROXY_UPSTREAM_RETRY_MAX_DELAY_MS?: string;
   AXIS_PROXY_INDEX_CATALOG_BATCH_SIZE?: string;
   AXIS_PROXY_INDEX_PROJECT_DETAIL_BATCH_SIZE?: string;
   AXIS_PROXY_FAILED_PROJECT_SAMPLE_LIMIT?: string;
   AXIS_PROXY_FILE_BYTE_CACHE_ENABLED?: string;
   AXIS_PROXY_FILE_BYTE_CACHE_MAX_BYTES?: string;
+  AXIS_PROXY_FILE_BYTE_CACHE_MAX_TOTAL_BYTES?: string;
+  AXIS_PROXY_FILE_BYTE_CACHE_TTL_SECONDS?: string;
   AXIS_PROXY_RESPECT_UPSTREAM_CACHE_CONTROL?: string;
 }
 
@@ -140,6 +145,18 @@ function deploymentOperationalPolicyFromEnv(env: AxisEnv): RuntimeOperationalPol
     env.AXIS_PROXY_FAILED_PROJECT_SAMPLE_LIMIT,
     "AXIS_PROXY_FAILED_PROJECT_SAMPLE_LIMIT",
   );
+  const upstreamRequestRetries = optionalNonNegativeInteger(
+    env.AXIS_PROXY_UPSTREAM_REQUEST_RETRIES,
+    "AXIS_PROXY_UPSTREAM_REQUEST_RETRIES",
+  );
+  const upstreamRetryBaseDelayMs = optionalNonNegativeInteger(
+    env.AXIS_PROXY_UPSTREAM_RETRY_BASE_DELAY_MS,
+    "AXIS_PROXY_UPSTREAM_RETRY_BASE_DELAY_MS",
+  );
+  const upstreamRetryMaxDelayMs = optionalNonNegativeInteger(
+    env.AXIS_PROXY_UPSTREAM_RETRY_MAX_DELAY_MS,
+    "AXIS_PROXY_UPSTREAM_RETRY_MAX_DELAY_MS",
+  );
   const fileByteCacheEnabled = optionalBoolean(
     env.AXIS_PROXY_FILE_BYTE_CACHE_ENABLED,
     "AXIS_PROXY_FILE_BYTE_CACHE_ENABLED",
@@ -148,6 +165,14 @@ function deploymentOperationalPolicyFromEnv(env: AxisEnv): RuntimeOperationalPol
     env.AXIS_PROXY_FILE_BYTE_CACHE_MAX_BYTES,
     "AXIS_PROXY_FILE_BYTE_CACHE_MAX_BYTES",
   );
+  const fileByteCacheMaxTotalBytes = optionalNonNegativeInteger(
+    env.AXIS_PROXY_FILE_BYTE_CACHE_MAX_TOTAL_BYTES,
+    "AXIS_PROXY_FILE_BYTE_CACHE_MAX_TOTAL_BYTES",
+  );
+  const fileByteCacheTtlSeconds = optionalNonNegativeInteger(
+    env.AXIS_PROXY_FILE_BYTE_CACHE_TTL_SECONDS,
+    "AXIS_PROXY_FILE_BYTE_CACHE_TTL_SECONDS",
+  );
   const respectUpstreamCacheControl = optionalBoolean(
     env.AXIS_PROXY_RESPECT_UPSTREAM_CACHE_CONTROL,
     "AXIS_PROXY_RESPECT_UPSTREAM_CACHE_CONTROL",
@@ -155,10 +180,15 @@ function deploymentOperationalPolicyFromEnv(env: AxisEnv): RuntimeOperationalPol
   const fileByteCache = {
     ...(fileByteCacheEnabled === undefined ? {} : { enabled: fileByteCacheEnabled }),
     ...(fileByteCacheMaxBytes === undefined ? {} : { maxBytes: fileByteCacheMaxBytes }),
+    ...(fileByteCacheMaxTotalBytes === undefined ? {} : { maxTotalBytes: fileByteCacheMaxTotalBytes }),
+    ...(fileByteCacheTtlSeconds === undefined ? {} : { ttlSeconds: fileByteCacheTtlSeconds }),
     ...(respectUpstreamCacheControl === undefined ? {} : { respectUpstreamCacheControl }),
   };
   const proxy = {
     ...(upstreamFetchTimeoutMs === undefined ? {} : { upstreamFetchTimeoutMs }),
+    ...(upstreamRequestRetries === undefined ? {} : { upstreamRequestRetries }),
+    ...(upstreamRetryBaseDelayMs === undefined ? {} : { upstreamRetryBaseDelayMs }),
+    ...(upstreamRetryMaxDelayMs === undefined ? {} : { upstreamRetryMaxDelayMs }),
     ...(indexCatalogBatchSize === undefined ? {} : { indexCatalogBatchSize }),
     ...(indexProjectDetailBatchSize === undefined ? {} : { indexProjectDetailBatchSize }),
     ...(failedProjectSampleLimit === undefined ? {} : { failedProjectSampleLimit }),

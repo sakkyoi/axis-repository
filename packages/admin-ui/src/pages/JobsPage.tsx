@@ -6,7 +6,12 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { SkeletonRows } from "../components/ui/skeleton";
 import { useErrorToast } from "../components/ui/toast";
-import { backgroundJobResultLabel, backgroundJobStatusLabel, backgroundJobTypeLabel } from "../jobs/job-model";
+import {
+  backgroundJobDetailLines,
+  backgroundJobResultLabel,
+  backgroundJobStatusLabel,
+  backgroundJobTypeLabel,
+} from "../jobs/job-model";
 import { ErrorState, PageShell } from "./shared";
 
 const statusVariant: Record<BackgroundJob["status"], "default" | "success" | "warning" | "destructive"> = {
@@ -127,6 +132,9 @@ export function JobsPage() {
                       ) : (
                         backgroundJobResultLabel(job)
                       )}
+                      {backgroundJobDetailLines(job).map((line) => (
+                        <div key={line} className="mt-1 text-[11px] text-muted-foreground">{line}</div>
+                      ))}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {(job.status === "pending" || job.status === "running") && (
