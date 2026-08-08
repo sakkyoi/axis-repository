@@ -1,8 +1,3 @@
-CREATE TABLE IF NOT EXISTS axis_state_kv (
-  key TEXT PRIMARY KEY,
-  value_json TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS axis_repositories (
   name TEXT PRIMARY KEY,
   id TEXT NOT NULL,
@@ -49,6 +44,43 @@ CREATE TABLE IF NOT EXISTS axis_runtime_settings (
   id TEXT PRIMARY KEY,
   record_json TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS axis_publish_sessions (
+  id TEXT PRIMARY KEY,
+  repository_name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_publish_sessions_created_idx
+  ON axis_publish_sessions (created_at DESC, id ASC);
+CREATE INDEX IF NOT EXISTS axis_publish_sessions_repository_idx
+  ON axis_publish_sessions (repository_name, created_at DESC, id ASC);
+
+CREATE TABLE IF NOT EXISTS axis_repository_secrets (
+  id TEXT PRIMARY KEY,
+  namespace TEXT NOT NULL,
+  repository_name TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  UNIQUE(namespace, repository_name, name)
+);
+CREATE INDEX IF NOT EXISTS axis_repository_secrets_name_idx
+  ON axis_repository_secrets (namespace, repository_name, name);
+CREATE INDEX IF NOT EXISTS axis_repository_secrets_repository_idx
+  ON axis_repository_secrets (repository_name, name ASC);
+
+CREATE TABLE IF NOT EXISTS axis_repository_activities (
+  id TEXT PRIMARY KEY,
+  repository_name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_repository_activities_repository_idx
+  ON axis_repository_activities (repository_name, created_at DESC, id ASC);
 
 CREATE TABLE IF NOT EXISTS axis_background_jobs (
   id TEXT PRIMARY KEY,

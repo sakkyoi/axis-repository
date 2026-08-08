@@ -10,16 +10,14 @@ class FakeD1Database {
   private readonly adminRefreshSessions = new Map<string, Record<string, unknown>>();
   private readonly repositoryPluginPolicies = new Map<string, Record<string, unknown>>();
   private readonly runtimeSettings = new Map<string, Record<string, unknown>>();
+  private readonly publishSessions = new Map<string, Record<string, unknown>>();
+  private readonly repositorySecrets = new Map<string, Record<string, unknown>>();
+  private readonly repositoryActivities = new Map<string, Record<string, unknown>>();
   private readonly backgroundJobs = new Map<string, Record<string, unknown>>();
   private readonly repositoryArtifacts = new Map<string, Record<string, unknown>>();
-  private readonly stateKv = new Map<string, string>();
   readonly preparedQueries: string[] = [];
   readonly batchSizes: number[] = [];
   execCount = 0;
-
-  stateKvSize(): number {
-    return this.stateKv.size;
-  }
 
   prepare(query: string): D1PreparedStatement {
     this.preparedQueries.push(query);
@@ -30,9 +28,11 @@ class FakeD1Database {
       adminRefreshSessions: this.adminRefreshSessions,
       repositoryPluginPolicies: this.repositoryPluginPolicies,
       runtimeSettings: this.runtimeSettings,
+      publishSessions: this.publishSessions,
+      repositorySecrets: this.repositorySecrets,
+      repositoryActivities: this.repositoryActivities,
       backgroundJobs: this.backgroundJobs,
       repositoryArtifacts: this.repositoryArtifacts,
-      stateKv: this.stateKv,
     }) as unknown as D1PreparedStatement;
   }
 
@@ -65,9 +65,11 @@ interface FakeD1Tables {
   adminRefreshSessions: Map<string, Record<string, unknown>>;
   repositoryPluginPolicies: Map<string, Record<string, unknown>>;
   runtimeSettings: Map<string, Record<string, unknown>>;
+  publishSessions: Map<string, Record<string, unknown>>;
+  repositorySecrets: Map<string, Record<string, unknown>>;
+  repositoryActivities: Map<string, Record<string, unknown>>;
   backgroundJobs: Map<string, Record<string, unknown>>;
   repositoryArtifacts: Map<string, Record<string, unknown>>;
-  stateKv: Map<string, string>;
 }
 
 function fakeD1Meta(changes = 0): D1Meta & Record<string, unknown> {
@@ -152,14 +154,36 @@ class FakeD1PreparedStatement {
         idColumn: "id",
       });
     }
+    if (this.query.includes("FROM axis_publish_sessions")) {
+      return selectRows(this.tables.publishSessions, this.query, this.bindings, {
+        idColumn: "id",
+        repositoryColumn: "repository_name",
+        orderColumn: "created_at",
+        descending: true,
+      });
+    }
+    if (this.query.includes("FROM axis_repository_secrets")) {
+      return selectRows(this.tables.repositorySecrets, this.query, this.bindings, {
+        idColumn: "id",
+        repositoryColumn: "repository_name",
+        namespaceColumn: "namespace",
+        nameColumn: "name",
+        orderColumn: "name",
+      });
+    }
+    if (this.query.includes("FROM axis_repository_activities")) {
+      return selectRows(this.tables.repositoryActivities, this.query, this.bindings, {
+        idColumn: "id",
+        repositoryColumn: "repository_name",
+        orderColumn: "created_at",
+        descending: true,
+      });
+    }
     if (this.query.includes("FROM axis_background_jobs")) {
       return selectBackgroundJobs(this.tables.backgroundJobs, this.query, this.bindings);
     }
     if (this.query.includes("FROM axis_repository_artifacts")) {
       return selectRepositoryArtifacts(this.tables.repositoryArtifacts, this.query, this.bindings);
-    }
-    if (this.query.includes("FROM axis_state_kv")) {
-      return selectStateKv(this.tables.stateKv, this.query, this.bindings);
     }
     return [];
   }
@@ -265,16 +289,104 @@ class FakeD1PreparedStatement {
       this.changes = 1;
       return;
     }
-    if (this.query.startsWith("INSERT INTO axis_state_kv")) {
-      const [key, valueJson] = this.bindings;
-      this.tables.stateKv.set(String(key), String(valueJson));
+    if (this.query.startsWith("INSERT INTO axis_publish_sessions")) {
+      const [id, repositoryName, status, createdAt, expiresAt, recordJson] = this.bindings;
+      this.tables.publishSessions.set(String(id), {
+        id,
+        repository_name: repositoryName,
+        status,
+        created_at: createdAt,
+        expires_at: expiresAt,
+        record_json: recordJson,
+      });
       this.changes = 1;
       return;
     }
-    if (this.query.startsWith("DELETE FROM axis_state_kv")) {
-      const [key] = this.bindings;
-      this.tables.stateKv.delete(String(key));
+    if (this.query.startsWith("DELETE FROM axis_publish_sessions")) {
+      const [value] = this.bindings;
+      let deleted = 0;
+      for (const [id, row] of [...this.tables.publishSessions.entries()]) {
+        if (this.query.includes("repository_name = ?")) {
+          if (row.repository_name !== value) continue;
+        } else if (id !== value) {
+          continue;
+        }
+        this.tables.publishSessions.delete(id);
+        deleted += 1;
+      }
+      this.changes = deleted;
+      return;
+    }
+    if (this.query.startsWith("INSERT INTO axis_repository_secrets")) {
+      const [id, namespace, repositoryName, name, createdAt, recordJson] = this.bindings;
+      for (const [existingId, row] of [...this.tables.repositorySecrets.entries()]) {
+        if (
+          existingId !== id
+          && row.namespace === namespace
+          && row.repository_name === repositoryName
+          && row.name === name
+        ) {
+          this.tables.repositorySecrets.delete(existingId);
+        }
+      }
+      this.tables.repositorySecrets.set(String(id), {
+        id,
+        namespace,
+        repository_name: repositoryName,
+        name,
+        created_at: createdAt,
+        record_json: recordJson,
+      });
       this.changes = 1;
+      return;
+    }
+    if (this.query.startsWith("DELETE FROM axis_repository_secrets")) {
+      let deleted = 0;
+      if (this.query.includes("namespace = ? AND repository_name = ? AND name = ? AND id <> ?")) {
+        const [namespace, repositoryName, name, id] = this.bindings;
+        for (const [existingId, row] of [...this.tables.repositorySecrets.entries()]) {
+          if (
+            existingId !== id
+            && row.namespace === namespace
+            && row.repository_name === repositoryName
+            && row.name === name
+          ) {
+            this.tables.repositorySecrets.delete(existingId);
+            deleted += 1;
+          }
+        }
+      } else {
+        const [repositoryName] = this.bindings;
+        for (const [id, row] of [...this.tables.repositorySecrets.entries()]) {
+          if (row.repository_name !== repositoryName) continue;
+          this.tables.repositorySecrets.delete(id);
+          deleted += 1;
+        }
+      }
+      this.changes = deleted;
+      return;
+    }
+    if (this.query.startsWith("INSERT INTO axis_repository_activities")) {
+      const [id, repositoryName, type, createdAt, recordJson] = this.bindings;
+      this.tables.repositoryActivities.set(String(id), {
+        id,
+        repository_name: repositoryName,
+        type,
+        created_at: createdAt,
+        record_json: recordJson,
+      });
+      this.changes = 1;
+      return;
+    }
+    if (this.query.startsWith("DELETE FROM axis_repository_activities")) {
+      const [repositoryName] = this.bindings;
+      let deleted = 0;
+      for (const [id, row] of [...this.tables.repositoryActivities.entries()]) {
+        if (row.repository_name !== repositoryName) continue;
+        this.tables.repositoryActivities.delete(id);
+        deleted += 1;
+      }
+      this.changes = deleted;
       return;
     }
     if (this.query.startsWith("INSERT INTO axis_background_jobs")) {
@@ -426,6 +538,8 @@ function selectRows(
   options: {
     idColumn: string;
     nameColumn?: string;
+    namespaceColumn?: string;
+    repositoryColumn?: string;
     orderColumn?: string;
     descending?: boolean;
   },
@@ -433,8 +547,25 @@ function selectRows(
   let rows = [...table.values()];
   if (query.includes(`${options.idColumn} = ?`)) {
     rows = rows.filter((row) => row[options.idColumn] === bindings[0]);
+  } else if (
+    options.namespaceColumn
+    && options.repositoryColumn
+    && options.nameColumn
+    && query.includes(`${options.namespaceColumn} = ?`)
+    && query.includes(`${options.repositoryColumn} = ?`)
+    && query.includes(`${options.nameColumn} = ?`)
+  ) {
+    rows = rows.filter((row) =>
+      row[options.namespaceColumn!] === bindings[0]
+      && row[options.repositoryColumn!] === bindings[1]
+      && row[options.nameColumn!] === bindings[2]);
+  } else if (options.repositoryColumn && query.includes(`${options.repositoryColumn} = ?`)) {
+    rows = rows.filter((row) => row[options.repositoryColumn!] === bindings[0]);
   } else if (options.nameColumn && query.includes(`${options.nameColumn} = ?`)) {
     rows = rows.filter((row) => row[options.nameColumn!] === bindings[0]);
+  }
+  if (query.includes("COUNT(*) AS total")) {
+    return [{ total: rows.length }];
   }
   if (options.orderColumn) {
     rows = rows.sort((left, right) => {
@@ -509,22 +640,6 @@ function applyLimitOffset(rows: Record<string, unknown>[], query: string, bindin
   const limit = Number(bindings.at(hasOffset ? -2 : -1));
   const offset = hasOffset ? Number(bindings.at(-1)) : 0;
   return rows.slice(offset, offset + limit);
-}
-
-function selectStateKv(
-  table: Map<string, string>,
-  query: string,
-  bindings: unknown[],
-): Record<string, unknown>[] {
-  let rows = [...table.entries()].map(([key, valueJson]) => ({ key, value_json: valueJson }));
-  if (query.includes("key = ?")) {
-    rows = rows.filter((row) => row.key === bindings[0]);
-  }
-  if (query.includes("key LIKE ?")) {
-    const prefix = String(bindings[0]).replace(/%$/, "").replaceAll("\\%", "%").replaceAll("\\_", "_").replaceAll("\\\\", "\\");
-    rows = rows.filter((row) => row.key.startsWith(prefix));
-  }
-  return rows.sort((left, right) => left.key.localeCompare(right.key));
 }
 
 describeStateStoreContract("D1 shared index stores", async () => {
@@ -606,8 +721,49 @@ describe("D1 control-plane stores", () => {
     await state.runtimeSettings.save({
       operationalPolicy: { proxy: { upstreamFetchTimeoutMs: 1000 } },
     });
+    await state.publishSessions.save({
+      id: "pub_1",
+      repositoryName: "python-proxy",
+      ecosystem: "pypi",
+      status: "pending_uploads",
+      requestedBy: {
+        tokenId: "ptok_1",
+        name: "ci",
+        permissions: ["publish"],
+        repositories: ["python-proxy"],
+        ecosystemScopes: {},
+        signingKeyIds: [],
+      },
+      createdAt: "2026-08-05T00:00:00.000Z",
+      expiresAt: "2026-08-05T00:15:00.000Z",
+      artifacts: [],
+      uploads: [],
+      verifiedUploads: [],
+    });
+    await state.repositorySecrets.save({
+      id: "repository_secret_1",
+      repositoryName: "python-proxy",
+      namespace: "pypi",
+      name: "release",
+      publicMetadata: {},
+      encryptedSecrets: {
+        algorithm: "AES-GCM",
+        iv: "iv",
+        ciphertext: "ciphertext",
+      },
+      createdAt: "2026-08-05T00:00:00.000Z",
+    });
+    await state.repositoryActivities.save({
+      id: "activity_1",
+      repositoryName: "python-proxy",
+      type: "artifact-index.rebuild",
+      actor: "admin",
+      summary: "Published artifact",
+      createdAt: "2026-08-05T00:00:00.000Z",
+      metadata: {},
+    });
 
-    expect(database.stateKvSize()).toBe(0);
+    expect(database.preparedQueries.some((query) => query.includes("axis_state_kv"))).toBe(false);
     expect(database.preparedQueries).toEqual(expect.arrayContaining([
       expect.stringContaining("INSERT INTO axis_repositories"),
       expect.stringContaining("INSERT INTO axis_admin_users"),
@@ -615,6 +771,9 @@ describe("D1 control-plane stores", () => {
       expect.stringContaining("INSERT INTO axis_publish_tokens"),
       expect.stringContaining("INSERT INTO axis_repository_plugin_policies"),
       expect.stringContaining("INSERT INTO axis_runtime_settings"),
+      expect.stringContaining("INSERT INTO axis_publish_sessions"),
+      expect.stringContaining("INSERT INTO axis_repository_secrets"),
+      expect.stringContaining("INSERT INTO axis_repository_activities"),
     ]));
   });
 });
@@ -647,8 +806,7 @@ describe("D1 shared state schema bootstrap", () => {
     });
 
     expect(database.execCount).toBe(0);
-    expect(database.preparedQueries).toContain("CREATE TABLE IF NOT EXISTS axis_state_kv (\n  key TEXT PRIMARY KEY,\n  value_json TEXT NOT NULL\n)");
     expect(database.preparedQueries.filter((query) => query.startsWith("CREATE TABLE") || query.startsWith("CREATE INDEX")))
-      .toHaveLength(23);
+      .toHaveLength(30);
   });
 });

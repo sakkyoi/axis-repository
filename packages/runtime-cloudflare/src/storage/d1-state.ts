@@ -6,29 +6,30 @@ import type {
   BackgroundJobListQuery,
   BackgroundJobRecord,
   BackgroundJobStore,
+  PublishSession,
+  PublishSessionStore,
   PublishTokenRecord,
   PublishTokenStore,
   Repository,
+  RepositoryActivityRecord,
+  RepositoryActivityStore,
   RepositoryArtifactFamilyRecord,
   RepositoryArtifactRecord,
   RepositoryArtifactStore,
   RepositoryPluginPolicyRecord,
   RepositoryPluginPolicyStore,
+  RepositorySecretRecord,
+  RepositorySecretStore,
   RepositoryStore,
   RuntimeSettingsRecord,
   RuntimeSettingsStore,
+  SigningKeyRecord,
   StateStore,
 } from "@axis-repository/core";
-import { DurableStateStore, type DurableStorage } from "./durable-state";
 
 const D1_ARTIFACT_BATCH_SIZE = 100;
 
 export const D1_SHARED_INDEX_SCHEMA = `
-CREATE TABLE IF NOT EXISTS axis_state_kv (
-  key TEXT PRIMARY KEY,
-  value_json TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS axis_repositories (
   name TEXT PRIMARY KEY,
   id TEXT NOT NULL,
@@ -75,6 +76,43 @@ CREATE TABLE IF NOT EXISTS axis_runtime_settings (
   id TEXT PRIMARY KEY,
   record_json TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS axis_publish_sessions (
+  id TEXT PRIMARY KEY,
+  repository_name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_publish_sessions_created_idx
+  ON axis_publish_sessions (created_at DESC, id ASC);
+CREATE INDEX IF NOT EXISTS axis_publish_sessions_repository_idx
+  ON axis_publish_sessions (repository_name, created_at DESC, id ASC);
+
+CREATE TABLE IF NOT EXISTS axis_repository_secrets (
+  id TEXT PRIMARY KEY,
+  namespace TEXT NOT NULL,
+  repository_name TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  UNIQUE(namespace, repository_name, name)
+);
+CREATE INDEX IF NOT EXISTS axis_repository_secrets_name_idx
+  ON axis_repository_secrets (namespace, repository_name, name);
+CREATE INDEX IF NOT EXISTS axis_repository_secrets_repository_idx
+  ON axis_repository_secrets (repository_name, name ASC);
+
+CREATE TABLE IF NOT EXISTS axis_repository_activities (
+  id TEXT PRIMARY KEY,
+  repository_name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_repository_activities_repository_idx
+  ON axis_repository_activities (repository_name, created_at DESC, id ASC);
 
 CREATE TABLE IF NOT EXISTS axis_background_jobs (
   id TEXT PRIMARY KEY,
@@ -158,60 +196,6 @@ class D1SharedStateSchema {
     for (const statement of splitSqlStatements(D1_SHARED_INDEX_SCHEMA)) {
       await this.database.prepare(statement).run();
     }
-  }
-}
-
-export class D1KeyValueStorage implements DurableStorage {
-  constructor(
-    private readonly database: D1Database,
-    private readonly schema = new D1SharedStateSchema(database),
-  ) {}
-
-  async get<T>(key: string): Promise<T | undefined> {
-    await this.schema.ensure();
-    const row = await this.database
-      .prepare("SELECT value_json FROM axis_state_kv WHERE key = ?")
-      .bind(key)
-      .first<{ value_json: string }>();
-    return row === null ? undefined : parseRecord<T>(row.value_json);
-  }
-
-  async put<T>(key: string, value: T): Promise<void> {
-    await this.schema.ensure();
-    await this.database
-      .prepare(
-        "INSERT INTO axis_state_kv (key, value_json) VALUES (?, ?)"
-        + " ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json",
-      )
-      .bind(key, JSON.stringify(value))
-      .run();
-  }
-
-  async delete(key: string): Promise<boolean> {
-    await this.schema.ensure();
-    const exists = await this.get(key);
-    await this.database
-      .prepare("DELETE FROM axis_state_kv WHERE key = ?")
-      .bind(key)
-      .run();
-    return exists !== undefined;
-  }
-
-  async list<T>(options?: { prefix?: string }): Promise<Map<string, T>> {
-    await this.schema.ensure();
-    const rows = options?.prefix === undefined
-      ? await this.database
-        .prepare("SELECT key, value_json FROM axis_state_kv ORDER BY key ASC")
-        .all<{ key: string; value_json: string }>()
-      : await this.database
-        .prepare("SELECT key, value_json FROM axis_state_kv WHERE key LIKE ? ESCAPE '\\' ORDER BY key ASC")
-        .bind(`${escapeSqlLike(options.prefix)}%`)
-        .all<{ key: string; value_json: string }>();
-    const result = new Map<string, T>();
-    for (const row of rows.results) {
-      result.set(row.key, parseRecord<T>(row.value_json));
-    }
-    return result;
   }
 }
 
@@ -486,6 +470,214 @@ export class D1RuntimeSettingsStore implements RuntimeSettingsStore {
       )
       .bind("default", JSON.stringify(record))
       .run();
+  }
+}
+
+export class D1PublishSessionStore implements PublishSessionStore {
+  constructor(
+    private readonly database: D1Database,
+    private readonly schema = new D1SharedStateSchema(database),
+  ) {}
+
+  async get(id: string): Promise<PublishSession | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_publish_sessions WHERE id = ?")
+      .bind(id)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<PublishSession>(row.record_json);
+  }
+
+  async list(): Promise<PublishSession[]> {
+    await this.schema.ensure();
+    const rows = await this.database
+      .prepare("SELECT record_json FROM axis_publish_sessions ORDER BY created_at DESC, id ASC")
+      .all<{ record_json: string }>();
+    return rows.results.map((row) => parseRecord<PublishSession>(row.record_json));
+  }
+
+  async save(session: PublishSession): Promise<void> {
+    await this.schema.ensure();
+    await this.saveStatement(session).run();
+  }
+
+  async deleteByRepository(repositoryName: string): Promise<number> {
+    await this.schema.ensure();
+    const total = await this.count(
+      "SELECT COUNT(*) AS total FROM axis_publish_sessions WHERE repository_name = ?",
+      [repositoryName],
+    );
+    await this.database
+      .prepare("DELETE FROM axis_publish_sessions WHERE repository_name = ?")
+      .bind(repositoryName)
+      .run();
+    return total;
+  }
+
+  async update(
+    id: string,
+    updater: (current: PublishSession) => PublishSession,
+  ): Promise<PublishSession | null> {
+    const current = await this.get(id);
+    if (current === null) return null;
+    const updated = updater(parseRecord<PublishSession>(JSON.stringify(current)));
+    await this.save(updated);
+    return parseRecord<PublishSession>(JSON.stringify(updated));
+  }
+
+  private saveStatement(session: PublishSession): D1PreparedStatement {
+    return this.database
+      .prepare(
+        "INSERT INTO axis_publish_sessions (id, repository_name, status, created_at, expires_at, record_json)"
+        + " VALUES (?, ?, ?, ?, ?, ?)"
+        + " ON CONFLICT(id) DO UPDATE SET"
+        + " repository_name = excluded.repository_name, status = excluded.status,"
+        + " created_at = excluded.created_at, expires_at = excluded.expires_at,"
+        + " record_json = excluded.record_json",
+      )
+      .bind(
+        session.id,
+        session.repositoryName,
+        session.status,
+        session.createdAt,
+        session.expiresAt,
+        JSON.stringify(session),
+      );
+  }
+
+  private async count(query: string, values: unknown[]): Promise<number> {
+    const row = await this.database.prepare(query).bind(...values).first<{ total: number }>();
+    return row?.total ?? 0;
+  }
+}
+
+export class D1RepositorySecretStore implements RepositorySecretStore {
+  constructor(
+    private readonly database: D1Database,
+    private readonly schema = new D1SharedStateSchema(database),
+  ) {}
+
+  async getById(id: string): Promise<RepositorySecretRecord | SigningKeyRecord | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_repository_secrets WHERE id = ?")
+      .bind(id)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<RepositorySecretRecord>(row.record_json);
+  }
+
+  async getByName(name: string, repositoryName: string, namespace: string): Promise<RepositorySecretRecord | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare(
+        "SELECT record_json FROM axis_repository_secrets"
+        + " WHERE namespace = ? AND repository_name = ? AND name = ?",
+      )
+      .bind(namespace, repositoryName, name)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<RepositorySecretRecord>(row.record_json);
+  }
+
+  async list(): Promise<Array<RepositorySecretRecord | SigningKeyRecord>> {
+    await this.schema.ensure();
+    const rows = await this.database
+      .prepare("SELECT record_json FROM axis_repository_secrets ORDER BY name ASC, id ASC")
+      .all<{ record_json: string }>();
+    return rows.results.map((row) => parseRecord<RepositorySecretRecord>(row.record_json));
+  }
+
+  async save(record: RepositorySecretRecord): Promise<void> {
+    await this.schema.ensure();
+    await this.database
+      .prepare("DELETE FROM axis_repository_secrets WHERE namespace = ? AND repository_name = ? AND name = ? AND id <> ?")
+      .bind(record.namespace, record.repositoryName, record.name, record.id)
+      .run();
+    await this.database
+      .prepare(
+        "INSERT INTO axis_repository_secrets (id, namespace, repository_name, name, created_at, record_json)"
+        + " VALUES (?, ?, ?, ?, ?, ?)"
+        + " ON CONFLICT(id) DO UPDATE SET"
+        + " namespace = excluded.namespace, repository_name = excluded.repository_name,"
+        + " name = excluded.name, created_at = excluded.created_at, record_json = excluded.record_json",
+      )
+      .bind(
+        record.id,
+        record.namespace,
+        record.repositoryName,
+        record.name,
+        record.createdAt,
+        JSON.stringify(record),
+      )
+      .run();
+  }
+
+  async deleteByRepository(repositoryName: string): Promise<number> {
+    await this.schema.ensure();
+    const total = await this.count(
+      "SELECT COUNT(*) AS total FROM axis_repository_secrets WHERE repository_name = ?",
+      [repositoryName],
+    );
+    await this.database
+      .prepare("DELETE FROM axis_repository_secrets WHERE repository_name = ?")
+      .bind(repositoryName)
+      .run();
+    return total;
+  }
+
+  private async count(query: string, values: unknown[]): Promise<number> {
+    const row = await this.database.prepare(query).bind(...values).first<{ total: number }>();
+    return row?.total ?? 0;
+  }
+}
+
+export class D1RepositoryActivityStore implements RepositoryActivityStore {
+  constructor(
+    private readonly database: D1Database,
+    private readonly schema = new D1SharedStateSchema(database),
+  ) {}
+
+  async listByRepository(repositoryName: string): Promise<RepositoryActivityRecord[]> {
+    await this.schema.ensure();
+    const rows = await this.database
+      .prepare(
+        "SELECT record_json FROM axis_repository_activities WHERE repository_name = ?"
+        + " ORDER BY created_at DESC, id ASC",
+      )
+      .bind(repositoryName)
+      .all<{ record_json: string }>();
+    return rows.results.map((row) => parseRecord<RepositoryActivityRecord>(row.record_json));
+  }
+
+  async save(record: RepositoryActivityRecord): Promise<void> {
+    await this.schema.ensure();
+    await this.database
+      .prepare(
+        "INSERT INTO axis_repository_activities (id, repository_name, type, created_at, record_json)"
+        + " VALUES (?, ?, ?, ?, ?)"
+        + " ON CONFLICT(id) DO UPDATE SET"
+        + " repository_name = excluded.repository_name, type = excluded.type,"
+        + " created_at = excluded.created_at, record_json = excluded.record_json",
+      )
+      .bind(record.id, record.repositoryName, record.type, record.createdAt, JSON.stringify(record))
+      .run();
+  }
+
+  async deleteByRepository(repositoryName: string): Promise<number> {
+    await this.schema.ensure();
+    const total = await this.count(
+      "SELECT COUNT(*) AS total FROM axis_repository_activities WHERE repository_name = ?",
+      [repositoryName],
+    );
+    await this.database
+      .prepare("DELETE FROM axis_repository_activities WHERE repository_name = ?")
+      .bind(repositoryName)
+      .run();
+    return total;
+  }
+
+  private async count(query: string, values: unknown[]): Promise<number> {
+    const row = await this.database.prepare(query).bind(...values).first<{ total: number }>();
+    return row?.total ?? 0;
   }
 }
 
@@ -868,6 +1060,9 @@ export function withD1SharedIndexes(base: StateStore, database: D1Database): Sta
     adminRefreshSessions: new D1AdminRefreshSessionStore(database, schema),
     repositoryPluginPolicies: new D1RepositoryPluginPolicyStore(database, schema),
     runtimeSettings: new D1RuntimeSettingsStore(database, schema),
+    publishSessions: new D1PublishSessionStore(database, schema),
+    repositorySecrets: new D1RepositorySecretStore(database, schema),
+    repositoryActivities: new D1RepositoryActivityStore(database, schema),
     backgroundJobs: new D1BackgroundJobStore(database, schema),
     repositoryArtifacts: new D1RepositoryArtifactStore(database, schema),
   };
@@ -876,20 +1071,18 @@ export function withD1SharedIndexes(base: StateStore, database: D1Database): Sta
 export function createD1StateStore(database: D1Database): StateStore {
   const schema = new D1SharedStateSchema(database);
   return {
-    ...new DurableStateStore(new D1KeyValueStorage(database, schema)),
     repositories: new D1RepositoryStore(database, schema),
     publishTokens: new D1PublishTokenStore(database, schema),
     adminUsers: new D1AdminUserStore(database, schema),
     adminRefreshSessions: new D1AdminRefreshSessionStore(database, schema),
     repositoryPluginPolicies: new D1RepositoryPluginPolicyStore(database, schema),
     runtimeSettings: new D1RuntimeSettingsStore(database, schema),
+    publishSessions: new D1PublishSessionStore(database, schema),
+    repositorySecrets: new D1RepositorySecretStore(database, schema),
+    repositoryActivities: new D1RepositoryActivityStore(database, schema),
     backgroundJobs: new D1BackgroundJobStore(database, schema),
     repositoryArtifacts: new D1RepositoryArtifactStore(database, schema),
   };
-}
-
-function escapeSqlLike(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
 function optionalJson(value: unknown): string | null {

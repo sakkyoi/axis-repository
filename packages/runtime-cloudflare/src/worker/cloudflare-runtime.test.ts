@@ -175,7 +175,6 @@ class FakeQueue {
 
 class FakeD1Database {
   private readonly backgroundJobs = new Map<string, Record<string, unknown>>();
-  private readonly stateKv = new Map<string, string>();
 
   backgroundJobIds(): string[] {
     return [...this.backgroundJobs.keys()];
@@ -191,7 +190,6 @@ class FakeD1Database {
   prepare(query: string): D1PreparedStatement {
     return new FakeD1PreparedStatement(query, {
       backgroundJobs: this.backgroundJobs,
-      stateKv: this.stateKv,
     }) as unknown as D1PreparedStatement;
   }
 
@@ -214,7 +212,6 @@ class FakeD1Database {
 
 interface FakeD1Tables {
   backgroundJobs: Map<string, Record<string, unknown>>;
-  stateKv: Map<string, string>;
 }
 
 class FakeD1PreparedStatement {
@@ -254,20 +251,11 @@ class FakeD1PreparedStatement {
     if (this.query.includes("FROM axis_background_jobs")) {
       return selectBackgroundJobs(this.tables.backgroundJobs, this.query, this.bindings);
     }
-    if (this.query.includes("FROM axis_state_kv")) {
-      return selectStateKv(this.tables.stateKv, this.query, this.bindings);
-    }
     return [];
   }
 
   private applyMutation(): void {
     if (this.query.startsWith("CREATE TABLE") || this.query.startsWith("CREATE INDEX")) return;
-    if (this.query.startsWith("INSERT INTO axis_state_kv")) {
-      const [key, valueJson] = this.bindings;
-      this.tables.stateKv.set(String(key), String(valueJson));
-      this.changes = 1;
-      return;
-    }
     if (this.query.startsWith("INSERT INTO axis_background_jobs")) {
       const [id, type, status, subjectType, subjectId, subjectRepositoryName, repositoryName, priority, attempts, maxAttempts, requestedAt, scheduledAt, startedAt, finishedAt, lastHeartbeatAt, leaseId, leaseExpiresAt, progressJson, resultJson, failureJson, cancelRequestedAt, recordJson] = this.bindings;
       this.tables.backgroundJobs.set(String(id), {
@@ -329,18 +317,6 @@ function selectBackgroundJobs(
   }
   if (query.includes("status = ?")) rows = rows.filter((row) => row.status === bindings[bindingIndex++]);
   if (query.includes("type = ?")) rows = rows.filter((row) => row.type === bindings[bindingIndex++]);
-  return rows;
-}
-
-function selectStateKv(table: Map<string, string>, query: string, bindings: unknown[]): Record<string, unknown>[] {
-  let rows = [...table.entries()].map(([key, valueJson]) => ({ key, value_json: valueJson }));
-  if (query.includes("key LIKE ?")) {
-    const prefix = String(bindings[0]).replace(/%$/, "").replaceAll("\\%", "%").replaceAll("\\_", "_").replaceAll("\\\\", "\\");
-    rows = rows.filter((row) => row.key.startsWith(prefix));
-  }
-  if (query.includes("key = ?")) {
-    rows = rows.filter((row) => row.key === bindings[0]);
-  }
   return rows;
 }
 
