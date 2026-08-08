@@ -28,6 +28,7 @@ import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
 import { BackgroundJobDispatcher } from "./background-job-dispatcher";
 import { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
+import { RepositoryArtifactDeleteJobService } from "./repository-artifact-delete-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import type { RepositoryObjectDownloadSigner } from "../storage/object-download-url";
@@ -46,6 +47,7 @@ export interface AppDependencies {
   backgroundJobService: BackgroundJobService;
   backgroundJobDispatcher: BackgroundJobDispatcher;
   stagingUploadGcJobService: StagingUploadGcJobService;
+  repositoryArtifactDeleteJobService: RepositoryArtifactDeleteJobService;
   repositoryMaintenanceJobService: RepositoryMaintenanceJobService;
   publishFinalizeJobService: PublishFinalizeJobService;
   repositoryActivityService: RepositoryActivityService;
@@ -238,6 +240,14 @@ export function createDevDependencyHarness(
     publishSessionService: pluginPublishSessionService,
     clock,
   });
+  const repositoryArtifactDeleteJobService = new RepositoryArtifactDeleteJobService({
+    state,
+    repositoryService,
+    repositoryArtifactStore: state.repositoryArtifacts,
+    repositoryArtifactIndexService,
+    repositoryActivityService,
+    clock,
+  });
   const stagingUploadGcJobService = new StagingUploadGcJobService({
     state,
     objectStore,
@@ -251,6 +261,7 @@ export function createDevDependencyHarness(
     repositoryMaintenanceJobService,
     publishFinalizeJobService,
     stagingUploadGcJobService,
+    repositoryArtifactDeleteJobService,
   });
   const backgroundJobDispatcher = new BackgroundJobDispatcher({
     state,
@@ -267,6 +278,10 @@ export function createDevDependencyHarness(
       {
         supports: (job) => job.type === "repository.maintenance",
         run: (job) => repositoryMaintenanceJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type === "repository.artifact.delete",
+        run: (job) => repositoryArtifactDeleteJobService.runBackgroundJob(job),
       },
       {
         supports: (job) => job.type === "storage.staging-upload-gc",
@@ -291,6 +306,7 @@ export function createDevDependencyHarness(
       backgroundJobService,
       backgroundJobDispatcher,
       stagingUploadGcJobService,
+      repositoryArtifactDeleteJobService,
       repositoryMaintenanceJobService,
       publishFinalizeJobService,
       repositoryActivityService,

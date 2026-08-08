@@ -10,6 +10,9 @@ export function assertBackgroundJobQueueConfiguration(env: AxisEnv): void {
   if (env.AXIS_BACKGROUND_JOBS !== undefined && env.AXIS_SHARED_STATE === undefined) {
     throw new Error("AXIS_SHARED_STATE is required when AXIS_BACKGROUND_JOBS is bound");
   }
+  if (env.AXIS_SHARED_STATE !== undefined && env.AXIS_BACKGROUND_JOBS === undefined) {
+    throw new Error("AXIS_BACKGROUND_JOBS is required when AXIS_SHARED_STATE is bound");
+  }
 }
 
 export async function enqueueBackgroundJobWakeup(env: AxisEnv, now: Date = new Date()): Promise<void> {

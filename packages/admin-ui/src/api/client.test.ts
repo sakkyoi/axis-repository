@@ -1010,42 +1010,21 @@ describe("createAxisClient", () => {
       requests.push(`${config.method?.toUpperCase()} ${config.url}`);
       return {
         data: {
-          artifact: {
-            id: "artifact 1",
+          job: {
+            id: "repository.artifact.delete:debian internal:artifact 1",
+            type: "repository.artifact.delete",
+            status: "pending",
+            subject: { type: "artifact", id: "artifact 1", repositoryName: "debian internal" },
             repositoryName: "debian internal",
-            ecosystem: "apt",
-            identity: "apt:main:myapp:1.2.3:amd64",
-            name: "myapp",
-            version: "1.2.3",
-            summary: "myapp 1.2.3 amd64",
-            primaryObjectKey: "repositories/debian internal/pool/main/myapp.deb",
-            objectKeys: ["repositories/debian internal/pool/main/myapp.deb"],
-            metadata: { architecture: "amd64" },
-            publishedAt: "2026-07-24T00:00:00.000Z",
-            updatedAt: "2026-07-24T00:00:00.000Z",
-          },
-          artifacts: [],
-          deletedObjectKeys: ["repositories/debian internal/pool/main/myapp.deb"],
-          missingObjectKeys: [],
-          skippedObjectKeys: [],
-          failedObjectKeys: [],
-          truncated: false,
-          activity: {
-            id: "activity_1",
-            repositoryName: "debian internal",
-            type: "artifact.delete",
-            actor: "admin",
-            summary: "Deleted artifact myapp 1.2.3 amd64",
-            metadata: {
-              artifactId: "artifact 1",
-              objectKeys: ["repositories/debian internal/pool/main/myapp.deb"],
-              deletedObjectKeys: ["repositories/debian internal/pool/main/myapp.deb"],
-            },
-            createdAt: "2026-07-24T00:00:00.000Z",
+            priority: 0,
+            attempts: 0,
+            maxAttempts: 3,
+            requestedAt: "2026-07-24T00:00:00.000Z",
+            scheduledAt: "2026-07-24T00:00:00.000Z",
           },
         },
-        status: 200,
-        statusText: "OK",
+        status: 202,
+        statusText: "Accepted",
         headers: {},
         config,
       };
@@ -1053,12 +1032,11 @@ describe("createAxisClient", () => {
 
     await expect(client.deleteRepositoryArtifact("debian internal", "artifact 1"))
       .resolves.toMatchObject({
-        activity: {
-          type: "artifact.delete",
-          metadata: { artifactId: "artifact 1" },
+        job: {
+          type: "repository.artifact.delete",
+          status: "pending",
+          subject: { type: "artifact", id: "artifact 1" },
         },
-        deletedObjectKeys: ["repositories/debian internal/pool/main/myapp.deb"],
-        artifacts: [],
       });
     expect(requests).toEqual([
       "DELETE /admin/repositories/debian%20internal/artifacts/artifact%201",

@@ -122,17 +122,13 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
   function confirmDeleteArtifact() {
     if (!pendingDeleteArtifact) return;
     deleteArtifact.mutate(pendingDeleteArtifact.id, {
-      onSuccess: (result) => {
+      onSuccess: () => {
         closeArtifactGroup();
         setPendingDeleteArtifact(undefined);
         toast.notify({
-          title: "Artifact delete finished",
-          description: [
-            `${result.deletedObjectKeys.length} deleted`,
-            result.missingObjectKeys.length > 0 ? `${result.missingObjectKeys.length} missing` : undefined,
-            result.skippedObjectKeys.length > 0 ? `${result.skippedObjectKeys.length} skipped` : undefined,
-            result.failedObjectKeys.length > 0 ? `${result.failedObjectKeys.length} failed` : undefined,
-          ].filter(Boolean).join(", "),
+          title: "Artifact delete started",
+          description: "The job is running in the background.",
+          action: { label: "View jobs", to: "/ui/jobs" },
         });
       },
     });

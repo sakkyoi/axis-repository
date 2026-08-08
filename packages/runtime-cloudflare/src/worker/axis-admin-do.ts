@@ -30,6 +30,7 @@ import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
 import { BackgroundJobDispatcher, type DrainBackgroundJobsResult } from "./background-job-dispatcher";
 import { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
+import { RepositoryArtifactDeleteJobService } from "./repository-artifact-delete-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import { RepositoryWriteLock } from "./repository-write-lock";
@@ -394,6 +395,14 @@ export function createDurableObjectDependencies(
     publishSessionService: pluginPublishSessionService,
     clock,
   });
+  const repositoryArtifactDeleteJobService = new RepositoryArtifactDeleteJobService({
+    state,
+    repositoryService,
+    repositoryArtifactStore: state.repositoryArtifacts,
+    repositoryArtifactIndexService,
+    repositoryActivityService,
+    clock,
+  });
   const stagingUploadGcJobService = new StagingUploadGcJobService({
     state,
     objectStore,
@@ -407,6 +416,7 @@ export function createDurableObjectDependencies(
     repositoryMaintenanceJobService,
     publishFinalizeJobService,
     stagingUploadGcJobService,
+    repositoryArtifactDeleteJobService,
   });
   const backgroundJobDispatcher = new BackgroundJobDispatcher({
     state,
@@ -423,6 +433,10 @@ export function createDurableObjectDependencies(
       {
         supports: (job) => job.type === "repository.maintenance",
         run: (job) => repositoryMaintenanceJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type === "repository.artifact.delete",
+        run: (job) => repositoryArtifactDeleteJobService.runBackgroundJob(job),
       },
       {
         supports: (job) => job.type === "storage.staging-upload-gc",
@@ -458,6 +472,7 @@ export function createDurableObjectDependencies(
     stagingUploadGcJobService,
     repositoryMaintenanceJobService,
     publishFinalizeJobService,
+    repositoryArtifactDeleteJobService,
     repositoryActivityService,
     repositoryArtifactStore: state.repositoryArtifacts,
     repositoryArtifactIndexService,

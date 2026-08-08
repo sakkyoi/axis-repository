@@ -911,7 +911,8 @@ async function handleProtocolUpload(
       });
     }
 
-    await dependencies.publishSessionService.finalize({ sessionId: session.id, principal });
+    await dependencies.publishFinalizeJobService.request({ sessionId: session.id, principal });
+    await dependencies.scheduleBackgroundJobs?.();
   } finally {
     // The staged copy has served its purpose whether or not the publish did.
     for (const upload of uploads) {
@@ -2002,29 +2003,12 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactPath.repositoryName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
-    const result = await dependencies.repositoryArtifactIndexService.deleteArtifact({
+    const job = await dependencies.repositoryArtifactDeleteJobService.request({
       repositoryName: repository.name,
       artifactId: adminRepositoryArtifactPath.artifactId,
     });
-    const activity = await dependencies.repositoryActivityService.recordArtifactDelete({
-      repositoryName: repository.name,
-      artifactId: result.artifact.id,
-      identity: result.artifact.identity,
-      summary: result.artifact.summary,
-      name: result.artifact.name,
-      ...(result.artifact.version !== undefined ? { version: result.artifact.version } : {}),
-      objectKeys: result.artifact.objectKeys,
-      deletedObjectKeys: result.deletedObjectKeys,
-      missingObjectKeys: result.missingObjectKeys,
-      skippedObjectKeys: result.skippedObjectKeys,
-      failedObjectKeys: result.failedObjectKeys,
-    });
-    await dependencies.repositoryActivityService.recordArtifactIndexRebuild({
-      repositoryName: repository.name,
-      artifactCount: result.artifacts.length,
-    });
-    const { artifact, artifacts, ...deleteResult } = result;
-    return jsonResponse({ activity, artifact, artifacts, ...deleteResult, truncated: false });
+    await dependencies.scheduleBackgroundJobs?.();
+    return jsonResponse({ job }, { status: 202 });
   }
   const adminRepositoryObjectDetailName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.objectDetail);
   if (adminRepositoryObjectDetailName) {
@@ -2110,12 +2094,9 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         ...(metadata.contentType !== undefined ? { contentType: metadata.contentType } : {}),
         ...(metadata.contentLength !== undefined ? { size: metadata.contentLength } : {}),
       });
-      const rebuildResult = await dependencies.repositoryArtifactIndexService.rebuild({ repositoryName: repository.name });
-      await dependencies.repositoryActivityService.recordArtifactIndexRebuild({
-        repositoryName: repository.name,
-        artifactCount: rebuildResult.artifacts.length,
-      });
-      return jsonResponse({ activity });
+      const job = await dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: repository.name });
+      await dependencies.scheduleBackgroundJobs?.();
+      return jsonResponse({ activity, job }, { status: 202 });
     }
     throw new NotFoundError();
   }

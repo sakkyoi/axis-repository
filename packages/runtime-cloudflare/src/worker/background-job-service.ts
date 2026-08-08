@@ -9,6 +9,7 @@ import type { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import type { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
 import type { RepositoryMaintenanceJobService } from "./repository-maintenance-job-service";
 import type { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
+import type { RepositoryArtifactDeleteJobService } from "./repository-artifact-delete-job-service";
 
 export interface BackgroundJobServiceOptions {
   state: StateStore;
@@ -17,6 +18,7 @@ export interface BackgroundJobServiceOptions {
   repositoryMaintenanceJobService?: Pick<RepositoryMaintenanceJobService, "request">;
   publishFinalizeJobService?: Pick<PublishFinalizeJobService, "requestAsAdmin">;
   stagingUploadGcJobService?: Pick<StagingUploadGcJobService, "request">;
+  repositoryArtifactDeleteJobService?: Pick<RepositoryArtifactDeleteJobService, "request">;
 }
 
 export interface RequestRepositoryIndexBackgroundJobInput {
@@ -61,6 +63,14 @@ export class BackgroundJobService {
     if (job.type.startsWith("repository.index.") && job.subject.type === "repository") {
       if (!this.options.repositoryIndexJobService) throw missingRunnerError(job);
       await this.requestRepositoryIndex({ repositoryName: job.subject.id });
+      return this.options.state.backgroundJobs.get(id);
+    }
+    if (job.type === "repository.artifact.delete" && job.subject.type === "artifact") {
+      const runner = this.options.repositoryArtifactDeleteJobService;
+      if (!runner) throw missingRunnerError(job);
+      const repositoryName = job.repositoryName ?? job.subject.repositoryName;
+      if (!repositoryName) throw new ValidationError(`Background job is missing repository name: ${job.id}`);
+      await runner.request({ repositoryName, artifactId: job.subject.id });
       return this.options.state.backgroundJobs.get(id);
     }
     if (job.type === "repository.maintenance") {

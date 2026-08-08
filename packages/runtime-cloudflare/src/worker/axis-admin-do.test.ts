@@ -452,6 +452,7 @@ describe("AxisAdminDO", () => {
   it("uses the shared D1 index stores when AXIS_SHARED_STATE is bound", () => {
     const dependencies = createDurableObjectDependencies(new FakeDurableObjectStorage(), {
       AXIS_SHARED_STATE: {} as D1Database,
+      AXIS_BACKGROUND_JOBS: new FakeQueue() as unknown as Queue,
       AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
       AXIS_ADMIN_USERNAME: "admin",
       AXIS_ADMIN_PASSWORD: "admin-password",
@@ -1391,5 +1392,12 @@ describe("AxisAdminDO maintenance alarm", () => {
       .resolves.toMatchObject({ status: "pending", attempts: 0 });
     expect(database.backgroundJobRecord("repository.maintenance")).toMatchObject({ status: "pending", attempts: 0 });
     expect(queue.messages).toHaveLength(1);
+  });
+
+  it("requires a Queue binding when shared production state is configured", () => {
+    expect(() => createObject({
+      AXIS_SHARED_STATE: new FakeD1Database() as unknown as D1Database,
+      AXIS_BACKGROUND_JOBS: undefined,
+    })).toThrow("AXIS_BACKGROUND_JOBS is required when AXIS_SHARED_STATE is bound");
   });
 });

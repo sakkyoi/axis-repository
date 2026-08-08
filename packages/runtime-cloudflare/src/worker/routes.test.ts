@@ -3691,6 +3691,17 @@ describe("Cloudflare runtime routes", () => {
       `https://axis.example/admin/repositories/debian-internal/artifacts/${encodeURIComponent(artifact!.id)}`,
       { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
     ));
+    expect(deleted.status).toBe(202);
+    await expect(deleted.json()).resolves.toMatchObject({
+      job: {
+        type: "repository.artifact.delete",
+        status: "pending",
+        repositoryName: "debian-internal",
+      },
+    });
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
+
     const artifactsAfterDelete = await app.fetch(new Request(
       "https://axis.example/admin/repositories/debian-internal/artifacts",
       { headers: { authorization: "Bearer dev-admin-token" } },
@@ -3699,33 +3710,6 @@ describe("Cloudflare runtime routes", () => {
       "https://axis.example/admin/repositories/debian-internal/activity",
       { headers: { authorization: "Bearer dev-admin-token" } },
     ));
-
-    expect(deleted.status).toBe(200);
-    await expect(deleted.json()).resolves.toMatchObject({
-      artifact: {
-        id: artifact!.id,
-      },
-      artifacts: [],
-      deletedObjectKeys: artifact!.objectKeys,
-      missingObjectKeys: [],
-      skippedObjectKeys: [],
-      failedObjectKeys: [],
-      truncated: false,
-      activity: {
-        repositoryName: "debian-internal",
-        type: "artifact.delete",
-        actor: "admin",
-        summary: "Deleted artifact myapp 1.2.3 amd64",
-        metadata: {
-          artifactId: artifact!.id,
-          objectKeys: artifact!.objectKeys,
-          deletedObjectKeys: artifact!.objectKeys,
-          missingObjectKeys: [],
-          skippedObjectKeys: [],
-          failedObjectKeys: [],
-        },
-      },
-    });
     await expect(harness.repositoryObjectStore.headObject(artifact!.objectKeys[0]!)).resolves.toBeNull();
     await expect(artifactsAfterDelete.json()).resolves.toMatchObject({ artifacts: [], truncated: false });
     // Leaving the stanza behind would keep apt asking for a .deb that is gone,
@@ -3997,13 +3981,60 @@ describe("Cloudflare runtime routes", () => {
       "https://axis.example/admin/repositories/debian-internal/objects?path=pool%2Fmain%2Fmyapp%2Fmyapp_1.2.3_amd64.deb",
       { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
     ));
+    expect(deleted.status).toBe(202);
+    await expect(deleted.json()).resolves.toMatchObject({
+      activity: { type: "object.delete", repositoryName: "debian-internal" },
+      job: { id: "repository.index:debian-internal", status: "pending" },
+    });
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
     const artifacts = await app.fetch(new Request(
       "https://axis.example/admin/repositories/debian-internal/artifacts",
       { headers: { authorization: "Bearer dev-admin-token" } },
     ));
 
-    expect(deleted.status).toBe(200);
     await expect(artifacts.json()).resolves.toMatchObject({ artifacts: [], truncated: false });
+  });
+
+  it("queues artifact index rebuilds after deleting repository content objects", async () => {
+    const harness = createDevDependencyHarness();
+    let scheduledJobs = 0;
+    harness.dependencies.scheduleBackgroundJobs = async () => {
+      scheduledJobs += 1;
+    };
+    const app = createApp(harness.dependencies);
+    const { token, session } = await createPublishSession(app, harness.repositoryObjectStore);
+    const uploadId = session.uploads[0]?.uploadId;
+    expect(uploadId).toBeDefined();
+    await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/uploads/${uploadId}/verify`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    await app.fetch(new Request(
+      `https://axis.example/api/publish-sessions/${session.id}/finalize`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    ));
+    await expect(drainPublishFinalizeJobs(harness)).resolves.toMatchObject({ processed: 1, failed: 0 });
+    scheduledJobs = 0;
+
+    const deleted = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-internal/objects?path=pool%2Fmain%2Fmyapp%2Fmyapp_1.2.3_amd64.deb",
+      { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(deleted.status).toBe(202);
+    await expect(deleted.json()).resolves.toMatchObject({
+      activity: {
+        type: "object.delete",
+        repositoryName: "debian-internal",
+      },
+      job: {
+        id: "repository.index:debian-internal",
+        type: "repository.index.hosted-rebuild",
+        status: "pending",
+      },
+    });
+    expect(scheduledJobs).toBe(1);
   });
 
   it("returns repository object detail metadata through the admin file browser", async () => {
@@ -4056,16 +4087,7 @@ describe("Cloudflare runtime routes", () => {
       "https://axis.example/admin/repositories/debian-private/objects?path=pool%2Fmain%2Fapp%2Fapp_1.0.0_amd64.deb",
       { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
     ));
-    const listing = await app.fetch(new Request(
-      "https://axis.example/admin/repositories/debian-private/objects?prefix=pool%2Fmain%2Fapp%2F",
-      { headers: { authorization: "Bearer dev-admin-token" } },
-    ));
-    const activity = await app.fetch(new Request(
-      "https://axis.example/admin/repositories/debian-private/activity",
-      { headers: { authorization: "Bearer dev-admin-token" } },
-    ));
-
-    expect(deleteResponse.status).toBe(200);
+    expect(deleteResponse.status).toBe(202);
     await expect(deleteResponse.json()).resolves.toMatchObject({
       activity: {
         type: "object.delete",
@@ -4078,7 +4100,19 @@ describe("Cloudflare runtime routes", () => {
           size: 3,
         },
       },
+      job: { type: "repository.index.hosted-rebuild", status: "pending" },
     });
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
+    const listing = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/objects?prefix=pool%2Fmain%2Fapp%2F",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const activity = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/debian-private/activity",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
     await expect(listing.json()).resolves.toMatchObject({ objects: [] });
     const activityBody = await activity.json() as { activities: Array<{ type: string; summary: string; metadata: Record<string, unknown> }> };
     expect(activityBody.activities).toEqual(expect.arrayContaining([
@@ -4117,7 +4151,9 @@ describe("Cloudflare runtime routes", () => {
         `https://axis.example/admin/repositories/debian-private/objects?path=${encodeURIComponent(path)}`,
         { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
       ));
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(202);
+      await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+        .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
     }
 
     const firstPage = await app.fetch(new Request(
@@ -6909,6 +6945,8 @@ describe("publishing a PyPI package the way twine does", () => {
     ));
 
     expect(response.status).toBe(200);
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
     await expect(harness.repositoryObjectStore.headObject(
       "repositories/python-internal/packages/alpha/alpha-1.0.tar.gz",
     )).resolves.not.toBeNull();
@@ -6916,6 +6954,44 @@ describe("publishing a PyPI package the way twine does", () => {
       harness.repositoryObjectStore,
       "repositories/python-internal/simple/alpha/index.html",
     )).toContain("alpha-1.0.tar.gz");
+  });
+
+  it("queues finalization for protocol uploads instead of publishing inside the request", async () => {
+    const { harness, app, token } = await pypiUploadHarness();
+    let scheduledJobs = 0;
+    harness.dependencies.scheduleBackgroundJobs = async () => {
+      scheduledJobs += 1;
+    };
+    const bytes = await sdistBytes({ name: "alpha", version: "1.0" });
+
+    const response = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/legacy/",
+      {
+        method: "POST",
+        headers: { authorization: basic(token) },
+        body: await uploadForm({ filename: "alpha-1.0.tar.gz", bytes }),
+      },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(scheduledJobs).toBe(1);
+    await expect(harness.repositoryObjectStore.headObject(
+      "repositories/python-internal/packages/alpha/alpha-1.0.tar.gz",
+    )).resolves.toBeNull();
+    const jobs = await harness.dependencies.backgroundJobService.list({ type: "publish.finalize" });
+    expect(jobs.jobs).toEqual([
+      expect.objectContaining({
+        type: "publish.finalize",
+        status: "pending",
+        repositoryName: "python-internal",
+      }),
+    ]);
+
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
+    await expect(harness.repositoryObjectStore.headObject(
+      "repositories/python-internal/packages/alpha/alpha-1.0.tar.gz",
+    )).resolves.not.toBeNull();
   });
 
   it("publishes a wheel, whose metadata is read a different way", async () => {
@@ -6935,6 +7011,8 @@ describe("publishing a PyPI package the way twine does", () => {
     ));
 
     expect(response.status).toBe(200);
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
     const page = readStoredText(
       harness.repositoryObjectStore,
       "repositories/python-internal/simple/alpha/index.html",
@@ -7422,17 +7500,19 @@ describe("uploading a distribution larger than the worker heap", () => {
       },
     ));
 
-    // Rejected for its contents, not its size: an 8 MiB run of zeroes is not a
-    // source distribution. Reaching that verdict at all means the whole body
-    // streamed through — and a bad upload is a bad request, not a fault here.
-    expect(response.status).toBe(400);
+    // Accepted for background finalization: reaching that point at all means
+    // the whole body streamed through before the archive validator saw it.
+    expect(response.status).toBe(200);
     expect(chunksReadAtFirstWrite).toBeGreaterThanOrEqual(0);
     expect(chunksReadAtFirstWrite).toBeLessThan(totalChunks / 4);
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 1, remaining: 0 });
   });
 });
 
 describe("deleting a published PyPI distribution", () => {
   async function publish(
+    harness: ReturnType<typeof createDevDependencyHarness>,
     app: ReturnType<typeof createApp>,
     token: string,
     version: string,
@@ -7454,6 +7534,8 @@ describe("deleting a published PyPI distribution", () => {
       },
     ));
     expect(response.status).toBe(200);
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
   }
 
   it("stops offering the release to pip", async () => {
@@ -7474,8 +7556,8 @@ describe("deleting a published PyPI distribution", () => {
       permissions: ["publish"],
       ecosystemScopes: {},
     });
-    await publish(app, token, "1.0");
-    await publish(app, token, "2.0");
+    await publish(harness, app, token, "1.0");
+    await publish(harness, app, token, "2.0");
 
     const listed = await app.fetch(new Request(
       "https://axis.example/admin/repositories/python-internal/artifacts",
@@ -7488,7 +7570,9 @@ describe("deleting a published PyPI distribution", () => {
       `https://axis.example/admin/repositories/python-internal/artifacts/${encodeURIComponent(target.id)}`,
       { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
     ));
-    expect(deleted.status).toBe(200);
+    expect(deleted.status).toBe(202);
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
 
     const page = await app.fetch(new Request(
       "https://axis.example/repositories/python-internal/simple/alpha/",
@@ -7503,5 +7587,65 @@ describe("deleting a published PyPI distribution", () => {
       "https://axis.example/repositories/python-internal/packages/alpha/alpha-1.0.tar.gz.metadata",
     ));
     expect(metadata.status).toBe(404);
+  });
+
+  it("queues artifact deletes and rebuilds outside the request", async () => {
+    const harness = createDevDependencyHarness();
+    let scheduledJobs = 0;
+    harness.dependencies.scheduleBackgroundJobs = async () => {
+      scheduledJobs += 1;
+    };
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "public",
+      config: {},
+    });
+    const token = await createToken(app, {
+      name: "pypi-token",
+      repositories: ["python-internal"],
+      permissions: ["publish"],
+      ecosystemScopes: {},
+    });
+    await publish(harness, app, token, "1.0");
+    await publish(harness, app, token, "2.0");
+    scheduledJobs = 0;
+
+    const listed = await app.fetch(new Request(
+      "https://axis.example/admin/repositories/python-internal/artifacts",
+      { headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+    const { artifacts } = await listed.json() as { artifacts: Array<{ id: string; objectKeys: string[] }> };
+    const target = artifacts.find((artifact) => artifact.objectKeys.some((key) => key.includes("alpha-1.0")))!;
+
+    const deleted = await app.fetch(new Request(
+      `https://axis.example/admin/repositories/python-internal/artifacts/${encodeURIComponent(target.id)}`,
+      { method: "DELETE", headers: { authorization: "Bearer dev-admin-token" } },
+    ));
+
+    expect(deleted.status).toBe(202);
+    await expect(deleted.json()).resolves.toMatchObject({
+      job: {
+        type: "repository.artifact.delete",
+        status: "pending",
+        repositoryName: "python-internal",
+        subject: { type: "artifact", id: target.id, repositoryName: "python-internal" },
+      },
+    });
+    expect(scheduledJobs).toBe(1);
+    const beforeDrain = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/simple/alpha/",
+    ));
+    await expect(beforeDrain.text()).resolves.toContain("alpha-1.0.tar.gz");
+
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, failed: 0, remaining: 0 });
+    const afterDrain = await app.fetch(new Request(
+      "https://axis.example/repositories/python-internal/simple/alpha/",
+    ));
+    const html = await afterDrain.text();
+    expect(html).not.toContain("alpha-1.0.tar.gz");
+    expect(html).toContain("alpha-2.0.tar.gz");
   });
 });

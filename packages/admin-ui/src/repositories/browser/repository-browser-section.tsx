@@ -74,8 +74,9 @@ export function RepositoryBrowserSection({
         }
         setPendingDeletePath(undefined);
         toast.notify({
-          title: "Object deleted",
+          title: "Object delete started",
           description: deletedPath,
+          action: { label: "View jobs", to: "/ui/jobs" },
         });
       },
     });
