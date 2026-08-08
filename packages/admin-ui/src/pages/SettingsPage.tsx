@@ -1,23 +1,32 @@
 import { Ban, Power, RotateCcw } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getRuntimeConfig } from "../runtime-config";
-import { useRepositoryPlugins, useUpdateRepositoryPluginPolicy } from "../api/hooks";
+import {
+  useRepositoryPlugins,
+  useRuntimeSettings,
+  useUpdateRepositoryPluginPolicy,
+  useUpdateRuntimeSettings,
+} from "../api/hooks";
 import { BootstrapCredentialsCard } from "../components/bootstrap-credentials";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { HelpTrigger } from "../components/ui/help-trigger";
+import { Input } from "../components/ui/input";
 import { repositoryPluginStatusRows } from "../repositories/plugins/plugin-lifecycle";
 import { repositoryKindLabel } from "../repositories/detail/repository-page-model";
 import { ErrorState, PageShell } from "./shared";
 import { SkeletonRows } from "../components/ui/skeleton";
-import { useErrorToast } from "../components/ui/toast";
+import { useErrorToast, useToast } from "../components/ui/toast";
 
 export function SettingsPage() {
   const runtimeConfig = getRuntimeConfig();
   const apiTarget = runtimeConfig.apiBaseUrl || "same-origin";
   const repositoryPlugins = useRepositoryPlugins();
   const updatePluginPolicy = useUpdateRepositoryPluginPolicy();
+  const runtimeSettings = useRuntimeSettings();
+  const updateRuntimeSettings = useUpdateRuntimeSettings();
   useErrorToast("Plugin policy update failed", updatePluginPolicy.error);
+  useErrorToast("Runtime settings update failed", updateRuntimeSettings.error);
   const pluginRows = repositoryPluginStatusRows(repositoryPlugins.data ?? []);
   const [confirmDisableEcosystem, setConfirmDisableEcosystem] = useState<string | null>(null);
 
@@ -41,6 +50,10 @@ export function SettingsPage() {
         </div>
       </div>
       <BootstrapCredentialsCard />
+      <RuntimeOperationalPolicyCard
+        query={runtimeSettings}
+        update={updateRuntimeSettings}
+      />
       <section className="grid gap-3 rounded-lg border border-border bg-panel p-5">
         <div>
           <div className="flex items-center gap-2">
@@ -194,6 +207,189 @@ export function SettingsPage() {
       </section>
     </PageShell>
   );
+}
+
+type RuntimeSettingsQuery = ReturnType<typeof useRuntimeSettings>;
+type RuntimeSettingsUpdate = ReturnType<typeof useUpdateRuntimeSettings>;
+
+interface RuntimePolicyFormState {
+  upstreamFetchTimeoutMs: string;
+  indexCatalogBatchSize: string;
+  indexProjectDetailBatchSize: string;
+  failedProjectSampleLimit: string;
+  fileByteCacheEnabled: boolean;
+  fileByteCacheMaxBytes: string;
+  respectUpstreamCacheControl: boolean;
+}
+
+function RuntimeOperationalPolicyCard({
+  query,
+  update,
+}: {
+  query: RuntimeSettingsQuery;
+  update: RuntimeSettingsUpdate;
+}) {
+  const toast = useToast();
+  const effective = query.data?.settings.operationalPolicy.proxy;
+  const [form, setForm] = useState<RuntimePolicyFormState>(() => runtimePolicyFormState(effective));
+
+  useEffect(() => {
+    if (!effective) return;
+    setForm(runtimePolicyFormState(effective));
+  }, [effective]);
+
+  return (
+    <section className="grid gap-4 rounded-lg border border-border bg-panel p-5">
+      <div>
+        <h2 className="text-base font-semibold">Proxy runtime policy</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Global defaults for proxy repositories. Repository config can still override these values.
+        </p>
+      </div>
+      {query.isLoading && (
+        <div className="rounded-md border border-border">
+          <SkeletonRows rows={2} columns={["w-40", "w-24", "w-32"]} />
+        </div>
+      )}
+      {query.error && <ErrorState title="Runtime settings unavailable" error={query.error} />}
+      {effective && (
+        <form
+          className="grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            update.mutate({
+              operationalPolicy: {
+                proxy: {
+                  upstreamFetchTimeoutMs: integerFormValue(form.upstreamFetchTimeoutMs),
+                  indexCatalogBatchSize: integerFormValue(form.indexCatalogBatchSize),
+                  indexProjectDetailBatchSize: integerFormValue(form.indexProjectDetailBatchSize),
+                  failedProjectSampleLimit: integerFormValue(form.failedProjectSampleLimit),
+                  fileByteCache: {
+                    enabled: form.fileByteCacheEnabled,
+                    maxBytes: integerFormValue(form.fileByteCacheMaxBytes),
+                    respectUpstreamCacheControl: form.respectUpstreamCacheControl,
+                  },
+                },
+              },
+            }, {
+              onSuccess: () => toast.notify({ title: "Runtime settings saved" }),
+            });
+          }}
+        >
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <RuntimeNumberField
+              label="Upstream timeout"
+              suffix="ms"
+              value={form.upstreamFetchTimeoutMs}
+              onChange={(upstreamFetchTimeoutMs) => setForm((current) => ({ ...current, upstreamFetchTimeoutMs }))}
+            />
+            <RuntimeNumberField
+              label="Catalog batch"
+              value={form.indexCatalogBatchSize}
+              onChange={(indexCatalogBatchSize) => setForm((current) => ({ ...current, indexCatalogBatchSize }))}
+            />
+            <RuntimeNumberField
+              label="Project detail batch"
+              value={form.indexProjectDetailBatchSize}
+              onChange={(indexProjectDetailBatchSize) => setForm((current) => ({ ...current, indexProjectDetailBatchSize }))}
+            />
+            <RuntimeNumberField
+              label="Failed samples"
+              value={form.failedProjectSampleLimit}
+              onChange={(failedProjectSampleLimit) => setForm((current) => ({ ...current, failedProjectSampleLimit }))}
+            />
+            <RuntimeNumberField
+              label="Byte cache limit"
+              suffix="bytes"
+              value={form.fileByteCacheMaxBytes}
+              onChange={(fileByteCacheMaxBytes) => setForm((current) => ({ ...current, fileByteCacheMaxBytes }))}
+            />
+            <label className="flex min-h-16 items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.fileByteCacheEnabled}
+                onChange={(event) => setForm((current) => ({ ...current, fileByteCacheEnabled: event.target.checked }))}
+              />
+              <span>Enable byte cache</span>
+            </label>
+            <label className="flex min-h-16 items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.respectUpstreamCacheControl}
+                onChange={(event) => setForm((current) => ({ ...current, respectUpstreamCacheControl: event.target.checked }))}
+              />
+              <span>Respect upstream cache-control</span>
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={update.isPending}>
+              Save
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={update.isPending}
+              onClick={() => update.mutate({}, {
+                onSuccess: (result) => {
+                  setForm(runtimePolicyFormState(result.settings.operationalPolicy.proxy));
+                  toast.notify({ title: "Runtime settings reset" });
+                },
+              })}
+            >
+              <RotateCcw className="mr-1.5 size-3.5" aria-hidden="true" />
+              Reset overrides
+            </Button>
+          </div>
+        </form>
+      )}
+    </section>
+  );
+}
+
+function RuntimeNumberField({
+  label,
+  suffix,
+  value,
+  onChange,
+}: {
+  label: string;
+  suffix?: string;
+  value: string;
+  onChange(value: string): void;
+}) {
+  return (
+    <label className="grid gap-1.5 text-sm">
+      <span className="text-xs font-semibold uppercase text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-2">
+        <Input
+          type="number"
+          min={0}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        {suffix && <span className="text-xs text-muted-foreground">{suffix}</span>}
+      </div>
+    </label>
+  );
+}
+
+function runtimePolicyFormState(
+  policy: NonNullable<RuntimeSettingsQuery["data"]>["settings"]["operationalPolicy"]["proxy"] | undefined,
+): RuntimePolicyFormState {
+  return {
+    upstreamFetchTimeoutMs: String(policy?.upstreamFetchTimeoutMs ?? ""),
+    indexCatalogBatchSize: String(policy?.indexCatalogBatchSize ?? ""),
+    indexProjectDetailBatchSize: String(policy?.indexProjectDetailBatchSize ?? ""),
+    failedProjectSampleLimit: String(policy?.failedProjectSampleLimit ?? ""),
+    fileByteCacheEnabled: policy?.fileByteCache.enabled ?? true,
+    fileByteCacheMaxBytes: String(policy?.fileByteCache.maxBytes ?? ""),
+    respectUpstreamCacheControl: policy?.fileByteCache.respectUpstreamCacheControl ?? true,
+  };
+}
+
+function integerFormValue(value: string): number | undefined {
+  if (!value.trim()) return undefined;
+  return Number(value);
 }
 
 function RepositoryPluginAvailabilityHelp() {

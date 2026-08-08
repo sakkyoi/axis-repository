@@ -1,5 +1,16 @@
-import type { RepositoryArtifactRecord, RepositoryArtifactStore, RepositoryObjectStore } from "@axis-repository/core";
-import { ValidationError } from "@axis-repository/core";
+import type {
+  ProxyOperationalPolicy,
+  ProxyFileByteCachePolicy,
+  Repository,
+  RepositoryArtifactRecord,
+  RepositoryArtifactStore,
+  RepositoryObjectStore,
+} from "@axis-repository/core";
+import {
+  flattenResolvedProxyOperationalPolicy,
+  resolveProxyOperationalPolicy,
+  ValidationError,
+} from "@axis-repository/core";
 import { pypiPluginManifest } from "../manifest";
 import type {
   GroupRepositoryPlugin,
@@ -89,11 +100,6 @@ export function createPypiPlugin(input?: {
 }
 
 type FetchLike = (request: Request) => Promise<Response>;
-const PYPI_PROXY_UPSTREAM_FETCH_TIMEOUT_MS = 2000;
-const PYPI_PROXY_PROJECT_MARKER_BATCH_SIZE = 100;
-const PYPI_PROXY_PROJECT_DETAIL_BATCH_SIZE = 25;
-const PYPI_PROXY_FAILED_PROJECT_SAMPLE_LIMIT = 10;
-const PYPI_PROXY_FILE_BYTE_CACHE_MAX_BYTES = 512 * 1024 * 1024;
 const PYPI_PROXY_UPSTREAM_REQUEST_HEADERS = [
   "accept",
   "range",
@@ -105,6 +111,7 @@ const PYPI_PROXY_UPSTREAM_REQUEST_HEADERS = [
 export function createPypiProxyPlugin(input: {
   fetch?: FetchLike;
   objectStoreFor?: (repositoryName: string) => RepositoryObjectStore;
+  proxyPolicyFor?: (repository: Repository) => Promise<ProxyOperationalPolicy> | ProxyOperationalPolicy;
 } = {}): ProxyRepositoryPlugin {
   const fetchImpl = input.fetch ?? ((request: Request) => fetch(request));
   const fileCacheWrites = new Map<string, Promise<void>>();
@@ -122,7 +129,7 @@ export function createPypiProxyPlugin(input: {
       ? {
         adminResources: createPypiAdminResources({
           objectStoreFor: input.objectStoreFor,
-          fetchProxyProject: ({ repositoryName, repositoryEcosystem, repositoryConfig, artifactStore, project, cachedProject }) =>
+          fetchProxyProject: async ({ repository, repositoryName, repositoryEcosystem, repositoryConfig, artifactStore, project, cachedProject }) =>
             fetchAndCachePypiProxyProject({
               fetch: fetchImpl,
               objectStore: input.objectStoreFor!(repositoryName),
@@ -130,6 +137,7 @@ export function createPypiProxyPlugin(input: {
               repositoryName,
               repositoryEcosystem,
               repositoryConfig,
+              proxyPolicy: await pypiProxyPolicyForRepository(input, repository),
               project,
               ...(cachedProject === undefined ? {} : { cachedProject }),
             }),
@@ -138,13 +146,15 @@ export function createPypiProxyPlugin(input: {
       : {}),
     objectBrowser: createPypiProxyObjectBrowser(fetchImpl),
     artifacts: {
-      rebuildIndex: (rebuildInput) => rebuildPypiProxyArtifactIndex({
+      rebuildIndex: async (rebuildInput) => rebuildPypiProxyArtifactIndex({
         ...rebuildInput,
         fetch: fetchImpl,
+        proxyPolicy: await pypiProxyPolicyForRepository(input, rebuildInput.repository),
       }),
     },
     serveRepositoryPath: async ({ repository, request, relativePath, scheduleBackgroundTask }) => {
       const upstream = parsePypiProxyRepositoryConfig(repository.config);
+      const proxyPolicy = await pypiProxyPolicyForRepository(input, repository);
       const objectStore = input.objectStoreFor?.(repository.name);
       const upstreamUrl = await pypiProxyServeUpstreamUrl({
         objectStore,
@@ -158,6 +168,7 @@ export function createPypiProxyPlugin(input: {
       const proxyFile = pypiProxyFileFromRelativePath(relativePath);
       const cacheableFileRequest = proxyFile !== undefined
         && objectStore !== undefined
+        && proxyPolicy.fileByteCache.enabled
         && !request.headers.has("range")
         && !hasPypiProxyConditionalRequestHeaders(request.headers);
       if (cacheableFileRequest && (request.method === "GET" || request.method === "HEAD")) {
@@ -199,7 +210,7 @@ export function createPypiProxyPlugin(input: {
       if (proxyFile !== undefined && request.method === "GET") {
         if (cacheableFileRequest
           && upstreamResponse.status === 200
-          && pypiProxyFileResponseCanBeCached(upstreamResponse.headers)) {
+          && pypiProxyFileResponseCanBeCached(upstreamResponse.headers, proxyPolicy.fileByteCache)) {
           return streamAndCachePypiProxyFileResponse({
             objectStore: objectStore!,
             repositoryName: repository.name,
@@ -241,6 +252,28 @@ export function createPypiProxyPlugin(input: {
       parsePypiProxyRepositoryConfig(config);
     },
   };
+}
+
+async function pypiProxyPolicyForRepository(
+  input: { proxyPolicyFor?: (repository: Repository) => Promise<ProxyOperationalPolicy> | ProxyOperationalPolicy },
+  repository: Repository,
+): Promise<ProxyOperationalPolicy> {
+  const repositoryConfig = parsePypiProxyRepositoryConfig(repository.config);
+  if (input.proxyPolicyFor) {
+    const repositoryPolicy = repositoryConfig.proxyPolicy;
+    return flattenResolvedProxyOperationalPolicy(resolveProxyOperationalPolicy({
+      deployment: await input.proxyPolicyFor(repository),
+      ...(repositoryPolicy === undefined ? {} : { repository: repositoryPolicy }),
+    }));
+  }
+  return fallbackPypiProxyPolicy(repository.config);
+}
+
+function fallbackPypiProxyPolicy(repositoryConfig: Record<string, unknown>): ProxyOperationalPolicy {
+  const config = parsePypiProxyRepositoryConfig(repositoryConfig);
+  return flattenResolvedProxyOperationalPolicy(resolveProxyOperationalPolicy(
+    config.proxyPolicy === undefined ? {} : { repository: config.proxyPolicy },
+  ));
 }
 
 async function rewritePypiProxySimpleResponse(input: {
@@ -566,6 +599,7 @@ function proxyProjectFiles(files: unknown[]): Array<{
 
 async function rebuildPypiProxyArtifactIndex(input: RebuildRepositoryArtifactIndexInput & {
   fetch: FetchLike;
+  proxyPolicy: ProxyOperationalPolicy;
 }) {
   const upstream = parsePypiProxyRepositoryConfig(input.repository.config);
   const rootUrl = pypiProxyUpstreamUrl(upstream.upstreamUrl, `${SIMPLE_PREFIX}/`);
@@ -586,6 +620,7 @@ async function rebuildPypiProxyArtifactIndex(input: RebuildRepositoryArtifactInd
       upstreamUrl: upstream.upstreamUrl,
       rootUrl,
       indexedAt: input.now.toISOString(),
+      proxyPolicy: input.proxyPolicy,
     })
     : await readPypiProxyRebuild(input.objectStore, input.repository.name);
   if (!rebuild) {
@@ -606,6 +641,7 @@ async function rebuildPypiProxyArtifactIndex(input: RebuildRepositoryArtifactInd
       projects: rebuild.projects,
       failedProjects: rebuild.failedProjects,
       offset: detailOffset,
+      proxyPolicy: input.proxyPolicy,
     });
   }
   return pypiProxyProjectMarkerBatch({
@@ -618,6 +654,7 @@ async function rebuildPypiProxyArtifactIndex(input: RebuildRepositoryArtifactInd
     projects: rebuild.projects,
     failedProjects: rebuild.failedProjects,
     offset: continuationOffset ?? 0,
+    proxyPolicy: input.proxyPolicy,
   });
 }
 
@@ -628,8 +665,9 @@ async function startPypiProxyRebuild(input: {
   upstreamUrl: string;
   rootUrl: string;
   indexedAt: string;
+  proxyPolicy: ProxyOperationalPolicy;
 }): Promise<PypiProxyRebuildCache> {
-  const projects = await fetchPypiProxyProjects(input.fetch, input.rootUrl);
+  const projects = await fetchPypiProxyProjects(input.fetch, input.rootUrl, input.proxyPolicy);
   const normalizedProjects = uniqueNormalizedProjects(projects);
   const rebuild: PypiProxyRebuildCache = {
     upstreamUrl: input.upstreamUrl,
@@ -662,9 +700,10 @@ async function pypiProxyProjectMarkerBatch(input: {
   projects: string[];
   failedProjects: PypiProxyProjectFailure[] | undefined;
   offset: number;
+  proxyPolicy: ProxyOperationalPolicy;
 }) {
   const start = Math.max(0, input.offset);
-  const end = Math.min(start + PYPI_PROXY_PROJECT_MARKER_BATCH_SIZE, input.projects.length);
+  const end = Math.min(start + input.proxyPolicy.indexCatalogBatchSize, input.projects.length);
   const markerComplete = end >= input.projects.length;
   return {
     artifacts: input.projects.slice(start, end).map((project) => proxyProjectArtifactRecord({
@@ -690,6 +729,7 @@ async function pypiProxyProjectMarkerBatch(input: {
         projectCount: input.projects.length,
         warmedProjectCount: 0,
         failedProjects: input.failedProjects ?? [],
+        failedProjectSampleLimit: input.proxyPolicy.failedProjectSampleLimit,
       }),
     },
   };
@@ -705,11 +745,12 @@ async function pypiProxyProjectDetailBatch(input: {
   projects: string[];
   failedProjects: PypiProxyProjectFailure[] | undefined;
   offset: number;
+  proxyPolicy: ProxyOperationalPolicy;
 }) {
   const upstream = parsePypiProxyRepositoryConfig(input.repositoryConfig);
   const rootUrl = pypiProxyUpstreamUrl(upstream.upstreamUrl, `${SIMPLE_PREFIX}/`) ?? "";
   const start = Math.max(0, input.offset);
-  const end = Math.min(start + PYPI_PROXY_PROJECT_DETAIL_BATCH_SIZE, input.projects.length);
+  const end = Math.min(start + input.proxyPolicy.indexProjectDetailBatchSize, input.projects.length);
   const artifacts: RepositoryArtifactRecord[] = [];
   const failedProjects = [...(input.failedProjects ?? [])];
   let warmedProjectCount = start - failedProjects.length;
@@ -719,6 +760,7 @@ async function pypiProxyProjectDetailBatch(input: {
       objectStore: input.objectStore,
       repositoryName: input.repositoryName,
       repositoryConfig: input.repositoryConfig,
+      proxyPolicy: input.proxyPolicy,
       project,
     });
     if (result.failure) {
@@ -778,6 +820,7 @@ async function pypiProxyProjectDetailBatch(input: {
         projectCount: input.projects.length,
         warmedProjectCount,
         failedProjects,
+        failedProjectSampleLimit: input.proxyPolicy.failedProjectSampleLimit,
       }),
     },
   };
@@ -847,13 +890,14 @@ function proxyIndexResult(input: {
   projectCount: number;
   warmedProjectCount: number;
   failedProjects: PypiProxyProjectFailure[];
+  failedProjectSampleLimit: number;
 }): Record<string, unknown> {
   return {
     phase: input.phase,
     projectCount: input.projectCount,
     warmedProjectCount: input.warmedProjectCount,
     failedProjectCount: input.failedProjects.length,
-    failedProjects: input.failedProjects.slice(0, PYPI_PROXY_FAILED_PROJECT_SAMPLE_LIMIT),
+    failedProjects: input.failedProjects.slice(0, input.failedProjectSampleLimit),
   };
 }
 
@@ -956,21 +1000,25 @@ async function updatePypiProxyProjectSummary(input: {
   });
 }
 
-async function fetchPypiProxyProjects(fetchImpl: FetchLike, rootUrl: string): Promise<string[]> {
+async function fetchPypiProxyProjects(
+  fetchImpl: FetchLike,
+  rootUrl: string,
+  proxyPolicy: ProxyOperationalPolicy,
+): Promise<string[]> {
   const rootResponse = await fetchWithTimeout(fetchImpl, new Request(rootUrl, {
     headers: { accept: "text/html" },
-  }));
+  }), proxyPolicy.upstreamFetchTimeoutMs);
   if (!rootResponse.ok) {
     throw new ValidationError(`PyPI proxy upstream root returned ${rootResponse.status}`);
   }
   return parseProjectListHtml(await rootResponse.text());
 }
 
-async function fetchWithTimeout(fetchImpl: FetchLike, request: Request): Promise<Response> {
+async function fetchWithTimeout(fetchImpl: FetchLike, request: Request, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => {
-    controller.abort(new Error(`PyPI proxy upstream request timed out after ${PYPI_PROXY_UPSTREAM_FETCH_TIMEOUT_MS}ms`));
-  }, PYPI_PROXY_UPSTREAM_FETCH_TIMEOUT_MS);
+    controller.abort(new Error(`PyPI proxy upstream request timed out after ${timeoutMs}ms`));
+  }, timeoutMs);
   try {
     return await fetchImpl(new Request(request, { signal: controller.signal }));
   } finally {
@@ -985,6 +1033,7 @@ async function fetchAndCachePypiProxyProject(input: {
   repositoryName: string;
   repositoryEcosystem: string;
   repositoryConfig: Record<string, unknown>;
+  proxyPolicy: ProxyOperationalPolicy;
   project: string;
   cachedProject?: { name: string; files: unknown[] };
 }): Promise<{ name: string; files: unknown[] } | undefined> {
@@ -1011,6 +1060,7 @@ async function fetchAndCachePypiProxyProject(input: {
     repositoryName: input.repositoryName,
     projectName,
     projectUrl,
+    proxyPolicy: input.proxyPolicy,
   }).catch(() => undefined);
   if (!project) {
     return undefined;
@@ -1031,6 +1081,7 @@ async function fetchAndCachePypiProxyProjectForWarming(input: {
   objectStore: RepositoryObjectStore;
   repositoryName: string;
   repositoryConfig: Record<string, unknown>;
+  proxyPolicy: ProxyOperationalPolicy;
   project: string;
 }): Promise<{ project?: { name: string; files: unknown[] }; failure?: PypiProxyProjectFailure }> {
   const upstream = parsePypiProxyRepositoryConfig(input.repositoryConfig);
@@ -1053,6 +1104,7 @@ async function fetchAndCachePypiProxyProjectForWarming(input: {
         repositoryName: input.repositoryName,
         projectName,
         projectUrl,
+        proxyPolicy: input.proxyPolicy,
       }),
     };
   } catch (error) {
@@ -1068,10 +1120,11 @@ async function fetchAndStorePypiProxyProject(input: {
   repositoryName: string;
   projectName: string;
   projectUrl: string;
+  proxyPolicy: ProxyOperationalPolicy;
 }): Promise<{ name: string; files: unknown[] }> {
   const projectResponse = await fetchWithTimeout(input.fetch, new Request(input.projectUrl, {
     headers: { accept: "text/html" },
-  })).catch((error: unknown) => {
+  }), input.proxyPolicy.upstreamFetchTimeoutMs).catch((error: unknown) => {
     throw new PypiProxyUpstreamError(
       `PyPI proxy upstream project ${input.projectName} request failed: ${error instanceof Error ? error.message : String(error)}`,
       true,
@@ -1418,13 +1471,13 @@ function hasPypiProxyConditionalRequestHeaders(headers: Headers): boolean {
     || headers.has("if-unmodified-since");
 }
 
-function pypiProxyFileResponseCanBeCached(headers: Headers): boolean {
+function pypiProxyFileResponseCanBeCached(headers: Headers, policy: ProxyFileByteCachePolicy): boolean {
   const contentLength = parsePypiProxyFileCacheContentLength(headers.get("content-length"));
-  if (contentLength === undefined || contentLength > PYPI_PROXY_FILE_BYTE_CACHE_MAX_BYTES) {
+  if (contentLength === undefined || contentLength > policy.maxBytes) {
     return false;
   }
   const cacheControl = headers.get("cache-control");
-  if (!cacheControl) {
+  if (!cacheControl || !policy.respectUpstreamCacheControl) {
     return true;
   }
   const directives = cacheControl.toLowerCase().split(",").map((directive) => directive.trim());

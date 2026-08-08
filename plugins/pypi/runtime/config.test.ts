@@ -12,6 +12,24 @@ describe("PyPI repository config", () => {
     });
   });
 
+  it("accepts repository-scoped proxy policy overrides", () => {
+    expect(parsePypiProxyRepositoryConfig({
+      pypi: {
+        upstreamUrl: "https://pypi.example/root",
+        proxyPolicy: {
+          upstreamFetchTimeoutMs: 5000,
+          fileByteCache: { enabled: false },
+        },
+      },
+    })).toEqual({
+      upstreamUrl: "https://pypi.example/root/",
+      proxyPolicy: {
+        upstreamFetchTimeoutMs: 5000,
+        fileByteCache: { enabled: false },
+      },
+    });
+  });
+
   it("requires a proxy upstream URL", () => {
     expect(() => parsePypiProxyRepositoryConfig({ pypi: {} }))
       .toThrow("config.pypi.upstreamUrl is required");

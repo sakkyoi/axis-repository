@@ -51,6 +51,27 @@
       },
       "R2_SECRET_ACCESS_KEY": {
         "description": "Secret access key of that same R2 API token, shown once when the token is created. Without it, the access key ID, and the account ID, artifact uploads are refused: every request is answered by a single Durable Object, so a Worker that cannot sign upload URLs fails at sign-in rather than at the first publish. Set `UPLOAD_BACKEND=local-r2` to run without any of them."
+      },
+      "AXIS_PROXY_UPSTREAM_FETCH_TIMEOUT_MS": {
+        "description": "Deployment default timeout for proxy repository upstream metadata requests, in milliseconds. Admin runtime settings can override it without redeploying."
+      },
+      "AXIS_PROXY_INDEX_CATALOG_BATCH_SIZE": {
+        "description": "Deployment default number of proxy catalog entries one index job slice records before yielding. Admin runtime settings can override it without redeploying."
+      },
+      "AXIS_PROXY_INDEX_PROJECT_DETAIL_BATCH_SIZE": {
+        "description": "Deployment default number of proxy project detail pages one index job slice warms before yielding. Admin runtime settings can override it without redeploying."
+      },
+      "AXIS_PROXY_FAILED_PROJECT_SAMPLE_LIMIT": {
+        "description": "Deployment default number of failed proxy project samples kept in job results for operator inspection. Admin runtime settings can override it without redeploying."
+      },
+      "AXIS_PROXY_FILE_BYTE_CACHE_ENABLED": {
+        "description": "Deployment default toggle for proxy artifact byte caching. Set to `true` or `false`; admin runtime settings can override it without redeploying."
+      },
+      "AXIS_PROXY_FILE_BYTE_CACHE_MAX_BYTES": {
+        "description": "Deployment default maximum size of a proxy artifact response that may be cached, in bytes. Admin runtime settings can override it without redeploying."
+      },
+      "AXIS_PROXY_RESPECT_UPSTREAM_CACHE_CONTROL": {
+        "description": "Deployment default toggle for respecting upstream `Cache-Control` when proxy artifact byte caching decides whether to store a response. Set to `true` or `false`; admin runtime settings can override it without redeploying."
       }
     }
   },

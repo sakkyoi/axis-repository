@@ -847,6 +847,7 @@ describe("PublishSessionService", () => {
       publishSessions: backingState.publishSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
+      runtimeSettings: backingState.runtimeSettings,
       repositoryActivities: backingState.repositoryActivities,
       repositoryArtifacts: backingState.repositoryArtifacts,
     };
@@ -1002,6 +1003,7 @@ describe("PublishSessionService", () => {
       adminRefreshSessions: backingState.adminRefreshSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
+      runtimeSettings: backingState.runtimeSettings,
       repositoryActivities: backingState.repositoryActivities,
       repositoryArtifacts: backingState.repositoryArtifacts,
       publishSessions: {
@@ -1095,6 +1097,7 @@ describe("PublishSessionService", () => {
       adminRefreshSessions: backingState.adminRefreshSessions,
       repositorySecrets: backingState.repositorySecrets,
       repositoryPluginPolicies: backingState.repositoryPluginPolicies,
+      runtimeSettings: backingState.runtimeSettings,
       repositoryActivities: backingState.repositoryActivities,
       repositoryArtifacts: backingState.repositoryArtifacts,
       publishSessions: {

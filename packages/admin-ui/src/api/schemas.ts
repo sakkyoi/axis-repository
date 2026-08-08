@@ -227,6 +227,47 @@ export const deploymentResponseSchema = z.object({
   leftoverBootstrapCredentials: z.array(leftoverBootstrapCredentialSchema),
 });
 
+export const proxyFileByteCacheSettingsSchema = z.object({
+  enabled: z.boolean().optional(),
+  maxBytes: z.number().optional(),
+  respectUpstreamCacheControl: z.boolean().optional(),
+});
+
+export const proxyOperationalPolicySettingsSchema = z.object({
+  upstreamFetchTimeoutMs: z.number().optional(),
+  indexCatalogBatchSize: z.number().optional(),
+  indexProjectDetailBatchSize: z.number().optional(),
+  failedProjectSampleLimit: z.number().optional(),
+  fileByteCache: proxyFileByteCacheSettingsSchema.optional(),
+});
+
+export const runtimeSettingsOverridesSchema = z.object({
+  operationalPolicy: z.object({
+    proxy: proxyOperationalPolicySettingsSchema.optional(),
+  }).optional(),
+});
+
+export const runtimeSettingsSchema = z.object({
+  operationalPolicy: z.object({
+    proxy: z.object({
+      upstreamFetchTimeoutMs: z.number(),
+      indexCatalogBatchSize: z.number(),
+      indexProjectDetailBatchSize: z.number(),
+      failedProjectSampleLimit: z.number(),
+      fileByteCache: z.object({
+        enabled: z.boolean(),
+        maxBytes: z.number(),
+        respectUpstreamCacheControl: z.boolean(),
+      }),
+    }),
+  }),
+});
+
+export const runtimeSettingsResponseSchema = z.object({
+  settings: runtimeSettingsSchema,
+  overrides: runtimeSettingsOverridesSchema,
+});
+
 export const publishTokenSchema = z.object({
   id: z.string(),
   name: z.string(),

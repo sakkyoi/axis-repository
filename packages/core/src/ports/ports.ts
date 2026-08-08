@@ -17,6 +17,7 @@ import type {
   PublishArtifactsInput,
   PublishResult,
   RepositoryPluginPolicyRecord,
+  RuntimeSettingsRecord,
 } from "../domain/domain";
 
 export interface Clock {
@@ -216,6 +217,11 @@ export interface RepositoryPluginPolicyStore {
   save(record: RepositoryPluginPolicyRecord): Promise<void>;
 }
 
+export interface RuntimeSettingsStore {
+  get(): Promise<RuntimeSettingsRecord | null>;
+  save(record: RuntimeSettingsRecord): Promise<void>;
+}
+
 export interface RepositoryActivityStore {
   listByRepository(repositoryName: string): Promise<RepositoryActivityRecord[]>;
   save(record: RepositoryActivityRecord): Promise<void>;
@@ -266,6 +272,7 @@ export interface StateStore {
   adminRefreshSessions: AdminRefreshSessionStore;
   repositorySecrets: RepositorySecretStore;
   repositoryPluginPolicies: RepositoryPluginPolicyStore;
+  runtimeSettings: RuntimeSettingsStore;
   repositoryActivities: RepositoryActivityStore;
   repositoryArtifacts: RepositoryArtifactStore;
 }

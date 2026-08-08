@@ -1660,6 +1660,59 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(401);
   });
 
+  it("reads and updates runtime settings behind admin auth", async () => {
+    const app = createApp(createDevDependencies());
+
+    const updateResponse = await app.fetch(new Request("https://axis.example/admin/settings/runtime", {
+      method: "PATCH",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        operationalPolicy: {
+          proxy: {
+            upstreamFetchTimeoutMs: 5000,
+            fileByteCache: {
+              enabled: false,
+              maxBytes: 1024,
+            },
+          },
+        },
+      }),
+    }));
+    const getResponse = await app.fetch(new Request("https://axis.example/admin/settings/runtime", {
+      headers: { authorization: "Bearer dev-admin-token" },
+    }));
+
+    expect(updateResponse.status).toBe(200);
+    await expect(getResponse.json()).resolves.toMatchObject({
+      settings: {
+        operationalPolicy: {
+          proxy: {
+            upstreamFetchTimeoutMs: 5000,
+            fileByteCache: {
+              enabled: false,
+              maxBytes: 1024,
+              respectUpstreamCacheControl: true,
+            },
+          },
+        },
+      },
+      overrides: {
+        operationalPolicy: {
+          proxy: {
+            upstreamFetchTimeoutMs: 5000,
+            fileByteCache: {
+              enabled: false,
+              maxBytes: 1024,
+            },
+          },
+        },
+      },
+    });
+  });
+
   it("says so in its own log, for an operator who never opens the admin UI", async () => {
     const warnings: unknown[] = [];
     const warn = vi.spyOn(console, "warn").mockImplementation((...args) => void warnings.push(args[0]));

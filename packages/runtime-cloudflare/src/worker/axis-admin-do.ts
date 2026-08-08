@@ -4,8 +4,10 @@ import {
   PublishSessionService,
   PublishTokenService,
   PluginPolicyService,
+  RuntimeSettingsService,
   RepositoryService,
   type Clock,
+  type RuntimeOperationalPolicySettings,
 } from "@axis-repository/core";
 import { createApp } from "./app";
 import { WebCryptoRandomId, Sha256SecretHasher, Pbkdf2PasswordHasher } from "../crypto";
@@ -57,6 +59,13 @@ export interface AxisEnv {
   UPLOAD_BACKEND?: string;
   ADMIN_UI_API_BASE_URL?: string;
   AXIS_ARTIFACT_ORIGIN?: string;
+  AXIS_PROXY_UPSTREAM_FETCH_TIMEOUT_MS?: string;
+  AXIS_PROXY_INDEX_CATALOG_BATCH_SIZE?: string;
+  AXIS_PROXY_INDEX_PROJECT_DETAIL_BATCH_SIZE?: string;
+  AXIS_PROXY_FAILED_PROJECT_SAMPLE_LIMIT?: string;
+  AXIS_PROXY_FILE_BYTE_CACHE_ENABLED?: string;
+  AXIS_PROXY_FILE_BYTE_CACHE_MAX_BYTES?: string;
+  AXIS_PROXY_RESPECT_UPSTREAM_CACHE_CONTROL?: string;
 }
 
 export interface AxisAdminAlarmPlan {
@@ -96,6 +105,68 @@ function optionalPositiveInteger(value: string | undefined, name: string): numbe
     throw new Error(`${name} must be a positive integer`);
   }
   return parsed;
+}
+
+function optionalNonNegativeInteger(value: string | undefined, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer`);
+  }
+  return parsed;
+}
+
+function optionalBoolean(value: string | undefined, name: string): boolean | undefined {
+  if (value === undefined || value === "") return undefined;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false`);
+}
+
+function deploymentOperationalPolicyFromEnv(env: AxisEnv): RuntimeOperationalPolicySettings | undefined {
+  const upstreamFetchTimeoutMs = optionalPositiveInteger(
+    env.AXIS_PROXY_UPSTREAM_FETCH_TIMEOUT_MS,
+    "AXIS_PROXY_UPSTREAM_FETCH_TIMEOUT_MS",
+  );
+  const indexCatalogBatchSize = optionalPositiveInteger(
+    env.AXIS_PROXY_INDEX_CATALOG_BATCH_SIZE,
+    "AXIS_PROXY_INDEX_CATALOG_BATCH_SIZE",
+  );
+  const indexProjectDetailBatchSize = optionalPositiveInteger(
+    env.AXIS_PROXY_INDEX_PROJECT_DETAIL_BATCH_SIZE,
+    "AXIS_PROXY_INDEX_PROJECT_DETAIL_BATCH_SIZE",
+  );
+  const failedProjectSampleLimit = optionalNonNegativeInteger(
+    env.AXIS_PROXY_FAILED_PROJECT_SAMPLE_LIMIT,
+    "AXIS_PROXY_FAILED_PROJECT_SAMPLE_LIMIT",
+  );
+  const fileByteCacheEnabled = optionalBoolean(
+    env.AXIS_PROXY_FILE_BYTE_CACHE_ENABLED,
+    "AXIS_PROXY_FILE_BYTE_CACHE_ENABLED",
+  );
+  const fileByteCacheMaxBytes = optionalNonNegativeInteger(
+    env.AXIS_PROXY_FILE_BYTE_CACHE_MAX_BYTES,
+    "AXIS_PROXY_FILE_BYTE_CACHE_MAX_BYTES",
+  );
+  const respectUpstreamCacheControl = optionalBoolean(
+    env.AXIS_PROXY_RESPECT_UPSTREAM_CACHE_CONTROL,
+    "AXIS_PROXY_RESPECT_UPSTREAM_CACHE_CONTROL",
+  );
+  const fileByteCache = {
+    ...(fileByteCacheEnabled === undefined ? {} : { enabled: fileByteCacheEnabled }),
+    ...(fileByteCacheMaxBytes === undefined ? {} : { maxBytes: fileByteCacheMaxBytes }),
+    ...(respectUpstreamCacheControl === undefined ? {} : { respectUpstreamCacheControl }),
+  };
+  const proxy = {
+    ...(upstreamFetchTimeoutMs === undefined ? {} : { upstreamFetchTimeoutMs }),
+    ...(indexCatalogBatchSize === undefined ? {} : { indexCatalogBatchSize }),
+    ...(indexProjectDetailBatchSize === undefined ? {} : { indexProjectDetailBatchSize }),
+    ...(failedProjectSampleLimit === undefined ? {} : { failedProjectSampleLimit }),
+    ...(Object.keys(fileByteCache).length === 0 ? {} : { fileByteCache }),
+  };
+  return Object.keys(proxy).length > 0
+    ? { proxy }
+    : undefined;
 }
 
 function parseUploadBackend(value: string | undefined): UploadBackend {
@@ -206,6 +277,11 @@ export function createDurableObjectDependencies(
     randomId,
     encryption,
   });
+  const deploymentOperationalPolicy = deploymentOperationalPolicyFromEnv(env);
+  const runtimeSettingsService = new RuntimeSettingsService({
+    state,
+    ...(deploymentOperationalPolicy === undefined ? {} : { deploymentOperationalPolicy }),
+  });
   const uploadUrlTtlSeconds = optionalPositiveInteger(env.UPLOAD_URL_TTL_SECONDS, "UPLOAD_URL_TTL_SECONDS");
   const downloadUrlTtlSeconds = optionalPositiveInteger(env.DOWNLOAD_URL_TTL_SECONDS, "DOWNLOAD_URL_TTL_SECONDS");
   const uploadBackend = parseUploadBackend(env.UPLOAD_BACKEND);
@@ -234,7 +310,11 @@ export function createDurableObjectDependencies(
       ...(downloadUrlTtlSeconds === undefined ? {} : { ttlSeconds: downloadUrlTtlSeconds }),
     })
     : undefined;
-  const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, secrets: repositorySecrets });
+  const repositoryRuntimePlugins = createDefaultArtifactPlugins({
+    objectStore,
+    secrets: repositorySecrets,
+    proxyPolicyFor: async () => (await runtimeSettingsService.get()).operationalPolicy.proxy,
+  });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const pluginPolicyService = new PluginPolicyService({ state });
   const repositoryActivityService = new RepositoryActivityService({ state, clock, randomId });
@@ -352,6 +432,7 @@ export function createDurableObjectDependencies(
     repositoryArtifactStore: state.repositoryArtifacts,
     repositoryArtifactIndexService,
     pluginPolicyService,
+    runtimeSettingsService,
     repositorySecrets,
     repositoryObjectStore: objectStore,
     ...(downloadSigner ? { repositoryObjectDownloadSigner: downloadSigner } : {}),

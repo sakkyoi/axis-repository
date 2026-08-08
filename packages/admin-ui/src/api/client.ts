@@ -9,6 +9,7 @@ import {
   createdPublishSessionSchema,
   publishSessionSchema,
   deploymentResponseSchema,
+  runtimeSettingsResponseSchema,
   publishTokenCreateResponseSchema,
   publishTokenSchema,
   publishTokensResponseSchema,
@@ -69,6 +70,8 @@ export interface UpdateRepositoryPluginPolicyInput {
   enabled: boolean | null;
 }
 
+export type RuntimeSettingsOverrides = ReturnType<typeof runtimeSettingsResponseSchema.parse>["overrides"];
+
 export interface CreateAdminPublishSessionInput {
   repositoryName: string;
   ecosystem: string;
@@ -104,6 +107,8 @@ export interface AxisClient {
   verifyAdminSession(): Promise<void>;
   listAdminUsers(): Promise<{ users: AdminUser[]; canCreateUsers: boolean }>;
   getDeployment(): Promise<ReturnType<typeof deploymentResponseSchema.parse>>;
+  getRuntimeSettings(): Promise<ReturnType<typeof runtimeSettingsResponseSchema.parse>>;
+  updateRuntimeSettings(input: RuntimeSettingsOverrides): Promise<ReturnType<typeof runtimeSettingsResponseSchema.parse>>;
   listBackgroundJobs(options?: ListBackgroundJobsOptions): Promise<ReturnType<typeof backgroundJobsResponseSchema.parse>>;
   getBackgroundJob(id: string): Promise<ReturnType<typeof backgroundJobResponseSchema.parse>["job"]>;
   cancelBackgroundJob(id: string): Promise<ReturnType<typeof backgroundJobResponseSchema.parse>["job"]>;
@@ -270,6 +275,14 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async getDeployment() {
       const response = await http.get("/admin/deployment");
       return deploymentResponseSchema.parse(response.data);
+    },
+    async getRuntimeSettings() {
+      const response = await http.get("/admin/settings/runtime");
+      return runtimeSettingsResponseSchema.parse(response.data);
+    },
+    async updateRuntimeSettings(input: RuntimeSettingsOverrides) {
+      const response = await http.patch("/admin/settings/runtime", input);
+      return runtimeSettingsResponseSchema.parse(response.data);
     },
     async listBackgroundJobs(options: ListBackgroundJobsOptions = {}) {
       const response = await http.get(backgroundJobsUrl(options));

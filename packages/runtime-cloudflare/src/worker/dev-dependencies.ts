@@ -4,6 +4,7 @@ import {
   UnauthorizedError,
   PluginPolicyService,
   RepositoryActivityService,
+  RuntimeSettingsService,
   PublishSessionService,
   PublishTokenService,
   RepositoryService,
@@ -51,6 +52,7 @@ export interface AppDependencies {
   repositoryArtifactStore: RepositoryArtifactStore;
   repositoryArtifactIndexService: PluginRepositoryArtifactIndexService;
   pluginPolicyService: PluginPolicyService;
+  runtimeSettingsService: RuntimeSettingsService;
   repositorySecrets: RepositorySecretService;
   repositoryObjectStore: RepositoryObjectStore;
   /**
@@ -181,7 +183,12 @@ export function createDevDependencyHarness(
     randomId,
     encryption: new SecretEncryption(signingKeyEncryptionSecret),
   });
-  const repositoryRuntimePlugins = createDefaultArtifactPlugins({ objectStore, secrets: repositorySecrets });
+  const runtimeSettingsService = new RuntimeSettingsService({ state });
+  const repositoryRuntimePlugins = createDefaultArtifactPlugins({
+    objectStore,
+    secrets: repositorySecrets,
+    proxyPolicyFor: async () => (await runtimeSettingsService.get()).operationalPolicy.proxy,
+  });
   const repositoryService = new RepositoryService({ state, clock, randomId });
   const pluginPolicyService = new PluginPolicyService({ state });
   const repositoryActivityService = new RepositoryActivityService({ state, clock, randomId });
@@ -289,6 +296,7 @@ export function createDevDependencyHarness(
       repositoryActivityService,
       repositoryArtifactStore: state.repositoryArtifacts,
       pluginPolicyService,
+      runtimeSettingsService,
       repositorySecrets,
       repositoryObjectStore: objectStore,
       repositoryArtifactIndexService,

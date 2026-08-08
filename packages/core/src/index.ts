@@ -6,6 +6,7 @@ export * from "./ports/ports";
 export * from "./services/plugin-policy-service";
 export * from "./services/admin-auth-service";
 export * from "./services/repository-activity-service";
+export * from "./services/runtime-settings-service";
 export * from "./services/publish-session-service";
 export * from "./services/publish-token-service";
 export * from "./services/repository-service";

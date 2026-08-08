@@ -647,6 +647,60 @@ describe("PyPI plugin lifecycle", () => {
     })).resolves.toMatchObject({ objects: [] });
   });
 
+  it("uses repository proxy policy when deciding whether to cache PyPI proxy file bytes", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "https://files.example/packages/demo-1.0-py3-none-any.whl",
+      }],
+    });
+    const upstreamRequests: Request[] = [];
+    const plugin = createPypiProxyPlugin({
+      objectStoreFor: () => objectStore,
+      fetch: async (request) => {
+        upstreamRequests.push(request);
+        return new Response("wheel bytes", {
+          headers: {
+            "content-type": "application/octet-stream",
+            "content-length": String(512 * 1024 * 1024 + 1),
+            "cache-control": "private, no-store",
+          },
+        });
+      },
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: {
+        pypi: {
+          upstreamUrl: "https://pypi.example/root/",
+          proxyPolicy: {
+            fileByteCache: {
+              maxBytes: 512 * 1024 * 1024 + 1,
+              respectUpstreamCacheControl: false,
+            },
+          },
+        },
+      },
+    };
+
+    await plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+    });
+    const cached = await plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+    });
+
+    expect(upstreamRequests).toHaveLength(1);
+    await expect(cached?.text()).resolves.toBe("wheel bytes");
+  });
+
   it("bypasses the PyPI proxy file byte cache for conditional requests", async () => {
     const objectStore = new MemoryRepositoryObjectStore();
     await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {

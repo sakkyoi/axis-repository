@@ -19,6 +19,22 @@ export interface RepositoryPluginPolicyRecord {
   enabledOverride: boolean | null;
 }
 
+export interface RuntimeSettingsRecord {
+  operationalPolicy?: {
+    proxy?: {
+      upstreamFetchTimeoutMs?: number;
+      indexCatalogBatchSize?: number;
+      indexProjectDetailBatchSize?: number;
+      failedProjectSampleLimit?: number;
+      fileByteCache?: {
+        enabled?: boolean;
+        maxBytes?: number;
+        respectUpstreamCacheControl?: boolean;
+      };
+    };
+  };
+}
+
 export interface EncryptedSecret {
   algorithm: "AES-GCM";
   iv: string;

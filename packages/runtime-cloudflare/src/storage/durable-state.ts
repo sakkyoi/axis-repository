@@ -12,6 +12,7 @@ import type {
   RepositoryPluginPolicyRecord,
   SigningKeyRecord,
   StateStore,
+  RuntimeSettingsRecord,
 } from "@axis-repository/core";
 
 export interface DurableStorage {
@@ -34,6 +35,7 @@ const repositorySecretKey = (id: string) => `repository-secret:${id}`;
 const repositorySecretNameKey = (namespace: string, repositoryName: string, name: string) =>
   `repository-secret-name:${namespace}:${repositoryName}:${name}`;
 const repositoryPluginPolicyKey = (ecosystem: string) => `repository-plugin-policy:${ecosystem}`;
+const runtimeSettingsKey = () => "runtime-settings";
 const repositoryActivityKey = (id: string) => `repository-activity:${id}`;
 const repositoryArtifactKey = (id: string) => `repository-artifact:${id}`;
 const repositoryArtifactIdentityKey = (repositoryName: string, identity: string) =>
@@ -414,6 +416,15 @@ export class DurableStateStore implements StateStore {
     },
     save: async (record: RepositoryPluginPolicyRecord): Promise<void> => {
       await this.storage.put(repositoryPluginPolicyKey(record.ecosystem), record);
+    },
+  };
+
+  readonly runtimeSettings = {
+    get: async (): Promise<RuntimeSettingsRecord | null> => {
+      return (await this.storage.get<RuntimeSettingsRecord>(runtimeSettingsKey())) ?? null;
+    },
+    save: async (record: RuntimeSettingsRecord): Promise<void> => {
+      await this.storage.put(runtimeSettingsKey(), record);
     },
   };
 

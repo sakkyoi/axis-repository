@@ -1,4 +1,4 @@
-import type { RepositoryObjectStore } from "@axis-repository/core";
+import type { ProxyOperationalPolicy, Repository, RepositoryObjectStore } from "@axis-repository/core";
 import { RepositoryRuntimePluginRegistry } from "./repository-runtime-plugin-registry";
 import { OpenPgpSigner } from "../signing/openpgp-signer";
 import { createBundledRuntimePlugins } from "./bundled-runtime-plugins";
@@ -8,6 +8,7 @@ import type { RepositorySecretService } from "../storage/repository-secret-servi
 export function createDefaultArtifactPlugins(input: {
   objectStore: RepositoryObjectStore;
   secrets: RepositorySecretService;
+  proxyPolicyFor?: (repository: Repository) => Promise<ProxyOperationalPolicy> | ProxyOperationalPolicy;
 }): RepositoryRuntimePluginRegistry {
   const registry = new RepositoryRuntimePluginRegistry();
   for (const plugin of createBundledRuntimePlugins({
@@ -15,6 +16,7 @@ export function createDefaultArtifactPlugins(input: {
     objectStoreFor: repositoryScopedObjectStoreFactory(input.objectStore),
     secrets: input.secrets,
     aptReleaseSigner: new OpenPgpSigner(),
+    ...(input.proxyPolicyFor === undefined ? {} : { proxyPolicyFor: input.proxyPolicyFor }),
   })) {
     registry.register(plugin);
   }

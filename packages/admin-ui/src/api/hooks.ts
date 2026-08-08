@@ -5,6 +5,7 @@ import {
   type CreateAdminPublishSessionInput,
   type CreatePublishTokenInput,
   type ListBackgroundJobsOptions,
+  type RuntimeSettingsOverrides,
   type CreateRepositoryInput,
   type UpdateRepositoryPluginPolicyInput,
   type UpdateRepositoryInput,
@@ -44,6 +45,23 @@ export function useDeployment() {
     queryKey: ["deployment"],
     queryFn: () => client.getDeployment(),
     staleTime: Infinity,
+  });
+}
+
+export function useRuntimeSettings() {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["runtime-settings"],
+    queryFn: () => client.getRuntimeSettings(),
+  });
+}
+
+export function useUpdateRuntimeSettings() {
+  const client = useAxisClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RuntimeSettingsOverrides) => client.updateRuntimeSettings(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["runtime-settings"] }),
   });
 }
 

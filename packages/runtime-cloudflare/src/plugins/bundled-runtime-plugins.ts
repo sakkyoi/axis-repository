@@ -3,6 +3,7 @@ import type {
   RepositoryRuntimePluginDescriptor,
   RepositorySecretCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import type { ProxyOperationalPolicy, Repository } from "@axis-repository/core";
 import { aptRepositoryPluginBundle } from "@axis-repository/plugin-apt";
 import { AptPublisher } from "@axis-repository/plugin-apt/runtime/publisher";
 import { createAptGroupPlugin, createAptPlugin, createAptProxyPlugin, AptSigningKeyResource } from "@axis-repository/plugin-apt/runtime";
@@ -30,6 +31,7 @@ export interface BundledRuntimePluginInput {
   objectStoreFor: RepositoryObjectStoreFactory;
   secrets: RepositorySecretCapability;
   aptReleaseSigner: AptReleaseSigner;
+  proxyPolicyFor?: (repository: Repository) => Promise<ProxyOperationalPolicy> | ProxyOperationalPolicy;
 }
 
 type RuntimePluginFactory = (input: BundledRuntimePluginInput) => RepositoryRuntimePluginDescriptor[];
@@ -53,7 +55,10 @@ const bundledRuntimePluginFactories: Record<string, RuntimePluginFactory> = {
   },
   pypi: (input) => [
     createPypiPlugin({ objectStoreFor: input.objectStoreFor }),
-    createPypiProxyPlugin({ objectStoreFor: input.objectStoreFor }),
+    createPypiProxyPlugin({
+      objectStoreFor: input.objectStoreFor,
+      ...(input.proxyPolicyFor === undefined ? {} : { proxyPolicyFor: input.proxyPolicyFor }),
+    }),
     createPypiGroupPlugin(),
   ],
 };

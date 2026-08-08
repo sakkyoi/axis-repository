@@ -638,6 +638,80 @@ describe("createAxisClient", () => {
     ]);
   });
 
+  it("reads and updates runtime settings through the admin endpoint", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      accessToken: "admin-secret",
+    });
+    const requests: Array<{ method: string; url: string; data: unknown }> = [];
+    const responseData = {
+      settings: {
+        operationalPolicy: {
+          proxy: {
+            upstreamFetchTimeoutMs: 5000,
+            indexCatalogBatchSize: 200,
+            indexProjectDetailBatchSize: 50,
+            failedProjectSampleLimit: 20,
+            fileByteCache: {
+              enabled: true,
+              maxBytes: 1024,
+              respectUpstreamCacheControl: true,
+            },
+          },
+        },
+      },
+      overrides: {
+        operationalPolicy: {
+          proxy: {
+            upstreamFetchTimeoutMs: 5000,
+          },
+        },
+      },
+    };
+    client.http.defaults.adapter = async (config) => {
+      requests.push({
+        method: config.method?.toUpperCase() ?? "",
+        url: config.url ?? "",
+        data: config.data ? JSON.parse(String(config.data)) : undefined,
+      });
+      return {
+        data: responseData,
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.getRuntimeSettings()).resolves.toEqual(responseData);
+    await expect(client.updateRuntimeSettings({
+      operationalPolicy: {
+        proxy: {
+          upstreamFetchTimeoutMs: 5000,
+        },
+      },
+    })).resolves.toEqual(responseData);
+
+    expect(requests).toEqual([
+      {
+        method: "GET",
+        url: "/admin/settings/runtime",
+        data: undefined,
+      },
+      {
+        method: "PATCH",
+        url: "/admin/settings/runtime",
+        data: {
+          operationalPolicy: {
+            proxy: {
+              upstreamFetchTimeoutMs: 5000,
+            },
+          },
+        },
+      },
+    ]);
+  });
+
   it("uses a generic admin-scoped endpoint for repository client helpers", async () => {
     const client = createAxisClient({
       baseUrl: "https://axis.example/",

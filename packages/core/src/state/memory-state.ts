@@ -11,6 +11,7 @@ import type {
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
   SigningKeyRecord,
+  RuntimeSettingsRecord,
 } from "../domain/domain";
 import type { StateStore } from "../ports/ports";
 
@@ -47,6 +48,7 @@ export class MemoryStateStore implements StateStore {
   private readonly repositorySecretById = new Map<string, RepositorySecretRecord | SigningKeyRecord>();
   private readonly repositorySecretIdByName = new Map<string, string>();
   private readonly repositoryPluginPolicyByEcosystem = new Map<string, RepositoryPluginPolicyRecord>();
+  private runtimeSettingsRecord: RuntimeSettingsRecord | null = null;
   private readonly repositoryActivityById = new Map<string, RepositoryActivityRecord>();
   private readonly repositoryArtifactById = new Map<string, RepositoryArtifactRecord>();
   private readonly repositoryArtifactIdByIdentity = new Map<string, string>();
@@ -261,6 +263,15 @@ export class MemoryStateStore implements StateStore {
     },
     save: async (record: RepositoryPluginPolicyRecord): Promise<void> => {
       this.repositoryPluginPolicyByEcosystem.set(record.ecosystem, snapshot(record));
+    },
+  };
+
+  readonly runtimeSettings = {
+    get: async (): Promise<RuntimeSettingsRecord | null> => {
+      return this.runtimeSettingsRecord ? snapshot(this.runtimeSettingsRecord) : null;
+    },
+    save: async (record: RuntimeSettingsRecord): Promise<void> => {
+      this.runtimeSettingsRecord = snapshot(record);
     },
   };
 

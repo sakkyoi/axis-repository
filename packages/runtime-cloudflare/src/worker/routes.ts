@@ -17,6 +17,8 @@ import {
   type RepositoryObjectList,
   type RepositoryObjectMetadata,
   type RepositoryObjectRange,
+  type RuntimeSettingsRecord,
+  validateRuntimeSettingsRecord,
 } from "@axis-repository/core";
 import { resolvePluginIconAssets } from "@axis-repository/core/plugin-icons";
 import { getRepositoryPluginCatalogEntry, repositoryPluginCatalog } from "@axis-repository/plugin-catalog";
@@ -1035,6 +1037,10 @@ async function repositoryDirectoryResponse(input: {
   });
 }
 
+function parseRuntimeSettingsUpdate(body: Record<string, unknown>): RuntimeSettingsRecord {
+  return validateRuntimeSettingsRecord(body as RuntimeSettingsRecord);
+}
+
 async function repositoryDirectoryPageJsonResponse(input: {
   dependencies: AppDependencies;
   repository: Repository;
@@ -1756,6 +1762,23 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       if (!job) throw new NotFoundError();
       await dependencies.scheduleBackgroundJobs?.();
       return jsonResponse({ job });
+    }
+    throw new NotFoundError();
+  }
+  if (url.pathname === "/admin/settings/runtime") {
+    await requireAdmin(request, dependencies.adminAuthService);
+    if (request.method === "GET") {
+      return jsonResponse({
+        settings: await dependencies.runtimeSettingsService.get(),
+        overrides: await dependencies.runtimeSettingsService.getRecord(),
+      });
+    }
+    if (request.method === "PATCH") {
+      const overrides = await dependencies.runtimeSettingsService.update(parseRuntimeSettingsUpdate(await readJsonObject(request)));
+      return jsonResponse({
+        settings: await dependencies.runtimeSettingsService.get(),
+        overrides,
+      });
     }
     throw new NotFoundError();
   }

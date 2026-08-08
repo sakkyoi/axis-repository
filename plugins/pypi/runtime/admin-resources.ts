@@ -1,4 +1,10 @@
-import { NotFoundError, ValidationError, type RepositoryArtifactStore, type RepositoryObjectStore } from "@axis-repository/core";
+import {
+  NotFoundError,
+  ValidationError,
+  type Repository,
+  type RepositoryArtifactStore,
+  type RepositoryObjectStore,
+} from "@axis-repository/core";
 import type { RepositoryAdminResources } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { listAllObjects, objectBytes, pluginJsonResponse, readJsonObject } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { pypiPluginManifest } from "../manifest";
@@ -32,6 +38,7 @@ function pypiAdminResourceRoute(name: string) {
 export function createPypiAdminResources(input: {
   objectStoreFor: (repositoryName: string) => RepositoryObjectStore;
   fetchProxyProject?: (input: {
+    repository: Repository;
     repositoryName: string;
     repositoryEcosystem: string;
     repositoryConfig: Record<string, unknown>;
@@ -105,6 +112,7 @@ export function createPypiAdminResources(input: {
           if (repository?.kind === "proxy") {
             const cached = await readPypiProxyCachedProject(objectStore, repositoryName, project);
             const synced = await input.fetchProxyProject?.({
+                repository,
                 repositoryName,
                 repositoryEcosystem: repository.ecosystem,
                 repositoryConfig: repository.config,
