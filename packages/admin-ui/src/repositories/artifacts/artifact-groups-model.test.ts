@@ -3,12 +3,13 @@ import {
   artifactVariantLabel,
   artifactVersionCountLabel,
   artifactFamilyVersionLabel,
+  artifactFamilySummaryLabel,
   artifactsForVersion,
   groupArtifactsByFamily,
   pypiProxyProjectFamilyName,
   pypiProxyProjectArtifactName,
 } from "./artifact-groups-model";
-import type { RepositoryArtifact } from "../../api/schemas";
+import type { RepositoryArtifact, RepositoryArtifactFamily } from "../../api/schemas";
 
 function artifact(input: Partial<RepositoryArtifact> & { id: string }): RepositoryArtifact {
   return {
@@ -21,6 +22,30 @@ function artifact(input: Partial<RepositoryArtifact> & { id: string }): Reposito
     metadata: {},
     publishedAt: "2026-07-30T00:00:00.000Z",
     updatedAt: "2026-07-30T00:00:00.000Z",
+    ...input,
+  };
+}
+
+function family(input: Partial<RepositoryArtifactFamily>): RepositoryArtifactFamily {
+  const latestArtifact = input.latestArtifact ?? artifact({
+    id: "project",
+    ecosystem: "pypi",
+    identity: "pypi:proxy-project:demo",
+    family: "pypi:proxy-project:demo",
+    name: "demo",
+    summary: "demo",
+  });
+  return {
+    key: latestArtifact.family ?? latestArtifact.id,
+    repositoryName: latestArtifact.repositoryName,
+    ecosystem: latestArtifact.ecosystem,
+    name: latestArtifact.name,
+    latestSummary: latestArtifact.summary,
+    latestPublishedAt: latestArtifact.publishedAt,
+    updatedAt: latestArtifact.updatedAt,
+    artifactCount: 1,
+    versionCount: 0,
+    latestArtifact,
     ...input,
   };
 }
@@ -167,5 +192,36 @@ describe("grouping artifacts", () => {
       ecosystem: "pypi",
       identity: "pypi:demo:demo-1.0.tar.gz",
     }))).toBeUndefined();
+  });
+
+  it("labels PyPI proxy project cache states without guessing from counts", () => {
+    expect(artifactFamilySummaryLabel(family({
+      latestArtifact: artifact({
+        id: "project",
+        ecosystem: "pypi",
+        identity: "pypi:proxy-project:demo",
+        family: "pypi:proxy-project:demo",
+        metadata: { cacheStatus: "pending" },
+      }),
+    }))).toBe("Waiting for cached files");
+    expect(artifactFamilySummaryLabel(family({
+      latestArtifact: artifact({
+        id: "project",
+        ecosystem: "pypi",
+        identity: "pypi:proxy-project:demo",
+        family: "pypi:proxy-project:demo",
+        metadata: { cacheStatus: "failed", lastCacheFailure: "upstream returned 503" },
+      }),
+    }))).toBe("Cache failed: upstream returned 503");
+    expect(artifactFamilySummaryLabel(family({
+      latestSummary: "demo 1.0",
+      latestArtifact: artifact({
+        id: "file",
+        ecosystem: "pypi",
+        identity: "pypi:proxy-file:demo:demo-1.0.whl",
+        family: "pypi:proxy-project:demo",
+        summary: "demo 1.0",
+      }),
+    }))).toBe("demo 1.0");
   });
 });

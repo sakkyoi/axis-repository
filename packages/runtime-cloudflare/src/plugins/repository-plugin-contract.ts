@@ -170,6 +170,7 @@ export interface RebuildRepositoryArtifactIndexResult {
   complete: boolean;
   continuation?: Record<string, unknown>;
   progress?: BackgroundJobProgress;
+  result?: Record<string, unknown>;
   reset?: boolean;
 }
 

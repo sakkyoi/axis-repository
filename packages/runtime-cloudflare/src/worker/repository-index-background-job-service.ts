@@ -14,6 +14,7 @@ interface RepositoryIndexRebuildRunnerResult {
   continuation?: Record<string, unknown>;
   progress?: BackgroundJobProgress;
   artifactCount?: number;
+  result?: Record<string, unknown>;
 }
 
 const CONTINUATION_SLICE_MAX_RETRIES = 3;
@@ -88,6 +89,7 @@ export class RepositoryIndexBackgroundJobService {
           lastHeartbeatAt: finishedAt,
           ...(result.progress === undefined ? {} : { progress: result.progress }),
           result: {
+            ...(result.result ?? {}),
             continuation: result.continuation ?? {},
             artifactCount,
           },
@@ -103,7 +105,10 @@ export class RepositoryIndexBackgroundJobService {
         ...runningWithoutFailure,
         status: "succeeded",
         finishedAt,
-        result: { artifactCount },
+        result: {
+          ...(result.result ?? {}),
+          artifactCount,
+        },
       });
     } catch (error) {
       const finishedAt = this.options.clock.now().toISOString();

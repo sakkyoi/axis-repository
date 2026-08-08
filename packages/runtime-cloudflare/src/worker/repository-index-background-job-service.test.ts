@@ -116,6 +116,12 @@ describe("RepositoryIndexBackgroundJobService", () => {
           complete: false,
           continuation: { projectOffset: 20 },
           progress: { current: 20, total: 45, message: "Indexed 20 of 45 projects" },
+          result: {
+            proxyIndex: {
+              phase: "indexing-project-catalog",
+              projectCount: 45,
+            },
+          },
         }),
       },
       clock: testClock(),
@@ -131,9 +137,66 @@ describe("RepositoryIndexBackgroundJobService", () => {
       scheduledAt: "2026-08-05T00:00:02.000Z",
       lastHeartbeatAt: "2026-08-05T00:00:02.000Z",
       progress: { current: 20, total: 45, message: "Indexed 20 of 45 projects" },
-      result: { continuation: { projectOffset: 20 } },
+      result: {
+        continuation: { projectOffset: 20 },
+        proxyIndex: {
+          phase: "indexing-project-catalog",
+          projectCount: 45,
+        },
+      },
     });
     await expect(state.repositoryActivities.listByRepository("python-proxy")).resolves.toEqual([]);
+  });
+
+  it("preserves repository index runner result metadata on succeeded jobs", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
+    await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
+    const service = new RepositoryIndexBackgroundJobService({
+      state,
+      repositoryService,
+      repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
+      repositoryArtifactIndexService: {
+        rebuild: async () => ({
+          artifacts: [],
+          complete: true,
+          artifactCount: 12,
+          result: {
+            proxyIndex: {
+              phase: "complete-with-failures",
+              projectCount: 10,
+              warmedProjectCount: 9,
+              failedProjectCount: 1,
+              failedProjects: [{
+                project: "broken",
+                message: "upstream returned 503",
+                retryable: true,
+              }],
+            },
+          },
+        }),
+      },
+      clock: testClock(),
+    });
+    const job = await service.request({ repositoryName: "python-proxy" });
+
+    await service.runBackgroundJob(job);
+
+    await expect(state.backgroundJobs.get("repository.index:python-proxy")).resolves.toMatchObject({
+      status: "succeeded",
+      result: {
+        artifactCount: 12,
+        proxyIndex: {
+          phase: "complete-with-failures",
+          failedProjectCount: 1,
+          failedProjects: [{
+            project: "broken",
+            message: "upstream returned 503",
+            retryable: true,
+          }],
+        },
+      },
+    });
   });
 
   it("does not count continuation slices as new attempts", async () => {

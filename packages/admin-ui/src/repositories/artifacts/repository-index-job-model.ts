@@ -16,7 +16,7 @@ export function repositoryIndexJobStatusView(job: BackgroundJob | null | undefin
   if (job.status === "pending") {
     return {
       label: "Refresh queued",
-      description: `Requested ${formatRelativeDate(job.requestedAt)}.`,
+      description: job.progress?.message ?? `Requested ${formatRelativeDate(job.requestedAt)}.`,
       active: true,
       failed: false,
     };
@@ -24,7 +24,7 @@ export function repositoryIndexJobStatusView(job: BackgroundJob | null | undefin
   if (job.status === "running") {
     return {
       label: "Refreshing index",
-      description: `Started ${formatRelativeDate(job.startedAt ?? job.requestedAt)}.`,
+      description: job.progress?.message ?? `Started ${formatRelativeDate(job.startedAt ?? job.requestedAt)}.`,
       active: true,
       failed: false,
     };
@@ -53,11 +53,43 @@ export function repositoryIndexJobStatusView(job: BackgroundJob | null | undefin
       failed: true,
     };
   }
+  const proxyIndex = proxyIndexResult(job.result);
+  if (proxyIndex.failedProjectCount > 0) {
+    return {
+      label: "Index refreshed with warnings",
+      description: proxyIndex.failedProjectSample
+        ? `${proxyIndex.failedProjectCount} projects failed to cache. ${proxyIndex.failedProjectSample}`
+        : `${proxyIndex.failedProjectCount} projects failed to cache.`,
+      active: false,
+      failed: false,
+    };
+  }
   return {
     label: "Index refreshed",
     description: job.finishedAt ? `Finished ${formatRelativeDate(job.finishedAt)}.` : "The index is ready.",
     active: false,
     failed: false,
+  };
+}
+
+function proxyIndexResult(result: Record<string, unknown> | undefined): {
+  failedProjectCount: number;
+  failedProjectSample?: string;
+} {
+  const proxyIndex = result?.proxyIndex;
+  if (!proxyIndex || typeof proxyIndex !== "object" || Array.isArray(proxyIndex)) {
+    return { failedProjectCount: 0 };
+  }
+  const record = proxyIndex as Record<string, unknown>;
+  const failedProjectCount = typeof record.failedProjectCount === "number" ? record.failedProjectCount : 0;
+  const failedProjects = Array.isArray(record.failedProjects) ? record.failedProjects : [];
+  const first = failedProjects.find((project) =>
+    project && typeof project === "object" && !Array.isArray(project)) as Record<string, unknown> | undefined;
+  const project = typeof first?.project === "string" ? first.project : undefined;
+  const message = typeof first?.message === "string" ? first.message : undefined;
+  return {
+    failedProjectCount,
+    ...(project && message ? { failedProjectSample: `${project}: ${message}` } : {}),
   };
 }
 

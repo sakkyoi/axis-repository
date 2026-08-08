@@ -28,6 +28,7 @@ import { cn } from "../../lib/utils";
 import { moreChoicesLabel, visibleChoices } from "./artifact-choice-model";
 import {
   artifactFamilyVersionLabel,
+  artifactFamilySummaryLabel,
   artifactVariantLabel,
   artifactsForVersion,
   groupArtifactsByFamily,
@@ -327,7 +328,7 @@ function RepositoryArtifactsTable({
                   <Package className="h-4 w-4 shrink-0 text-primary-ink" />
                   <div className="min-w-0">
                     <div className="truncate font-medium">{family.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">{family.latestSummary}</div>
+                    <div className="truncate text-xs text-muted-foreground">{artifactFamilySummaryLabel(family)}</div>
                   </div>
                 </div>
               </td>

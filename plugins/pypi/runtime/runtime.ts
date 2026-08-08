@@ -38,13 +38,13 @@ import {
 } from "./layout";
 import { parseProjectFilesHtml, parseProjectListHtml, readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
 import { parseCoreMetadata, type PypiCoreMetadata } from "../shared/metadata";
+import { escapeHtml, SIMPLE_JSON_CONTENT_TYPE, type SimpleProjectFile } from "./simple-index";
 import {
   parseDistributionFilename,
   normalizeProjectName,
   requireDistributionFilename,
   type PypiDistributionFilename,
 } from "../shared/names";
-import type { SimpleProjectFile } from "./simple-index";
 import { inValidationErrorsSync } from "./format";
 import { PypiPublisher } from "./publisher";
 import { createPypiUploadProtocol } from "./upload-protocol";
@@ -91,6 +91,15 @@ export function createPypiPlugin(input?: {
 type FetchLike = (request: Request) => Promise<Response>;
 const PYPI_PROXY_UPSTREAM_FETCH_TIMEOUT_MS = 2000;
 const PYPI_PROXY_PROJECT_MARKER_BATCH_SIZE = 100;
+const PYPI_PROXY_PROJECT_DETAIL_BATCH_SIZE = 25;
+const PYPI_PROXY_FAILED_PROJECT_SAMPLE_LIMIT = 10;
+const PYPI_PROXY_UPSTREAM_REQUEST_HEADERS = [
+  "accept",
+  "range",
+  "if-range",
+  "if-none-match",
+  "if-modified-since",
+] as const;
 
 export function createPypiProxyPlugin(input: {
   fetch?: FetchLike;
@@ -134,8 +143,9 @@ export function createPypiProxyPlugin(input: {
     },
     serveRepositoryPath: async ({ repository, request, relativePath }) => {
       const upstream = parsePypiProxyRepositoryConfig(repository.config);
+      const objectStore = input.objectStoreFor?.(repository.name);
       const upstreamUrl = await pypiProxyServeUpstreamUrl({
-        objectStore: input.objectStoreFor?.(repository.name),
+        objectStore,
         repositoryName: repository.name,
         upstreamUrl: upstream.upstreamUrl,
         relativePath,
@@ -143,33 +153,225 @@ export function createPypiProxyPlugin(input: {
       if (!upstreamUrl) {
         return null;
       }
-      const headers = new Headers();
-      const accept = request.headers.get("accept");
-      if (accept) {
-        headers.set("accept", accept);
+      const proxyFile = pypiProxyFileFromRelativePath(relativePath);
+      const cacheableFileRequest = proxyFile !== undefined
+        && objectStore !== undefined
+        && !request.headers.has("range")
+        && !hasPypiProxyConditionalRequestHeaders(request.headers);
+      if (cacheableFileRequest && (request.method === "GET" || request.method === "HEAD")) {
+        const cached = await readPypiProxyFileCache({
+          objectStore: objectStore!,
+          repositoryName: repository.name,
+          upstreamUrl,
+          method: request.method,
+        });
+        if (cached) {
+          return cached;
+        }
       }
+      const headers = new Headers();
+      for (const name of PYPI_PROXY_UPSTREAM_REQUEST_HEADERS) {
+        const value = request.headers.get(name);
+        if (value) {
+          headers.set(name, value);
+        }
+      }
+      const accept = request.headers.get("accept");
       const upstreamResponse = await fetchImpl(new Request(upstreamUrl, {
         method: request.method,
         headers,
       }));
+      if (cacheableFileRequest && request.method === "GET" && upstreamResponse.status === 200) {
+        return cachePypiProxyFileResponse({
+          objectStore: objectStore!,
+          repositoryName: repository.name,
+          upstreamUrl,
+          response: upstreamResponse,
+        });
+      }
+      const response = request.method === "GET"
+        ? await rewritePypiProxySimpleResponse({
+          repositoryName: repository.name,
+          relativePath,
+          accept,
+          response: upstreamResponse,
+        })
+        : upstreamResponse;
       if (request.method === "GET" && upstreamResponse.ok) {
         await cachePypiProxyProjectResponse({
-          objectStore: input.objectStoreFor?.(repository.name),
+          objectStore,
           repositoryName: repository.name,
           relativePath,
           response: upstreamResponse,
         });
       }
-      return new Response(request.method === "HEAD" ? null : upstreamResponse.body, {
-        status: upstreamResponse.status,
-        statusText: upstreamResponse.statusText,
-        headers: proxyResponseHeaders(upstreamResponse.headers),
+      return new Response(request.method === "HEAD" ? null : response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: proxyResponseHeaders(response.headers),
       });
     },
     validateRepositoryConfig: ({ config }) => {
       parsePypiProxyRepositoryConfig(config);
     },
   };
+}
+
+async function rewritePypiProxySimpleResponse(input: {
+  repositoryName: string;
+  relativePath: string;
+  accept: string | null;
+  response: Response;
+}): Promise<Response> {
+  if (!input.response.ok) {
+    return input.response;
+  }
+  const contentType = input.response.headers.get("content-type") ?? "";
+  const normalizedContentType = contentType.toLowerCase();
+  if (normalizedContentType.includes(SIMPLE_JSON_CONTENT_TYPE)) {
+    const rewritten = rewritePypiProxyProjectFilesJson(await input.response.clone().text());
+    if (!rewritten) {
+      return input.response;
+    }
+    const headers = proxyResponseHeaders(input.response.headers);
+    headers.set("content-type", SIMPLE_JSON_CONTENT_TYPE);
+    headers.delete("content-length");
+    return new Response(rewritten, {
+      status: input.response.status,
+      statusText: input.response.statusText,
+      headers,
+    });
+  }
+  if (!normalizedContentType.includes("text/html")) {
+    return input.response;
+  }
+  if (prefersPypiSimpleJson(input.accept)) {
+    const html = await input.response.clone().text();
+    const json = pypiProxyProjectFromRelativePath(input.relativePath)
+      ? renderPypiProxyProjectFilesJson({
+        project: pypiProxyProjectFromRelativePath(input.relativePath)!,
+        files: parseProjectFilesHtml(html, { includeUrl: true }).map(({ url: _url, ...file }) => file),
+      })
+      : renderPypiProxyProjectListJson(parseProjectListHtml(html));
+    const headers = proxyResponseHeaders(input.response.headers);
+    headers.set("content-type", SIMPLE_JSON_CONTENT_TYPE);
+    headers.delete("content-length");
+    return new Response(json, {
+      status: input.response.status,
+      statusText: input.response.statusText,
+      headers,
+    });
+  }
+  const project = pypiProxyProjectFromRelativePath(input.relativePath);
+  if (!project) {
+    return input.response;
+  }
+  const files = parseProjectFilesHtml(await input.response.clone().text(), { includeUrl: true })
+    .map(({ url: _url, ...file }) => file);
+  if (files.length === 0) {
+    return input.response;
+  }
+  const headers = proxyResponseHeaders(input.response.headers);
+  headers.set("content-type", "text/html; charset=utf-8");
+  headers.delete("content-length");
+  return new Response(renderPypiProxyProjectFilesHtml({ project, files }), {
+    status: input.response.status,
+    statusText: input.response.statusText,
+    headers,
+  });
+}
+
+function prefersPypiSimpleJson(accept: string | null): boolean {
+  if (!accept) {
+    return false;
+  }
+  let jsonQuality = 0;
+  let htmlQuality = 0;
+  for (const entry of accept.split(",")) {
+    const [type = "", ...parameters] = entry.trim().split(";").map((part) => part.trim());
+    const quality = Number(parameters.find((parameter) => parameter.startsWith("q="))?.slice(2) ?? "1");
+    if (!Number.isFinite(quality) || quality <= 0) {
+      continue;
+    }
+    if (type === SIMPLE_JSON_CONTENT_TYPE) {
+      jsonQuality = Math.max(jsonQuality, quality);
+    } else if (type === "text/html" || type === "application/vnd.pypi.simple.v1+html" || type === "*/*") {
+      htmlQuality = Math.max(htmlQuality, quality);
+    }
+  }
+  return jsonQuality > 0 && jsonQuality >= htmlQuality;
+}
+
+function renderPypiProxyProjectListJson(projects: string[]): string {
+  return `${JSON.stringify({
+    meta: { "api-version": "1.0" },
+    projects: [...projects].sort((left, right) => left.localeCompare(right)).map((name) => ({ name })),
+  }, null, 2)}\n`;
+}
+
+function rewritePypiProxyProjectFilesJson(text: string): string | undefined {
+  const parsed = parseJsonObject(text);
+  const files = Array.isArray(parsed.files) ? parsed.files : undefined;
+  if (!files) {
+    return undefined;
+  }
+  return `${JSON.stringify({
+    ...parsed,
+    files: files.map((file) => {
+      if (!isRecord(file) || typeof file.filename !== "string") {
+        return file;
+      }
+      return {
+        ...file,
+        url: `./${encodeURIComponent(file.filename)}`,
+      };
+    }),
+  }, null, 2)}\n`;
+}
+
+function renderPypiProxyProjectFilesJson(input: { project: string; files: SimpleProjectFile[] }): string {
+  return `${JSON.stringify({
+    meta: { "api-version": "1.0" },
+    name: input.project,
+    files: [...input.files]
+      .sort((left, right) => left.filename.localeCompare(right.filename))
+      .map((file) => ({
+        filename: file.filename,
+        url: `./${encodeURIComponent(file.filename)}`,
+        hashes: { sha256: file.sha256 },
+        ...(file.requiresPython ? { "requires-python": file.requiresPython } : {}),
+        ...(file.coreMetadataSha256 ? { "core-metadata": { sha256: file.coreMetadataSha256 } } : {}),
+        ...(file.yanked === undefined ? {} : { yanked: file.yanked === "" ? true : file.yanked }),
+      })),
+  }, null, 2)}\n`;
+}
+
+function renderPypiProxyProjectFilesHtml(input: { project: string; files: SimpleProjectFile[] }): string {
+  const anchors = [...input.files]
+    .sort((left, right) => left.filename.localeCompare(right.filename))
+    .map((file) => {
+      const attributes = [
+        file.requiresPython ? ` data-requires-python="${escapeHtml(file.requiresPython)}"` : "",
+        file.coreMetadataSha256 ? ` data-core-metadata="sha256=${file.coreMetadataSha256}"` : "",
+        file.yanked === undefined ? "" : ` data-yanked="${escapeHtml(file.yanked)}"`,
+      ].join("");
+      const href = `./${encodeURIComponent(file.filename)}#sha256=${file.sha256}`;
+      return `    <a href="${escapeHtml(href)}"${attributes}>${escapeHtml(file.filename)}</a><br />`;
+    });
+  return [
+    "<!DOCTYPE html>",
+    "<html>",
+    "  <head>",
+    "    <meta name=\"pypi:repository-version\" content=\"1.0\" />",
+    `    <title>Links for ${escapeHtml(input.project)}</title>`,
+    "  </head>",
+    "  <body>",
+    `    <h1>Links for ${escapeHtml(input.project)}</h1>`,
+    ...anchors,
+    "  </body>",
+    "</html>",
+    "",
+  ].join("\n");
 }
 
 async function pypiProxyServeUpstreamUrl(input: {
@@ -195,6 +397,17 @@ async function pypiProxyServeUpstreamUrl(input: {
   }
   const projectUrl = pypiProxyUpstreamUrl(input.upstreamUrl, `${SIMPLE_PREFIX}/${projectName}/`);
   return projectUrl ? proxyProjectFileObjectKey(file, projectUrl) : null;
+}
+
+function pypiProxyFileFromRelativePath(relativePath: string): { projectName: string; filename: string } | undefined {
+  const match = /^simple\/([^/]+)\/([^/]+)$/u.exec(relativePath.replace(/\/+$/g, ""));
+  if (!match) {
+    return undefined;
+  }
+  return {
+    projectName: normalizeProjectName(match[1] ?? ""),
+    filename: match[2] ?? "",
+  };
 }
 
 function createPypiProxyObjectBrowser(_fetchImpl: FetchLike): RepositoryObjectBrowser {
@@ -365,6 +578,7 @@ async function rebuildPypiProxyArtifactIndex(input: RebuildRepositoryArtifactInd
       repositoryConfig: input.repository.config,
       indexedAt: input.now.toISOString(),
       projects: rebuild.projects,
+      failedProjects: rebuild.failedProjects,
       offset: detailOffset,
     });
   }
@@ -376,6 +590,7 @@ async function rebuildPypiProxyArtifactIndex(input: RebuildRepositoryArtifactInd
     rootUrl: rebuild.rootUrl,
     indexedAt: rebuild.indexedAt,
     projects: rebuild.projects,
+    failedProjects: rebuild.failedProjects,
     offset: continuationOffset ?? 0,
   });
 }
@@ -395,6 +610,7 @@ async function startPypiProxyRebuild(input: {
     rootUrl: input.rootUrl,
     indexedAt: input.indexedAt,
     projects: normalizedProjects,
+    failedProjects: [],
   };
   await input.objectStore.putJson(proxyCacheKey(input.repositoryName), {
     upstreamUrl: input.upstreamUrl,
@@ -418,6 +634,7 @@ async function pypiProxyProjectMarkerBatch(input: {
   rootUrl: string;
   indexedAt: string;
   projects: string[];
+  failedProjects: PypiProxyProjectFailure[] | undefined;
   offset: number;
 }) {
   const start = Math.max(0, input.offset);
@@ -430,6 +647,7 @@ async function pypiProxyProjectMarkerBatch(input: {
       project,
       upstreamUrl: pypiProxyUpstreamUrl(input.upstreamUrl, `${SIMPLE_PREFIX}/${project}/`) ?? input.rootUrl,
       indexedAt: input.indexedAt,
+      cacheStatus: "pending",
     })),
     complete: false,
     continuation: markerComplete ? { projectDetailOffset: 0 } : { projectOffset: end },
@@ -439,6 +657,14 @@ async function pypiProxyProjectMarkerBatch(input: {
       message: markerComplete
         ? `Project catalog indexed. Warming ${input.projects.length} project details`
         : `Indexing project catalog ${end} of ${input.projects.length}`,
+    },
+    result: {
+      proxyIndex: proxyIndexResult({
+        phase: markerComplete ? "warming-project-details" : "indexing-project-catalog",
+        projectCount: input.projects.length,
+        warmedProjectCount: 0,
+        failedProjects: input.failedProjects ?? [],
+      }),
     },
   };
 }
@@ -451,21 +677,39 @@ async function pypiProxyProjectDetailBatch(input: {
   repositoryConfig: Record<string, unknown>;
   indexedAt: string;
   projects: string[];
+  failedProjects: PypiProxyProjectFailure[] | undefined;
   offset: number;
 }) {
+  const upstream = parsePypiProxyRepositoryConfig(input.repositoryConfig);
+  const rootUrl = pypiProxyUpstreamUrl(upstream.upstreamUrl, `${SIMPLE_PREFIX}/`) ?? "";
   const start = Math.max(0, input.offset);
-  const end = Math.min(start + 1, input.projects.length);
+  const end = Math.min(start + PYPI_PROXY_PROJECT_DETAIL_BATCH_SIZE, input.projects.length);
   const artifacts: RepositoryArtifactRecord[] = [];
+  const failedProjects = [...(input.failedProjects ?? [])];
+  let warmedProjectCount = start - failedProjects.length;
   for (const project of input.projects.slice(start, end)) {
-    const cachedProject = await fetchAndCachePypiProxyProject({
+    const result = await fetchAndCachePypiProxyProjectForWarming({
       fetch: input.fetch,
       objectStore: input.objectStore,
-      artifactStore: undefined,
       repositoryName: input.repositoryName,
-      repositoryEcosystem: input.repositoryEcosystem,
       repositoryConfig: input.repositoryConfig,
       project,
     });
+    if (result.failure) {
+      failedProjects.push(result.failure);
+      artifacts.push(proxyProjectArtifactRecord({
+        repositoryName: input.repositoryName,
+        ecosystem: input.repositoryEcosystem,
+        project,
+        upstreamUrl: pypiProxyUpstreamUrl(upstream.upstreamUrl, `${SIMPLE_PREFIX}/${project}/`) ?? rootUrl,
+        indexedAt: input.indexedAt,
+        cacheStatus: "failed",
+        lastCacheFailure: result.failure.message,
+      }));
+      continue;
+    }
+    const cachedProject = result.project;
+    warmedProjectCount += 1;
     artifacts.push(...pypiProxyProjectArtifacts({
       repositoryName: input.repositoryName,
       repositoryEcosystem: input.repositoryEcosystem,
@@ -478,7 +722,19 @@ async function pypiProxyProjectDetailBatch(input: {
   const complete = end >= input.projects.length;
   if (complete) {
     await input.objectStore.deleteObject(proxyRebuildCacheKey(input.repositoryName));
+  } else {
+    await input.objectStore.putJson(proxyRebuildCacheKey(input.repositoryName), {
+      upstreamUrl: upstream.upstreamUrl,
+      rootUrl,
+      indexedAt: input.indexedAt,
+      projects: input.projects,
+      failedProjects,
+    } satisfies PypiProxyRebuildCache);
   }
+  const failedCount = failedProjects.length;
+  const phase = complete
+    ? failedCount > 0 ? "complete-with-failures" : "complete"
+    : "warming-project-details";
   return {
     artifacts,
     complete,
@@ -486,9 +742,26 @@ async function pypiProxyProjectDetailBatch(input: {
     progress: {
       current: input.projects.length + end,
       total: input.projects.length * 2,
-      message: `Warmed project details ${end} of ${input.projects.length}`,
+      message: failedCount > 0
+        ? `Warmed project details ${warmedProjectCount} of ${input.projects.length}; ${failedCount} failed`
+        : `Warmed project details ${end} of ${input.projects.length}`,
+    },
+    result: {
+      proxyIndex: proxyIndexResult({
+        phase,
+        projectCount: input.projects.length,
+        warmedProjectCount,
+        failedProjects,
+      }),
     },
   };
+}
+
+interface PypiProxyProjectFailure {
+  project: string;
+  message: string;
+  retryable: boolean;
+  status?: number;
 }
 
 interface PypiProxyRebuildCache {
@@ -496,6 +769,7 @@ interface PypiProxyRebuildCache {
   rootUrl: string;
   indexedAt: string;
   projects: string[];
+  failedProjects?: PypiProxyProjectFailure[];
 }
 
 async function readPypiProxyRebuild(
@@ -520,6 +794,40 @@ async function readPypiProxyRebuild(
     rootUrl: raw.rootUrl,
     indexedAt: raw.indexedAt,
     projects: raw.projects.filter((project): project is string => typeof project === "string"),
+    failedProjects: Array.isArray(raw.failedProjects)
+      ? raw.failedProjects.flatMap(parsePypiProxyProjectFailure)
+      : [],
+  };
+}
+
+function parsePypiProxyProjectFailure(value: unknown): PypiProxyProjectFailure[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return [];
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.project !== "string" || typeof record.message !== "string") {
+    return [];
+  }
+  return [{
+    project: record.project,
+    message: record.message,
+    retryable: record.retryable === true,
+    ...(typeof record.status === "number" ? { status: record.status } : {}),
+  }];
+}
+
+function proxyIndexResult(input: {
+  phase: string;
+  projectCount: number;
+  warmedProjectCount: number;
+  failedProjects: PypiProxyProjectFailure[];
+}): Record<string, unknown> {
+  return {
+    phase: input.phase,
+    projectCount: input.projectCount,
+    warmedProjectCount: input.warmedProjectCount,
+    failedProjectCount: input.failedProjects.length,
+    failedProjects: input.failedProjects.slice(0, PYPI_PROXY_FAILED_PROJECT_SAMPLE_LIMIT),
   };
 }
 
@@ -543,6 +851,8 @@ function proxyProjectArtifactRecord(input: {
   project: string;
   upstreamUrl: string;
   indexedAt: string;
+  cacheStatus?: "pending" | "cached" | "failed";
+  lastCacheFailure?: string;
 }): RepositoryArtifactRecord {
   return {
     id: `artifact_${input.repositoryName}_pypi_proxy_project_${input.project}`,
@@ -557,6 +867,8 @@ function proxyProjectArtifactRecord(input: {
       source: "proxy",
       project: input.project,
       upstreamUrl: input.upstreamUrl,
+      ...(input.cacheStatus ? { cacheStatus: input.cacheStatus } : {}),
+      ...(input.lastCacheFailure ? { lastCacheFailure: input.lastCacheFailure } : {}),
     },
     publishedAt: input.indexedAt,
     updatedAt: input.indexedAt,
@@ -667,30 +979,121 @@ async function fetchAndCachePypiProxyProject(input: {
   if (!projectUrl) {
     return undefined;
   }
-  const projectResponse = await fetchWithTimeout(input.fetch, new Request(projectUrl, {
-    headers: { accept: "text/html" },
-  })).catch(() => undefined);
-  if (!projectResponse?.ok) {
-    return undefined;
-  }
-  const files = parseProjectFilesHtml(await projectResponse.text(), { includeUrl: true });
-  const project = { name: projectName, files };
-  await input.objectStore.putJson(proxyProjectCacheKey(input.repositoryName, projectName), project);
-  await updatePypiProxyProjectSummary({
+  const project = await fetchAndStorePypiProxyProject({
+    fetch: input.fetch,
     objectStore: input.objectStore,
     repositoryName: input.repositoryName,
-    project: projectName,
-    fileCount: files.length,
-  });
+    projectName,
+    projectUrl,
+  }).catch(() => undefined);
+  if (!project) {
+    return undefined;
+  }
   await upsertPypiProxyProjectArtifacts({
     artifactStore: input.artifactStore,
     repositoryName: input.repositoryName,
     repositoryEcosystem: input.repositoryEcosystem,
     repositoryConfig: input.repositoryConfig,
     project: projectName,
-    files,
+    files: project.files,
   });
   return project;
+}
+
+async function fetchAndCachePypiProxyProjectForWarming(input: {
+  fetch: FetchLike;
+  objectStore: RepositoryObjectStore;
+  repositoryName: string;
+  repositoryConfig: Record<string, unknown>;
+  project: string;
+}): Promise<{ project?: { name: string; files: unknown[] }; failure?: PypiProxyProjectFailure }> {
+  const upstream = parsePypiProxyRepositoryConfig(input.repositoryConfig);
+  const projectName = normalizeProjectName(input.project);
+  const projectUrl = pypiProxyUpstreamUrl(upstream.upstreamUrl, `${SIMPLE_PREFIX}/${projectName}/`);
+  if (!projectUrl) {
+    return {
+      failure: {
+        project: projectName,
+        message: `PyPI proxy upstream project ${projectName} could not be resolved`,
+        retryable: false,
+      },
+    };
+  }
+  try {
+    return {
+      project: await fetchAndStorePypiProxyProject({
+        fetch: input.fetch,
+        objectStore: input.objectStore,
+        repositoryName: input.repositoryName,
+        projectName,
+        projectUrl,
+      }),
+    };
+  } catch (error) {
+    return {
+      failure: pypiProxyProjectFailure(projectName, error),
+    };
+  }
+}
+
+async function fetchAndStorePypiProxyProject(input: {
+  fetch: FetchLike;
+  objectStore: RepositoryObjectStore;
+  repositoryName: string;
+  projectName: string;
+  projectUrl: string;
+}): Promise<{ name: string; files: unknown[] }> {
+  const projectResponse = await fetchWithTimeout(input.fetch, new Request(input.projectUrl, {
+    headers: { accept: "text/html" },
+  })).catch((error: unknown) => {
+    throw new PypiProxyUpstreamError(
+      `PyPI proxy upstream project ${input.projectName} request failed: ${error instanceof Error ? error.message : String(error)}`,
+      true,
+    );
+  });
+  if (!projectResponse.ok) {
+    throw new PypiProxyUpstreamError(
+      `PyPI proxy upstream project ${input.projectName} returned ${projectResponse.status}`,
+      projectResponse.status === 429 || projectResponse.status >= 500,
+      projectResponse.status,
+    );
+  }
+  const files = parseProjectFilesHtml(await projectResponse.text(), { includeUrl: true });
+  const project = { name: input.projectName, files };
+  await input.objectStore.putJson(proxyProjectCacheKey(input.repositoryName, input.projectName), project);
+  await updatePypiProxyProjectSummary({
+    objectStore: input.objectStore,
+    repositoryName: input.repositoryName,
+    project: input.projectName,
+    fileCount: files.length,
+  });
+  return project;
+}
+
+class PypiProxyUpstreamError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}
+
+function pypiProxyProjectFailure(project: string, error: unknown): PypiProxyProjectFailure {
+  if (error instanceof PypiProxyUpstreamError) {
+    return {
+      project,
+      message: error.message,
+      retryable: error.retryable,
+      ...(error.status !== undefined ? { status: error.status } : {}),
+    };
+  }
+  return {
+    project,
+    message: error instanceof Error ? error.message : String(error),
+    retryable: true,
+  };
 }
 
 async function upsertPypiProxyProjectArtifacts(input: {
@@ -766,6 +1169,180 @@ function proxyProjectFileObjectKey(file: { filename: string; url?: string }, pro
   return file.url ? new URL(file.url, projectUrl).toString() : new URL(file.filename, projectUrl).toString();
 }
 
+interface PypiProxyFileCacheMetadata {
+  upstreamUrl: string;
+  contentType: string;
+  contentLength: number;
+  cachedAt: string;
+  etag?: string;
+  lastModified?: string;
+  acceptRanges?: string;
+  cacheControl?: string;
+}
+
+async function pypiProxyFileCacheObjectKey(repositoryName: string, upstreamUrl: string): Promise<string> {
+  const digest = await digestHex("SHA-256", new TextEncoder().encode(upstreamUrl));
+  return `repositories/${repositoryName}/_proxy-cache/pypi/files/${digest}`;
+}
+
+async function pypiProxyFileCacheMetadataKey(repositoryName: string, upstreamUrl: string): Promise<string> {
+  return `${await pypiProxyFileCacheObjectKey(repositoryName, upstreamUrl)}.json`;
+}
+
+async function readPypiProxyFileCache(input: {
+  objectStore: RepositoryObjectStore;
+  repositoryName: string;
+  upstreamUrl: string;
+  method: string;
+}): Promise<Response | null> {
+  const objectKey = await pypiProxyFileCacheObjectKey(input.repositoryName, input.upstreamUrl);
+  const object = await input.objectStore.getObject(objectKey);
+  if (!object) {
+    return null;
+  }
+  const metadata = await readPypiProxyFileCacheMetadata({
+    objectStore: input.objectStore,
+    repositoryName: input.repositoryName,
+    upstreamUrl: input.upstreamUrl,
+  });
+  const headers = pypiProxyFileCacheHeaders(metadata, object);
+  return new Response(input.method === "HEAD" ? null : objectStream(object), {
+    status: 200,
+    headers,
+  });
+}
+
+async function cachePypiProxyFileResponse(input: {
+  objectStore: RepositoryObjectStore;
+  repositoryName: string;
+  upstreamUrl: string;
+  response: Response;
+}): Promise<Response> {
+  const contentType = input.response.headers.get("content-type") ?? "application/octet-stream";
+  const objectKey = await pypiProxyFileCacheObjectKey(input.repositoryName, input.upstreamUrl);
+  const writer = await input.objectStore.createPartWriter(objectKey, contentType);
+  try {
+    if (input.response.body) {
+      await writeReadableStreamToPartWriter(input.response.body, writer);
+    }
+    const { size } = await writer.complete();
+    const metadata: PypiProxyFileCacheMetadata = {
+      upstreamUrl: input.upstreamUrl,
+      contentType,
+      contentLength: size,
+      cachedAt: new Date().toISOString(),
+      ...(input.response.headers.get("etag") ? { etag: input.response.headers.get("etag")! } : {}),
+      ...(input.response.headers.get("last-modified") ? { lastModified: input.response.headers.get("last-modified")! } : {}),
+      ...(input.response.headers.get("accept-ranges") ? { acceptRanges: input.response.headers.get("accept-ranges")! } : {}),
+      ...(input.response.headers.get("cache-control") ? { cacheControl: input.response.headers.get("cache-control")! } : {}),
+    };
+    await input.objectStore.putJson(
+      await pypiProxyFileCacheMetadataKey(input.repositoryName, input.upstreamUrl),
+      metadata,
+    );
+    const cached = await readPypiProxyFileCache({
+      objectStore: input.objectStore,
+      repositoryName: input.repositoryName,
+      upstreamUrl: input.upstreamUrl,
+      method: "GET",
+    });
+    if (cached) {
+      return cached;
+    }
+    return new Response(null, {
+      status: input.response.status,
+      statusText: input.response.statusText,
+      headers: proxyResponseHeaders(input.response.headers),
+    });
+  } catch (error) {
+    await writer.abort().catch(() => undefined);
+    throw error;
+  }
+}
+
+async function writeReadableStreamToPartWriter(
+  stream: ReadableStream<Uint8Array>,
+  writer: { write(chunk: Uint8Array): Promise<void> },
+): Promise<void> {
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      const result = await reader.read();
+      if (result.done) {
+        return;
+      }
+      await writer.write(result.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function readPypiProxyFileCacheMetadata(input: {
+  objectStore: RepositoryObjectStore;
+  repositoryName: string;
+  upstreamUrl: string;
+}): Promise<PypiProxyFileCacheMetadata | null> {
+  const object = await input.objectStore.getObject(
+    await pypiProxyFileCacheMetadataKey(input.repositoryName, input.upstreamUrl),
+  );
+  if (!object) {
+    return null;
+  }
+  const parsed = parseJsonObject(new TextDecoder().decode(await objectBytes(object)));
+  if (parsed.upstreamUrl !== input.upstreamUrl) {
+    return null;
+  }
+  const contentType = typeof parsed.contentType === "string" ? parsed.contentType : "application/octet-stream";
+  const contentLength = typeof parsed.contentLength === "number" ? parsed.contentLength : 0;
+  return {
+    upstreamUrl: input.upstreamUrl,
+    contentType,
+    contentLength,
+    cachedAt: typeof parsed.cachedAt === "string" ? parsed.cachedAt : "",
+    ...(typeof parsed.etag === "string" ? { etag: parsed.etag } : {}),
+    ...(typeof parsed.lastModified === "string" ? { lastModified: parsed.lastModified } : {}),
+    ...(typeof parsed.acceptRanges === "string" ? { acceptRanges: parsed.acceptRanges } : {}),
+    ...(typeof parsed.cacheControl === "string" ? { cacheControl: parsed.cacheControl } : {}),
+  };
+}
+
+function pypiProxyFileCacheHeaders(
+  metadata: PypiProxyFileCacheMetadata | null,
+  object: { contentType?: string; contentLength?: number; etag?: string },
+): Headers {
+  const headers = new Headers();
+  const contentType = metadata?.contentType ?? object.contentType;
+  if (contentType) {
+    headers.set("content-type", contentType);
+  }
+  const contentLength = metadata?.contentLength ?? object.contentLength;
+  if (contentLength !== undefined) {
+    headers.set("content-length", String(contentLength));
+  }
+  const etag = metadata?.etag ?? object.etag;
+  if (etag) {
+    headers.set("etag", etag);
+  }
+  if (metadata?.lastModified) {
+    headers.set("last-modified", metadata.lastModified);
+  }
+  if (metadata?.acceptRanges) {
+    headers.set("accept-ranges", metadata.acceptRanges);
+  }
+  if (metadata?.cacheControl) {
+    headers.set("cache-control", metadata.cacheControl);
+  }
+  return headers;
+}
+
+function hasPypiProxyConditionalRequestHeaders(headers: Headers): boolean {
+  return headers.has("if-none-match")
+    || headers.has("if-modified-since")
+    || headers.has("if-match")
+    || headers.has("if-unmodified-since");
+}
+
 async function cachePypiProxyProjectResponse(input: {
   objectStore: RepositoryObjectStore | undefined;
   repositoryName: string;
@@ -779,7 +1356,14 @@ async function cachePypiProxyProjectResponse(input: {
   if (!projectName) {
     return;
   }
-  const files = parseProjectFilesHtml(await input.response.clone().text(), { includeUrl: true });
+  const contentType = input.response.headers.get("content-type")?.toLowerCase() ?? "";
+  const text = await input.response.clone().text();
+  const files = contentType.includes(SIMPLE_JSON_CONTENT_TYPE)
+    ? parsePypiProxyProjectFilesJson(text)
+    : parseProjectFilesHtml(text, { includeUrl: true });
+  if (files.length === 0) {
+    return;
+  }
   await input.objectStore.putJson(proxyProjectCacheKey(input.repositoryName, projectName), {
     name: projectName,
     files,
@@ -790,6 +1374,47 @@ async function cachePypiProxyProjectResponse(input: {
     project: projectName,
     fileCount: files.length,
   });
+}
+
+function parsePypiProxyProjectFilesJson(text: string): SimpleProjectFile[] {
+  const parsed = parseJsonObject(text);
+  const files = Array.isArray(parsed.files) ? parsed.files : [];
+  return files.flatMap((file): SimpleProjectFile[] => {
+    if (!isRecord(file) || typeof file.filename !== "string" || typeof file.url !== "string") {
+      return [];
+    }
+    const hashes = isRecord(file.hashes) ? file.hashes : {};
+    const sha256 = typeof hashes.sha256 === "string" ? hashes.sha256 : undefined;
+    if (!sha256) {
+      return [];
+    }
+    const requiresPython = file["requires-python"];
+    const coreMetadata = file["core-metadata"];
+    const yanked = file.yanked;
+    return [{
+      filename: file.filename,
+      url: file.url,
+      sha256,
+      ...(typeof requiresPython === "string" ? { requiresPython } : {}),
+      ...(isRecord(coreMetadata) && typeof coreMetadata.sha256 === "string"
+        ? { coreMetadataSha256: coreMetadata.sha256 }
+        : {}),
+      ...(yanked === undefined ? {} : { yanked: yanked === true ? "" : String(yanked) }),
+    }];
+  });
+}
+
+function parseJsonObject(text: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return isRecord(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function pypiProxyProjectFromRelativePath(relativePath: string): string | undefined {

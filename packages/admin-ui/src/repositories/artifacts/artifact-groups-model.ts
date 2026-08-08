@@ -1,4 +1,4 @@
-import type { RepositoryArtifact } from "../../api/schemas";
+import type { RepositoryArtifact, RepositoryArtifactFamily } from "../../api/schemas";
 
 /**
  * The artifacts that are one thing, gathered.
@@ -130,6 +130,22 @@ export function artifactFamilyVersionLabel(input: {
   }
   const artifactLabel = input.artifactCount === 1 ? "1 artifact" : `${input.artifactCount} artifacts`;
   return `${versionLabel}, ${artifactLabel}`;
+}
+
+export function artifactFamilySummaryLabel(family: RepositoryArtifactFamily): string {
+  if (!pypiProxyProjectFamilyName(family.key)) {
+    return family.latestSummary;
+  }
+  const metadata = family.latestArtifact.metadata;
+  if (metadata.cacheStatus === "pending") {
+    return "Waiting for cached files";
+  }
+  if (metadata.cacheStatus === "failed") {
+    return typeof metadata.lastCacheFailure === "string"
+      ? `Cache failed: ${metadata.lastCacheFailure}`
+      : "Cache failed";
+  }
+  return family.latestSummary;
 }
 
 export function pypiProxyProjectArtifactName(artifact: RepositoryArtifact): string | undefined {

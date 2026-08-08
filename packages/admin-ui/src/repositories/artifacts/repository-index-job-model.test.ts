@@ -24,6 +24,16 @@ describe("repositoryIndexJobStatusView", () => {
       label: "Refreshing index",
       active: true,
     });
+    expect(repositoryIndexJobStatusView({
+      ...job,
+      status: "running",
+      attempts: 1,
+      progress: { current: 150, total: 200, message: "Warmed project details 50 of 100" },
+    })).toMatchObject({
+      label: "Refreshing index",
+      description: "Warmed project details 50 of 100",
+      active: true,
+    });
     expect(repositoryIndexJobStatusView({ ...job, status: "canceling" })).toMatchObject({
       label: "Canceling refresh",
       active: true,
@@ -70,6 +80,33 @@ describe("repositoryIndexJobStatusView", () => {
       label: "Refresh failed",
       active: false,
       description: "upstream unavailable",
+    });
+  });
+
+  it("surfaces partial proxy index failures from succeeded jobs", () => {
+    expect(repositoryIndexJobStatusView({
+      id: "repository.index:python-proxy",
+      type: "repository.index.proxy-refresh",
+      status: "succeeded",
+      subject: { type: "repository", id: "python-proxy", repositoryName: "python-proxy" },
+      repositoryName: "python-proxy",
+      priority: 0,
+      requestedAt: "2026-08-05T00:00:00.000Z",
+      scheduledAt: "2026-08-05T00:00:00.000Z",
+      attempts: 1,
+      finishedAt: "2026-08-05T00:00:10.000Z",
+      result: {
+        proxyIndex: {
+          phase: "complete-with-failures",
+          failedProjectCount: 2,
+          failedProjects: [{ project: "broken", message: "upstream returned 503", retryable: true }],
+        },
+      },
+    })).toMatchObject({
+      label: "Index refreshed with warnings",
+      description: "2 projects failed to cache. broken: upstream returned 503",
+      active: false,
+      failed: false,
     });
   });
 });
