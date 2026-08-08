@@ -642,7 +642,7 @@ function applyLimitOffset(rows: Record<string, unknown>[], query: string, bindin
   return rows.slice(offset, offset + limit);
 }
 
-describeStateStoreContract("D1 shared index stores", async () => {
+describeStateStoreContract("D1StateStore", async () => {
   const database = new FakeD1Database();
   await database.exec(D1_SHARED_INDEX_SCHEMA);
   return createD1StateStore(database as unknown as D1Database) as StateStore;

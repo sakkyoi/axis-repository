@@ -142,7 +142,7 @@ function repositoryArtifact(
 /**
  * Behaviour every StateStore adapter must share.
  *
- * The in-memory and Durable Object adapters back the same port, and drift
+ * The in-memory and production adapters back the same port, and drift
  * between them shows up as "works in dev, not in production" (or the reverse).
  * Both suites used to assert this by copy-paste; this is the single statement
  * of the contract, run against each adapter.
