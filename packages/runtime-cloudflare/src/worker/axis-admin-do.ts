@@ -37,6 +37,7 @@ import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import { RepositoryWriteLock } from "./repository-write-lock";
 import { assertBackgroundJobQueueConfiguration, enqueueBackgroundJobWakeup } from "./background-job-queue";
+import { scheduleBackgroundJobs } from "./background-job-scheduler";
 import {
   MAINTENANCE_MAX_INTERVAL_MS,
   MAINTENANCE_MIN_INTERVAL_MS,
@@ -559,8 +560,16 @@ export class AxisAdminDO {
     let nextRunAt = new Date(now.getTime() + MAINTENANCE_MAX_INTERVAL_MS);
     let remainingBackgroundJobs = 0;
     try {
-      await this.dependencies.stagingUploadGcJobService.request({ deferIfRepositoryIndexActive: true });
-      const maintenanceJob = await this.dependencies.repositoryMaintenanceJobService.request();
+      await scheduleBackgroundJobs({
+        stagingUploadGcJobService: this.dependencies.stagingUploadGcJobService,
+        repositoryMaintenanceJobService: this.dependencies.repositoryMaintenanceJobService,
+        wakeBackgroundJobs: async () => {
+          if (this.env.AXIS_BACKGROUND_JOBS === undefined) {
+            return;
+          }
+          await this.dependencies.scheduleBackgroundJobs?.();
+        },
+      });
       if (this.env.AXIS_BACKGROUND_JOBS === undefined) {
         const jobs = await this.dependencies.backgroundJobDispatcher.drain({ limit: 1 });
         remainingBackgroundJobs = jobs.remaining;
@@ -569,10 +578,9 @@ export class AxisAdminDO {
           await this.state.storage.setAlarm(backgroundJobPlan.nextRunAt);
           return;
         }
-      } else {
-        await this.dependencies.scheduleBackgroundJobs?.();
       }
-      const maintenanceFallback = maintenanceJob.status === "succeeded"
+      const maintenanceJob = await this.dependencies.backgroundJobService.get("repository.maintenance");
+      const maintenanceFallback = maintenanceJob?.status === "succeeded"
         ? nextRunAt
         : new Date(now.getTime() + MAINTENANCE_MIN_INTERVAL_MS);
       nextRunAt = repositoryMaintenanceNextRunAt(maintenanceJob, maintenanceFallback);

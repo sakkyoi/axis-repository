@@ -38,6 +38,9 @@
       }
     ]
   },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
   // Values a deployment supplies that are not credentials.
   //
   // Deploy to Cloudflare asks for these the same way it asks for the secrets in

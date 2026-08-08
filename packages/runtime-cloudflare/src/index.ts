@@ -1,6 +1,7 @@
 import { AxisAdminDO, type AxisEnv } from "./worker/axis-admin-do";
 import { createDurableObjectDependencies } from "./worker/axis-admin-do";
 import { drainBackgroundJobQueue, drainBackgroundJobQueueBatch, type BackgroundJobQueueMessage } from "./worker/background-job-queue";
+import { scheduleBackgroundJobs } from "./worker/background-job-scheduler";
 import type { DurableStorage } from "./storage/durable-state";
 
 export { AxisAdminDO };
@@ -49,6 +50,22 @@ export default {
       dependencies,
       queue: env.AXIS_BACKGROUND_JOBS,
       messages: batch.messages.map((message) => message.body),
+    });
+  },
+  async scheduled(_controller: ScheduledController, env: AxisEnv, _ctx?: ExecutionContext): Promise<void> {
+    if (!env.AXIS_SHARED_STATE || !env.AXIS_BACKGROUND_JOBS) {
+      throw new Error("AXIS_SHARED_STATE and AXIS_BACKGROUND_JOBS are required for scheduled background jobs");
+    }
+    const dependencies = createDurableObjectDependencies(unavailableDurableStorage, env, {
+      scheduleBackgroundJobs: () => drainBackgroundJobQueue({
+        dependencies,
+        queue: env.AXIS_BACKGROUND_JOBS!,
+      }),
+    });
+    await scheduleBackgroundJobs({
+      stagingUploadGcJobService: dependencies.stagingUploadGcJobService,
+      repositoryMaintenanceJobService: dependencies.repositoryMaintenanceJobService,
+      wakeBackgroundJobs: () => env.AXIS_BACKGROUND_JOBS!.send({ enqueuedAt: new Date().toISOString() }).then(() => undefined),
     });
   },
 };

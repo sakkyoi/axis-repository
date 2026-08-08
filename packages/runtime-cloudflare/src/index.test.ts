@@ -154,4 +154,12 @@ describe("worker entrypoint", () => {
       consoleError.mockRestore();
     }
   });
+
+  it("requires shared state and queue bindings for scheduled background jobs", async () => {
+    await expect(worker.scheduled(
+      { cron: "*/5 * * * *", scheduledTime: Date.now(), type: "scheduled", noRetry: () => {} } as ScheduledController,
+      axisEnv() as unknown as AxisEnv,
+      {} as ExecutionContext,
+    )).rejects.toThrow("AXIS_SHARED_STATE and AXIS_BACKGROUND_JOBS are required for scheduled background jobs");
+  });
 });
