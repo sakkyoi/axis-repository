@@ -73,4 +73,6 @@ export interface RepositorySecretCapability {
 
 export interface RepositoryRuntimePluginServices {
   secrets?: RepositorySecretCapability;
+  repositoryArtifactStore?: RepositoryArtifactStore;
 }
+import type { RepositoryArtifactStore } from "@axis-repository/core";

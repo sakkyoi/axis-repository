@@ -9,6 +9,8 @@ import type {
 } from "@axis-repository/core";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
 
+const D1_ARTIFACT_BATCH_SIZE = 100;
+
 export const D1_SHARED_INDEX_SCHEMA = `
 CREATE TABLE IF NOT EXISTS axis_state_kv (
   key TEXT PRIMARY KEY,
@@ -458,35 +460,16 @@ export class D1RepositoryArtifactStore implements RepositoryArtifactStore {
 
   async upsert(record: RepositoryArtifactRecord): Promise<void> {
     await this.schema.ensure();
-    await this.database
-      .prepare(
-        "INSERT INTO axis_repository_artifacts ("
-        + "id, repository_name, ecosystem, identity, family, family_key, name, version, summary,"
-        + " primary_object_key, published_at, updated_at, record_json"
-        + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        + " ON CONFLICT(repository_name, identity) DO UPDATE SET"
-        + " id = excluded.id, ecosystem = excluded.ecosystem, family = excluded.family,"
-        + " family_key = excluded.family_key, name = excluded.name, version = excluded.version,"
-        + " summary = excluded.summary, primary_object_key = excluded.primary_object_key,"
-        + " published_at = excluded.published_at, updated_at = excluded.updated_at,"
-        + " record_json = excluded.record_json",
-      )
-      .bind(
-        record.id,
-        record.repositoryName,
-        record.ecosystem,
-        record.identity,
-        record.family ?? null,
-        record.family ?? record.id,
-        record.name,
-        record.version ?? null,
-        record.summary,
-        record.primaryObjectKey ?? null,
-        record.publishedAt,
-        record.updatedAt,
-        JSON.stringify(record),
-      )
-      .run();
+    await this.upsertStatement(record).run();
+  }
+
+  async upsertMany(records: RepositoryArtifactRecord[]): Promise<void> {
+    await this.schema.ensure();
+    for (let index = 0; index < records.length; index += D1_ARTIFACT_BATCH_SIZE) {
+      const chunk = records.slice(index, index + D1_ARTIFACT_BATCH_SIZE);
+      if (chunk.length === 0) continue;
+      await this.database.batch(chunk.map((record) => this.upsertStatement(record)));
+    }
   }
 
   async replaceByRepository(repositoryName: string, records: RepositoryArtifactRecord[]): Promise<void> {

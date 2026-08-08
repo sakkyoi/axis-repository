@@ -254,7 +254,6 @@ export function useRepositoryArtifactIndexJob(repositoryName: string | undefined
     void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "pages"] });
     void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "family"] });
     void queryClient.invalidateQueries({ queryKey: ["repository-artifact-families", repositoryName, "pages"] });
-    void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
     void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
   }, [query.data?.job?.status, queryClient, repositoryName]);
 
@@ -289,7 +288,6 @@ export function useRebuildRepositoryArtifactIndex(repositoryName: string | undef
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName, "pages"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-artifact-families", repositoryName, "pages"] });
-      void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
       void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
     },
   });

@@ -421,6 +421,24 @@ export function describeStateStoreContract(
         ]);
       });
 
+      it("upserts multiple repository artifacts in one store operation", async () => {
+        const state = await store();
+        await state.repositoryArtifacts.upsertMany([
+          repositoryArtifact(),
+          repositoryArtifact({
+            id: "artifact_2",
+            identity: "myapp/2.0.0/amd64",
+            version: "2.0.0",
+            updatedAt: "2026-08-05T00:01:00.000Z",
+          }),
+        ]);
+
+        await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toMatchObject([
+          { id: "artifact_2", version: "2.0.0" },
+          { id: "artifact_1" },
+        ]);
+      });
+
       it("replaces one repository's artifacts without touching another's", async () => {
         const state = await store();
         await state.repositoryArtifacts.upsert(repositoryArtifact());
@@ -581,7 +599,7 @@ export function describeStateStoreContract(
         });
         await state.backgroundJobs.save({
           id: "job_2",
-          type: "repository.index.refresh",
+          type: "repository.index.proxy-refresh",
           status: "succeeded",
           subject: { type: "repository", id: "python-proxy", repositoryName: "python-proxy" },
           repositoryName: "python-proxy",

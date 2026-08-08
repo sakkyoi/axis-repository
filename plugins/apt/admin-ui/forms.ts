@@ -188,7 +188,7 @@ export function buildUpdateAptRepositoryInput(
 ): UpdateRepositoryInput {
   const parsed = parseUpdateForm(values);
   return {
-    visibility: parsed.visibility,
+    visibility: repository?.visibility ?? parsed.visibility,
     config: {
       ...repository?.config,
       ...aptConfig(values, {

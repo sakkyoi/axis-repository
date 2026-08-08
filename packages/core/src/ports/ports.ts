@@ -234,6 +234,7 @@ export interface RepositoryArtifactStore {
   ): Promise<{ records: RepositoryArtifactRecord[]; total: number }>;
   listByRepositoryFamily(repositoryName: string, family: string): Promise<RepositoryArtifactRecord[]>;
   upsert(record: RepositoryArtifactRecord): Promise<void>;
+  upsertMany(records: RepositoryArtifactRecord[]): Promise<void>;
   replaceByRepository(repositoryName: string, records: RepositoryArtifactRecord[]): Promise<void>;
 }
 

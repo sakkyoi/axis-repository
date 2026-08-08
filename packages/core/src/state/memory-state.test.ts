@@ -241,6 +241,90 @@ describe("MemoryStateStore repository artifacts", () => {
     ]);
   });
 
+  it("does not count artifacts without versions as family versions", async () => {
+    const state = new MemoryStateStore();
+    const marker: RepositoryArtifactRecord = {
+      id: "artifact_marker",
+      repositoryName: "python-proxy",
+      ecosystem: "pypi",
+      identity: "pypi:proxy-project:demo",
+      family: "pypi:proxy-project:demo",
+      name: "demo",
+      summary: "demo",
+      objectKeys: [],
+      metadata: {},
+      publishedAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:00:00.000Z",
+    };
+    const file: RepositoryArtifactRecord = {
+      ...marker,
+      id: "artifact_file",
+      identity: "pypi:proxy-file:demo:demo-1.0.tar.gz",
+      version: "1.0",
+      summary: "demo 1.0",
+      primaryObjectKey: "https://files.example/demo-1.0.tar.gz",
+      objectKeys: ["https://files.example/demo-1.0.tar.gz"],
+      updatedAt: "2026-07-12T00:01:00.000Z",
+    };
+    await state.repositoryArtifacts.upsert(marker);
+    await state.repositoryArtifacts.upsert(file);
+
+    await expect(state.repositoryArtifacts.listFamiliesByRepositoryPage("python-proxy", { limit: 10, offset: 0 }))
+      .resolves.toMatchObject({
+        records: [{
+          key: "pypi:proxy-project:demo",
+          latestVersion: "1.0",
+          versionCount: 1,
+          artifactCount: 2,
+        }],
+      });
+  });
+
+  it("uses a versioned artifact as the latest family representative when an unversioned marker is newer", async () => {
+    const state = new MemoryStateStore();
+    const file: RepositoryArtifactRecord = {
+      id: "artifact_file",
+      repositoryName: "python-proxy",
+      ecosystem: "pypi",
+      identity: "pypi:proxy-file:demo:demo-1.0.tar.gz",
+      family: "pypi:proxy-project:demo",
+      name: "demo",
+      version: "1.0",
+      summary: "demo 1.0",
+      primaryObjectKey: "https://files.example/demo-1.0.tar.gz",
+      objectKeys: ["https://files.example/demo-1.0.tar.gz"],
+      metadata: {},
+      publishedAt: "2026-07-12T00:01:00.000Z",
+      updatedAt: "2026-07-12T00:01:00.000Z",
+    };
+    const marker: RepositoryArtifactRecord = {
+      id: "artifact_marker",
+      repositoryName: "python-proxy",
+      ecosystem: "pypi",
+      identity: "pypi:proxy-project:demo",
+      family: "pypi:proxy-project:demo",
+      name: "demo",
+      summary: "demo",
+      objectKeys: [],
+      metadata: {},
+      publishedAt: "2026-07-12T00:02:00.000Z",
+      updatedAt: "2026-07-12T00:02:00.000Z",
+    };
+    await state.repositoryArtifacts.upsert(file);
+    await state.repositoryArtifacts.upsert(marker);
+
+    await expect(state.repositoryArtifacts.listFamiliesByRepositoryPage("python-proxy", { limit: 10, offset: 0 }))
+      .resolves.toMatchObject({
+        records: [{
+          key: "pypi:proxy-project:demo",
+          latestVersion: "1.0",
+          latestArtifact: expect.objectContaining({ id: "artifact_file" }),
+          versionCount: 1,
+          artifactCount: 2,
+        }],
+      });
+  });
+
 });
 
 describe("MemoryStateStore", () => {

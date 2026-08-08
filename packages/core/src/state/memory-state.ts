@@ -332,15 +332,18 @@ export class MemoryStateStore implements StateStore {
       this.repositoryArtifactById.set(record.id, snapshot(record));
       this.repositoryArtifactIdByIdentity.set(identityIndex, record.id);
     },
+    upsertMany: async (records: RepositoryArtifactRecord[]): Promise<void> => {
+      for (const record of records) {
+        await this.repositoryArtifacts.upsert(record);
+      }
+    },
     replaceByRepository: async (repositoryName: string, records: RepositoryArtifactRecord[]): Promise<void> => {
       for (const artifact of [...this.repositoryArtifactById.values()]) {
         if (artifact.repositoryName !== repositoryName) continue;
         this.repositoryArtifactById.delete(artifact.id);
         this.repositoryArtifactIdByIdentity.delete(repositoryArtifactIdentityIndex(artifact.repositoryName, artifact.identity));
       }
-      for (const record of records) {
-        await this.repositoryArtifacts.upsert(record);
-      }
+      await this.repositoryArtifacts.upsertMany(records);
     },
   };
 

@@ -79,7 +79,10 @@ export function groupArtifactsByFamily(artifacts: RepositoryArtifact[]): Artifac
       versionOrder.compare(right.version ?? "", left.version ?? ""));
     const versions: string[] = [];
     for (const artifact of ordered) {
-      const version = artifact.version ?? "";
+      if (artifact.version === undefined) {
+        continue;
+      }
+      const version = artifact.version;
       if (!versions.includes(version)) {
         versions.push(version);
       }
@@ -111,4 +114,32 @@ export function artifactsForVersion(group: ArtifactGroup, version: string): Repo
 /** Only worth saying when there is more than one to count. */
 export function artifactVersionCountLabel(group: ArtifactGroup): string | undefined {
   return group.versions.length < 2 ? undefined : `${group.versions.length} versions`;
+}
+
+export function artifactFamilyVersionLabel(input: {
+  latestVersion?: string | undefined;
+  versionCount: number;
+  artifactCount: number;
+}): string {
+  if (input.latestVersion === undefined) {
+    return "-";
+  }
+  const versionLabel = input.versionCount === 1 ? "1 version" : `${input.versionCount} versions`;
+  if (input.artifactCount === input.versionCount) {
+    return versionLabel;
+  }
+  const artifactLabel = input.artifactCount === 1 ? "1 artifact" : `${input.artifactCount} artifacts`;
+  return `${versionLabel}, ${artifactLabel}`;
+}
+
+export function pypiProxyProjectArtifactName(artifact: RepositoryArtifact): string | undefined {
+  if (artifact.ecosystem !== "pypi") {
+    return undefined;
+  }
+  return pypiProxyProjectFamilyName(artifact.identity);
+}
+
+export function pypiProxyProjectFamilyName(family: string | undefined): string | undefined {
+  const project = /^pypi:proxy-project:(.+)$/u.exec(family ?? "")?.[1];
+  return project || undefined;
 }

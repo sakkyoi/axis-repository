@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
   useUpdateRepository,
-  VisibilitySelect,
   type Repository,
   type RepositoryPlugin,
   type SigningKey,
@@ -132,10 +131,6 @@ function AptRepositoryFields({
   const selectedActiveSigningKey = signingKeyState.activeKeys.find((key) => key.id === values.signingKeyId);
   return (
     <div className="grid gap-3">
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Visibility</span>
-        <VisibilitySelect value={values.visibility} onChange={(value) => onChange("visibility", value)} />
-      </label>
       <label className="grid gap-2">
         <span className="text-sm font-medium">Codename</span>
         <Input value={values.codename} onChange={(event) => onChange("codename", event.target.value)} placeholder="noble" required />

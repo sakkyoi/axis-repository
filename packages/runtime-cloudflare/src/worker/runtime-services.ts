@@ -26,7 +26,11 @@ import {
 import { getRepositoryPluginCatalogEntry } from "@axis-repository/plugin-catalog";
 import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { ensureRepositoryPluginEnabled } from "../plugins/repository-plugin-policy";
-import type { DeleteRepositoryArtifactResult } from "../plugins/repository-plugin-contract";
+import type {
+  DeleteRepositoryArtifactResult,
+  RebuildRepositoryArtifactIndexOutput,
+  RebuildRepositoryArtifactIndexResult,
+} from "../plugins/repository-plugin-contract";
 import { scopeObjectStoreToRepository } from "../plugins/scoped-capabilities";
 import type { RepositoryWriteLock } from "./repository-write-lock";
 
@@ -347,13 +351,19 @@ export class PluginRepositoryArtifactIndexService {
     },
   ) {}
 
-  async rebuild(input: { repositoryName: string }): Promise<{ artifacts: RepositoryArtifactRecord[] }> {
+  async rebuild(input: {
+    repositoryName: string;
+    continuation?: Record<string, unknown>;
+  }): Promise<RebuildRepositoryArtifactIndexResult & { artifactCount: number }> {
     // Reconciling rewrites every index from the pool, so it has to wait for
     // any publish in flight rather than race it.
     return this.options.writeLock.run(input.repositoryName, () => this.rebuildUnlocked(input));
   }
 
-  private async rebuildUnlocked(input: { repositoryName: string }): Promise<{ artifacts: RepositoryArtifactRecord[] }> {
+  private async rebuildUnlocked(input: {
+    repositoryName: string;
+    continuation?: Record<string, unknown>;
+  }): Promise<RebuildRepositoryArtifactIndexResult & { artifactCount: number }> {
     const repository = await this.options.repositoryService.getByName(input.repositoryName);
     const plugin = this.options.plugins.getPluginForRepository(repository);
     if (!plugin) {
@@ -365,9 +375,24 @@ export class PluginRepositoryArtifactIndexService {
       repository,
       objectStore: scopeObjectStoreToRepository(this.options.repositoryObjectStore, repository.name),
       now: this.options.clock.now(),
+      ...(input.continuation === undefined ? {} : { continuation: input.continuation }),
     }) ?? [];
-    await this.options.repositoryArtifactStore.replaceByRepository(repository.name, artifacts);
-    return { artifacts };
+    const result = normalizeRebuildOutput(artifacts);
+    if (result.reset) {
+      await this.options.repositoryArtifactStore.replaceByRepository(repository.name, []);
+    }
+    if (Array.isArray(artifacts)) {
+      await this.options.repositoryArtifactStore.replaceByRepository(repository.name, result.artifacts);
+    } else {
+      await this.options.repositoryArtifactStore.upsertMany(result.artifacts);
+    }
+    const artifactCount = result.complete === false
+      ? result.progress?.current ?? result.artifacts.length
+      : (await this.options.repositoryArtifactStore.listByRepository(repository.name)).length;
+    return {
+      ...result,
+      artifactCount,
+    };
   }
 
   async deleteArtifact(input: {
@@ -453,6 +478,17 @@ export class PluginRepositoryArtifactIndexService {
 function repositoryRelativeObjectPath(repositoryName: string, objectKey: string): string {
   const prefix = `repositories/${repositoryName}/`;
   return objectKey.startsWith(prefix) ? objectKey.slice(prefix.length) : objectKey;
+}
+
+function normalizeRebuildOutput(output: RebuildRepositoryArtifactIndexOutput): RebuildRepositoryArtifactIndexResult {
+  if (Array.isArray(output)) {
+    return {
+      artifacts: output,
+      complete: true,
+      reset: true,
+    };
+  }
+  return output;
 }
 
 function mergeConfigPatch(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {

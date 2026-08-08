@@ -568,4 +568,90 @@ describe("PluginRepositoryArtifactIndexService", () => {
     expect(pluginCalls).toEqual(["artifact_myapp"]);
     await expect(objectStore.headObject(indexedArtifact.objectKeys[0]!)).resolves.toEqual({});
   });
+
+  it("appends incremental artifact index batches instead of replacing each batch", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock, randomId });
+    await repositoryService.create({
+      name: "python-proxy",
+      ecosystem: "pypi",
+      kind: "proxy",
+      config: {},
+    });
+    const firstArtifact: RepositoryArtifactRecord = {
+      id: "artifact_first",
+      repositoryName: "python-proxy",
+      ecosystem: "pypi",
+      identity: "pypi:first:first-1.0.0.tar.gz",
+      name: "first",
+      version: "1.0.0",
+      summary: "first 1.0.0",
+      objectKeys: ["https://upstream.example/simple/first/first-1.0.0.tar.gz"],
+      metadata: {},
+      publishedAt: "2026-07-24T00:00:00.000Z",
+      updatedAt: "2026-07-24T00:00:00.000Z",
+    };
+    const secondArtifact: RepositoryArtifactRecord = {
+      ...firstArtifact,
+      id: "artifact_second",
+      identity: "pypi:second:second-1.0.0.tar.gz",
+      name: "second",
+      summary: "second 1.0.0",
+      objectKeys: ["https://upstream.example/simple/second/second-1.0.0.tar.gz"],
+    };
+    let continuationSeen: unknown;
+    const plugins = new RepositoryRuntimePluginRegistry();
+    plugins.register({
+      kind: "proxy",
+      ecosystem: "pypi",
+      name: "pypi-proxy-test",
+      version: "0.0.0",
+      capabilities: ["proxy"],
+      repositoryKinds: ["proxy"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      artifacts: {
+        rebuildIndex: async (input) => {
+          continuationSeen = input.continuation;
+          return input.continuation
+            ? { artifacts: [secondArtifact], complete: true }
+            : {
+              artifacts: [firstArtifact],
+              complete: false,
+              continuation: { projectOffset: 1 },
+              reset: true,
+            };
+        },
+      },
+    });
+    const service = new PluginRepositoryArtifactIndexService({
+      writeLock: new RepositoryWriteLock(),
+      repositoryService,
+      plugins,
+      repositoryObjectStore: memoryObjectStore(),
+      repositoryArtifactStore: state.repositoryArtifacts,
+      clock,
+    });
+
+    await expect(service.rebuild({ repositoryName: "python-proxy" })).resolves.toMatchObject({
+      complete: false,
+      continuation: { projectOffset: 1 },
+      artifactCount: 1,
+    });
+    await expect(state.repositoryArtifacts.listByRepository("python-proxy")).resolves.toEqual([firstArtifact]);
+
+    await expect(service.rebuild({
+      repositoryName: "python-proxy",
+      continuation: { projectOffset: 1 },
+    })).resolves.toMatchObject({
+      complete: true,
+      artifactCount: 2,
+    });
+    expect(continuationSeen).toEqual({ projectOffset: 1 });
+    await expect(state.repositoryArtifacts.listByRepository("python-proxy")).resolves.toEqual([
+      firstArtifact,
+      secondArtifact,
+    ]);
+  });
+
 });

@@ -14,13 +14,24 @@ export interface StagingUploadGcRunResult {
   discardedObjectKeys: string[];
 }
 
+export interface StagingUploadGcRequestInput {
+  force?: boolean;
+  deferIfRepositoryIndexActive?: boolean;
+}
+
 export class StagingUploadGcJobService {
   constructor(private readonly options: StagingUploadGcJobServiceOptions) {}
 
-  async request(): Promise<BackgroundJobRecord> {
+  async request(input: StagingUploadGcRequestInput = {}): Promise<BackgroundJobRecord | null> {
     const existing = await this.options.state.backgroundJobs.get(STAGING_UPLOAD_GC_JOB_ID);
     if (existing?.status === "pending" || existing?.status === "running") {
       return existing;
+    }
+    if (existing?.status === "failed" && input.force !== true) {
+      return existing;
+    }
+    if (input.deferIfRepositoryIndexActive && await this.hasActiveRepositoryIndexJob()) {
+      return null;
     }
     const requestedAt = this.options.clock.now().toISOString();
     const job: BackgroundJobRecord = {
@@ -35,6 +46,15 @@ export class StagingUploadGcJobService {
     };
     await this.options.state.backgroundJobs.save(job);
     return job;
+  }
+
+  private async hasActiveRepositoryIndexJob(): Promise<boolean> {
+    const pending = await this.options.state.backgroundJobs.list({ status: "pending" });
+    if (pending.jobs.some((job) => job.type.startsWith("repository.index."))) {
+      return true;
+    }
+    const running = await this.options.state.backgroundJobs.list({ status: "running" });
+    return running.jobs.some((job) => job.type.startsWith("repository.index."));
   }
 
   async runBackgroundJob(job: BackgroundJobRecord): Promise<StagingUploadGcRunResult> {
@@ -76,7 +96,7 @@ export class StagingUploadGcJobService {
           retryable: true,
         },
       });
-      throw error;
+      return { discardedObjectKeys: [] };
     }
   }
 }

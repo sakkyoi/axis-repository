@@ -102,6 +102,81 @@ describe("RepositoryIndexBackgroundJobService", () => {
     ]);
   });
 
+  it("keeps incomplete repository index work pending with continuation", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
+    await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
+    const service = new RepositoryIndexBackgroundJobService({
+      state,
+      repositoryService,
+      repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
+      repositoryArtifactIndexService: {
+        rebuild: async () => ({
+          artifacts: [],
+          complete: false,
+          continuation: { projectOffset: 20 },
+          progress: { current: 20, total: 45, message: "Indexed 20 of 45 projects" },
+        }),
+      },
+      clock: testClock(),
+    });
+    const job = await service.request({ repositoryName: "python-proxy" });
+
+    await expect(service.runBackgroundJob(job)).resolves.toBeUndefined();
+
+    await expect(state.backgroundJobs.get("repository.index:python-proxy")).resolves.toMatchObject({
+      status: "pending",
+      attempts: 1,
+      startedAt: "2026-08-05T00:00:01.000Z",
+      scheduledAt: "2026-08-05T00:00:02.000Z",
+      lastHeartbeatAt: "2026-08-05T00:00:02.000Z",
+      progress: { current: 20, total: 45, message: "Indexed 20 of 45 projects" },
+      result: { continuation: { projectOffset: 20 } },
+    });
+    await expect(state.repositoryActivities.listByRepository("python-proxy")).resolves.toEqual([]);
+  });
+
+  it("does not count continuation slices as new attempts", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
+    await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
+    let rebuilds = 0;
+    const service = new RepositoryIndexBackgroundJobService({
+      state,
+      repositoryService,
+      repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
+      repositoryArtifactIndexService: {
+        rebuild: async () => {
+          rebuilds += 1;
+          return rebuilds === 1
+            ? {
+              artifacts: [],
+              complete: false,
+              continuation: { projectOffset: 20 },
+              progress: { current: 20, total: 21 },
+            }
+            : {
+              artifacts: [],
+              complete: true,
+              artifactCount: 0,
+            };
+        },
+      },
+      clock: testClock(),
+    });
+    const job = await service.request({ repositoryName: "python-proxy" });
+    await service.runBackgroundJob(job);
+    const pending = await state.backgroundJobs.get("repository.index:python-proxy");
+    expect(pending).toMatchObject({ status: "pending", attempts: 1 });
+
+    await service.runBackgroundJob(pending!);
+
+    await expect(state.backgroundJobs.get("repository.index:python-proxy")).resolves.toMatchObject({
+      status: "succeeded",
+      attempts: 1,
+    });
+  });
+
   it("marks failed repository index background jobs without deleting the previous artifact index", async () => {
     const state = new MemoryStateStore();
     const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
@@ -137,5 +212,66 @@ describe("RepositoryIndexBackgroundJobService", () => {
       failure: { message: "upstream unavailable", retryable: true },
     });
     await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toEqual([previousArtifact]);
+  });
+
+  it("reschedules failed continuation slices for automatic retry", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
+    await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
+    const service = new RepositoryIndexBackgroundJobService({
+      state,
+      repositoryService,
+      repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
+      repositoryArtifactIndexService: { rebuild: async () => { throw new Error("upstream unavailable"); } },
+      clock: testClock(),
+    });
+    const job = await service.request({ repositoryName: "python-proxy" });
+    await state.backgroundJobs.save({
+      ...job,
+      result: { continuation: { projectDetailOffset: 12 } },
+      attempts: 1,
+    });
+
+    await service.runBackgroundJob((await state.backgroundJobs.get(job.id))!);
+
+    await expect(state.backgroundJobs.get("repository.index:python-proxy")).resolves.toMatchObject({
+      status: "pending",
+      attempts: 1,
+      scheduledAt: "2026-08-05T00:00:02.000Z",
+      result: {
+        continuation: { projectDetailOffset: 12 },
+        lastFailure: { message: "upstream unavailable", retryable: true },
+      },
+    });
+  });
+
+  it("fails continuation slices after the automatic retry budget is exhausted", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
+    await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
+    const service = new RepositoryIndexBackgroundJobService({
+      state,
+      repositoryService,
+      repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
+      repositoryArtifactIndexService: { rebuild: async () => { throw new Error("upstream unavailable"); } },
+      clock: testClock(),
+    });
+    const job = await service.request({ repositoryName: "python-proxy" });
+    await state.backgroundJobs.save({
+      ...job,
+      result: {
+        continuation: { projectDetailOffset: 12 },
+        retryCount: 3,
+      },
+      attempts: 1,
+    });
+
+    await service.runBackgroundJob((await state.backgroundJobs.get(job.id))!);
+
+    await expect(state.backgroundJobs.get("repository.index:python-proxy")).resolves.toMatchObject({
+      status: "failed",
+      attempts: 1,
+      failure: { message: "upstream unavailable", retryable: true },
+    });
   });
 });

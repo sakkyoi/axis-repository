@@ -1,7 +1,9 @@
 import { Eye, Package, RefreshCcw, RotateCw, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
+  useAxisClient,
   useDeleteRepositoryArtifact,
   useRebuildRepositoryArtifactIndex,
   useRepositoryArtifactIndexJob,
@@ -25,9 +27,12 @@ import { SkeletonRows } from "../../components/ui/skeleton";
 import { cn } from "../../lib/utils";
 import { moreChoicesLabel, visibleChoices } from "./artifact-choice-model";
 import {
+  artifactFamilyVersionLabel,
   artifactVariantLabel,
   artifactsForVersion,
   groupArtifactsByFamily,
+  pypiProxyProjectArtifactName,
+  pypiProxyProjectFamilyName,
 } from "./artifact-groups-model";
 import { repositoryIndexJobIsActive, repositoryIndexJobStatusView } from "./repository-index-job-model";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
@@ -49,6 +54,8 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
   const [selectedArtifact, setSelectedArtifact] = useState<RepositoryArtifact>();
   const [pendingDeleteArtifact, setPendingDeleteArtifact] = useState<RepositoryArtifact>();
   const familyArtifactsQuery = useRepositoryArtifactFamilyArtifacts(repository.name, openFamilyKey);
+  const pypiProxyProject = pypiProxyProjectFamilyName(openFamilyKey);
+  const pypiProject = usePypiProxyProjectCache(repository.name, pypiProxyProject);
   const pages = familiesQuery.data?.pages ?? [];
   const families = pages.flatMap((page) => page.families);
   const totalFamilies = pages[0]?.totalFamilies ?? families.length;
@@ -66,6 +73,17 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
     if (selectedArtifact && openGroup.artifacts.some((artifact) => artifact.id === selectedArtifact.id)) return;
     setSelectedArtifact(openGroup.latest);
   }, [openGroup, selectedArtifact]);
+
+  useEffect(() => {
+    if (!pypiProxyProject) return;
+    void pypiProject.refetch();
+  }, [pypiProject.refetch, pypiProxyProject]);
+
+  useEffect(() => {
+    if (!pypiProject.data || !pypiProxyProject) return;
+    void familiesQuery.refetch();
+    void familyArtifactsQuery.refetch();
+  }, [familiesQuery, familyArtifactsQuery, pypiProject.data, pypiProxyProject]);
 
   function openArtifactFamily(family: RepositoryArtifactFamily) {
     setOpenFamilyKey(family.key);
@@ -134,7 +152,7 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
-          {artifactFamilyCountLabel(totalFamilies, totalArtifacts)}
+          {artifactFamilyCountLabel(totalFamilies, totalArtifacts, { cached: indexJobIsRunning })}
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => void familiesQuery.refetch()}>
@@ -181,22 +199,13 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
           </div>
         )}
         {!familiesQuery.isLoading && !familiesQuery.isError && families.length > 0 && (
-          <>
-            <RepositoryArtifactsTable families={families} onOpenFamily={openArtifactFamily} />
-            {familiesQuery.hasNextPage && (
-              <div className="border-t border-border p-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={familiesQuery.isFetchingNextPage}
-                  onClick={() => void familiesQuery.fetchNextPage()}
-                >
-                  {familiesQuery.isFetchingNextPage ? "Loading..." : "Load more"}
-                </Button>
-              </div>
-            )}
-          </>
+          <RepositoryArtifactsTable
+            families={families}
+            hasNextPage={familiesQuery.hasNextPage}
+            loadingNextPage={familiesQuery.isFetchingNextPage}
+            onLoadNextPage={() => void familiesQuery.fetchNextPage()}
+            onOpenFamily={openArtifactFamily}
+          />
         )}
       </div>
       <Dialog open={Boolean(openFamilyKey)} onOpenChange={(open) => {
@@ -236,6 +245,8 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
                   <RepositoryArtifactDetail
                     artifact={selectedArtifact}
                     repositoryName={repository.name}
+                    cachedFileCount={pypiProxyProject ? pypiProject.data?.files.length : undefined}
+                    loadingCachedFiles={pypiProxyProject ? pypiProject.isLoading : false}
                     deleting={deleteArtifact.variables === selectedArtifact.id && deleteArtifact.isPending}
                     onOpenObject={openArtifactObject}
                     onDelete={() => setPendingDeleteArtifact(selectedArtifact)}
@@ -264,13 +275,40 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
 
 function RepositoryArtifactsTable({
   families,
+  hasNextPage,
+  loadingNextPage,
+  onLoadNextPage,
   onOpenFamily,
 }: {
   families: RepositoryArtifactFamily[];
+  hasNextPage: boolean;
+  loadingNextPage: boolean;
+  onLoadNextPage: () => void;
   onOpenFamily: (family: RepositoryArtifactFamily) => void;
 }) {
+  const scrollRootRef = useRef<HTMLDivElement>(null);
+  const loadBoundaryRef = useRef<HTMLTableRowElement>(null);
+
+  useEffect(() => {
+    const root = scrollRootRef.current;
+    const boundary = loadBoundaryRef.current;
+    if (!root || !boundary || !hasNextPage || loadingNextPage || !("IntersectionObserver" in window)) {
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        onLoadNextPage();
+      }
+    }, {
+      root,
+      rootMargin: "48px 0px",
+    });
+    observer.observe(boundary);
+    return () => observer.disconnect();
+  }, [hasNextPage, loadingNextPage, onLoadNextPage]);
+
   return (
-    <div className="max-h-80 overflow-auto">
+    <div ref={scrollRootRef} className="max-h-80 overflow-auto">
       <table className="w-full min-w-[42rem] table-fixed text-sm">
         <thead className="sticky top-0 bg-panel text-left text-xs text-muted-foreground">
           <tr>
@@ -314,24 +352,29 @@ function RepositoryArtifactsTable({
             </tr>
           ))}
         </tbody>
+        {(hasNextPage || loadingNextPage) && (
+          <tfoot>
+            <tr ref={loadBoundaryRef} aria-hidden={!loadingNextPage}>
+              <td colSpan={5} className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+                {loadingNextPage ? "Loading more..." : ""}
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );
 }
 
-function artifactFamilyCountLabel(totalFamilies: number, totalArtifacts: number): string {
+function artifactFamilyCountLabel(
+  totalFamilies: number,
+  totalArtifacts: number,
+  options: { cached?: boolean } = {},
+): string {
   const familyLabel = totalFamilies === 1 ? "1 package" : `${totalFamilies} packages`;
   const artifactLabel = totalArtifacts === 1 ? "1 artifact" : `${totalArtifacts} artifacts`;
-  return `${familyLabel}, ${artifactLabel}`;
-}
-
-function artifactFamilyVersionLabel(family: RepositoryArtifactFamily): string {
-  const versionLabel = family.versionCount === 1 ? "1 version" : `${family.versionCount} versions`;
-  if (family.artifactCount === family.versionCount) {
-    return versionLabel;
-  }
-  const artifactLabel = family.artifactCount === 1 ? "1 artifact" : `${family.artifactCount} artifacts`;
-  return `${versionLabel}, ${artifactLabel}`;
+  const label = `${familyLabel}, ${artifactLabel}`;
+  return options.cached ? `Cached ${label}` : label;
 }
 
 /**
@@ -412,16 +455,21 @@ function ArtifactChoice({
 function RepositoryArtifactDetail({
   artifact,
   repositoryName,
+  cachedFileCount,
+  loadingCachedFiles,
   deleting,
   onOpenObject,
   onDelete,
 }: {
   artifact: RepositoryArtifact;
   repositoryName: string;
+  cachedFileCount: number | undefined;
+  loadingCachedFiles: boolean;
   deleting: boolean;
   onOpenObject: (objectKey: string) => void;
   onDelete: () => void;
 }) {
+  const pypiProxyProject = pypiProxyProjectArtifactName(artifact);
   const primaryObjectUrl = artifact.primaryObjectKey
     ? `${window.location.origin}/${artifact.primaryObjectKey.split("/").map(encodeURIComponent).join("/")}`
     : undefined;
@@ -438,6 +486,12 @@ function RepositoryArtifactDetail({
         <ArtifactDetailItem label="Updated" value={artifact.updatedAt} />
         <ArtifactDetailItem label="Publish session" value={artifact.publishSessionId ?? "-"} />
         <ArtifactDetailItem label="Primary object" value={artifact.primaryObjectKey ?? "-"} />
+        {pypiProxyProject && (
+          <ArtifactDetailItem
+            label="Cached files"
+            value={loadingCachedFiles ? "Loading..." : cachedFileCount === undefined ? "-" : String(cachedFileCount)}
+          />
+        )}
       </dl>
       <div className="flex flex-wrap justify-end gap-2">
         {primaryObjectUrl && (
@@ -486,6 +540,33 @@ function RepositoryArtifactDetail({
       </div>
     </div>
   );
+}
+
+function usePypiProxyProjectCache(repositoryName: string, project: string | undefined) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["pypi-projects", repositoryName, "project", project],
+    queryFn: async () => {
+      const response = await client.getRepositoryPluginResource(repositoryName, "pypi", ["projects", project ?? ""]);
+      return parsePypiProjectResource(response);
+    },
+    enabled: false,
+  });
+}
+
+function parsePypiProjectResource(response: unknown): { name: string; files: unknown[] } {
+  if (!response || typeof response !== "object" || !("project" in response)) {
+    return { name: "", files: [] };
+  }
+  const project = (response as { project?: unknown }).project;
+  if (!project || typeof project !== "object") {
+    return { name: "", files: [] };
+  }
+  const record = project as Record<string, unknown>;
+  return {
+    name: typeof record.name === "string" ? record.name : "",
+    files: Array.isArray(record.files) ? record.files : [],
+  };
 }
 
 function ArtifactDetailItem({ label, value }: { label: string; value: string }) {

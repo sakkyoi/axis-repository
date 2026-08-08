@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PublishArtifactsInput, Repository } from "@axis-repository/core";
+import type { PublishArtifactsInput, Repository, RepositoryArtifactRecord } from "@axis-repository/core";
 import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
 import { createPypiPlugin } from "./runtime";
 import { sdistBytes, wheelBytes } from "../shared/dist-fixtures.test-support";
@@ -19,6 +19,16 @@ function repository(): Repository {
     createdAt: NOW.toISOString(),
     updatedAt: NOW.toISOString(),
   };
+}
+
+function rebuildArtifacts(output: unknown): RepositoryArtifactRecord[] {
+  if (Array.isArray(output)) {
+    return output as RepositoryArtifactRecord[];
+  }
+  if (output && typeof output === "object" && "artifacts" in output && Array.isArray(output.artifacts)) {
+    return output.artifacts as RepositoryArtifactRecord[];
+  }
+  throw new Error("Unexpected rebuild output");
 }
 
 function publishInput(sessionId: string, filenames: string[]): PublishArtifactsInput {
@@ -347,11 +357,11 @@ describe("publishing to a PyPI repository", () => {
     const pypi = await harness();
     await pypi.publish("pub_1", ["alpha-1.0.tar.gz", "beta-2.0-py3-none-any.whl"]);
 
-    const rebuilt = await pypi.plugin.artifacts!.rebuildIndex({
+    const rebuilt = rebuildArtifacts(await pypi.plugin.artifacts!.rebuildIndex({
       repository: repository(),
       objectStore: pypi.objectStore,
       now: NOW,
-    });
+    }));
 
     expect(rebuilt.map((artifact) => artifact.identity).sort()).toEqual([
       "pypi:alpha:alpha-1.0.tar.gz",
@@ -365,11 +375,11 @@ describe("publishing to a PyPI repository", () => {
     const pypi = await harness();
     const { artifacts } = await pypi.publish("pub_1", ["alpha-1.0.tar.gz"]);
 
-    const rebuilt = await pypi.plugin.artifacts!.rebuildIndex({
+    const rebuilt = rebuildArtifacts(await pypi.plugin.artifacts!.rebuildIndex({
       repository: repository(),
       objectStore: pypi.objectStore,
       now: NOW,
-    });
+    }));
 
     expect(rebuilt.map((artifact) => artifact.id)).toEqual(artifacts.map((artifact) => artifact.id));
     expect(rebuilt.map((artifact) => artifact.identity)).toEqual(artifacts.map((artifact) => artifact.identity));

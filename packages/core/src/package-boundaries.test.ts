@@ -252,6 +252,7 @@ describe("package boundaries", () => {
       "migrateLegacyPendingJobs",
       "BackgroundJobMigrator",
       "migrators",
+      "repository.index.refresh",
     ];
 
     for (const filePath of checkedFiles) {

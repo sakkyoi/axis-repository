@@ -8,6 +8,7 @@ class FakeD1Database {
   private readonly repositoryArtifacts = new Map<string, Record<string, unknown>>();
   private readonly stateKv = new Map<string, string>();
   readonly preparedQueries: string[] = [];
+  readonly batchSizes: number[] = [];
   execCount = 0;
 
   prepare(query: string): D1PreparedStatement {
@@ -20,6 +21,7 @@ class FakeD1Database {
   }
 
   async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
+    this.batchSizes.push(statements.length);
     const results: D1Result<T>[] = [];
     for (const statement of statements) {
       results.push(await statement.run<T>());
@@ -343,6 +345,31 @@ describeStateStoreContract("D1 shared index stores", async () => {
   const database = new FakeD1Database();
   await database.exec(D1_SHARED_INDEX_SCHEMA);
   return createD1StateStore(database as unknown as D1Database) as StateStore;
+});
+
+describe("D1 repository artifact store", () => {
+  it("chunks artifact batch upserts to keep single D1 calls bounded", async () => {
+    const database = new FakeD1Database();
+    const state = createD1StateStore(database as unknown as D1Database);
+    const records = Array.from({ length: 205 }, (_, index) => ({
+      id: `artifact_${index}`,
+      repositoryName: "python-proxy",
+      ecosystem: "pypi",
+      identity: `pypi:demo:${index}`,
+      name: "demo",
+      version: String(index),
+      summary: `demo ${index}`,
+      objectKeys: [`https://files.example/demo-${index}.tar.gz`],
+      metadata: {},
+      publishedAt: "2026-08-05T00:00:00.000Z",
+      updatedAt: "2026-08-05T00:00:00.000Z",
+    }));
+
+    await state.repositoryArtifacts.upsertMany(records);
+
+    expect(database.batchSizes).toEqual([100, 100, 5]);
+    await expect(state.repositoryArtifacts.listByRepository("python-proxy")).resolves.toHaveLength(205);
+  });
 });
 
 describe("D1 shared state schema bootstrap", () => {

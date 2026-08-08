@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   artifactVariantLabel,
   artifactVersionCountLabel,
+  artifactFamilyVersionLabel,
   artifactsForVersion,
   groupArtifactsByFamily,
+  pypiProxyProjectFamilyName,
+  pypiProxyProjectArtifactName,
 } from "./artifact-groups-model";
 import type { RepositoryArtifact } from "../../api/schemas";
 
@@ -133,5 +136,36 @@ describe("grouping artifacts", () => {
 
     expect(artifactsForVersion(groups[0]!, "1.0").map(artifactVariantLabel))
       .toEqual(["amd64", "arm64", "riscv64"]);
+  });
+
+  it("shows an unknown version count as unknown instead of one version", () => {
+    expect(artifactFamilyVersionLabel({
+      latestVersion: undefined,
+      versionCount: 1,
+      artifactCount: 1,
+    })).toBe("-");
+  });
+
+  it("does not count project markers without versions as artifact versions", () => {
+    const groups = groupArtifactsByFamily([
+      artifact({ id: "marker", family: "pypi:proxy-project:demo", ecosystem: "pypi", name: "demo", version: undefined }),
+      artifact({ id: "file", family: "pypi:proxy-project:demo", ecosystem: "pypi", name: "demo", version: "1.0" }),
+    ]);
+
+    expect(groups[0]?.versions).toEqual(["1.0"]);
+  });
+
+  it("recognizes pypi proxy project artifacts", () => {
+    expect(pypiProxyProjectFamilyName("pypi:proxy-project:demo")).toBe("demo");
+    expect(pypiProxyProjectArtifactName(artifact({
+      id: "project",
+      ecosystem: "pypi",
+      identity: "pypi:proxy-project:demo",
+    }))).toBe("demo");
+    expect(pypiProxyProjectArtifactName(artifact({
+      id: "file",
+      ecosystem: "pypi",
+      identity: "pypi:demo:demo-1.0.tar.gz",
+    }))).toBeUndefined();
   });
 });

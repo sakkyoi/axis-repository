@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { RotateCw, Save } from "lucide-react";
+import { useState } from "react";
+import { RotateCw } from "lucide-react";
 import {
   Badge,
   Button,
@@ -11,11 +11,8 @@ import {
   repositoryIndexJobIsActive,
   repositoryIndexJobStatusView,
   useRepositoryArtifactIndexJob,
-  useUpdateRepository,
-  VisibilitySelect,
   type Repository,
   type RepositoryPlugin,
-  type RepositoryVisibility,
 } from "@axis-repository/admin-ui/plugin-ui";
 import { usePypiClientInfo, usePypiProject, usePypiProjects, useRefreshPypiProxyCache, useSetPypiFileYanked } from "./api";
 
@@ -50,44 +47,6 @@ export function pypiInstallCommandText(repository: Repository, pipIndexUrl = pyp
     `  --index-url "${pipIndexUrl}" \\`,
     "  <package>",
   ].join("\n");
-}
-
-export function PypiSettingsSection({
-  repository,
-}: {
-  repository: Repository;
-  pluginMetadata: RepositoryPlugin | undefined;
-}) {
-  const [visibility, setVisibility] = useState<RepositoryVisibility>(repository.visibility);
-  const updateRepository = useUpdateRepository();
-  useErrorToast("Repository not saved", updateRepository.error);
-
-  useEffect(() => {
-    setVisibility(repository.visibility);
-  }, [repository]);
-
-  async function savePypiConfig() {
-    updateRepository.mutate({
-      name: repository.name,
-      input: {
-        visibility,
-        config: repository.config,
-      },
-    });
-  }
-
-  return (
-    <div className="grid gap-3">
-      <label className="grid gap-2">
-        <span className="text-sm font-medium">Visibility</span>
-        <VisibilitySelect value={visibility} onChange={setVisibility} />
-      </label>
-      <Button onClick={savePypiConfig} disabled={updateRepository.isPending}>
-        <Save className="mr-2 h-4 w-4" />
-        Save repository
-      </Button>
-    </div>
-  );
 }
 
 export function pypiProxyUpstreamUrl(repository: Repository): string {
@@ -182,6 +141,19 @@ export function PypiInstallHintsSection({
           code={clientInfo.data ? pypiInstallCommandText(repository, clientInfo.data.pipIndexUrl) : "Loading..."}
         />
       </details>
+      {clientInfo.isError && <ErrorState title="PyPI client setup unavailable" error={clientInfo.error} />}
+    </>
+  );
+}
+
+export function PypiUploadHintsSection({
+  repository,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  return (
+    <>
       <details className="min-w-0">
         <summary className="cursor-pointer text-sm font-medium">twine upload</summary>
         <CodeBlock
@@ -190,7 +162,6 @@ export function PypiInstallHintsSection({
           code={pypiUploadCommandText(repository)}
         />
       </details>
-      {clientInfo.isError && <ErrorState title="PyPI client setup unavailable" error={clientInfo.error} />}
     </>
   );
 }

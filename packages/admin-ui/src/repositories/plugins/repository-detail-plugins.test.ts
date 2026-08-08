@@ -45,6 +45,7 @@ describe("repository detail plugins", () => {
       "repository-artifacts",
       "repository-browser",
       "settings",
+      "apt-settings",
       "advanced-json",
       "signing-keys",
       "client-helpers",
@@ -55,6 +56,7 @@ describe("repository detail plugins", () => {
       "settings",
       "client-helpers",
       "install-hints",
+      "upload-hints",
       "project-files",
     ]);
   });
@@ -92,6 +94,7 @@ describe("repository detail plugins", () => {
     ]);
     expect(repositorySettingsSectionsFor(repository({ ecosystem: "apt" })).map((section) => section.id)).toEqual([
       "settings",
+      "apt-settings",
       "advanced-json",
       "signing-keys",
     ]);
@@ -100,10 +103,27 @@ describe("repository detail plugins", () => {
       "repository-browser",
       "client-helpers",
       "install-hints",
+      "upload-hints",
       "project-files",
     ]);
     expect(repositorySettingsSectionsFor(repository({ ecosystem: "pypi" })).map((section) => section.id)).toEqual([
       "settings",
+    ]);
+  });
+
+  it("adds shared repository settings for every repository kind", () => {
+    expect(repositorySettingsSectionsFor(repository({ ecosystem: "apt", kind: "proxy" })).map((section) => section.id)).toEqual([
+      "settings",
+      "advanced-json",
+    ]);
+    expect(repositorySettingsSectionsFor(repository({ ecosystem: "pypi", kind: "proxy" })).map((section) => section.id)).toEqual([
+      "settings",
+      "proxy-settings",
+      "advanced-json",
+    ]);
+    expect(repositorySettingsSectionsFor(repository({ ecosystem: "pypi", kind: "group" })).map((section) => section.id)).toEqual([
+      "settings",
+      "advanced-json",
     ]);
   });
 
@@ -119,12 +139,13 @@ describe("repository detail plugins", () => {
       "repository-browser",
     ]);
     expect(repositorySettingsSectionsFor(repository({ kind: "group" })).map((section) => section.id)).toEqual([
+      "settings",
       "advanced-json",
     ]);
     expect(repositorySummarySectionsFor(repository({ kind: "proxy" })).map((section) => section.id)).toEqual([]);
   });
 
-  it("shows PyPI install hints for proxy repositories", () => {
+  it("shows only PyPI install hints for proxy repositories", () => {
     expect(repositoryWorkspaceSectionsFor(repository({ ecosystem: "pypi", kind: "proxy" })).map((section) => section.id)).toEqual([
       "repository-artifacts",
       "repository-browser",
@@ -134,6 +155,7 @@ describe("repository detail plugins", () => {
       "install-hints",
     ]);
     expect(repositorySettingsSectionsFor(repository({ ecosystem: "pypi", kind: "proxy" })).map((section) => section.id)).toEqual([
+      "settings",
       "proxy-settings",
       "advanced-json",
     ]);

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { dispatchRepositoryAdminResource, dispatchRepositoryClientHelper } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { describe, expect, it, vi } from "vitest";
+import type { RepositoryArtifactStore } from "@axis-repository/core";
+import { dispatchRepositoryAdminResource, dispatchRepositoryClientHelper, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
 import { createPypiPlugin, createPypiProxyPlugin, pypiProxyUpstreamUrl } from "./runtime";
 
@@ -217,6 +218,44 @@ describe("PyPI plugin lifecycle", () => {
     await expect(response?.text()).resolves.toBe("<html>demo</html>");
   });
 
+  it("proxies cached PyPI proxy file paths through Axis repository URLs", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "https://files.example/packages/demo-1.0-py3-none-any.whl",
+      }],
+    });
+    const upstreamRequests: Request[] = [];
+    const plugin = createPypiProxyPlugin({
+      objectStoreFor: () => objectStore,
+      fetch: async (request) => {
+        upstreamRequests.push(request);
+        return new Response("wheel bytes", {
+          headers: { "content-type": "application/octet-stream" },
+        });
+      },
+    });
+
+    const response = await plugin.serveRepositoryPath?.({
+      repository: {
+        ...repositoryFixture(),
+        kind: "proxy",
+        config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      },
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+    });
+
+    expect(upstreamRequests.map((request) => request.url)).toEqual([
+      "https://files.example/packages/demo-1.0-py3-none-any.whl",
+    ]);
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get("content-type")).toBe("application/octet-stream");
+    await expect(response?.text()).resolves.toBe("wheel bytes");
+  });
+
   it("serves a Simple API URL client helper for proxy repositories", async () => {
     const plugin = createPypiProxyPlugin({
       fetch: async () => new Response(null),
@@ -241,7 +280,7 @@ describe("PyPI plugin lifecycle", () => {
     });
   });
 
-  it("rebuilds a proxy cache into artifact records", async () => {
+  it("refreshes a proxy catalog without fetching project detail pages", async () => {
     const upstreamHtml = new Map([
       ["https://pypi.org/simple/", "<a href=\"demo/\">demo</a>"],
       [
@@ -249,12 +288,16 @@ describe("PyPI plugin lifecycle", () => {
         `<a href="https://files.example/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}">demo-1.0-py3-none-any.whl</a>`,
       ],
     ]);
+    const fetchedUrls: string[] = [];
     const objectStore = new MemoryRepositoryObjectStore();
     const plugin = createPypiProxyPlugin({
-      fetch: async (request) => new Response(upstreamHtml.get(request.url) ?? "", {
-        status: upstreamHtml.has(request.url) ? 200 : 404,
-        headers: { "content-type": "text/html" },
-      }),
+      fetch: async (request) => {
+        fetchedUrls.push(request.url);
+        return new Response(upstreamHtml.get(request.url) ?? "", {
+          status: upstreamHtml.has(request.url) ? 200 : 404,
+          headers: { "content-type": "text/html" },
+        });
+      },
       objectStoreFor: () => objectStore,
     });
     const repository = {
@@ -263,27 +306,35 @@ describe("PyPI plugin lifecycle", () => {
       config: { pypi: { upstreamUrl: "https://pypi.org/" } },
     };
 
-    const artifacts = await plugin.artifacts?.rebuildIndex({
+    await expect(plugin.artifacts?.rebuildIndex({
       repository,
       objectStore,
       now: new Date("2026-08-05T00:00:00.000Z"),
+    })).resolves.toMatchObject({
+      artifacts: [
+        expect.objectContaining({
+          id: "artifact_python-internal_pypi_proxy_project_demo",
+          repositoryName: "python-internal",
+          ecosystem: "pypi",
+          identity: "pypi:proxy-project:demo",
+          family: "pypi:proxy-project:demo",
+          name: "demo",
+          summary: "demo",
+          objectKeys: [],
+          metadata: {
+            source: "proxy",
+            project: "demo",
+            upstreamUrl: "https://pypi.org/simple/demo/",
+          },
+          publishedAt: "2026-08-05T00:00:00.000Z",
+          updatedAt: "2026-08-05T00:00:00.000Z",
+        }),
+      ],
+      complete: false,
+      continuation: { projectDetailOffset: 0 },
+      progress: { current: 1, total: 2, message: "Project catalog indexed. Warming 1 project details" },
     });
-
-    expect(artifacts).toEqual([
-      expect.objectContaining({
-        repositoryName: "python-internal",
-        ecosystem: "pypi",
-        identity: "pypi:demo:demo-1.0-py3-none-any.whl",
-        family: "pypi:demo",
-        name: "demo",
-        version: "1.0",
-        summary: "demo 1.0",
-        primaryObjectKey: `https://files.example/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}`,
-        objectKeys: [`https://files.example/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}`],
-        publishedAt: "2026-08-05T00:00:00.000Z",
-        updatedAt: "2026-08-05T00:00:00.000Z",
-      }),
-    ]);
+    expect(fetchedUrls).toEqual(["https://pypi.org/simple/"]);
 
     const projectsResponse = await dispatchRepositoryAdminResource(plugin.adminResources!, {
       repositoryName: repository.name,
@@ -311,8 +362,44 @@ describe("PyPI plugin lifecycle", () => {
     });
 
     await expect(projectsResponse.json()).resolves.toMatchObject({
-      projects: [{ name: "demo", fileCount: 1 }],
+      projects: [{ name: "demo" }],
       truncated: false,
+    });
+
+    await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects/demo.json"))
+      .resolves.toBeNull();
+  });
+
+  it("fetches and caches proxy project details on demand", async () => {
+    const upstreamHtml = new Map([
+      ["https://pypi.org/simple/", "<a href=\"demo/\">demo</a>"],
+      [
+        "https://pypi.org/simple/demo/",
+        `<a href="https://files.example/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}">demo-1.0-py3-none-any.whl</a>`,
+      ],
+    ]);
+    const fetchedUrls: string[] = [];
+    const objectStore = new MemoryRepositoryObjectStore();
+    const plugin = createPypiProxyPlugin({
+      fetch: async (request) => {
+        fetchedUrls.push(request.url);
+        return new Response(upstreamHtml.get(request.url) ?? "", {
+          status: upstreamHtml.has(request.url) ? 200 : 404,
+          headers: { "content-type": "text/html" },
+        });
+      },
+      objectStoreFor: () => objectStore,
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+    };
+
+    await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:00.000Z"),
     });
 
     const projectResponse = await dispatchRepositoryAdminResource(plugin.adminResources!, {
@@ -333,17 +420,264 @@ describe("PyPI plugin lifecycle", () => {
         ],
       },
     });
+    expect(fetchedUrls).toEqual(["https://pypi.org/simple/", "https://pypi.org/simple/demo/"]);
+
+    const manifest = await objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects.json");
+    expect(manifest).not.toBeNull();
+    expect(JSON.parse(new TextDecoder().decode(await objectBytes(manifest!)))).toEqual({
+      upstreamUrl: "https://pypi.org/",
+      refreshedAt: "2026-08-05T00:00:00.000Z",
+      projects: [{ name: "demo", fileCount: 1 }],
+    });
+    await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects/demo.json")).resolves.not.toBeNull();
+  });
+
+  it("refreshes proxy catalogs in a single root index fetch", async () => {
+    const projectNames = Array.from({ length: 7 }, (_, index) => `demo-${String(index + 1).padStart(2, "0")}`);
+    const upstreamHtml = new Map<string, string>([
+      ["https://pypi.org/simple/", projectNames.map((project) => `<a href="${project}/">${project}</a>`).join("")],
+      ...projectNames.map((project, index) => [
+        `https://pypi.org/simple/${project}/`,
+        `<a href="${project}-1.0-py3-none-any.whl#sha256=${String(index).padStart(64, "a")}">${project}-1.0-py3-none-any.whl</a>`,
+      ] as const),
+    ]);
+    const fetchedUrls: string[] = [];
+    const objectStore = new MemoryRepositoryObjectStore();
+    const plugin = createPypiProxyPlugin({
+      fetch: async (request) => {
+        fetchedUrls.push(request.url);
+        return new Response(upstreamHtml.get(request.url) ?? "", {
+          status: upstreamHtml.has(request.url) ? 200 : 404,
+          headers: { "content-type": "text/html" },
+        });
+      },
+      objectStoreFor: () => objectStore,
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+    };
+
+    await expect(plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:00.000Z"),
+    })).resolves.toMatchObject({
+      artifacts: expect.arrayContaining(
+        projectNames.map((project) => expect.objectContaining({ identity: `pypi:proxy-project:${project}` })),
+      ),
+      complete: false,
+      continuation: { projectDetailOffset: 0 },
+    });
+    expect(fetchedUrls).toEqual(["https://pypi.org/simple/"]);
+  });
+
+  it("chunks large proxy catalog marker indexing with continuation", async () => {
+    const projectNames = Array.from({ length: 125 }, (_, index) => `demo-${String(index + 1).padStart(3, "0")}`);
+    const fetchedUrls: string[] = [];
+    const objectStore = new MemoryRepositoryObjectStore();
+    const plugin = createPypiProxyPlugin({
+      fetch: async (request) => {
+        fetchedUrls.push(request.url);
+        return new Response(projectNames.map((project) => `<a href="${project}/">${project}</a>`).join(""), {
+          headers: { "content-type": "text/html" },
+        });
+      },
+      objectStoreFor: () => objectStore,
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+    };
+
+    const first = await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:00.000Z"),
+    });
+    expect(first).toMatchObject({
+      artifacts: expect.arrayContaining([
+        expect.objectContaining({ identity: "pypi:proxy-project:demo-001" }),
+        expect.objectContaining({ identity: "pypi:proxy-project:demo-100" }),
+      ]),
+      complete: false,
+      continuation: { projectOffset: 100 },
+      progress: { current: 100, total: 250 },
+    });
+
+    const second = await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:01.000Z"),
+      continuation: { projectOffset: 100 },
+    });
+    expect(second).toMatchObject({
+      artifacts: expect.arrayContaining([
+        expect.objectContaining({ identity: "pypi:proxy-project:demo-101" }),
+        expect.objectContaining({ identity: "pypi:proxy-project:demo-125" }),
+      ]),
+      complete: false,
+      continuation: { projectDetailOffset: 0 },
+      progress: { current: 125, total: 250 },
+    });
+    expect(fetchedUrls).toEqual(["https://pypi.org/simple/"]);
+  });
+
+  it("warms proxy project details inside the repository index job after catalog marker indexing", async () => {
+    const projectNames = ["alpha", "bravo", "charlie"];
+    const upstreamHtml = new Map<string, string>([
+      ["https://pypi.org/simple/", projectNames.map((project) => `<a href="${project}/">${project}</a>`).join("")],
+      ...projectNames.map((project) => [
+        `https://pypi.org/simple/${project}/`,
+        `<a href="${project}-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}">${project}-1.0-py3-none-any.whl</a>`,
+      ] as const),
+    ]);
+    const fetchedUrls: string[] = [];
+    const objectStore = new MemoryRepositoryObjectStore();
+    const plugin = createPypiProxyPlugin({
+      fetch: async (request) => {
+        fetchedUrls.push(request.url);
+        return new Response(upstreamHtml.get(request.url) ?? "", {
+          status: upstreamHtml.has(request.url) ? 200 : 404,
+          headers: { "content-type": "text/html" },
+        });
+      },
+      objectStoreFor: () => objectStore,
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+    };
+
+    const catalog = await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:00.000Z"),
+    });
+
+    expect(catalog).toMatchObject({
+      artifacts: expect.arrayContaining([
+        expect.objectContaining({ identity: "pypi:proxy-project:alpha" }),
+        expect.objectContaining({ identity: "pypi:proxy-project:charlie" }),
+      ]),
+      complete: false,
+      continuation: { projectDetailOffset: 0 },
+      progress: { current: 3, total: 6, message: "Project catalog indexed. Warming 3 project details" },
+    });
+    expect(fetchedUrls).toEqual(["https://pypi.org/simple/"]);
+
+    const details = await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:01.000Z"),
+      continuation: { projectDetailOffset: 0 },
+    });
+
+    expect(details).toMatchObject({
+      artifacts: expect.arrayContaining([
+        expect.objectContaining({
+          identity: "pypi:proxy-file:alpha:alpha-1.0-py3-none-any.whl",
+          version: "1.0",
+        }),
+      ]),
+      complete: false,
+      continuation: { projectDetailOffset: 1 },
+      progress: { current: 4, total: 6, message: "Warmed project details 1 of 3" },
+    });
+    expect(fetchedUrls).toEqual([
+      "https://pypi.org/simple/",
+      "https://pypi.org/simple/alpha/",
+    ]);
+
+    const remainingDetails = await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:02.000Z"),
+      continuation: { projectDetailOffset: 1 },
+    });
+
+    expect(remainingDetails).toMatchObject({
+      artifacts: expect.arrayContaining([
+        expect.objectContaining({
+          identity: "pypi:proxy-file:bravo:bravo-1.0-py3-none-any.whl",
+          version: "1.0",
+        }),
+      ]),
+      complete: false,
+      continuation: { projectDetailOffset: 2 },
+      progress: { current: 5, total: 6, message: "Warmed project details 2 of 3" },
+    });
+
+    const lastDetails = await plugin.artifacts?.rebuildIndex({
+      repository,
+      objectStore,
+      now: new Date("2026-08-05T00:00:03.000Z"),
+      continuation: { projectDetailOffset: 2 },
+    });
+
+    expect(lastDetails).toMatchObject({
+      artifacts: expect.arrayContaining([
+        expect.objectContaining({
+          identity: "pypi:proxy-file:charlie:charlie-1.0-py3-none-any.whl",
+          version: "1.0",
+        }),
+      ]),
+      complete: true,
+      progress: { current: 6, total: 6, message: "Warmed project details 3 of 3" },
+    });
+    expect(fetchedUrls).toEqual([
+      "https://pypi.org/simple/",
+      "https://pypi.org/simple/alpha/",
+      "https://pypi.org/simple/bravo/",
+      "https://pypi.org/simple/charlie/",
+    ]);
+    await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects/alpha.json"))
+      .resolves.not.toBeNull();
+    await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/rebuild.json"))
+      .resolves.toBeNull();
+  });
+
+  it("removes proxy project detail cache when a refreshed catalog no longer lists the project", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/removed.json", {
+      name: "removed",
+      files: [],
+    });
+    const plugin = createPypiProxyPlugin({
+      fetch: async (request) => new Response(
+        request.url === "https://pypi.org/simple/" ? "<a href=\"demo/\">demo</a>" : "",
+        { status: request.url === "https://pypi.org/simple/" ? 200 : 404 },
+      ),
+      objectStoreFor: () => objectStore,
+    });
+
+    await plugin.artifacts?.rebuildIndex({
+      repository: {
+        ...repositoryFixture(),
+        kind: "proxy",
+        config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      },
+      objectStore,
+      now: new Date("2026-08-05T00:00:00.000Z"),
+    });
+
+    await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects/removed.json"))
+      .resolves.toBeNull();
   });
 
   it("paginates proxy cached projects", async () => {
     const objectStore = new MemoryRepositoryObjectStore();
     await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects.json", {
       projects: [
-        { name: "alpha", files: [] },
-        { name: "bravo", files: [] },
-        { name: "charlie", files: [] },
+        { name: "alpha" },
+        { name: "bravo" },
+        { name: "charlie" },
       ],
     });
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/alpha.json", { name: "alpha", files: [] });
     const plugin = createPypiProxyPlugin({ objectStoreFor: () => objectStore });
     const repository = {
       ...repositoryFixture(),
@@ -395,12 +729,15 @@ describe("PyPI plugin lifecycle", () => {
       projects: [
         {
           name: "demo",
-          files: [{
-            filename: "demo-1.0-py3-none-any.whl",
-            url: "https://files.example/demo-1.0-py3-none-any.whl",
-          }],
         },
       ],
+    });
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "https://files.example/demo-1.0-py3-none-any.whl",
+      }],
     });
     const plugin = createPypiProxyPlugin({ objectStoreFor: () => objectStore });
     const repository = {
@@ -444,6 +781,141 @@ describe("PyPI plugin lifecycle", () => {
       path: "simple/demo/demo-1.0-py3-none-any.whl",
       objectKey: "virtual:pypi-proxy:simple/demo/demo-1.0-py3-none-any.whl",
       repositoryUrl: "https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl",
+    });
+  });
+
+  it("paginates PyPI proxy project directories from the virtual object browser", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects.json", {
+      upstreamUrl: "https://pypi.org/",
+      refreshedAt: "2026-08-05T00:00:00.000Z",
+      projects: [
+        { name: "alpha" },
+        { name: "bravo" },
+        { name: "charlie" },
+      ],
+    });
+    const plugin = createPypiProxyPlugin({ objectStoreFor: () => objectStore });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+    };
+
+    const first = await plugin.objectBrowser?.listObjects({ repository, objectStore, prefix: "simple/", limit: 2 });
+
+    expect(first).toMatchObject({
+      prefix: "simple/",
+      directories: [
+        { name: "alpha", path: "simple/alpha/" },
+        { name: "bravo", path: "simple/bravo/" },
+      ],
+      objects: [],
+      truncated: true,
+    });
+    expect(first?.cursor).toEqual(expect.any(String));
+    const cursor = first?.cursor;
+    if (!cursor) {
+      throw new Error("Expected a cursor for the second PyPI proxy browser page");
+    }
+
+    await expect(plugin.objectBrowser?.listObjects({
+      repository,
+      objectStore,
+      prefix: "simple/",
+      limit: 2,
+      cursor,
+    })).resolves.toMatchObject({
+      prefix: "simple/",
+      directories: [
+        { name: "charlie", path: "simple/charlie/" },
+      ],
+      objects: [],
+      truncated: false,
+    });
+  });
+
+  it("does not fetch upstream while browsing uncached PyPI proxy project directories", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects.json", {
+      upstreamUrl: "https://pypi.org/",
+      refreshedAt: "2026-08-05T00:00:00.000Z",
+      projects: [{ name: "demo" }],
+    });
+    let fetchCount = 0;
+    const plugin = createPypiProxyPlugin({
+      objectStoreFor: () => objectStore,
+      fetch: async () => {
+        fetchCount += 1;
+        return new Response("<a href=\"demo-1.0-py3-none-any.whl\">demo</a>");
+      },
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+    };
+
+    await expect(plugin.objectBrowser?.listObjects({
+      repository,
+      objectStore,
+      prefix: "simple/demo/",
+    })).resolves.toEqual({
+      prefix: "simple/demo/",
+      directories: [],
+      objects: [],
+      truncated: false,
+    });
+    expect(fetchCount).toBe(0);
+  });
+
+  it("keeps PyPI proxy object browser reads free of artifact index side effects", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects.json", {
+      upstreamUrl: "https://pypi.org/",
+      refreshedAt: "2026-08-05T00:00:00.000Z",
+      projects: [{ name: "demo" }],
+    });
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "https://files.example/demo-1.0-py3-none-any.whl",
+      }],
+    });
+    const artifactStore = {
+      upsert: vi.fn(async () => {}),
+    } as unknown as RepositoryArtifactStore & { upsert: ReturnType<typeof vi.fn> };
+    const plugin = createPypiProxyPlugin({ objectStoreFor: () => objectStore });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+    };
+
+    await expect(plugin.objectBrowser?.listObjects({
+      repository,
+      objectStore,
+      repositoryArtifactStore: artifactStore,
+      prefix: "simple/demo/",
+    })).resolves.toMatchObject({
+      prefix: "simple/demo/",
+      objects: [{ name: "demo-1.0-py3-none-any.whl" }],
+    });
+    await expect(plugin.objectBrowser?.getObjectDetail?.({
+      repository,
+      objectStore,
+      repositoryArtifactStore: artifactStore,
+      path: "simple/demo/demo-1.0-py3-none-any.whl",
+      origin: "https://axis.example",
+    })).resolves.toMatchObject({
+      name: "demo-1.0-py3-none-any.whl",
+    });
+
+    expect(artifactStore.upsert).not.toHaveBeenCalled();
+    const manifest = await objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects.json");
+    expect(JSON.parse(new TextDecoder().decode(await objectBytes(manifest!)))).toMatchObject({
+      projects: [{ name: "demo" }],
     });
   });
 
@@ -492,43 +964,11 @@ describe("PyPI plugin lifecycle", () => {
     });
   });
 
-  it("fetches proxy project pages with bounded concurrency", async () => {
-    const projectNames = Array.from({ length: 20 }, (_, index) => `demo-${index}`);
-    let activeProjectRequests = 0;
-    let maxActiveProjectRequests = 0;
+  it("does not fetch proxy project pages during catalog refresh when project pages fail", async () => {
+    const fetchedUrls: string[] = [];
     const plugin = createPypiProxyPlugin({
       fetch: async (request) => {
-        if (request.url === "https://pypi.org/simple/") {
-          return new Response(projectNames.map((project) => `<a href="${project}/">${project}</a>`).join(""));
-        }
-        activeProjectRequests += 1;
-        maxActiveProjectRequests = Math.max(maxActiveProjectRequests, activeProjectRequests);
-        await Promise.resolve();
-        activeProjectRequests -= 1;
-        const project = request.url.replace(/^https:\/\/pypi\.org\/simple\/|\/$/g, "");
-        return new Response(
-          `<a href="${project}-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}">${project}-1.0-py3-none-any.whl</a>`,
-        );
-      },
-    });
-
-    await plugin.artifacts?.rebuildIndex({
-      repository: {
-        ...repositoryFixture(),
-        kind: "proxy",
-        config: { pypi: { upstreamUrl: "https://pypi.org/" } },
-      },
-      objectStore: new MemoryRepositoryObjectStore(),
-      now: new Date("2026-08-05T00:00:00.000Z"),
-    });
-
-    expect(maxActiveProjectRequests).toBeGreaterThan(1);
-    expect(maxActiveProjectRequests).toBeLessThanOrEqual(8);
-  });
-
-  it("skips proxy project pages that fail with network errors", async () => {
-    const plugin = createPypiProxyPlugin({
-      fetch: async (request) => {
+        fetchedUrls.push(request.url);
         if (request.url === "https://pypi.org/simple/") {
           return new Response([
             "<a href=\"broken/\">broken</a>",
@@ -544,7 +984,7 @@ describe("PyPI plugin lifecycle", () => {
       },
     });
 
-    const artifacts = await plugin.artifacts?.rebuildIndex({
+    await expect(plugin.artifacts?.rebuildIndex({
       repository: {
         ...repositoryFixture(),
         kind: "proxy",
@@ -552,10 +992,14 @@ describe("PyPI plugin lifecycle", () => {
       },
       objectStore: new MemoryRepositoryObjectStore(),
       now: new Date("2026-08-05T00:00:00.000Z"),
+    })).resolves.toMatchObject({
+      artifacts: [
+        expect.objectContaining({ identity: "pypi:proxy-project:broken" }),
+        expect.objectContaining({ identity: "pypi:proxy-project:demo" }),
+      ],
+      complete: false,
+      continuation: { projectDetailOffset: 0 },
     });
-
-    expect(artifacts).toEqual([
-      expect.objectContaining({ identity: "pypi:demo:demo-1.0-py3-none-any.whl" }),
-    ]);
+    expect(fetchedUrls).toEqual(["https://pypi.org/simple/"]);
   });
 });

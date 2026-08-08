@@ -492,6 +492,11 @@ export class DurableStateStore implements StateStore {
       await this.storage.put(repositoryArtifactKey(record.id), record);
       await this.storage.put(identityKey, record.id);
     },
+    upsertMany: async (records: RepositoryArtifactRecord[]): Promise<void> => {
+      for (const record of records) {
+        await this.repositoryArtifacts.upsert(record);
+      }
+    },
     replaceByRepository: async (repositoryName: string, records: RepositoryArtifactRecord[]): Promise<void> => {
       const values = await this.storage.list<RepositoryArtifactRecord>({
         prefix: "repository-artifact:",
@@ -501,9 +506,7 @@ export class DurableStateStore implements StateStore {
         await this.storage.delete(repositoryArtifactKey(artifact.id));
         await this.storage.delete(repositoryArtifactIdentityKey(artifact.repositoryName, artifact.identity));
       }
-      for (const record of records) {
-        await this.repositoryArtifacts.upsert(record);
-      }
+      await this.repositoryArtifacts.upsertMany(records);
     },
   };
 

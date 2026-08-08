@@ -19,6 +19,8 @@ export type {
   ServeRepositoryPathInput,
   RepositoryUploadProtocol,
   RebuildRepositoryArtifactIndexInput,
+  RebuildRepositoryArtifactIndexOutput,
+  RebuildRepositoryArtifactIndexResult,
   RepositoryArtifactIndexLifecycle,
   RepositoryMaintenanceInput,
   RepositoryMaintenanceLifecycle,

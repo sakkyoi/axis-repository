@@ -52,9 +52,16 @@ function normalizeRepositoryDetailSections(sections: RepositoryDetailSection[]):
       ? { ...section, Component: RepositoryPublishSection }
       : section,
   );
+  const hasSettingsSection = normalizedSections.some((section) => section.id === "settings");
   const hasArtifactsSection = normalizedSections.some((section) => section.id === "repository-artifacts");
   const hasBrowserSection = normalizedSections.some((section) => section.id === "repository-browser");
-  if (hasArtifactsSection && hasBrowserSection) return normalizedSections;
+  if (hasSettingsSection && hasArtifactsSection && hasBrowserSection) return normalizedSections;
+  const settingsSection: RepositoryDetailSection = {
+    id: "settings",
+    title: "Repository settings",
+    placement: "settings",
+    Component: RepositorySettingsSection,
+  };
   const artifactsSection: RepositoryDetailSection = {
     id: "repository-artifacts",
     title: "Artifacts",
@@ -70,6 +77,7 @@ function normalizeRepositoryDetailSections(sections: RepositoryDetailSection[]):
   return [
     ...(hasArtifactsSection ? [] : [artifactsSection]),
     ...(hasBrowserSection ? [] : [browserSection]),
+    ...(hasSettingsSection ? [] : [settingsSection]),
     ...normalizedSections,
   ];
 }

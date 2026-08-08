@@ -64,14 +64,70 @@ describe("StagingUploadGcJobService", () => {
     const job = await state.backgroundJobs.get("storage.staging-upload-gc");
     expect(job).not.toBeNull();
 
-    await expect(service.runBackgroundJob(job!)).rejects.toThrow("Network connection lost.");
+    await expect(service.runBackgroundJob(job!)).resolves.toMatchObject({
+      discardedObjectKeys: [],
+    });
 
     await expect(state.backgroundJobs.get("storage.staging-upload-gc")).resolves.toMatchObject({
       status: "failed",
+      attempts: 1,
       failure: {
         message: "Network connection lost.",
         retryable: true,
       },
     });
+  });
+
+  it("does not automatically requeue a failed cleanup job without an explicit retry", async () => {
+    const state = new MemoryStateStore();
+    const objectStore = await objectStoreWith({});
+    const service = new StagingUploadGcJobService({ state, objectStore, clock, sessionTtlMs: SESSION_TTL_MS });
+    await service.request();
+    const job = await state.backgroundJobs.get("storage.staging-upload-gc");
+    expect(job).not.toBeNull();
+    await state.backgroundJobs.save({
+      ...job!,
+      status: "failed",
+      finishedAt: NOW.toISOString(),
+      failure: {
+        message: "Network connection lost.",
+        failedAt: NOW.toISOString(),
+        retryable: true,
+      },
+    });
+
+    await expect(service.request()).resolves.toMatchObject({
+      status: "failed",
+      attempts: 0,
+    });
+    await expect(state.backgroundJobs.get("storage.staging-upload-gc")).resolves.toMatchObject({
+      status: "failed",
+      attempts: 0,
+    });
+
+    await expect(service.request({ force: true })).resolves.toMatchObject({
+      status: "pending",
+      attempts: 0,
+    });
+  });
+
+  it("can defer cleanup while repository index work is active", async () => {
+    const state = new MemoryStateStore();
+    await state.backgroundJobs.save({
+      id: "repository.index:python-proxy",
+      type: "repository.index.proxy-refresh",
+      status: "pending",
+      subject: { type: "repository", id: "python-proxy", repositoryName: "python-proxy" },
+      repositoryName: "python-proxy",
+      priority: 0,
+      attempts: 1,
+      requestedAt: NOW.toISOString(),
+      scheduledAt: NOW.toISOString(),
+    });
+    const objectStore = await objectStoreWith({});
+    const service = new StagingUploadGcJobService({ state, objectStore, clock, sessionTtlMs: SESSION_TTL_MS });
+
+    await expect(service.request({ deferIfRepositoryIndexActive: true })).resolves.toBeNull();
+    await expect(state.backgroundJobs.get("storage.staging-upload-gc")).resolves.toBeNull();
   });
 });

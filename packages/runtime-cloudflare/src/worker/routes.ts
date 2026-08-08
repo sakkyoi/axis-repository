@@ -29,7 +29,7 @@ import {
   repositoryPluginPolicyFields,
 } from "../plugins/repository-plugin-policy";
 import { dispatchRepositoryAdminResource } from "../plugins/repository-plugin-admin-resources";
-import type { ProtocolUploadSink } from "../plugins/repository-plugin-contract";
+import type { ProtocolUploadSink, RepositoryObjectBrowserListing } from "../plugins/repository-plugin-contract";
 import { createIncrementalDigest } from "../storage/digest";
 import { scopeSecretsToEcosystem } from "../plugins/scoped-capabilities";
 import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
@@ -40,7 +40,9 @@ import {
   readRepositoryDirectory,
   REPOSITORY_FAVICON_QUERY_PARAM,
   renderRepositoryDirectoryHtml,
+  renderRepositoryDirectoryHtmlStream,
   trailingSlashRedirectLocation,
+  type RepositoryDirectoryListing,
 } from "./repository-directory";
 
 export interface AxisApp {
@@ -963,10 +965,17 @@ async function repositoryDirectoryResponse(input: {
   requestUrl: string;
   relativePath: string;
   method: string;
+  virtual?: boolean;
 }): Promise<Response | null> {
+  const directoryPageLimit = 200;
   const plugin = input.dependencies.repositoryRuntimePlugins.getPluginForRepository(input.repository);
   if (!plugin) {
     return null;
+  }
+  const url = new URL(input.requestUrl);
+  const favicon = repositoryFaviconResponse(input.repository, url, input.method);
+  if (favicon) {
+    return favicon;
   }
   const isRoot = input.relativePath === "";
   const directoryPath = isRoot || input.relativePath.endsWith("/")
@@ -978,17 +987,28 @@ async function repositoryDirectoryResponse(input: {
     return null;
   }
 
-  const listing = await readRepositoryDirectory({
+  const virtualListing = input.virtual
+    ? await plugin.objectBrowser?.listObjects({
+      repository: input.repository,
+      objectStore: input.dependencies.repositoryObjectStore,
+      repositoryArtifactStore: input.dependencies.repositoryArtifactStore,
+      prefix: directoryPath,
+      limit: directoryPageLimit,
+    })
+    : undefined;
+  const listing = virtualListing
+    ? repositoryObjectBrowserDirectoryListing(virtualListing)
+    : await readRepositoryDirectory({
     objectStore: input.dependencies.repositoryObjectStore,
     repositoryName: input.repository.name,
     relativePath: directoryPath,
     canServe: (relativePath) => plugin.canServeRepositoryPath({ relativePath }),
+    limit: directoryPageLimit,
   });
   if (!listing) {
     return null;
   }
 
-  const url = new URL(input.requestUrl);
   if (directoryNeedsTrailingSlash(url.pathname)) {
     return new Response(null, {
       status: 301,
@@ -996,35 +1016,165 @@ async function repositoryDirectoryResponse(input: {
     });
   }
 
-  const catalogEntry = getRepositoryPluginCatalogEntry(input.repository.ecosystem);
-  const pluginIcon = catalogEntry?.icon ?? resolvePluginIconAssets(undefined);
-  const logoMarks = {
-    light: textAsset("/logo-mark-light.svg"),
-    dark: textAsset("/logo-mark-dark.svg"),
-  };
-  const faviconTheme = url.searchParams.get(REPOSITORY_FAVICON_QUERY_PARAM);
-  if (faviconTheme === "light" || faviconTheme === "dark") {
-    const svg = compositeRepositoryFaviconSvg(logoMarks[faviconTheme], pluginIcon);
-    return new Response(input.method === "HEAD" ? null : svg, {
-      headers: {
-        "content-type": "image/svg+xml; charset=utf-8",
-        "cache-control": repositoryCacheControl(input.repository),
-      },
-    });
-  }
-
-  const html = renderRepositoryDirectoryHtml({
+  const renderInput = {
     repositoryName: input.repository.name,
     repositoryEcosystem: input.repository.ecosystem,
-    pluginIcon,
+    pluginIcon: repositoryPluginIcon(input.repository),
     listing,
-  });
-  return new Response(input.method === "HEAD" ? null : html, {
+  };
+  const body = input.method === "HEAD"
+    ? null
+    : listing.entries.length === 0 && !listing.truncated
+      ? renderRepositoryDirectoryHtml(renderInput)
+      : renderRepositoryDirectoryHtmlStream({
+        ...renderInput,
+        listings: virtualListing
+          ? virtualRepositoryDirectoryListingPages({
+            dependencies: input.dependencies,
+            repository: input.repository,
+            prefix: directoryPath,
+            limit: directoryPageLimit,
+            ...(virtualListing.cursor !== undefined ? { cursor: virtualListing.cursor } : {}),
+          })
+          : storedRepositoryDirectoryListingPages({
+            dependencies: input.dependencies,
+            repository: input.repository,
+            relativePath: directoryPath,
+            limit: directoryPageLimit,
+            canServe: (relativePath) => plugin.canServeRepositoryPath({ relativePath }),
+            ...(listing.cursor !== undefined ? { cursor: listing.cursor } : {}),
+          }),
+      });
+  return new Response(body, {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": repositoryCacheControl(input.repository),
     },
   });
+}
+
+function repositoryFaviconResponse(repository: Repository, url: URL, method: string): Response | null {
+  const faviconTheme = url.searchParams.get(REPOSITORY_FAVICON_QUERY_PARAM);
+  if (faviconTheme !== "light" && faviconTheme !== "dark") {
+    return null;
+  }
+  const logoMarks = {
+    light: textAsset("/logo-mark-light.svg"),
+    dark: textAsset("/logo-mark-dark.svg"),
+  };
+  const svg = compositeRepositoryFaviconSvg(logoMarks[faviconTheme], repositoryPluginIcon(repository));
+  return new Response(method === "HEAD" ? null : svg, {
+    headers: {
+      "content-type": "image/svg+xml; charset=utf-8",
+      "cache-control": repositoryCacheControl(repository),
+    },
+  });
+}
+
+function repositoryPluginIcon(repository: Repository) {
+  const catalogEntry = getRepositoryPluginCatalogEntry(repository.ecosystem);
+  return catalogEntry?.icon ?? resolvePluginIconAssets(undefined);
+}
+
+async function* virtualRepositoryDirectoryListingPages(input: {
+  dependencies: AppDependencies;
+  repository: Repository;
+  prefix: string;
+  cursor?: string;
+  limit: number;
+}): AsyncIterable<RepositoryDirectoryListing> {
+  let cursor = input.cursor;
+  const plugin = input.dependencies.repositoryRuntimePlugins.getPluginForRepository(input.repository);
+  while (cursor) {
+    const page = await plugin?.objectBrowser?.listObjects({
+      repository: input.repository,
+      objectStore: input.dependencies.repositoryObjectStore,
+      repositoryArtifactStore: input.dependencies.repositoryArtifactStore,
+      prefix: input.prefix,
+      cursor,
+      limit: input.limit,
+    });
+    if (!page) return;
+    yield repositoryObjectBrowserDirectoryListing(page);
+    cursor = page.cursor;
+  }
+}
+
+async function* storedRepositoryDirectoryListingPages(input: {
+  dependencies: AppDependencies;
+  repository: Repository;
+  relativePath: string;
+  cursor?: string;
+  limit: number;
+  canServe: (relativePath: string) => boolean;
+}): AsyncIterable<RepositoryDirectoryListing> {
+  let cursor = input.cursor;
+  while (cursor) {
+    const page = await readRepositoryDirectory({
+      objectStore: input.dependencies.repositoryObjectStore,
+      repositoryName: input.repository.name,
+      relativePath: input.relativePath,
+      canServe: input.canServe,
+      cursor,
+      limit: input.limit,
+    });
+    if (!page) return;
+    yield page;
+    cursor = page.cursor;
+  }
+}
+
+function repositoryObjectBrowserDirectoryListing(listing: RepositoryObjectBrowserListing): RepositoryDirectoryListing {
+  return {
+    relativePath: listing.prefix,
+    entries: [
+      ...listing.directories.map((directory) => ({
+        name: `${directory.name.replace(/\/+$/g, "")}/`,
+        relativePath: directory.path,
+        directory: true,
+      })),
+      ...listing.objects.map((object) => ({
+        name: object.name,
+        relativePath: object.path,
+        directory: false,
+        ...(object.size !== undefined ? { size: object.size } : {}),
+      })),
+    ],
+    ...(listing.cursor !== undefined ? { cursor: listing.cursor } : {}),
+    truncated: listing.truncated,
+  };
+}
+
+function isRepositoryBrowserNavigation(request: Request): boolean {
+  if (request.headers.get("sec-fetch-dest") === "document") {
+    return true;
+  }
+  return prefersBrowserHtml(request.headers.get("accept"));
+}
+
+function prefersBrowserHtml(accept: string | null): boolean {
+  if (!accept) {
+    return false;
+  }
+  let htmlQuality = 0;
+  let browserDocumentQuality = 0;
+  let repositoryApiQuality = 0;
+  for (const entry of accept.split(",")) {
+    const [type = "", ...parameters] = entry.trim().split(";").map((part) => part.trim());
+    const quality = Number(parameters.find((parameter) => parameter.startsWith("q="))?.slice(2) ?? "1");
+    if (!Number.isFinite(quality) || quality <= 0) {
+      continue;
+    }
+    if (type === "text/html") {
+      htmlQuality = Math.max(htmlQuality, quality);
+    } else if (type === "application/xhtml+xml") {
+      browserDocumentQuality = Math.max(browserDocumentQuality, quality);
+    } else if (type.startsWith("application/vnd.")) {
+      repositoryApiQuality = Math.max(repositoryApiQuality, quality);
+    }
+  }
+  return browserDocumentQuality > 0
+    && Math.max(htmlQuality, browserDocumentQuality) >= repositoryApiQuality;
 }
 
 async function pluginRepositoryPathResponse(input: {
@@ -1850,6 +2000,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const pluginDetail = await plugin?.objectBrowser?.getObjectDetail?.({
       repository,
       objectStore: dependencies.repositoryObjectStore,
+      repositoryArtifactStore: dependencies.repositoryArtifactStore,
       path: relativePath,
       origin: publicArtifactOrigin(url, dependencies),
     });
@@ -1876,11 +2027,16 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     if (request.method === "GET") {
       const prefix = repositoryObjectListPrefix(url.searchParams.get("prefix"));
+      const cursor = url.searchParams.get("cursor") ?? undefined;
+      const limit = optionalPositiveIntegerSearchParam(url, "limit");
       const plugin = dependencies.repositoryRuntimePlugins.getPluginForRepository(repository);
       const pluginListing = await plugin?.objectBrowser?.listObjects({
         repository,
         objectStore: dependencies.repositoryObjectStore,
+        repositoryArtifactStore: dependencies.repositoryArtifactStore,
         prefix,
+        ...(cursor !== undefined ? { cursor } : {}),
+        ...(limit !== undefined ? { limit } : {}),
       });
       if (pluginListing) {
         return jsonResponse(pluginListing);
@@ -1888,6 +2044,8 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       const listing = await dependencies.repositoryObjectStore.listObjects({
         prefix: `repositories/${repository.name}/${prefix}`,
         delimiter: "/",
+        ...(cursor !== undefined ? { cursor } : {}),
+        ...(limit !== undefined ? { limit } : {}),
       });
       return jsonResponse(repositoryObjectBrowserResponse({
         repositoryName: repository.name,
@@ -1951,6 +2109,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         // service here would let any plugin that reads services.secrets reach
         // every namespace and decrypt other plugins' secrets.
         secrets: scopeSecretsToEcosystem(dependencies.repositorySecrets, plugin.ecosystem),
+        repositoryArtifactStore: dependencies.repositoryArtifactStore,
       },
     });
   }
@@ -2132,12 +2291,29 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (repositoryObjectPath && (request.method === "GET" || request.method === "HEAD")) {
     const { repositoryName, relativePath } = repositoryObjectPath;
     const repository = await dependencies.repositoryService.getByName(repositoryName);
+    await authorizeRepositoryRead(request, dependencies, repository);
+    const favicon = repositoryFaviconResponse(repository, url, request.method);
+    if (favicon) {
+      return favicon;
+    }
     const accept = request.headers.get("accept");
     const served = await resolveServedRepositoryPath(dependencies, repository, {
       relativePath,
       ...(accept ? { accept } : {}),
     });
-    await authorizeRepositoryRead(request, dependencies, repository);
+    if (isRepositoryBrowserNavigation(request)) {
+      const listing = await repositoryDirectoryResponse({
+        dependencies,
+        repository,
+        requestUrl: request.url,
+        relativePath,
+        method: request.method,
+        virtual: true,
+      });
+      if (listing) {
+        return listing;
+      }
+    }
     const objectKey = `repositories/${repositoryName}/${served.objectPath}`;
     const metadata = served.objectPath === ""
       ? null

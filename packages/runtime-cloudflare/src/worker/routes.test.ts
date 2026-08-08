@@ -492,7 +492,206 @@ describe("Cloudflare runtime routes", () => {
     await expect(response.text()).resolves.toBe("<html>proxied</html>");
   });
 
-  it("rebuilds PyPI proxy artifacts from the upstream Simple API cache", async () => {
+  it("renders PyPI proxy Simple browser navigations with the shared repository directory page", async () => {
+    const upstreamFetch = vi.fn(async () => new Response("<html>upstream</html>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }));
+    vi.stubGlobal("fetch", upstreamFetch);
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-proxy",
+          ecosystem: "pypi",
+          kind: "proxy",
+          visibility: "public",
+          config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+        }),
+      }),
+    );
+    expect(createResponse.status).toBe(201);
+    await harness.repositoryObjectStore.putJson("repositories/python-proxy/_proxy-cache/pypi/projects.json", {
+      upstreamUrl: "https://pypi.org/",
+      refreshedAt: "2026-08-05T00:00:00.000Z",
+      projects: [{ name: "demo", fileCount: 1 }],
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-proxy/simple/", {
+        headers: {
+          accept: "text/html",
+          "sec-fetch-dest": "document",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    const html = await response.text();
+    expect(html).toContain("Axis Repository");
+    expect(html).toContain("python-proxy");
+    expect(html).toContain("demo/");
+    expect(html).not.toContain("upstream");
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
+  it("treats browser HTML requests without Fetch Metadata as virtual repository browsing", async () => {
+    const upstreamFetch = vi.fn(async () => new Response("<html>upstream</html>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }));
+    vi.stubGlobal("fetch", upstreamFetch);
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-proxy",
+          ecosystem: "pypi",
+          kind: "proxy",
+          visibility: "public",
+          config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+        }),
+      }),
+    );
+    expect(createResponse.status).toBe(201);
+    await harness.repositoryObjectStore.putJson("repositories/python-proxy/_proxy-cache/pypi/projects.json", {
+      upstreamUrl: "https://pypi.org/",
+      refreshedAt: "2026-08-05T00:00:00.000Z",
+      projects: [{ name: "demo" }],
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-proxy/simple/demo/", {
+        headers: {
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    const html = await response.text();
+    expect(html).toContain("Axis Repository");
+    expect(html).toContain("Nothing published here yet.");
+    expect(html).not.toContain("upstream");
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
+  it("streams browser directory pages from paged virtual repository listings", async () => {
+    const harness = createDevDependencyHarness();
+    let releaseSecondPage: (() => void) | undefined;
+    const secondPageReady = new Promise<void>((resolve) => {
+      releaseSecondPage = resolve;
+    });
+    const listObjects = vi.fn(async ({ prefix, cursor, limit }: { prefix: string; cursor?: string; limit?: number }) => {
+      if (cursor) {
+        await secondPageReady;
+      }
+      return {
+        prefix,
+        directories: cursor
+          ? [{ name: "bravo", path: "simple/bravo/" }]
+          : [{ name: "alpha", path: "simple/alpha/" }],
+        objects: [],
+        ...(cursor ? {} : { cursor: "page_2" }),
+        truncated: !cursor,
+        limit,
+      };
+    });
+    harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "hosted",
+      ecosystem: "streamed",
+      name: "streamed-hosted",
+      version: "0.1.0",
+      repositoryKinds: ["hosted"],
+      capabilities: ["hosted"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: "2026-08-05T00:00:00.000Z", objects: [] }),
+      },
+    });
+    harness.dependencies.repositoryRuntimePlugins.register({
+      kind: "proxy",
+      ecosystem: "streamed",
+      name: "streamed-proxy",
+      version: "0.1.0",
+      repositoryKinds: ["proxy"],
+      capabilities: ["proxy"],
+      canServeRepositoryPath: ({ relativePath }) => relativePath === "simple/" || relativePath.startsWith("simple/"),
+      validateRepositoryConfig: () => {},
+      objectBrowser: {
+        listObjects,
+      },
+    });
+    const app = createApp(harness.dependencies);
+    const createResponse = await app.fetch(new Request("https://axis.example/admin/repositories", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "streamed-proxy",
+        ecosystem: "streamed",
+        kind: "proxy",
+        visibility: "public",
+        config: {},
+      }),
+    }));
+    expect(createResponse.status).toBe(201);
+    await expect(createResponse.json()).resolves.toMatchObject({
+      name: "streamed-proxy",
+      kind: "proxy",
+    });
+
+    const response = await Promise.race([
+      app.fetch(new Request("https://axis.example/repositories/streamed-proxy/simple/", {
+        headers: {
+          accept: "text/html",
+          "sec-fetch-dest": "document",
+        },
+      })),
+      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 10)),
+    ]);
+
+    expect(response).not.toBe("blocked");
+    if (response === "blocked") return;
+    expect(response.status).toBe(200);
+    expect(listObjects).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      prefix: "simple/",
+      limit: 200,
+    }));
+
+    const htmlPromise = response.text();
+    releaseSecondPage?.();
+    const html = await htmlPromise;
+
+    expect(listObjects).toHaveBeenCalledTimes(2);
+    expect(listObjects).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      prefix: "simple/",
+      cursor: "page_2",
+      limit: 200,
+    }));
+    expect(html).toContain("alpha/");
+    expect(html).toContain("bravo/");
+  });
+
+  it("refreshes a PyPI proxy catalog and lazily reads project details", async () => {
     const upstreamHtml = new Map([
       ["https://pypi.org/simple/", "<a href=\"demo/\">demo</a>"],
       [
@@ -540,7 +739,7 @@ describe("Cloudflare runtime routes", () => {
       },
     });
     await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
-      .resolves.toMatchObject({ processed: 1, remaining: 0 });
+      .resolves.toMatchObject({ processed: 1, remaining: 1 });
 
     const projectsResponse = await app.fetch(
       new Request("https://axis.example/admin/repositories/python-proxy/pypi/projects", {
@@ -549,8 +748,27 @@ describe("Cloudflare runtime routes", () => {
     );
     expect(projectsResponse.status).toBe(200);
     await expect(projectsResponse.json()).resolves.toMatchObject({
-      projects: [{ name: "demo", fileCount: 1 }],
+      projects: [{ name: "demo" }],
     });
+
+    const artifactsResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-proxy/artifacts", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(artifactsResponse.status).toBe(200);
+    await expect(artifactsResponse.json()).resolves.toMatchObject({
+      artifacts: [
+        expect.objectContaining({
+          identity: "pypi:proxy-project:demo",
+          name: "demo",
+          summary: "demo",
+        }),
+      ],
+    });
+
+    await expect(harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 }))
+      .resolves.toMatchObject({ processed: 1, remaining: 0 });
 
     const projectResponse = await app.fetch(
       new Request("https://axis.example/admin/repositories/python-proxy/pypi/projects/demo", {
@@ -560,6 +778,165 @@ describe("Cloudflare runtime routes", () => {
     expect(projectResponse.status).toBe(200);
     await expect(projectResponse.json()).resolves.toMatchObject({
       project: { name: "demo", files: [expect.objectContaining({ filename: "demo-1.0-py3-none-any.whl" })] },
+    });
+
+    const detailArtifactsResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-proxy/artifacts?family=pypi%3Aproxy-project%3Ademo", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(detailArtifactsResponse.status).toBe(200);
+    await expect(detailArtifactsResponse.json()).resolves.toMatchObject({
+      artifacts: expect.arrayContaining([
+        expect.objectContaining({
+          identity: "pypi:proxy-file:demo:demo-1.0-py3-none-any.whl",
+          version: "1.0",
+        }),
+      ]),
+    });
+    const familiesResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-proxy/artifacts/families", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(familiesResponse.status).toBe(200);
+    await expect(familiesResponse.json()).resolves.toMatchObject({
+      families: [expect.objectContaining({
+        key: "pypi:proxy-project:demo",
+        latestVersion: "1.0",
+        versionCount: 1,
+        latestArtifact: expect.objectContaining({
+          identity: "pypi:proxy-file:demo:demo-1.0-py3-none-any.whl",
+          version: "1.0",
+        }),
+      })],
+    });
+  });
+
+  it("indexes PyPI proxy project artifacts from an existing project detail cache", async () => {
+    const upstreamHtml = new Map([
+      ["https://pypi.org/simple/", "<a href=\"demo/\">demo</a>"],
+    ]);
+    vi.stubGlobal("fetch", async (request: Request) => new Response(upstreamHtml.get(request.url) ?? "", {
+      status: upstreamHtml.has(request.url) ? 200 : 404,
+      headers: { "content-type": "text/html" },
+    }));
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-proxy",
+          ecosystem: "pypi",
+          kind: "proxy",
+          visibility: "public",
+          config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+        }),
+      }),
+    );
+    expect(createResponse.status).toBe(201);
+    await harness.repositoryObjectStore.putJson("repositories/python-proxy/_proxy-cache/pypi/projects.json", {
+      upstreamUrl: "https://pypi.org/",
+      refreshedAt: "2026-08-05T00:00:00.000Z",
+      projects: [{ name: "demo", fileCount: 1 }],
+    });
+    await harness.repositoryObjectStore.putJson("repositories/python-proxy/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "https://files.example/demo-1.0-py3-none-any.whl",
+      }],
+    });
+
+    const projectResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-proxy/pypi/projects/demo", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(projectResponse.status).toBe(200);
+
+    const detailArtifactsResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-proxy/artifacts?family=pypi%3Aproxy-project%3Ademo", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(detailArtifactsResponse.status).toBe(200);
+    await expect(detailArtifactsResponse.json()).resolves.toMatchObject({
+      artifacts: expect.arrayContaining([
+        expect.objectContaining({
+          identity: "pypi:proxy-file:demo:demo-1.0-py3-none-any.whl",
+          version: "1.0",
+        }),
+      ]),
+    });
+  });
+
+  it("keeps cached PyPI proxy file artifacts when rebuilding the proxy catalog", async () => {
+    const upstreamHtml = new Map([
+      ["https://pypi.org/simple/", "<a href=\"demo/\">demo</a>"],
+      [
+        "https://pypi.org/simple/demo/",
+        `<a href="https://files.example/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}">demo-1.0-py3-none-any.whl</a>`,
+      ],
+    ]);
+    vi.stubGlobal("fetch", async (request: Request) => new Response(upstreamHtml.get(request.url) ?? "", {
+      status: upstreamHtml.has(request.url) ? 200 : 404,
+      headers: { "content-type": "text/html" },
+    }));
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-proxy",
+          ecosystem: "pypi",
+          kind: "proxy",
+          visibility: "public",
+          config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+        }),
+      }),
+    );
+    expect(createResponse.status).toBe(201);
+    await app.fetch(new Request("https://axis.example/admin/repositories/python-proxy/artifacts/rebuild-index", {
+      method: "POST",
+      headers: { authorization: "Bearer dev-admin-token" },
+    }));
+    await harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 });
+    await app.fetch(new Request("https://axis.example/admin/repositories/python-proxy/pypi/projects/demo", {
+      headers: { authorization: "Bearer dev-admin-token" },
+    }));
+
+    await app.fetch(new Request("https://axis.example/admin/repositories/python-proxy/artifacts/rebuild-index", {
+      method: "POST",
+      headers: { authorization: "Bearer dev-admin-token" },
+    }));
+    await harness.dependencies.backgroundJobDispatcher.drain({ limit: 1 });
+
+    const detailArtifactsResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-proxy/artifacts?family=pypi%3Aproxy-project%3Ademo", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+    expect(detailArtifactsResponse.status).toBe(200);
+    await expect(detailArtifactsResponse.json()).resolves.toMatchObject({
+      artifacts: expect.arrayContaining([
+        expect.objectContaining({
+          identity: "pypi:proxy-file:demo:demo-1.0-py3-none-any.whl",
+          version: "1.0",
+        }),
+      ]),
     });
   });
 
@@ -6385,6 +6762,20 @@ describe("browsing a repository", () => {
     expect(favicon).toContain("viewBox=\"0 0 210 210\"");
     expect(favicon).not.toContain("<!DOCTYPE");
     expect(favicon).not.toContain("&ns_");
+  });
+
+  it("serves repository favicons from child paths without listing that directory", async () => {
+    const { app } = await browsable();
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/debian-internal/not-served/?axis-repository-favicon=dark"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("image/svg+xml");
+    const favicon = await response.text();
+    expect(favicon).toContain("Badge: APT");
+    expect(favicon).not.toContain("<!DOCTYPE");
   });
 
   it("serves PyPI repository favicons without duplicate SVG sizing attributes", async () => {

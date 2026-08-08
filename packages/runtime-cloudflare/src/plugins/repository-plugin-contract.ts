@@ -6,6 +6,8 @@ import type {
   PublishResult,
   Repository,
   RepositoryArtifactRecord,
+  RepositoryArtifactStore,
+  BackgroundJobProgress,
   RepositoryObjectStore,
   TokenPrincipal,
 } from "@axis-repository/core";
@@ -160,7 +162,20 @@ export interface RebuildRepositoryArtifactIndexInput {
   repository: Repository;
   objectStore: RepositoryObjectStore;
   now: Date;
+  continuation?: Record<string, unknown>;
 }
+
+export interface RebuildRepositoryArtifactIndexResult {
+  artifacts: RepositoryArtifactRecord[];
+  complete: boolean;
+  continuation?: Record<string, unknown>;
+  progress?: BackgroundJobProgress;
+  reset?: boolean;
+}
+
+export type RebuildRepositoryArtifactIndexOutput =
+  | RepositoryArtifactRecord[]
+  | RebuildRepositoryArtifactIndexResult;
 
 export interface DeleteRepositoryArtifactInput {
   repository: Repository;
@@ -179,7 +194,7 @@ export interface DeleteRepositoryArtifactResult {
 }
 
 export interface RepositoryArtifactIndexLifecycle {
-  rebuildIndex(input: RebuildRepositoryArtifactIndexInput): Promise<RepositoryArtifactRecord[]>;
+  rebuildIndex(input: RebuildRepositoryArtifactIndexInput): Promise<RebuildRepositoryArtifactIndexOutput>;
   deleteArtifact?(input: DeleteRepositoryArtifactInput): Promise<DeleteRepositoryArtifactResult>;
 }
 
@@ -236,12 +251,16 @@ export interface RepositoryObjectBrowserDetail extends RepositoryObjectBrowserIt
 export interface RepositoryObjectBrowserInput {
   repository: Repository;
   objectStore: RepositoryObjectStore;
+  repositoryArtifactStore?: RepositoryArtifactStore;
   prefix: string;
+  cursor?: string;
+  limit?: number;
 }
 
 export interface RepositoryObjectBrowserDetailInput {
   repository: Repository;
   objectStore: RepositoryObjectStore;
+  repositoryArtifactStore?: RepositoryArtifactStore;
   path: string;
   origin: string;
 }

@@ -152,6 +152,42 @@ describe("renderRepositoryDirectoryHtml", () => {
     expect(html).toContain("2.0 KiB");
   });
 
+  it("keeps long file lists scrolling inside the listing panel instead of the page", () => {
+    const html = render();
+
+    expect(html).toContain("<div class=\"file-list\">");
+    expect(html).toContain("html,\n  body {\n    height: 100%;\n    overflow: hidden;\n  }");
+    expect(html).toContain("body {\n    display: grid;");
+    expect(html).toContain("grid-template-rows: auto minmax(0, 1fr) 3rem;");
+    expect(html).toContain("height: 100dvh;");
+    expect(html).toContain("main {\n    display: grid;");
+    expect(html).toContain("overflow: hidden;");
+    expect(html).toContain(".card {\n    display: grid;");
+    expect(html).toContain("grid-template-rows: minmax(0, 1fr);");
+    expect(html).toContain(".file-list {\n    height: 100%;");
+    expect(html).toContain("min-height: 0;");
+    expect(html).toContain("overflow: auto;");
+  });
+
+  it("keeps the footer split across the directory content width", () => {
+    const html = render();
+    const footerStyles = /footer \{[\s\S]*?\n  \}/.exec(html)?.[0] ?? "";
+
+    expect(footerStyles).toContain("align-items: center;");
+    expect(footerStyles).toContain("justify-content: space-between;");
+    expect(footerStyles).toContain("max-width: 54rem;");
+    expect(footerStyles).toContain("width: 100%;");
+  });
+
+  it("keeps the file list table header visible while the listing scrolls", () => {
+    const html = render();
+
+    expect(html).toContain("thead {\n    position: sticky;");
+    expect(html).toContain("top: 0;");
+    expect(html).toContain("z-index: 1;");
+    expect(html).toContain("background: hsl(var(--panel));");
+  });
+
   it("uses the light and dark logo assets in the directory header", () => {
     const html = render();
 
@@ -299,6 +335,6 @@ describe("readRepositoryDirectory", () => {
       canServe: () => true,
     });
 
-    expect(listing).toEqual({ relativePath: "", entries: [] });
+    expect(listing).toEqual({ relativePath: "", entries: [], truncated: false });
   });
 });

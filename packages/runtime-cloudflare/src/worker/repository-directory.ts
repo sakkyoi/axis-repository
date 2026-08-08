@@ -25,6 +25,8 @@ export interface RepositoryDirectoryEntry {
 export interface RepositoryDirectoryListing {
   relativePath: string;
   entries: RepositoryDirectoryEntry[];
+  cursor?: string;
+  truncated?: boolean;
 }
 
 /**
@@ -40,11 +42,15 @@ export async function readRepositoryDirectory(input: {
   /** Repository-relative, ending in "/" — or "" for the repository root. */
   relativePath: string;
   canServe: (relativePath: string) => boolean;
+  cursor?: string;
+  limit?: number;
 }): Promise<RepositoryDirectoryListing | null> {
   const base = `repositories/${input.repositoryName}/`;
   const page = await input.objectStore.listObjects({
     prefix: `${base}${input.relativePath}`,
     delimiter: "/",
+    ...(input.cursor !== undefined ? { cursor: input.cursor } : {}),
+    ...(input.limit !== undefined ? { limit: input.limit } : {}),
   });
 
   const entries: RepositoryDirectoryEntry[] = [];
@@ -75,7 +81,12 @@ export async function readRepositoryDirectory(input: {
 
   entries.sort((left, right) => Number(right.directory) - Number(left.directory)
     || left.name.localeCompare(right.name));
-  return { relativePath: input.relativePath, entries };
+  return {
+    relativePath: input.relativePath,
+    entries,
+    ...(page.cursor !== undefined ? { cursor: page.cursor } : {}),
+    truncated: page.truncated,
+  };
 }
 
 function trailingName(relativePath: string, directory: boolean): string {
@@ -210,9 +221,16 @@ const DIRECTORY_STYLES = `
   }
   * { box-sizing: border-box; }
   .sprite { display: none; }
+  html,
   body {
+    height: 100%;
+    overflow: hidden;
+  }
+  body {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) 3rem;
+    height: 100dvh;
     margin: 0;
-    min-height: 100vh;
     background:
       radial-gradient(70rem 32rem at 15% -8%, hsl(var(--primary) / 0.09), transparent 60%),
       hsl(var(--background));
@@ -290,7 +308,16 @@ const DIRECTORY_STYLES = `
     height: 1rem;
     width: 1rem;
   }
-  main { margin: 0 auto; max-width: 54rem; padding: 1.25rem 1.5rem 3rem; }
+  main {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    margin: 0 auto;
+    max-width: 54rem;
+    min-height: 0;
+    overflow: hidden;
+    padding: 1.25rem 1.5rem 0;
+    width: 100%;
+  }
   nav {
     align-items: center;
     display: flex;
@@ -310,13 +337,27 @@ const DIRECTORY_STYLES = `
     padding: 0.1rem 0.55rem;
   }
   .card {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
     background: hsl(var(--panel));
     border: 1px solid hsl(var(--border) / 0.85);
     border-radius: 16px;
     box-shadow: 0 1px 2px hsl(var(--shadow) / 0.06), 0 18px 36px -26px hsl(var(--shadow) / 0.5);
     overflow: hidden;
+    min-height: 0;
+  }
+  .file-list {
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
   }
   table { border-collapse: collapse; width: 100%; }
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: hsl(var(--panel));
+  }
   th {
     color: hsl(var(--muted-foreground));
     font-size: 0.6875rem;
@@ -394,7 +435,8 @@ const DIRECTORY_STYLES = `
     justify-content: space-between;
     margin: 0 auto;
     max-width: 54rem;
-    padding: 0.9rem 1.6rem 0;
+    padding: 0.9rem 1.6rem 1rem;
+    width: 100%;
   }
   .credit { color: hsl(var(--muted-foreground) / 0.85); }
   .love-icon {
@@ -412,21 +454,72 @@ export function renderRepositoryDirectoryHtml(input: {
   pluginIcon: ResolvedPluginIconAssets;
   listing: RepositoryDirectoryListing;
 }): string {
-  const path = `/${input.repositoryName}/${input.listing.relativePath}`;
-  const rows = input.listing.entries.map((entry) => {
-    // Links are relative to the listing, so the same page works whatever
-    // origin or prefix the repository is reached through — and prefixed, so a
-    // name carrying a colon cannot read as a scheme.
-    const href = escapeHtml(relativeReference(encodeURIComponent(entry.name.replace(/\/$/, ""))
-      + (entry.directory ? "/" : "")));
+  if (input.listing.entries.length === 0 && !input.listing.truncated) {
     return [
-      `          <tr${entry.directory ? " class=\"is-folder\"" : ""}>`,
-      `<td><a href="${href}">${icon(iconFor(entry))}`,
-      `<span class="name">${escapeHtml(entry.name)}</span></a></td>`,
-      `<td class="size">${entry.directory ? "" : formatSize(entry.size)}</td></tr>`,
-    ].join("");
-  });
+      renderRepositoryDirectoryHtmlHead(input),
+      renderRepositoryDirectoryEmptyState(),
+      renderRepositoryDirectoryHtmlFoot(0, { tableOpen: false }),
+    ].join("\n");
+  }
+  return [
+    renderRepositoryDirectoryHtmlHead(input),
+    renderRepositoryDirectoryTableOpen(input.listing),
+    ...input.listing.entries.map(renderRepositoryDirectoryRow),
+    renderRepositoryDirectoryHtmlFoot(input.listing.entries.length, { tableOpen: true }),
+  ].join("\n");
+}
 
+export function renderRepositoryDirectoryHtmlStream(input: {
+  repositoryName: string;
+  repositoryEcosystem: string;
+  pluginIcon: ResolvedPluginIconAssets;
+  listing: RepositoryDirectoryListing;
+  listings: AsyncIterable<RepositoryDirectoryListing>;
+}): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    async start(controller) {
+      let entryCount = 0;
+      const enqueue = (chunk: string) => controller.enqueue(encoder.encode(`${chunk}\n`));
+      enqueue(renderRepositoryDirectoryHtmlHead(input));
+      enqueue(renderRepositoryDirectoryTableOpen(input.listing));
+      for (const entry of input.listing.entries) {
+        entryCount += 1;
+        enqueue(renderRepositoryDirectoryRow(entry));
+      }
+      for await (const listing of input.listings) {
+        for (const entry of listing.entries) {
+          entryCount += 1;
+          enqueue(renderRepositoryDirectoryRow(entry));
+        }
+      }
+      enqueue(renderRepositoryDirectoryHtmlFoot(entryCount, { tableOpen: true }));
+      controller.close();
+    },
+  });
+}
+
+function renderRepositoryDirectoryRow(entry: RepositoryDirectoryEntry): string {
+  // Links are relative to the listing, so the same page works whatever
+  // origin or prefix the repository is reached through - and prefixed, so a
+  // name carrying a colon cannot read as a scheme.
+  const href = escapeHtml(relativeReference(encodeURIComponent(entry.name.replace(/\/$/, ""))
+    + (entry.directory ? "/" : "")));
+  return [
+    `          <tr${entry.directory ? " class=\"is-folder\"" : ""}>`,
+    `<td><a href="${href}">${icon(iconFor(entry))}`,
+    `<span class="name">${escapeHtml(entry.name)}</span></a></td>`,
+    `<td class="size">${entry.directory ? "" : formatSize(entry.size)}</td></tr>`,
+  ].join("");
+}
+
+function renderRepositoryDirectoryHtmlHead(input: {
+  repositoryName: string;
+  repositoryEcosystem: string;
+  pluginIcon: ResolvedPluginIconAssets;
+  listing: RepositoryDirectoryListing;
+}): string {
+  const path = `/${input.repositoryName}/${input.listing.relativePath}`;
   return [
     "<!DOCTYPE html>",
     "<html lang=\"en\">",
@@ -461,31 +554,46 @@ export function renderRepositoryDirectoryHtml(input: {
     "    <main>",
     `      <nav aria-label="Breadcrumb">${renderBreadcrumb(input)}</nav>`,
     "      <div class=\"card\">",
-    ...(input.listing.entries.length === 0
-      ? [
-        "        <div class=\"empty\">",
-        `          ${icon("i-folder")}`,
-        "          <div>Nothing published here yet.</div>",
-        "        </div>",
-      ]
+  ].join("\n");
+}
+
+function renderRepositoryDirectoryTableOpen(listing: RepositoryDirectoryListing): string {
+  return [
+    "        <div class=\"file-list\">",
+    "        <table>",
+    "          <thead><tr><th>Name</th><th>Size</th></tr></thead>",
+    "          <tbody>",
+    ...(listing.relativePath === ""
+      ? []
       : [
-        "        <table>",
-        "          <thead><tr><th>Name</th><th>Size</th></tr></thead>",
-        "          <tbody>",
-        ...(input.listing.relativePath === ""
-          ? []
-          : [
-            "          <tr class=\"is-folder\" data-up><td><a href=\"../\">"
-            + `${icon("i-folder")}<span class="name">../</span></a></td>`
-            + "<td class=\"size\"></td></tr>",
-          ]),
-        ...rows,
+        "          <tr class=\"is-folder\" data-up><td><a href=\"../\">"
+        + `${icon("i-folder")}<span class="name">../</span></a></td>`
+        + "<td class=\"size\"></td></tr>",
+      ]),
+  ].join("\n");
+}
+
+function renderRepositoryDirectoryEmptyState(): string {
+  return [
+    "        <div class=\"empty\">",
+    `          ${icon("i-folder")}`,
+    "          <div>Nothing published here yet.</div>",
+    "        </div>",
+  ].join("\n");
+}
+
+function renderRepositoryDirectoryHtmlFoot(entryCount: number, options: { tableOpen: boolean }): string {
+  return [
+    ...(options.tableOpen
+      ? [
         "          </tbody>",
         "        </table>",
-      ]),
+        "        </div>",
+      ]
+      : []),
     "      </div>",
     "    </main>",
-    `    <footer><span>${input.listing.entries.length} ${input.listing.entries.length === 1 ? "entry" : "entries"}</span><span class="credit">Made by sakkyoi with ${LOVE_ICON}</span></footer>`,
+    `    <footer><span>${entryCount} ${entryCount === 1 ? "entry" : "entries"}</span><span class="credit">Made by sakkyoi with ${LOVE_ICON}</span></footer>`,
     "  </body>",
     "</html>",
     "",

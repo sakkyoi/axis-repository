@@ -24,7 +24,7 @@ export const aptHostedRepositoryDetailPlugin: HostedRepositoryDetailPlugin = {
   kind: "hosted",
   ecosystem: aptPluginManifest.ecosystem,
   sections: [
-    { id: "settings", title: "APT settings", placement: "settings", Component: AptSettingsSection },
+    { id: "apt-settings", title: "APT settings", placement: "settings", Component: AptSettingsSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
     { id: "signing-keys", title: "APT signing keys", placement: "settings", Component: AptSigningKeysSection },
     { id: "client-helpers", title: "APT client setup", placement: "workspace", summary: true, Component: RepositoryClientHelpersSection },

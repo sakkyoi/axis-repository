@@ -14,9 +14,9 @@ import { AdvancedJsonConfigSection, RepositoryClientHelpersSection } from "@axis
 import { pypiHostedRepositoryCreatePlugin } from "./create";
 import {
   PypiInstallHintsSection,
+  PypiUploadHintsSection,
   PypiProjectFilesSection,
   PypiProxySettingsSection,
-  PypiSettingsSection,
 } from "./detail";
 import { repositoryCreateStepsForConfig } from "@axis-repository/admin-ui/plugin-ui";
 import { PypiPublishArtifactPreview, PypiPublishSessionDetail, pypiPublishSessionArtifactSummary } from "./publish";
@@ -26,9 +26,9 @@ export const pypiHostedRepositoryDetailPlugin: HostedRepositoryDetailPlugin = {
   kind: "hosted",
   ecosystem: pypiPluginManifest.ecosystem,
   sections: [
-    { id: "settings", title: "PyPI settings", placement: "settings", Component: PypiSettingsSection },
     { id: "client-helpers", title: "PyPI client setup", placement: "workspace", Component: RepositoryClientHelpersSection },
     { id: "install-hints", title: "Install hints", placement: "workspace", summary: true, Component: PypiInstallHintsSection },
+    { id: "upload-hints", title: "Upload hints", placement: "workspace", Component: PypiUploadHintsSection },
     { id: "project-files", title: "Published files", placement: "workspace", Component: PypiProjectFilesSection },
   ],
 };

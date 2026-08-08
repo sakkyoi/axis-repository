@@ -1,4 +1,4 @@
-import { NotFoundError, ValidationError, type RepositoryObjectStore } from "@axis-repository/core";
+import { NotFoundError, ValidationError, type RepositoryArtifactStore, type RepositoryObjectStore } from "@axis-repository/core";
 import type { RepositoryAdminResources } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { objectBytes, pluginJsonResponse, readJsonObject } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { pypiPluginManifest } from "../manifest";
@@ -31,6 +31,14 @@ function pypiAdminResourceRoute(name: string) {
  */
 export function createPypiAdminResources(input: {
   objectStoreFor: (repositoryName: string) => RepositoryObjectStore;
+  fetchProxyProject?: (input: {
+    repositoryName: string;
+    repositoryEcosystem: string;
+    repositoryConfig: Record<string, unknown>;
+    artifactStore: RepositoryArtifactStore | undefined;
+    project: string;
+    cachedProject?: { name: string; files: unknown[] };
+  }) => Promise<{ name: string; files: unknown[] } | undefined>;
 }): RepositoryAdminResources {
   async function setYanked(
     repositoryName: string,
@@ -71,11 +79,11 @@ export function createPypiAdminResources(input: {
           const objectStore = input.objectStoreFor(repositoryName);
           const pageParams = projectPageParams(new URL(request.url).searchParams);
           if (repository?.kind === "proxy") {
-            const projects = await readPypiProxyCachedProjects(objectStore, repositoryName);
+            const projects = await readPypiProxyCachedProjectSummaries(objectStore, repositoryName);
             return pluginJsonResponse({
               ...projectPage(projects
                 .slice(pageParams.offset, pageParams.offset + pageParams.limit)
-                .map((project) => ({ name: project.name, fileCount: project.files.length })), projects.length, pageParams),
+                .map((project) => ({ name: project.name, fileCount: project.fileCount })), projects.length, pageParams),
             });
           }
           // Read from the published pages rather than the artifact index, so
@@ -91,16 +99,23 @@ export function createPypiAdminResources(input: {
       },
       {
         ...pypiAdminResourceRoute("get-project"),
-        handle: async ({ repository, repositoryName, params }) => {
+        handle: async ({ repository, repositoryName, params, services }) => {
           const objectStore = input.objectStoreFor(repositoryName);
           const project = normalizeProjectName(requireParam(params.project));
           if (repository?.kind === "proxy") {
-            const cached = (await readPypiProxyCachedProjects(objectStore, repositoryName))
-              .find((candidate) => normalizeProjectName(candidate.name) === project);
-            if (!cached) {
+            const cached = await readPypiProxyCachedProject(objectStore, repositoryName, project);
+            const synced = await input.fetchProxyProject?.({
+                repositoryName,
+                repositoryEcosystem: repository.ecosystem,
+                repositoryConfig: repository.config,
+                artifactStore: services.repositoryArtifactStore,
+                project,
+                ...(cached === undefined ? {} : { cachedProject: cached }),
+              });
+            if (!synced) {
               throw new NotFoundError();
             }
-            return pluginJsonResponse({ project: cached });
+            return pluginJsonResponse({ project: synced });
           }
           return pluginJsonResponse({
             project: {
@@ -193,18 +208,54 @@ export async function readPypiProxyCachedProjects(
   objectStore: RepositoryObjectStore,
   repositoryName: string,
 ): Promise<Array<{ name: string; files: unknown[] }>> {
+  const summaries = await readPypiProxyCachedProjectSummaries(objectStore, repositoryName);
+  const projects = await Promise.all(summaries.map((summary) =>
+    readPypiProxyCachedProject(objectStore, repositoryName, summary.name),
+  ));
+  return projects.filter((project): project is { name: string; files: unknown[] } => Boolean(project));
+}
+
+export async function readPypiProxyCachedProjectSummaries(
+  objectStore: RepositoryObjectStore,
+  repositoryName: string,
+): Promise<Array<{ name: string; fileCount?: number }>> {
   const object = await objectStore.getObject(`repositories/${repositoryName}/_proxy-cache/pypi/projects.json`);
   if (!object) {
     return [];
   }
   const raw = JSON.parse(new TextDecoder().decode(await objectBytes(object))) as {
-    projects?: Array<{ name?: unknown; files?: unknown[] }>;
+    projects?: Array<{ name?: unknown; fileCount?: unknown }>;
   };
   return (raw.projects ?? [])
-    .filter((project): project is { name: string; files: unknown[] } =>
-      typeof project.name === "string" && Array.isArray(project.files),
+    .filter((project): project is { name: string; fileCount?: number } =>
+      typeof project.name === "string"
+      && (project.fileCount === undefined || Number.isSafeInteger(project.fileCount)),
     )
-    .map((project) => ({ name: project.name, files: project.files }));
+    .map((project) => ({
+      name: project.name,
+      ...(project.fileCount === undefined ? {} : { fileCount: project.fileCount }),
+    }));
+}
+
+export async function readPypiProxyCachedProject(
+  objectStore: RepositoryObjectStore,
+  repositoryName: string,
+  projectName: string,
+): Promise<{ name: string; files: unknown[] } | undefined> {
+  const object = await objectStore.getObject(
+    `repositories/${repositoryName}/_proxy-cache/pypi/projects/${encodeURIComponent(normalizeProjectName(projectName))}.json`,
+  );
+  if (!object) {
+    return undefined;
+  }
+  const raw = JSON.parse(new TextDecoder().decode(await objectBytes(object))) as {
+    name?: unknown;
+    files?: unknown[];
+  };
+  if (typeof raw.name !== "string" || !Array.isArray(raw.files)) {
+    return undefined;
+  }
+  return { name: raw.name, files: raw.files };
 }
 
 function requireParam(value: string | undefined): string {
