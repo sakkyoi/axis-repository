@@ -14,6 +14,7 @@ const clockValues = [
   "2026-08-05T00:00:01.000Z",
   "2026-08-05T00:00:02.000Z",
   "2026-08-05T00:00:03.000Z",
+  "2026-08-05T00:00:04.000Z",
 ];
 
 function testClock(): Clock {
@@ -45,6 +46,7 @@ describe("RepositoryIndexBackgroundJobService", () => {
       type: "repository.index.proxy-refresh",
       status: "pending",
       attempts: 0,
+      maxAttempts: 3,
       subject: { type: "repository", id: "python-proxy" },
     });
     await service.request({ repositoryName: "python-proxy" });
@@ -277,7 +279,7 @@ describe("RepositoryIndexBackgroundJobService", () => {
     await expect(state.repositoryArtifacts.listByRepository("debian-internal")).resolves.toEqual([previousArtifact]);
   });
 
-  it("reschedules failed continuation slices for automatic retry", async () => {
+  it("reschedules failed continuation slices with retry backoff and retry context", async () => {
     const state = new MemoryStateStore();
     const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
     await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
@@ -300,10 +302,49 @@ describe("RepositoryIndexBackgroundJobService", () => {
     await expect(state.backgroundJobs.get("repository.index:python-proxy")).resolves.toMatchObject({
       status: "pending",
       attempts: 1,
-      scheduledAt: "2026-08-05T00:00:02.000Z",
+      scheduledAt: "2026-08-05T00:00:32.000Z",
+      lastHeartbeatAt: "2026-08-05T00:00:02.000Z",
+      progress: { message: "Retrying after upstream unavailable" },
       result: {
         continuation: { projectDetailOffset: 12 },
+        retryCount: 1,
         lastFailure: { message: "upstream unavailable", retryable: true },
+      },
+    });
+  });
+
+  it("increases continuation slice retry backoff without counting it as a new job attempt", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
+    await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
+    const service = new RepositoryIndexBackgroundJobService({
+      state,
+      repositoryService,
+      repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
+      repositoryArtifactIndexService: { rebuild: async () => { throw new Error("rate limited"); } },
+      clock: testClock(),
+    });
+    const job = await service.request({ repositoryName: "python-proxy" });
+    await state.backgroundJobs.save({
+      ...job,
+      result: {
+        continuation: { projectDetailOffset: 12 },
+        retryCount: 1,
+      },
+      attempts: 1,
+    });
+
+    await service.runBackgroundJob((await state.backgroundJobs.get(job.id))!);
+
+    await expect(state.backgroundJobs.get("repository.index:python-proxy")).resolves.toMatchObject({
+      status: "pending",
+      attempts: 1,
+      scheduledAt: "2026-08-05T00:01:02.000Z",
+      progress: { message: "Retrying after rate limited" },
+      result: {
+        continuation: { projectDetailOffset: 12 },
+        retryCount: 2,
+        lastFailure: { message: "rate limited", retryable: true },
       },
     });
   });

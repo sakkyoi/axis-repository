@@ -50,6 +50,7 @@ describe("RepositoryMaintenanceJobService", () => {
     });
 
     const job = await service.request();
+    expect(job).toMatchObject({ maxAttempts: 3 });
     await service.runBackgroundJob(job);
 
     await expect(state.backgroundJobs.get(REPOSITORY_MAINTENANCE_JOB_ID)).resolves.toMatchObject({

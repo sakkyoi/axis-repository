@@ -27,11 +27,17 @@ export interface DrainBackgroundJobsResult {
   remaining: number;
 }
 
+const BACKGROUND_JOB_RETRY_BASE_DELAY_MS = 30 * 1000;
+const BACKGROUND_JOB_RETRY_MAX_DELAY_MS = 5 * 60 * 1000;
+
 export class BackgroundJobDispatcher {
   constructor(private readonly options: BackgroundJobDispatcherOptions) {}
 
   async drain(input: DrainBackgroundJobsInput = {}): Promise<DrainBackgroundJobsResult> {
     const limit = input.limit ?? 10;
+    if (!Number.isInteger(limit) || limit <= 0) {
+      throw new Error("Background job drain limit must be a positive integer");
+    }
     let processed = 0;
     let failed = 0;
     for (let index = 0; index < limit; index++) {
@@ -46,12 +52,18 @@ export class BackgroundJobDispatcher {
         await runner.run(job);
         await this.releaseLeaseIfSettled(job);
         const current = await this.options.state.backgroundJobs.get(job.id);
+        if (current?.status === "failed" && await this.rescheduleRetryableFailure(current)) {
+          continue;
+        }
         if (current?.status === "failed") {
           failed += 1;
         }
       } catch (error) {
+        const failedJob = await this.fail(job, error);
+        if (await this.rescheduleRetryableFailure(failedJob)) {
+          continue;
+        }
         failed += 1;
-        await this.fail(job, error);
       }
     }
 
@@ -73,19 +85,22 @@ export class BackgroundJobDispatcher {
     });
   }
 
-  private async fail(job: BackgroundJobRecord, error: unknown): Promise<void> {
+  private async fail(job: BackgroundJobRecord, error: unknown): Promise<BackgroundJobRecord> {
     const failedAt = this.options.clock.now().toISOString();
     const { leaseId: _leaseId, leaseExpiresAt: _leaseExpiresAt, ...jobWithoutLease } = job;
-    await this.options.state.backgroundJobs.save({
+    const failed: BackgroundJobRecord = {
       ...jobWithoutLease,
       status: "failed",
+      attempts: job.attempts + 1,
       finishedAt: failedAt,
       failure: {
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
         failedAt,
         retryable: true,
       },
-    });
+    };
+    await this.options.state.backgroundJobs.save(failed);
+    return failed;
   }
 
   private async releaseLeaseIfSettled(job: BackgroundJobRecord): Promise<void> {
@@ -96,8 +111,47 @@ export class BackgroundJobDispatcher {
     const { leaseId: _leaseId, leaseExpiresAt: _leaseExpiresAt, ...released } = current;
     await this.options.state.backgroundJobs.save(released);
   }
+
+  private async rescheduleRetryableFailure(job: BackgroundJobRecord): Promise<boolean> {
+    if (job.status !== "failed" || job.failure?.retryable !== true || !retryBudgetRemaining(job)) {
+      return false;
+    }
+    const now = this.options.clock.now();
+    const retryCount = Math.max(1, job.attempts);
+    const scheduledAt = new Date(now.getTime() + retryDelayMs(retryCount)).toISOString();
+    const { leaseId: _leaseId, leaseExpiresAt: _leaseExpiresAt, failure, finishedAt: _finishedAt, ...jobWithoutTerminalFailure } = job;
+    await this.options.state.backgroundJobs.save({
+      ...jobWithoutTerminalFailure,
+      status: "pending",
+      scheduledAt,
+      lastHeartbeatAt: failure.failedAt,
+      progress: { message: `Retrying after ${failure.message}` },
+      result: {
+        ...(job.result ?? {}),
+        lastFailure: failure,
+      },
+    });
+    return true;
+  }
 }
 
 function createLeaseId(): string {
   return `lease_${crypto.randomUUID()}`;
+}
+
+function retryBudgetRemaining(job: BackgroundJobRecord): boolean {
+  return job.result?.disableAutoRetry !== true
+    && job.maxAttempts !== undefined
+    && job.attempts < job.maxAttempts;
+}
+
+function retryDelayMs(retryCount: number): number {
+  return Math.min(
+    BACKGROUND_JOB_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, retryCount - 1),
+    BACKGROUND_JOB_RETRY_MAX_DELAY_MS,
+  );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -14,6 +14,15 @@ export function repositoryIndexJobIsActive(job: BackgroundJob | null | undefined
 export function repositoryIndexJobStatusView(job: BackgroundJob | null | undefined): RepositoryIndexJobStatusView | null {
   if (!job) return null;
   if (job.status === "pending") {
+    const retry = retryResult(job.result);
+    if (retry) {
+      return {
+        label: "Retrying refresh",
+        description: `Retrying after ${retry.message}. Next attempt ${formatRelativeDate(job.scheduledAt)}.`,
+        active: true,
+        failed: false,
+      };
+    }
     return {
       label: "Refresh queued",
       description: job.progress?.message ?? `Requested ${formatRelativeDate(job.requestedAt)}.`,
@@ -91,6 +100,15 @@ function proxyIndexResult(result: Record<string, unknown> | undefined): {
     failedProjectCount,
     ...(project && message ? { failedProjectSample: `${project}: ${message}` } : {}),
   };
+}
+
+function retryResult(result: Record<string, unknown> | undefined): { message: string } | null {
+  const lastFailure = result?.lastFailure;
+  if (!lastFailure || typeof lastFailure !== "object" || Array.isArray(lastFailure)) {
+    return null;
+  }
+  const message = (lastFailure as Record<string, unknown>).message;
+  return typeof message === "string" && message.length > 0 ? { message } : null;
 }
 
 function formatRelativeDate(value: string): string {

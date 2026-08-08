@@ -29,3 +29,19 @@ export async function drainBackgroundJobQueue(input: {
     await input.queue.send({ enqueuedAt: new Date().toISOString() });
   }
 }
+
+export async function drainBackgroundJobQueueBatch(input: {
+  dependencies: { backgroundJobDispatcher: Pick<BackgroundJobDispatcher, "drain"> };
+  queue: Queue<BackgroundJobQueueMessage>;
+  messages: readonly BackgroundJobQueueMessage[];
+  limit?: number;
+}): Promise<void> {
+  if (input.messages.length === 0) {
+    return;
+  }
+  await drainBackgroundJobQueue({
+    dependencies: input.dependencies,
+    queue: input.queue,
+    ...(input.limit === undefined ? {} : { limit: input.limit }),
+  });
+}

@@ -6,7 +6,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { SkeletonRows } from "../components/ui/skeleton";
 import { useErrorToast } from "../components/ui/toast";
-import { backgroundJobStatusLabel, backgroundJobTypeLabel } from "../jobs/job-model";
+import { backgroundJobResultLabel, backgroundJobStatusLabel, backgroundJobTypeLabel } from "../jobs/job-model";
 import { ErrorState, PageShell } from "./shared";
 
 const statusVariant: Record<BackgroundJob["status"], "default" | "success" | "warning" | "destructive"> = {
@@ -124,12 +124,8 @@ export function JobsPage() {
                     <div className="min-w-0 text-xs text-muted-foreground">
                       {job.failure ? (
                         <span className="text-destructive">{job.failure.message}</span>
-                      ) : job.progress?.message ? (
-                        job.progress.message
-                      ) : job.status === "succeeded" ? (
-                        "Completed"
                       ) : (
-                        "-"
+                        backgroundJobResultLabel(job)
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2">

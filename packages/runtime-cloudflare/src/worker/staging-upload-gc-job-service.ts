@@ -41,6 +41,7 @@ export class StagingUploadGcJobService {
       subject: { type: "system", id: "staging-uploads" },
       priority: -10,
       attempts: existing?.attempts ?? 0,
+      maxAttempts: 3,
       requestedAt,
       scheduledAt: requestedAt,
     };

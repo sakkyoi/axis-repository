@@ -31,6 +31,7 @@ describe("StagingUploadGcJobService", () => {
     await expect(service.request()).resolves.toMatchObject({
       id: "storage.staging-upload-gc",
       status: "pending",
+      maxAttempts: 3,
     });
     const job = await state.backgroundJobs.get("storage.staging-upload-gc");
     expect(job).not.toBeNull();

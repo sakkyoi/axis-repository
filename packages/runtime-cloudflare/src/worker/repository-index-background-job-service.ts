@@ -18,6 +18,8 @@ interface RepositoryIndexRebuildRunnerResult {
 }
 
 const CONTINUATION_SLICE_MAX_RETRIES = 3;
+const CONTINUATION_SLICE_RETRY_BASE_DELAY_MS = 30 * 1000;
+const CONTINUATION_SLICE_RETRY_MAX_DELAY_MS = 5 * 60 * 1000;
 
 export interface RepositoryIndexBackgroundJobServiceOptions {
   state: StateStore;
@@ -55,6 +57,7 @@ export class RepositoryIndexBackgroundJobService {
       repositoryName: repository.name,
       priority: 0,
       attempts: existing?.attempts ?? 0,
+      maxAttempts: 3,
       requestedAt,
       scheduledAt: requestedAt,
       ...(existing?.failure === undefined ? {} : { failure: existing.failure }),
@@ -115,17 +118,22 @@ export class RepositoryIndexBackgroundJobService {
       if (continuation !== undefined) {
         const retryCount = continuationRetryCount(running) + 1;
         if (retryCount <= CONTINUATION_SLICE_MAX_RETRIES) {
+          const message = errorMessage(error);
+          const scheduledAt = new Date(
+            new Date(finishedAt).getTime() + continuationRetryDelayMs(retryCount),
+          ).toISOString();
           await this.options.state.backgroundJobs.save({
             ...running,
             status: "pending",
-            scheduledAt: finishedAt,
+            scheduledAt,
             lastHeartbeatAt: finishedAt,
+            progress: { message: `Retrying after ${message}` },
             result: {
               ...(running.result ?? {}),
               continuation,
               retryCount,
               lastFailure: {
-                message: error instanceof Error ? error.message : String(error),
+                message,
                 failedAt: finishedAt,
                 retryable: true,
               },
@@ -139,7 +147,7 @@ export class RepositoryIndexBackgroundJobService {
         status: "failed",
         finishedAt,
         failure: {
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
           failedAt: finishedAt,
           retryable: true,
         },
@@ -171,4 +179,15 @@ function continuationRetryCount(job: BackgroundJobRecord): number {
   return typeof retryCount === "number" && Number.isFinite(retryCount) && retryCount >= 0
     ? Math.floor(retryCount)
     : 0;
+}
+
+function continuationRetryDelayMs(retryCount: number): number {
+  return Math.min(
+    CONTINUATION_SLICE_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, retryCount - 1),
+    CONTINUATION_SLICE_RETRY_MAX_DELAY_MS,
+  );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

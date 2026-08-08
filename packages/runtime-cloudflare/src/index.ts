@@ -1,6 +1,6 @@
 import { AxisAdminDO, type AxisEnv } from "./worker/axis-admin-do";
 import { createDurableObjectDependencies } from "./worker/axis-admin-do";
-import { drainBackgroundJobQueue, type BackgroundJobQueueMessage } from "./worker/background-job-queue";
+import { drainBackgroundJobQueue, drainBackgroundJobQueueBatch, type BackgroundJobQueueMessage } from "./worker/background-job-queue";
 import type { DurableStorage } from "./storage/durable-state";
 
 export { AxisAdminDO };
@@ -45,12 +45,11 @@ export default {
         queue: env.AXIS_BACKGROUND_JOBS!,
       }),
     });
-    for (const _message of batch.messages) {
-      await drainBackgroundJobQueue({
-        dependencies,
-        queue: env.AXIS_BACKGROUND_JOBS,
-      });
-    }
+    await drainBackgroundJobQueueBatch({
+      dependencies,
+      queue: env.AXIS_BACKGROUND_JOBS,
+      messages: batch.messages.map((message) => message.body),
+    });
   },
 };
 

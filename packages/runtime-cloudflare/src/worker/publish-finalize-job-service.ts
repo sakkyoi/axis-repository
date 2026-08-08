@@ -67,6 +67,7 @@ export class PublishFinalizeJobService {
       requestedAt,
       scheduledAt: requestedAt,
       attempts: existing?.attempts ?? 0,
+      maxAttempts: 3,
       ...(existing?.failure === undefined ? {} : { failure: existing.failure }),
       ...(session.status === "finalized" ? { finishedAt: requestedAt } : {}),
     };
@@ -114,6 +115,9 @@ export class PublishFinalizeJobService {
           message: error instanceof Error ? error.message : String(error),
           failedAt: finishedAt,
           retryable: true,
+        },
+        result: {
+          disableAutoRetry: true,
         },
       };
       await this.options.state.backgroundJobs.save(failed);

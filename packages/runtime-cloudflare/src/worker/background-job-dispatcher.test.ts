@@ -6,6 +6,10 @@ const clock: Clock = {
   now: () => new Date("2026-08-05T00:00:00.000Z"),
 };
 
+const retryClock: Clock = {
+  now: () => new Date("2026-08-05T00:00:10.000Z"),
+};
+
 function job(id: string, type = "test.job"): BackgroundJobRecord {
   return {
     id,
@@ -16,6 +20,14 @@ function job(id: string, type = "test.job"): BackgroundJobRecord {
     attempts: 0,
     requestedAt: "2026-08-05T00:00:00.000Z",
     scheduledAt: "2026-08-05T00:00:00.000Z",
+  };
+}
+
+function retryableJob(id: string, attempts: number, maxAttempts = 3): BackgroundJobRecord {
+  return {
+    ...job(id),
+    attempts,
+    maxAttempts,
   };
 }
 
@@ -45,7 +57,6 @@ describe("BackgroundJobDispatcher", () => {
     await expect(dispatcher.drain({ limit: 1 })).resolves.toMatchObject({
       processed: 1,
       failed: 0,
-      remaining: 0,
     });
     expect(ran).toEqual(["queued"]);
   });
@@ -173,6 +184,161 @@ describe("BackgroundJobDispatcher", () => {
         message: "Background job runner is not configured for type: unknown.job",
         retryable: true,
       },
+    });
+  });
+
+  it("rejects non-positive drain limits instead of treating them as background work", async () => {
+    const state = new MemoryStateStore();
+    const dispatcher = new BackgroundJobDispatcher({ state, clock, runners: [] });
+
+    await expect(dispatcher.drain({ limit: 0 })).rejects.toThrow("Background job drain limit must be a positive integer");
+    await expect(dispatcher.drain({ limit: -1 })).rejects.toThrow("Background job drain limit must be a positive integer");
+  });
+
+  it("reschedules retryable failed jobs saved by runners until the attempt budget is exhausted", async () => {
+    const state = new MemoryStateStore();
+    await state.backgroundJobs.save(retryableJob("self_failed", 0, 3));
+    const dispatcher = new BackgroundJobDispatcher({
+      state,
+      clock: retryClock,
+      createLeaseId: () => "lease_fixed",
+      runners: [{
+        supports: (candidate) => candidate.type === "test.job",
+        run: async (candidate) => {
+          await state.backgroundJobs.save({
+            ...candidate,
+            status: "failed",
+            attempts: candidate.attempts + 1,
+            finishedAt: "2026-08-05T00:00:10.000Z",
+            failure: {
+              message: "temporary outage",
+              failedAt: "2026-08-05T00:00:10.000Z",
+              retryable: true,
+            },
+          });
+        },
+      }],
+    });
+
+    await expect(dispatcher.drain({ limit: 1 })).resolves.toMatchObject({
+      processed: 1,
+      failed: 0,
+    });
+    await expect(state.backgroundJobs.get("self_failed")).resolves.toMatchObject({
+      status: "pending",
+      attempts: 1,
+      scheduledAt: "2026-08-05T00:00:40.000Z",
+      progress: { message: "Retrying after temporary outage" },
+      result: {
+        lastFailure: { message: "temporary outage", retryable: true },
+      },
+    });
+    const stored = await state.backgroundJobs.get("self_failed");
+    expect(stored).not.toHaveProperty("leaseId");
+    expect(stored).not.toHaveProperty("leaseExpiresAt");
+    expect(stored).not.toHaveProperty("failure");
+  });
+
+  it("reschedules retryable jobs when runners throw", async () => {
+    const state = new MemoryStateStore();
+    await state.backgroundJobs.save(retryableJob("throws", 0, 3));
+    const dispatcher = new BackgroundJobDispatcher({
+      state,
+      clock: retryClock,
+      createLeaseId: () => "lease_fixed",
+      runners: [{
+        supports: (candidate) => candidate.type === "test.job",
+        run: async () => {
+          throw new Error("network timeout");
+        },
+      }],
+    });
+
+    await expect(dispatcher.drain({ limit: 1 })).resolves.toMatchObject({
+      processed: 1,
+      failed: 0,
+    });
+    await expect(state.backgroundJobs.get("throws")).resolves.toMatchObject({
+      status: "pending",
+      attempts: 1,
+      scheduledAt: "2026-08-05T00:00:40.000Z",
+      result: {
+        lastFailure: { message: "network timeout", retryable: true },
+      },
+    });
+  });
+
+  it("keeps retryable failures terminal after max attempts are exhausted", async () => {
+    const state = new MemoryStateStore();
+    await state.backgroundJobs.save(retryableJob("exhausted", 2, 3));
+    const dispatcher = new BackgroundJobDispatcher({
+      state,
+      clock: retryClock,
+      createLeaseId: () => "lease_fixed",
+      runners: [{
+        supports: (candidate) => candidate.type === "test.job",
+        run: async (candidate) => {
+          await state.backgroundJobs.save({
+            ...candidate,
+            status: "failed",
+            attempts: candidate.attempts + 1,
+            finishedAt: "2026-08-05T00:00:10.000Z",
+            failure: {
+              message: "still down",
+              failedAt: "2026-08-05T00:00:10.000Z",
+              retryable: true,
+            },
+          });
+        },
+      }],
+    });
+
+    await expect(dispatcher.drain({ limit: 1 })).resolves.toMatchObject({
+      processed: 1,
+      failed: 1,
+      remaining: 0,
+    });
+    await expect(state.backgroundJobs.get("exhausted")).resolves.toMatchObject({
+      status: "failed",
+      attempts: 3,
+      failure: { message: "still down", retryable: true },
+    });
+  });
+
+  it("does not auto-retry jobs that require an explicit domain retry", async () => {
+    const state = new MemoryStateStore();
+    await state.backgroundJobs.save(retryableJob("explicit_retry_only", 0, 3));
+    const dispatcher = new BackgroundJobDispatcher({
+      state,
+      clock: retryClock,
+      createLeaseId: () => "lease_fixed",
+      runners: [{
+        supports: (candidate) => candidate.type === "test.job",
+        run: async (candidate) => {
+          await state.backgroundJobs.save({
+            ...candidate,
+            status: "failed",
+            attempts: candidate.attempts + 1,
+            finishedAt: "2026-08-05T00:00:10.000Z",
+            failure: {
+              message: "domain state must be reset first",
+              failedAt: "2026-08-05T00:00:10.000Z",
+              retryable: true,
+            },
+            result: { disableAutoRetry: true },
+          });
+        },
+      }],
+    });
+
+    await expect(dispatcher.drain({ limit: 1 })).resolves.toMatchObject({
+      processed: 1,
+      failed: 1,
+    });
+    await expect(state.backgroundJobs.get("explicit_retry_only")).resolves.toMatchObject({
+      status: "failed",
+      attempts: 1,
+      result: { disableAutoRetry: true },
     });
   });
 

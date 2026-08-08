@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BackgroundJob } from "../api/schemas";
-import { backgroundJobStatusLabel, backgroundJobTypeLabel } from "./job-model";
+import { backgroundJobResultLabel, backgroundJobStatusLabel, backgroundJobTypeLabel } from "./job-model";
 
 const job: BackgroundJob = {
   id: "repository.index:python-proxy",
@@ -45,5 +45,36 @@ describe("background job display model", () => {
     expect(backgroundJobStatusLabel("failed")).toBe("Failed");
     expect(backgroundJobStatusLabel("canceling")).toBe("Canceling");
     expect(backgroundJobStatusLabel("canceled")).toBe("Canceled");
+  });
+
+  it("formats result text from progress, retries, partial warnings, and terminal states", () => {
+    expect(backgroundJobResultLabel({
+      ...job,
+      attempts: 1,
+      scheduledAt: "2026-08-05T00:00:32.000Z",
+      result: {
+        lastFailure: {
+          message: "upstream unavailable",
+          failedAt: "2026-08-05T00:00:02.000Z",
+          retryable: true,
+        },
+      },
+    })).toBe("Retrying after upstream unavailable");
+    expect(backgroundJobResultLabel({
+      ...job,
+      status: "running",
+      progress: { current: 10, total: 20, message: "Warmed project details 10 of 20" },
+    })).toBe("Warmed project details 10 of 20");
+    expect(backgroundJobResultLabel({
+      ...job,
+      status: "succeeded",
+      result: {
+        proxyIndex: {
+          failedProjectCount: 2,
+          failedProjects: [{ project: "broken", message: "upstream returned 503", retryable: true }],
+        },
+      },
+    })).toBe("Completed with 2 cache warnings");
+    expect(backgroundJobResultLabel({ ...job, status: "succeeded" })).toBe("Completed");
   });
 });

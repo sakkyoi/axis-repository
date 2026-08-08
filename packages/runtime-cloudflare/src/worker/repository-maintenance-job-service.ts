@@ -43,6 +43,7 @@ export class RepositoryMaintenanceJobService {
       subject: { type: "system", id: "repositories" },
       priority: -20,
       attempts: existing?.attempts ?? 0,
+      maxAttempts: 3,
       requestedAt,
       scheduledAt: requestedAt,
     };

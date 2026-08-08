@@ -9,6 +9,7 @@ import {
 } from "@axis-repository/core";
 import {
   assertBackgroundJobQueueConfiguration,
+  drainBackgroundJobQueueBatch,
   drainBackgroundJobQueue,
   enqueueBackgroundJobWakeup,
   type BackgroundJobQueueMessage,
@@ -79,6 +80,31 @@ describe("background job queue", () => {
     });
 
     expect(queue.messages).toEqual([]);
+  });
+
+  it("treats a queue delivery batch as one wake-up instead of draining once per message", async () => {
+    const queue = new FakeQueue();
+    const calls: number[] = [];
+
+    await drainBackgroundJobQueueBatch({
+      queue: queue as unknown as Queue<BackgroundJobQueueMessage>,
+      messages: [
+        { enqueuedAt: "2026-08-05T00:00:00.000Z" },
+        { enqueuedAt: "2026-08-05T00:00:01.000Z" },
+        { enqueuedAt: "2026-08-05T00:00:02.000Z" },
+      ],
+      dependencies: {
+        backgroundJobDispatcher: {
+          drain: async (input) => {
+            calls.push(input?.limit ?? 0);
+            return { processed: 1, failed: 0, remaining: 1 };
+          },
+        },
+      },
+    });
+
+    expect(calls).toEqual([1]);
+    expect(queue.messages).toHaveLength(1);
   });
 
   it("runs a repository index proxy refresh slice through the queue consumer path", async () => {

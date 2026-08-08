@@ -128,6 +128,7 @@ describe("PublishFinalizeJobService", () => {
       id: "publish.finalize:pub_fixed",
       type: "publish.finalize",
       status: "pending",
+      maxAttempts: 3,
       subject: { type: "publish-session", id: "pub_fixed", repositoryName: "debian-internal" },
       repositoryName: "debian-internal",
     });
@@ -188,6 +189,7 @@ describe("PublishFinalizeJobService", () => {
       status: "failed",
       attempts: 1,
       failure: { message: "write failed", retryable: true },
+      result: { disableAutoRetry: true },
     });
     await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
       status: "finalize_failed",
