@@ -3,6 +3,53 @@ CREATE TABLE IF NOT EXISTS axis_state_kv (
   value_json TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS axis_repositories (
+  name TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
+  ecosystem TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  visibility TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_repositories_name_idx
+  ON axis_repositories (name ASC);
+
+CREATE TABLE IF NOT EXISTS axis_publish_tokens (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_publish_tokens_name_idx
+  ON axis_publish_tokens (name ASC);
+
+CREATE TABLE IF NOT EXISTS axis_admin_users (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_admin_users_username_idx
+  ON axis_admin_users (username ASC);
+
+CREATE TABLE IF NOT EXISTS axis_admin_refresh_sessions (
+  id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_admin_refresh_sessions_created_idx
+  ON axis_admin_refresh_sessions (created_at DESC, id ASC);
+
+CREATE TABLE IF NOT EXISTS axis_repository_plugin_policies (
+  ecosystem TEXT PRIMARY KEY,
+  record_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS axis_runtime_settings (
+  id TEXT PRIMARY KEY,
+  record_json TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS axis_background_jobs (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL,

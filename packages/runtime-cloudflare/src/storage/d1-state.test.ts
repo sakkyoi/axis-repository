@@ -4,6 +4,12 @@ import type { StateStore } from "@axis-repository/core";
 import { D1_SHARED_INDEX_SCHEMA, createD1StateStore } from "./d1-state";
 
 class FakeD1Database {
+  private readonly repositories = new Map<string, Record<string, unknown>>();
+  private readonly publishTokens = new Map<string, Record<string, unknown>>();
+  private readonly adminUsers = new Map<string, Record<string, unknown>>();
+  private readonly adminRefreshSessions = new Map<string, Record<string, unknown>>();
+  private readonly repositoryPluginPolicies = new Map<string, Record<string, unknown>>();
+  private readonly runtimeSettings = new Map<string, Record<string, unknown>>();
   private readonly backgroundJobs = new Map<string, Record<string, unknown>>();
   private readonly repositoryArtifacts = new Map<string, Record<string, unknown>>();
   private readonly stateKv = new Map<string, string>();
@@ -11,9 +17,19 @@ class FakeD1Database {
   readonly batchSizes: number[] = [];
   execCount = 0;
 
+  stateKvSize(): number {
+    return this.stateKv.size;
+  }
+
   prepare(query: string): D1PreparedStatement {
     this.preparedQueries.push(query);
     return new FakeD1PreparedStatement(query, {
+      repositories: this.repositories,
+      publishTokens: this.publishTokens,
+      adminUsers: this.adminUsers,
+      adminRefreshSessions: this.adminRefreshSessions,
+      repositoryPluginPolicies: this.repositoryPluginPolicies,
+      runtimeSettings: this.runtimeSettings,
       backgroundJobs: this.backgroundJobs,
       repositoryArtifacts: this.repositoryArtifacts,
       stateKv: this.stateKv,
@@ -43,6 +59,12 @@ class FakeD1Database {
 }
 
 interface FakeD1Tables {
+  repositories: Map<string, Record<string, unknown>>;
+  publishTokens: Map<string, Record<string, unknown>>;
+  adminUsers: Map<string, Record<string, unknown>>;
+  adminRefreshSessions: Map<string, Record<string, unknown>>;
+  repositoryPluginPolicies: Map<string, Record<string, unknown>>;
+  runtimeSettings: Map<string, Record<string, unknown>>;
   backgroundJobs: Map<string, Record<string, unknown>>;
   repositoryArtifacts: Map<string, Record<string, unknown>>;
   stateKv: Map<string, string>;
@@ -92,6 +114,44 @@ class FakeD1PreparedStatement {
   }
 
   private selectRows(): Record<string, unknown>[] {
+    if (this.query.includes("FROM axis_repositories")) {
+      return selectRows(this.tables.repositories, this.query, this.bindings, {
+        idColumn: "name",
+        orderColumn: "name",
+      });
+    }
+    if (this.query.includes("FROM axis_publish_tokens")) {
+      return selectRows(this.tables.publishTokens, this.query, this.bindings, {
+        idColumn: "id",
+        nameColumn: "name",
+        orderColumn: "name",
+      });
+    }
+    if (this.query.includes("FROM axis_admin_users")) {
+      return selectRows(this.tables.adminUsers, this.query, this.bindings, {
+        idColumn: "id",
+        nameColumn: "username",
+        orderColumn: "username",
+      });
+    }
+    if (this.query.includes("FROM axis_admin_refresh_sessions")) {
+      return selectRows(this.tables.adminRefreshSessions, this.query, this.bindings, {
+        idColumn: "id",
+        orderColumn: "created_at",
+        descending: true,
+      });
+    }
+    if (this.query.includes("FROM axis_repository_plugin_policies")) {
+      return selectRows(this.tables.repositoryPluginPolicies, this.query, this.bindings, {
+        idColumn: "ecosystem",
+        orderColumn: "ecosystem",
+      });
+    }
+    if (this.query.includes("FROM axis_runtime_settings")) {
+      return selectRows(this.tables.runtimeSettings, this.query, this.bindings, {
+        idColumn: "id",
+      });
+    }
     if (this.query.includes("FROM axis_background_jobs")) {
       return selectBackgroundJobs(this.tables.backgroundJobs, this.query, this.bindings);
     }
@@ -106,6 +166,105 @@ class FakeD1PreparedStatement {
 
   private applyMutation(): void {
     if (this.query.startsWith("CREATE TABLE") || this.query.startsWith("CREATE INDEX")) return;
+    if (this.query.startsWith("INSERT INTO axis_repositories")) {
+      const [name, id, ecosystem, kind, visibility, updatedAt, recordJson] = this.bindings;
+      this.tables.repositories.set(String(name), {
+        name,
+        id,
+        ecosystem,
+        kind,
+        visibility,
+        updated_at: updatedAt,
+        record_json: recordJson,
+      });
+      this.changes = 1;
+      return;
+    }
+    if (this.query.startsWith("DELETE FROM axis_repositories")) {
+      const [name] = this.bindings;
+      this.changes = this.tables.repositories.delete(String(name)) ? 1 : 0;
+      return;
+    }
+    if (this.query.startsWith("INSERT INTO axis_publish_tokens")) {
+      const [id, name, createdAt, recordJson] = this.bindings;
+      for (const [existingId, row] of [...this.tables.publishTokens.entries()]) {
+        if (existingId !== id && row.name === name) this.tables.publishTokens.delete(existingId);
+      }
+      this.tables.publishTokens.set(String(id), {
+        id,
+        name,
+        created_at: createdAt,
+        record_json: recordJson,
+      });
+      this.changes = 1;
+      return;
+    }
+    if (this.query.startsWith("DELETE FROM axis_publish_tokens")) {
+      const [value, id] = this.bindings;
+      for (const [existingId, row] of [...this.tables.publishTokens.entries()]) {
+        if (this.query.includes("name = ? AND id <> ?")) {
+          if (row.name === value && existingId !== id) this.tables.publishTokens.delete(existingId);
+        } else if (row.name === value) {
+          this.tables.publishTokens.delete(existingId);
+        }
+      }
+      this.changes = 1;
+      return;
+    }
+    if (this.query.startsWith("INSERT INTO axis_admin_users")) {
+      const [id, username, recordJson] = this.bindings;
+      for (const [existingId, row] of [...this.tables.adminUsers.entries()]) {
+        if (existingId !== id && row.username === username) this.tables.adminUsers.delete(existingId);
+      }
+      this.tables.adminUsers.set(String(id), {
+        id,
+        username,
+        record_json: recordJson,
+      });
+      this.changes = 1;
+      return;
+    }
+    if (this.query.startsWith("DELETE FROM axis_admin_users")) {
+      const [username, id] = this.bindings;
+      for (const [existingId, row] of [...this.tables.adminUsers.entries()]) {
+        if (row.username === username && existingId !== id) this.tables.adminUsers.delete(existingId);
+      }
+      this.changes = 1;
+      return;
+    }
+    if (this.query.startsWith("INSERT INTO axis_admin_refresh_sessions")) {
+      const [id, createdAt, recordJson] = this.bindings;
+      this.tables.adminRefreshSessions.set(String(id), {
+        id,
+        created_at: createdAt,
+        record_json: recordJson,
+      });
+      this.changes = 1;
+      return;
+    }
+    if (this.query.startsWith("DELETE FROM axis_admin_refresh_sessions")) {
+      const [id] = this.bindings;
+      this.changes = this.tables.adminRefreshSessions.delete(String(id)) ? 1 : 0;
+      return;
+    }
+    if (this.query.startsWith("INSERT INTO axis_repository_plugin_policies")) {
+      const [ecosystem, recordJson] = this.bindings;
+      this.tables.repositoryPluginPolicies.set(String(ecosystem), {
+        ecosystem,
+        record_json: recordJson,
+      });
+      this.changes = 1;
+      return;
+    }
+    if (this.query.startsWith("INSERT INTO axis_runtime_settings")) {
+      const [id, recordJson] = this.bindings;
+      this.tables.runtimeSettings.set(String(id), {
+        id,
+        record_json: recordJson,
+      });
+      this.changes = 1;
+      return;
+    }
     if (this.query.startsWith("INSERT INTO axis_state_kv")) {
       const [key, valueJson] = this.bindings;
       this.tables.stateKv.set(String(key), String(valueJson));
@@ -260,6 +419,33 @@ function selectBackgroundJobs(
   return applyLimitOffset(rows, query, bindings);
 }
 
+function selectRows(
+  table: Map<string, Record<string, unknown>>,
+  query: string,
+  bindings: unknown[],
+  options: {
+    idColumn: string;
+    nameColumn?: string;
+    orderColumn?: string;
+    descending?: boolean;
+  },
+): Record<string, unknown>[] {
+  let rows = [...table.values()];
+  if (query.includes(`${options.idColumn} = ?`)) {
+    rows = rows.filter((row) => row[options.idColumn] === bindings[0]);
+  } else if (options.nameColumn && query.includes(`${options.nameColumn} = ?`)) {
+    rows = rows.filter((row) => row[options.nameColumn!] === bindings[0]);
+  }
+  if (options.orderColumn) {
+    rows = rows.sort((left, right) => {
+      const order = String(left[options.orderColumn!]).localeCompare(String(right[options.orderColumn!]));
+      if (order !== 0) return options.descending ? -order : order;
+      return String(left[options.idColumn]).localeCompare(String(right[options.idColumn]));
+    });
+  }
+  return rows;
+}
+
 function selectRepositoryArtifacts(
   table: Map<string, Record<string, unknown>>,
   query: string,
@@ -372,6 +558,67 @@ describe("D1 repository artifact store", () => {
   });
 });
 
+describe("D1 control-plane stores", () => {
+  it("stores control-plane records in typed D1 tables instead of the generic state kv", async () => {
+    const database = new FakeD1Database();
+    const state = createD1StateStore(database as unknown as D1Database);
+
+    await state.repositories.save({
+      id: "repo_1",
+      name: "python-proxy",
+      ecosystem: "pypi",
+      kind: "proxy",
+      visibility: "public",
+      config: {},
+      createdAt: "2026-08-05T00:00:00.000Z",
+      updatedAt: "2026-08-05T00:00:00.000Z",
+    });
+    await state.adminUsers.save({
+      id: "admin_user_1",
+      username: "admin",
+      displayName: "admin",
+      passwordHash: "pbkdf2-sha256$hash",
+      role: "owner",
+      createdAt: "2026-08-05T00:00:00.000Z",
+      updatedAt: "2026-08-05T00:00:00.000Z",
+    });
+    await state.adminRefreshSessions.save({
+      id: "admin_session_1",
+      subject: "admin_user_1",
+      username: "admin",
+      role: "owner",
+      tokenHash: "sha256:hash",
+      scopes: ["admin:*"],
+      createdAt: "2026-08-05T00:00:00.000Z",
+      expiresAt: "2026-09-05T00:00:00.000Z",
+    });
+    await state.publishTokens.save({
+      id: "ptok_1",
+      name: "ci",
+      tokenHash: "sha256:hash",
+      permissions: ["publish"],
+      repositories: ["python-proxy"],
+      ecosystemScopes: {},
+      signingKeyIds: [],
+      createdAt: "2026-08-05T00:00:00.000Z",
+    });
+    await state.repositoryPluginPolicies.save({ ecosystem: "pypi", enabledOverride: true });
+    await state.runtimeSettings.save({
+      operationalPolicy: { proxy: { upstreamFetchTimeoutMs: 1000 } },
+    });
+
+    expect(database.stateKvSize()).toBe(0);
+    expect(database.preparedQueries).toEqual(expect.arrayContaining([
+      expect.stringContaining("INSERT INTO axis_repositories"),
+      expect.stringContaining("INSERT INTO axis_admin_users"),
+      expect.stringContaining("INSERT INTO axis_admin_refresh_sessions"),
+      expect.stringContaining("INSERT INTO axis_publish_tokens"),
+      expect.stringContaining("INSERT INTO axis_repository_plugin_policies"),
+      expect.stringContaining("INSERT INTO axis_runtime_settings"),
+    ]));
+  });
+});
+
 describe("D1 shared state schema bootstrap", () => {
   it("initializes the schema with complete prepared statements and reuses it for the store instance", async () => {
     const database = new FakeD1Database();
@@ -402,6 +649,6 @@ describe("D1 shared state schema bootstrap", () => {
     expect(database.execCount).toBe(0);
     expect(database.preparedQueries).toContain("CREATE TABLE IF NOT EXISTS axis_state_kv (\n  key TEXT PRIMARY KEY,\n  value_json TEXT NOT NULL\n)");
     expect(database.preparedQueries.filter((query) => query.startsWith("CREATE TABLE") || query.startsWith("CREATE INDEX")))
-      .toHaveLength(13);
+      .toHaveLength(23);
   });
 });

@@ -1,10 +1,22 @@
 import type {
+  AdminRefreshSessionRecord,
+  AdminRefreshSessionStore,
+  AdminUserRecord,
+  AdminUserStore,
   BackgroundJobListQuery,
   BackgroundJobRecord,
   BackgroundJobStore,
+  PublishTokenRecord,
+  PublishTokenStore,
+  Repository,
   RepositoryArtifactFamilyRecord,
   RepositoryArtifactRecord,
   RepositoryArtifactStore,
+  RepositoryPluginPolicyRecord,
+  RepositoryPluginPolicyStore,
+  RepositoryStore,
+  RuntimeSettingsRecord,
+  RuntimeSettingsStore,
   StateStore,
 } from "@axis-repository/core";
 import { DurableStateStore, type DurableStorage } from "./durable-state";
@@ -15,6 +27,53 @@ export const D1_SHARED_INDEX_SCHEMA = `
 CREATE TABLE IF NOT EXISTS axis_state_kv (
   key TEXT PRIMARY KEY,
   value_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS axis_repositories (
+  name TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
+  ecosystem TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  visibility TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_repositories_name_idx
+  ON axis_repositories (name ASC);
+
+CREATE TABLE IF NOT EXISTS axis_publish_tokens (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_publish_tokens_name_idx
+  ON axis_publish_tokens (name ASC);
+
+CREATE TABLE IF NOT EXISTS axis_admin_users (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_admin_users_username_idx
+  ON axis_admin_users (username ASC);
+
+CREATE TABLE IF NOT EXISTS axis_admin_refresh_sessions (
+  id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS axis_admin_refresh_sessions_created_idx
+  ON axis_admin_refresh_sessions (created_at DESC, id ASC);
+
+CREATE TABLE IF NOT EXISTS axis_repository_plugin_policies (
+  ecosystem TEXT PRIMARY KEY,
+  record_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS axis_runtime_settings (
+  id TEXT PRIMARY KEY,
+  record_json TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS axis_background_jobs (
@@ -153,6 +212,280 @@ export class D1KeyValueStorage implements DurableStorage {
       result.set(row.key, parseRecord<T>(row.value_json));
     }
     return result;
+  }
+}
+
+export class D1RepositoryStore implements RepositoryStore {
+  constructor(
+    private readonly database: D1Database,
+    private readonly schema = new D1SharedStateSchema(database),
+  ) {}
+
+  async getByName(name: string): Promise<Repository | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_repositories WHERE name = ?")
+      .bind(name)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<Repository>(row.record_json);
+  }
+
+  async list(): Promise<Repository[]> {
+    await this.schema.ensure();
+    const rows = await this.database
+      .prepare("SELECT record_json FROM axis_repositories ORDER BY name ASC")
+      .all<{ record_json: string }>();
+    return rows.results.map((row) => parseRecord<Repository>(row.record_json));
+  }
+
+  async save(repository: Repository): Promise<void> {
+    await this.schema.ensure();
+    await this.database
+      .prepare(
+        "INSERT INTO axis_repositories (name, id, ecosystem, kind, visibility, updated_at, record_json)"
+        + " VALUES (?, ?, ?, ?, ?, ?, ?)"
+        + " ON CONFLICT(name) DO UPDATE SET"
+        + " id = excluded.id, ecosystem = excluded.ecosystem, kind = excluded.kind,"
+        + " visibility = excluded.visibility, updated_at = excluded.updated_at,"
+        + " record_json = excluded.record_json",
+      )
+      .bind(
+        repository.name,
+        repository.id,
+        repository.ecosystem,
+        repository.kind,
+        repository.visibility,
+        repository.updatedAt,
+        JSON.stringify(repository),
+      )
+      .run();
+  }
+
+  async deleteByName(name: string): Promise<boolean> {
+    await this.schema.ensure();
+    const existing = await this.getByName(name);
+    await this.database
+      .prepare("DELETE FROM axis_repositories WHERE name = ?")
+      .bind(name)
+      .run();
+    return existing !== null;
+  }
+}
+
+export class D1PublishTokenStore implements PublishTokenStore {
+  constructor(
+    private readonly database: D1Database,
+    private readonly schema = new D1SharedStateSchema(database),
+  ) {}
+
+  async getById(id: string): Promise<PublishTokenRecord | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_publish_tokens WHERE id = ?")
+      .bind(id)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<PublishTokenRecord>(row.record_json);
+  }
+
+  async getByName(name: string): Promise<PublishTokenRecord | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_publish_tokens WHERE name = ?")
+      .bind(name)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<PublishTokenRecord>(row.record_json);
+  }
+
+  async list(): Promise<PublishTokenRecord[]> {
+    await this.schema.ensure();
+    const rows = await this.database
+      .prepare("SELECT record_json FROM axis_publish_tokens ORDER BY name ASC")
+      .all<{ record_json: string }>();
+    return rows.results.map((row) => parseRecord<PublishTokenRecord>(row.record_json));
+  }
+
+  async save(token: PublishTokenRecord): Promise<void> {
+    await this.schema.ensure();
+    await this.database
+      .prepare("DELETE FROM axis_publish_tokens WHERE name = ? AND id <> ?")
+      .bind(token.name, token.id)
+      .run();
+    await this.database
+      .prepare(
+        "INSERT INTO axis_publish_tokens (id, name, created_at, record_json)"
+        + " VALUES (?, ?, ?, ?)"
+        + " ON CONFLICT(id) DO UPDATE SET"
+        + " name = excluded.name, created_at = excluded.created_at, record_json = excluded.record_json",
+      )
+      .bind(token.id, token.name, token.createdAt, JSON.stringify(token))
+      .run();
+  }
+
+  async deleteByName(name: string): Promise<boolean> {
+    await this.schema.ensure();
+    const existing = await this.getByName(name);
+    await this.database
+      .prepare("DELETE FROM axis_publish_tokens WHERE name = ?")
+      .bind(name)
+      .run();
+    return existing !== null;
+  }
+}
+
+export class D1AdminUserStore implements AdminUserStore {
+  constructor(
+    private readonly database: D1Database,
+    private readonly schema = new D1SharedStateSchema(database),
+  ) {}
+
+  async getById(id: string): Promise<AdminUserRecord | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_admin_users WHERE id = ?")
+      .bind(id)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<AdminUserRecord>(row.record_json);
+  }
+
+  async getByUsername(username: string): Promise<AdminUserRecord | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_admin_users WHERE username = ?")
+      .bind(username)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<AdminUserRecord>(row.record_json);
+  }
+
+  async list(): Promise<AdminUserRecord[]> {
+    await this.schema.ensure();
+    const rows = await this.database
+      .prepare("SELECT record_json FROM axis_admin_users ORDER BY username ASC")
+      .all<{ record_json: string }>();
+    return rows.results.map((row) => parseRecord<AdminUserRecord>(row.record_json));
+  }
+
+  async save(user: AdminUserRecord): Promise<void> {
+    await this.schema.ensure();
+    await this.database
+      .prepare("DELETE FROM axis_admin_users WHERE username = ? AND id <> ?")
+      .bind(user.username, user.id)
+      .run();
+    await this.database
+      .prepare(
+        "INSERT INTO axis_admin_users (id, username, record_json)"
+        + " VALUES (?, ?, ?)"
+        + " ON CONFLICT(id) DO UPDATE SET username = excluded.username, record_json = excluded.record_json",
+      )
+      .bind(user.id, user.username, JSON.stringify(user))
+      .run();
+  }
+}
+
+export class D1AdminRefreshSessionStore implements AdminRefreshSessionStore {
+  constructor(
+    private readonly database: D1Database,
+    private readonly schema = new D1SharedStateSchema(database),
+  ) {}
+
+  async get(id: string): Promise<AdminRefreshSessionRecord | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_admin_refresh_sessions WHERE id = ?")
+      .bind(id)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<AdminRefreshSessionRecord>(row.record_json);
+  }
+
+  async list(): Promise<AdminRefreshSessionRecord[]> {
+    await this.schema.ensure();
+    const rows = await this.database
+      .prepare("SELECT record_json FROM axis_admin_refresh_sessions ORDER BY created_at DESC, id ASC")
+      .all<{ record_json: string }>();
+    return rows.results.map((row) => parseRecord<AdminRefreshSessionRecord>(row.record_json));
+  }
+
+  async save(session: AdminRefreshSessionRecord): Promise<void> {
+    await this.schema.ensure();
+    await this.database
+      .prepare(
+        "INSERT INTO axis_admin_refresh_sessions (id, created_at, record_json)"
+        + " VALUES (?, ?, ?)"
+        + " ON CONFLICT(id) DO UPDATE SET created_at = excluded.created_at, record_json = excluded.record_json",
+      )
+      .bind(session.id, session.createdAt, JSON.stringify(session))
+      .run();
+  }
+
+  async delete(id: string): Promise<boolean> {
+    await this.schema.ensure();
+    const existing = await this.get(id);
+    await this.database
+      .prepare("DELETE FROM axis_admin_refresh_sessions WHERE id = ?")
+      .bind(id)
+      .run();
+    return existing !== null;
+  }
+}
+
+export class D1RepositoryPluginPolicyStore implements RepositoryPluginPolicyStore {
+  constructor(
+    private readonly database: D1Database,
+    private readonly schema = new D1SharedStateSchema(database),
+  ) {}
+
+  async getByEcosystem(ecosystem: string): Promise<RepositoryPluginPolicyRecord | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_repository_plugin_policies WHERE ecosystem = ?")
+      .bind(ecosystem)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<RepositoryPluginPolicyRecord>(row.record_json);
+  }
+
+  async list(): Promise<RepositoryPluginPolicyRecord[]> {
+    await this.schema.ensure();
+    const rows = await this.database
+      .prepare("SELECT record_json FROM axis_repository_plugin_policies ORDER BY ecosystem ASC")
+      .all<{ record_json: string }>();
+    return rows.results.map((row) => parseRecord<RepositoryPluginPolicyRecord>(row.record_json));
+  }
+
+  async save(record: RepositoryPluginPolicyRecord): Promise<void> {
+    await this.schema.ensure();
+    await this.database
+      .prepare(
+        "INSERT INTO axis_repository_plugin_policies (ecosystem, record_json) VALUES (?, ?)"
+        + " ON CONFLICT(ecosystem) DO UPDATE SET record_json = excluded.record_json",
+      )
+      .bind(record.ecosystem, JSON.stringify(record))
+      .run();
+  }
+}
+
+export class D1RuntimeSettingsStore implements RuntimeSettingsStore {
+  constructor(
+    private readonly database: D1Database,
+    private readonly schema = new D1SharedStateSchema(database),
+  ) {}
+
+  async get(): Promise<RuntimeSettingsRecord | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_runtime_settings WHERE id = ?")
+      .bind("default")
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<RuntimeSettingsRecord>(row.record_json);
+  }
+
+  async save(record: RuntimeSettingsRecord): Promise<void> {
+    await this.schema.ensure();
+    await this.database
+      .prepare(
+        "INSERT INTO axis_runtime_settings (id, record_json) VALUES (?, ?)"
+        + " ON CONFLICT(id) DO UPDATE SET record_json = excluded.record_json",
+      )
+      .bind("default", JSON.stringify(record))
+      .run();
   }
 }
 
@@ -529,6 +862,12 @@ export function withD1SharedIndexes(base: StateStore, database: D1Database): Sta
   const schema = new D1SharedStateSchema(database);
   return {
     ...base,
+    repositories: new D1RepositoryStore(database, schema),
+    publishTokens: new D1PublishTokenStore(database, schema),
+    adminUsers: new D1AdminUserStore(database, schema),
+    adminRefreshSessions: new D1AdminRefreshSessionStore(database, schema),
+    repositoryPluginPolicies: new D1RepositoryPluginPolicyStore(database, schema),
+    runtimeSettings: new D1RuntimeSettingsStore(database, schema),
     backgroundJobs: new D1BackgroundJobStore(database, schema),
     repositoryArtifacts: new D1RepositoryArtifactStore(database, schema),
   };
@@ -538,6 +877,12 @@ export function createD1StateStore(database: D1Database): StateStore {
   const schema = new D1SharedStateSchema(database);
   return {
     ...new DurableStateStore(new D1KeyValueStorage(database, schema)),
+    repositories: new D1RepositoryStore(database, schema),
+    publishTokens: new D1PublishTokenStore(database, schema),
+    adminUsers: new D1AdminUserStore(database, schema),
+    adminRefreshSessions: new D1AdminRefreshSessionStore(database, schema),
+    repositoryPluginPolicies: new D1RepositoryPluginPolicyStore(database, schema),
+    runtimeSettings: new D1RuntimeSettingsStore(database, schema),
     backgroundJobs: new D1BackgroundJobStore(database, schema),
     repositoryArtifacts: new D1RepositoryArtifactStore(database, schema),
   };
