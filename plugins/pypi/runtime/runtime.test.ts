@@ -403,6 +403,99 @@ describe("PyPI plugin lifecycle", () => {
     await expect(cached?.text()).resolves.toBe("wheel bytes");
   });
 
+  it("does not cache PyPI proxy file responses that disallow storage", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "https://files.example/packages/demo-1.0-py3-none-any.whl",
+      }],
+    });
+    const upstreamRequests: Request[] = [];
+    const plugin = createPypiProxyPlugin({
+      objectStoreFor: () => objectStore,
+      fetch: async (request) => {
+        upstreamRequests.push(request);
+        return new Response("wheel bytes", {
+          headers: {
+            "content-type": "application/octet-stream",
+            "content-length": "11",
+            "cache-control": upstreamRequests.length === 1 ? "private, no-store" : "private",
+          },
+        });
+      },
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+    };
+
+    const first = await plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+    });
+    const second = await plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+    });
+
+    expect(upstreamRequests).toHaveLength(2);
+    expect(first?.headers.get("cache-control")).toBe("private, no-store");
+    expect(second?.headers.get("cache-control")).toBe("private");
+    await expect(objectStore.listObjects({
+      prefix: "repositories/python-internal/_proxy-cache/pypi/files/",
+    })).resolves.toMatchObject({ objects: [] });
+  });
+
+  it("does not cache PyPI proxy file responses larger than the byte cache limit", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "https://files.example/packages/demo-1.0-py3-none-any.whl",
+      }],
+    });
+    const upstreamRequests: Request[] = [];
+    const plugin = createPypiProxyPlugin({
+      objectStoreFor: () => objectStore,
+      fetch: async (request) => {
+        upstreamRequests.push(request);
+        return new Response("wheel bytes", {
+          headers: {
+            "content-type": "application/octet-stream",
+            "content-length": String(512 * 1024 * 1024 + 1),
+          },
+        });
+      },
+    });
+    const repository = {
+      ...repositoryFixture(),
+      kind: "proxy" as const,
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+    };
+
+    await plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+    });
+    await plugin.serveRepositoryPath?.({
+      repository,
+      request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
+      relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
+    });
+
+    expect(upstreamRequests).toHaveLength(2);
+    await expect(objectStore.listObjects({
+      prefix: "repositories/python-internal/_proxy-cache/pypi/files/",
+    })).resolves.toMatchObject({ objects: [] });
+  });
+
   it("bypasses the PyPI proxy file byte cache for conditional requests", async () => {
     const objectStore = new MemoryRepositoryObjectStore();
     await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects/demo.json", {

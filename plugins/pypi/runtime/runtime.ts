@@ -93,6 +93,7 @@ const PYPI_PROXY_UPSTREAM_FETCH_TIMEOUT_MS = 2000;
 const PYPI_PROXY_PROJECT_MARKER_BATCH_SIZE = 100;
 const PYPI_PROXY_PROJECT_DETAIL_BATCH_SIZE = 25;
 const PYPI_PROXY_FAILED_PROJECT_SAMPLE_LIMIT = 10;
+const PYPI_PROXY_FILE_BYTE_CACHE_MAX_BYTES = 512 * 1024 * 1024;
 const PYPI_PROXY_UPSTREAM_REQUEST_HEADERS = [
   "accept",
   "range",
@@ -181,12 +182,21 @@ export function createPypiProxyPlugin(input: {
         method: request.method,
         headers,
       }));
-      if (cacheableFileRequest && request.method === "GET" && upstreamResponse.status === 200) {
-        return cachePypiProxyFileResponse({
-          objectStore: objectStore!,
-          repositoryName: repository.name,
-          upstreamUrl,
-          response: upstreamResponse,
+      if (proxyFile !== undefined && request.method === "GET") {
+        if (cacheableFileRequest
+          && upstreamResponse.status === 200
+          && pypiProxyFileResponseCanBeCached(upstreamResponse.headers)) {
+          return cachePypiProxyFileResponse({
+            objectStore: objectStore!,
+            repositoryName: repository.name,
+            upstreamUrl,
+            response: upstreamResponse,
+          });
+        }
+        return new Response(upstreamResponse.body, {
+          status: upstreamResponse.status,
+          statusText: upstreamResponse.statusText,
+          headers: proxyResponseHeaders(upstreamResponse.headers),
         });
       }
       const response = request.method === "GET"
@@ -1341,6 +1351,32 @@ function hasPypiProxyConditionalRequestHeaders(headers: Headers): boolean {
     || headers.has("if-modified-since")
     || headers.has("if-match")
     || headers.has("if-unmodified-since");
+}
+
+function pypiProxyFileResponseCanBeCached(headers: Headers): boolean {
+  const contentLength = parsePypiProxyFileCacheContentLength(headers.get("content-length"));
+  if (contentLength === undefined || contentLength > PYPI_PROXY_FILE_BYTE_CACHE_MAX_BYTES) {
+    return false;
+  }
+  const cacheControl = headers.get("cache-control");
+  if (!cacheControl) {
+    return true;
+  }
+  const directives = cacheControl.toLowerCase().split(",").map((directive) => directive.trim());
+  return !directives.some((directive) =>
+    directive === "private"
+    || directive === "no-store"
+    || directive === "no-cache"
+    || directive === "max-age=0"
+    || directive === "s-maxage=0");
+}
+
+function parsePypiProxyFileCacheContentLength(value: string | null): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
 async function cachePypiProxyProjectResponse(input: {
