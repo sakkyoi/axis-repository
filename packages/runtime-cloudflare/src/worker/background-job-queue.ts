@@ -1,5 +1,5 @@
 import { ValidationError } from "@axis-repository/core";
-import type { AxisEnv } from "./axis-admin-do";
+import type { AxisEnv } from "./cloudflare-runtime";
 import type { BackgroundJobDispatcher } from "./background-job-dispatcher";
 
 export interface BackgroundJobQueueMessage {

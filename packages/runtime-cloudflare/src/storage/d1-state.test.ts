@@ -402,6 +402,6 @@ describe("D1 shared state schema bootstrap", () => {
     expect(database.execCount).toBe(0);
     expect(database.preparedQueries).toContain("CREATE TABLE IF NOT EXISTS axis_state_kv (\n  key TEXT PRIMARY KEY,\n  value_json TEXT NOT NULL\n)");
     expect(database.preparedQueries.filter((query) => query.startsWith("CREATE TABLE") || query.startsWith("CREATE INDEX")))
-      .toHaveLength(12);
+      .toHaveLength(13);
   });
 });

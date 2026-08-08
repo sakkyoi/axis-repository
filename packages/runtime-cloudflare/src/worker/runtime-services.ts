@@ -32,7 +32,7 @@ import type {
   RebuildRepositoryArtifactIndexResult,
 } from "../plugins/repository-plugin-contract";
 import { scopeObjectStoreToRepository } from "../plugins/scoped-capabilities";
-import type { RepositoryWriteLock } from "./repository-write-lock";
+import type { RepositoryWriteLocker } from "./repository-write-lock";
 
 export interface CreatePluginRepositoryInput extends CreateRepositoryInput {
   provisioning?: Record<string, unknown>;
@@ -129,7 +129,7 @@ export class PluginPublishSessionService {
       repositoryArtifactStore?: RepositoryArtifactStore;
       /** Used to drop staged uploads once publishing has copied them out. */
       repositoryObjectStore?: RepositoryObjectStore;
-      writeLock: RepositoryWriteLock;
+      writeLock: RepositoryWriteLocker;
     },
   ) {}
 
@@ -347,7 +347,7 @@ export class PluginRepositoryArtifactIndexService {
       repositoryObjectStore: RepositoryObjectStore;
       repositoryArtifactStore: RepositoryArtifactStore;
       clock: { now(): Date };
-      writeLock: RepositoryWriteLock;
+      writeLock: RepositoryWriteLocker;
     },
   ) {}
 

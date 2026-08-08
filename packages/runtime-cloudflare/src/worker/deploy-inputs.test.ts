@@ -43,6 +43,9 @@ function wranglerConfig(): {
     producers?: Array<{ binding?: string; queue?: string }>;
     consumers?: Array<{ queue?: string }>;
   };
+  durable_objects?: { bindings?: Array<{ name?: string; class_name?: string }> };
+  migrations?: Array<{ tag?: string; new_sqlite_classes?: string[]; deleted_classes?: string[] }>;
+  triggers?: { crons?: string[] };
 } {
   return parseJsonc(readFileSync(`${repositoryRoot}wrangler.jsonc`, "utf8")) as {
     d1_databases?: Array<{ binding?: string; database_name?: string; database_id?: string }>;
@@ -50,6 +53,9 @@ function wranglerConfig(): {
       producers?: Array<{ binding?: string; queue?: string }>;
       consumers?: Array<{ queue?: string }>;
     };
+    durable_objects?: { bindings?: Array<{ name?: string; class_name?: string }> };
+    migrations?: Array<{ tag?: string; new_sqlite_classes?: string[]; deleted_classes?: string[] }>;
+    triggers?: { crons?: string[] };
   };
 }
 
@@ -103,7 +109,7 @@ function parseJsonc(text: string): unknown {
 
 describe("what a deploy is asked to supply", () => {
   it("asks for everything the worker refuses to start without", () => {
-    // Each of these throws out of createDurableObjectDependencies or the admin
+    // Each of these throws while building the Cloudflare runtime or the admin
     // auth service, so a deployment missing one answers 500 to its own login
     // page.
     const required = [
@@ -237,7 +243,7 @@ describe("what a deploy is asked to supply", () => {
     );
   });
 
-  it("declares queue-based job resources without placeholder ids", () => {
+  it("declares production Cloudflare resources without placeholder ids", () => {
     const config = wranglerConfig();
 
     expect(config.d1_databases).toEqual([
@@ -261,7 +267,30 @@ describe("what a deploy is asked to supply", () => {
         max_retries: 3,
       },
     ]);
+    expect(config.triggers?.crons).toEqual(["*/5 * * * *"]);
+    expect(config.durable_objects?.bindings ?? []).toEqual([]);
+    expect(config.migrations ?? []).toEqual([]);
     expect(config.d1_databases?.[0]).not.toHaveProperty("database_id", "");
+  });
+
+  it("describes D1 as the production state store rather than a Durable Object helper", () => {
+    const manifest = JSON.parse(readFileSync(`${repositoryRoot}package.json`, "utf8")) as {
+      cloudflare?: { bindings?: Record<string, { description?: string }> };
+    };
+    const sharedState = manifest.cloudflare?.bindings?.AXIS_SHARED_STATE?.description ?? "";
+    const r2Secret = manifest.cloudflare?.bindings?.R2_SECRET_ACCESS_KEY?.description ?? "";
+
+    expect(sharedState).toContain("production state");
+    expect(sharedState).not.toContain("Durable Object");
+    expect(r2Secret).not.toContain("Durable Object");
+  });
+
+  it("keeps the production Worker entrypoint free of admin Durable Object routing", () => {
+    const entrypoint = readFileSync(`${repositoryRoot}packages/runtime-cloudflare/src/index.ts`, "utf8");
+
+    expect(entrypoint).not.toContain("AxisAdminDO");
+    expect(entrypoint).not.toContain("AXIS_ADMIN");
+    expect(entrypoint).not.toContain("DurableObjectNamespace");
   });
 
   it("keeps the D1 shared state migration aligned with the runtime schema", () => {

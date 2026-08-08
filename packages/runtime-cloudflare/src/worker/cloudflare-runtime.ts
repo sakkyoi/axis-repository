@@ -8,12 +8,11 @@ import {
   RepositoryService,
   type Clock,
   type RuntimeOperationalPolicySettings,
+  type StateStore,
 } from "@axis-repository/core";
-import { createApp } from "./app";
 import { WebCryptoRandomId, Sha256SecretHasher, Pbkdf2PasswordHasher } from "../crypto";
 import { HmacAdminAccessTokenCodec } from "../auth/admin-auth";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
-import { DurableStateStore, type DurableStorage } from "../storage/durable-state";
 import { createD1StateStore } from "../storage/d1-state";
 import type { AppDependencies } from "./dev-dependencies";
 import { SameOriginUploadBroker } from "../uploads/same-origin-upload-broker";
@@ -22,29 +21,20 @@ import { R2PresignedDownloadSigner } from "../storage/object-download-url";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage/repository-object-store";
 import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
 import { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
-import {
-  RepositoryMaintenanceJobService,
-  repositoryMaintenanceNextRunAt,
-} from "./repository-maintenance-job-service";
+import { RepositoryMaintenanceJobService } from "./repository-maintenance-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
 import { BackgroundJobService } from "./background-job-service";
-import { BackgroundJobDispatcher, type DrainBackgroundJobsResult } from "./background-job-dispatcher";
+import { BackgroundJobDispatcher } from "./background-job-dispatcher";
 import { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 import { RepositoryArtifactDeleteJobService } from "./repository-artifact-delete-job-service";
 import { RepositoryDeleteJobService } from "./repository-delete-job-service";
 import { RepositoryProxyCachePurgeJobService } from "./repository-proxy-cache-purge-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
-import { RepositoryWriteLock } from "./repository-write-lock";
-import { assertBackgroundJobQueueConfiguration, enqueueBackgroundJobWakeup } from "./background-job-queue";
-import { scheduleBackgroundJobs } from "./background-job-scheduler";
-import {
-  MAINTENANCE_MAX_INTERVAL_MS,
-  MAINTENANCE_MIN_INTERVAL_MS,
-} from "./repository-maintenance";
+import { D1RepositoryWriteLock, type RepositoryWriteLocker } from "./repository-write-lock";
+import { assertBackgroundJobQueueConfiguration } from "./background-job-queue";
 
 export interface AxisEnv {
-  AXIS_ADMIN?: DurableObjectNamespace;
   AXIS_SHARED_STATE?: D1Database;
   AXIS_BACKGROUND_JOBS?: Queue;
   AXIS_OBJECTS?: R2Bucket;
@@ -77,32 +67,11 @@ export interface AxisEnv {
   AXIS_PROXY_RESPECT_UPSTREAM_CACHE_CONTROL?: string;
 }
 
-export interface AxisAdminAlarmPlan {
-  runMaintenance: boolean;
-  nextRunAt: Date;
-}
-
-export function axisAdminAlarmPlanAfterBackgroundJobs(input: {
-  jobs: DrainBackgroundJobsResult;
-  now: Date;
-}): AxisAdminAlarmPlan {
-  if (input.jobs.processed === 0) {
-    return {
-      runMaintenance: true,
-      nextRunAt: new Date(input.now.getTime() + MAINTENANCE_MAX_INTERVAL_MS),
-    };
-  }
-  return {
-    runMaintenance: false,
-    nextRunAt: new Date(input.now.getTime() + (input.jobs.remaining > 0 ? 1000 : MAINTENANCE_MIN_INTERVAL_MS)),
-  };
-}
-
 type UploadBackend = "r2" | "local-r2" | "memory";
 
 function requiredEnv(value: string | undefined, name: string): string {
   if (!value) {
-    throw new Error(`${name} is required for AxisAdminDO`);
+    throw new Error(`${name} is required for the Cloudflare runtime`);
   }
   return value;
 }
@@ -243,7 +212,7 @@ function parseArtifactOrigin(value: string | undefined): string | undefined {
 
 function requiredR2Bucket(value: R2Bucket | undefined): R2Bucket {
   if (!value) {
-    throw new Error("AXIS_OBJECTS is required for AxisAdminDO");
+    throw new Error("AXIS_OBJECTS is required for the Cloudflare runtime");
   }
   return value;
 }
@@ -271,25 +240,41 @@ function bootstrapOwnerFromEnv(env: AxisEnv): { username: string; password?: str
   };
 }
 
-export function createDurableObjectDependencies(
-  storage: DurableStorage,
+export function createCloudflareRuntimeDependencies(
   env: AxisEnv,
   options: {
     scheduleBackgroundJobs?: () => Promise<void>;
     scheduleBackgroundTask?: (task: Promise<unknown>) => void;
   } = {},
 ): AppDependencies {
+  if (!env.AXIS_SHARED_STATE) {
+    throw new Error("AXIS_SHARED_STATE is required for the Cloudflare runtime");
+  }
+  return createRuntimeDependencies(
+    createD1StateStore(env.AXIS_SHARED_STATE),
+    env,
+    options,
+    new D1RepositoryWriteLock(env.AXIS_SHARED_STATE),
+  );
+}
+
+export function createRuntimeDependencies(
+  state: StateStore,
+  env: AxisEnv,
+  options: {
+    scheduleBackgroundJobs?: () => Promise<void>;
+    scheduleBackgroundTask?: (task: Promise<unknown>) => void;
+  },
+  writeLock: RepositoryWriteLocker,
+): AppDependencies {
   assertBackgroundJobQueueConfiguration(env);
   if (!env.TOKEN_HASH_PEPPER) {
-    throw new Error("TOKEN_HASH_PEPPER is required for AxisAdminDO");
+    throw new Error("TOKEN_HASH_PEPPER is required for the Cloudflare runtime");
   }
   if (!env.SIGNING_KEY_ENCRYPTION_SECRET) {
-    throw new Error("SIGNING_KEY_ENCRYPTION_SECRET is required for AxisAdminDO");
+    throw new Error("SIGNING_KEY_ENCRYPTION_SECRET is required for the Cloudflare runtime");
   }
 
-  const state = env.AXIS_SHARED_STATE === undefined
-    ? new DurableStateStore(storage)
-    : createD1StateStore(env.AXIS_SHARED_STATE);
   const clock: Clock = { now: () => new Date() };
   const randomId = new WebCryptoRandomId();
   const hasher = new Sha256SecretHasher(env.TOKEN_HASH_PEPPER);
@@ -359,7 +344,6 @@ export function createDurableObjectDependencies(
     clock,
     randomId,
   });
-  const writeLock = new RepositoryWriteLock();
   const repositoryArtifactIndexService = new PluginRepositoryArtifactIndexService({
     repositoryService,
     plugins: repositoryRuntimePlugins,
@@ -520,78 +504,4 @@ export function createDurableObjectDependencies(
       ? {}
       : { scheduleBackgroundJobs: options.scheduleBackgroundJobs }),
   };
-}
-
-export class AxisAdminDO {
-  private readonly dependencies: AppDependencies;
-  private readonly app: ReturnType<typeof createApp>;
-
-  constructor(private readonly state: DurableObjectState, private readonly env: AxisEnv) {
-    this.dependencies = createDurableObjectDependencies(
-      state.storage as unknown as DurableStorage,
-      env,
-      {
-        scheduleBackgroundJobs: env.AXIS_BACKGROUND_JOBS === undefined
-          ? () => state.storage.setAlarm(Date.now())
-          : () => enqueueBackgroundJobWakeup(env),
-        scheduleBackgroundTask: (task) => {
-          void (state as unknown as { waitUntil?: (promise: Promise<unknown>) => void }).waitUntil?.(task);
-        },
-      },
-    );
-    this.app = createApp(this.dependencies);
-
-    // Published metadata can expire, so the timer has to exist whether or not
-    // anyone is publishing. Starting it here means it survives the object
-    // being evicted and recreated, and recovers if an alarm was ever lost.
-    void state.blockConcurrencyWhile(async () => {
-      if ((await state.storage.getAlarm()) === null) {
-        await state.storage.setAlarm(Date.now() + MAINTENANCE_MIN_INTERVAL_MS);
-      }
-    });
-  }
-
-  fetch(request: Request): Promise<Response> {
-    return this.app.fetch(request);
-  }
-
-  async alarm(): Promise<void> {
-    const now = new Date();
-    let nextRunAt = new Date(now.getTime() + MAINTENANCE_MAX_INTERVAL_MS);
-    let remainingBackgroundJobs = 0;
-    try {
-      await scheduleBackgroundJobs({
-        stagingUploadGcJobService: this.dependencies.stagingUploadGcJobService,
-        repositoryMaintenanceJobService: this.dependencies.repositoryMaintenanceJobService,
-        wakeBackgroundJobs: async () => {
-          if (this.env.AXIS_BACKGROUND_JOBS === undefined) {
-            return;
-          }
-          await this.dependencies.scheduleBackgroundJobs?.();
-        },
-      });
-      if (this.env.AXIS_BACKGROUND_JOBS === undefined) {
-        const jobs = await this.dependencies.backgroundJobDispatcher.drain({ limit: 1 });
-        remainingBackgroundJobs = jobs.remaining;
-        const backgroundJobPlan = axisAdminAlarmPlanAfterBackgroundJobs({ jobs, now: new Date() });
-        if (!backgroundJobPlan.runMaintenance) {
-          await this.state.storage.setAlarm(backgroundJobPlan.nextRunAt);
-          return;
-        }
-      }
-      const maintenanceJob = await this.dependencies.backgroundJobService.get("repository.maintenance");
-      const maintenanceFallback = maintenanceJob?.status === "succeeded"
-        ? nextRunAt
-        : new Date(now.getTime() + MAINTENANCE_MIN_INTERVAL_MS);
-      nextRunAt = repositoryMaintenanceNextRunAt(maintenanceJob, maintenanceFallback);
-      if (remainingBackgroundJobs > 0) {
-        nextRunAt = new Date(Date.now() + 1000);
-      }
-    } catch (error) {
-      // Whatever went wrong, the alarm has to be rearmed: dropping it would
-      // stop every repository's metadata being renewed, silently and forever.
-      console.error(`Repository maintenance run failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    await this.state.storage.setAlarm(nextRunAt);
-  }
 }

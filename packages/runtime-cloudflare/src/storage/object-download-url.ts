@@ -3,11 +3,10 @@ import { AwsClient } from "aws4fetch";
 /**
  * Signs a URL a client can fetch a stored object from directly.
  *
- * Every request this Worker answers is routed through one Durable Object, so
- * serving an artifact meant streaming it through that object — billed for as
- * long as it took, and a single point every download in the deployment passes
- * through. Handing back a signed URL keeps the request (which resolves the
- * path and decides who may read it) and gives up the bytes.
+ * Serving a stored artifact through the Worker bills for the transfer and
+ * keeps the request open for the whole download. Handing back a signed URL
+ * keeps authorization and path resolution here, then moves the bytes directly
+ * to R2.
  *
  * Signing is per-request rather than a stable public URL, so it works the same
  * for a private repository as a public one, and needs nothing of the bucket

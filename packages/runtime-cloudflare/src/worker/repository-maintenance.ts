@@ -1,7 +1,7 @@
 import type { Clock, Repository, RepositoryObjectStore } from "@axis-repository/core";
 import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { scopeObjectStoreToRepository } from "../plugins/scoped-capabilities";
-import type { RepositoryWriteLock } from "./repository-write-lock";
+import type { RepositoryWriteLocker } from "./repository-write-lock";
 
 /**
  * Runs whatever every repository needs on a timer, and says when to come back.
@@ -30,7 +30,7 @@ export async function runRepositoryMaintenance(input: {
   repositories: Repository[];
   plugins: RepositoryRuntimePluginRegistry;
   repositoryObjectStore: RepositoryObjectStore;
-  writeLock: RepositoryWriteLock;
+  writeLock: RepositoryWriteLocker;
   clock: Clock;
 }): Promise<RepositoryMaintenanceRun> {
   const now = input.clock.now();

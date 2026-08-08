@@ -2394,11 +2394,10 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       throw new NotFoundError();
     }
     const cacheControl = repositoryCacheControl(repository);
-    // A signed URL is handed back rather than the bytes: every request here is
-    // routed through one Durable Object, and streaming an artifact through it
-    // bills for the whole transfer and makes that object the point every
-    // download in the deployment passes through. The request itself still
-    // resolves the path and decides who may read it — only the transfer moves.
+    // A signed URL is handed back rather than the bytes: streaming an artifact
+    // through the Worker bills for the whole transfer and keeps the request
+    // open for the whole download. The request itself still resolves the path
+    // and decides who may read it; only the transfer moves.
     //
     // HEAD is answered from metadata and never touched the bytes, so it stays;
     // redirecting it would add a round trip and take nothing off the Worker.

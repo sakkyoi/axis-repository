@@ -17,7 +17,7 @@ import {
 } from "@axis-repository/core";
 import type { AdminUiRuntimeConfig } from "../admin-ui-assets";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
-import { RepositoryWriteLock } from "./repository-write-lock";
+import { RepositoryWriteLock, type RepositoryWriteLocker } from "./repository-write-lock";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import SameOriginUploadBroker from "../uploads/same-origin-upload-broker";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
@@ -69,7 +69,7 @@ export interface AppDependencies {
   repositoryObjectDownloadSigner?: RepositoryObjectDownloadSigner;
   localUploadBroker?: SameOriginUploadBroker;
   repositoryRuntimePlugins: RepositoryRuntimePluginRegistry;
-  repositoryWriteLock: RepositoryWriteLock;
+  repositoryWriteLock: RepositoryWriteLocker;
   /** How long a publish session lives; what outlives one is nobody's. */
   publishSessionTtlMs: number;
   scheduleBackgroundJobs?: () => Promise<void>;

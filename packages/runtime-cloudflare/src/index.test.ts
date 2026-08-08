@@ -1,27 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import worker, { AxisAdminDO } from "./index";
-import type { AxisEnv } from "./worker/axis-admin-do";
-import { fakeDurableObjectState } from "./worker/durable-object.test-support";
-
-class FakeNamespace {
-  readonly object: AxisAdminDO;
-  readonly requestedNames: string[] = [];
-
-  constructor(object: AxisAdminDO) {
-    this.object = object;
-  }
-
-  idFromName(name: string) {
-    this.requestedNames.push(name);
-    return { name };
-  }
-
-  get() {
-    return {
-      fetch: (request: Request) => this.object.fetch(request),
-    };
-  }
-}
+import worker from "./index";
+import type { AxisEnv } from "./worker/cloudflare-runtime";
 
 class FakeR2Bucket {
   async head(): Promise<null> {
@@ -29,8 +8,14 @@ class FakeR2Bucket {
   }
 }
 
+class FakeQueue {
+  async send(): Promise<void> {}
+}
+
 function axisEnv(overrides: Partial<AxisEnv> = {}): AxisEnv {
   return {
+    AXIS_SHARED_STATE: {} as D1Database,
+    AXIS_BACKGROUND_JOBS: new FakeQueue() as unknown as Queue,
     AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
     AXIS_ADMIN_USERNAME: "admin",
     AXIS_ADMIN_PASSWORD: "admin-password",
@@ -45,65 +30,11 @@ function axisEnv(overrides: Partial<AxisEnv> = {}): AxisEnv {
   };
 }
 
-async function adminAccessToken(fetch: (request: Request) => Promise<Response>): Promise<string> {
-  const response = await fetch(new Request("https://axis.example/admin/auth/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username: "admin", password: "admin-password" }),
-  }));
-  expect(response.status).toBe(200);
-  const body = await response.json() as { accessToken: string };
-  return body.accessToken;
-}
-
 describe("worker entrypoint", () => {
-  it("proxies API requests to the configured AxisAdminDO", async () => {
-    const object = new AxisAdminDO(fakeDurableObjectState() as unknown as DurableObjectState, axisEnv());
-    const namespace = new FakeNamespace(object);
-    const env = {
-      ...axisEnv(),
-      AXIS_ADMIN: namespace,
-    };
-    const accessToken = await adminAccessToken((request) => worker.fetch(request, env as unknown as AxisEnv));
-
-    const response = await worker.fetch(
-      new Request("https://axis.example/admin/repositories", {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          name: "debian-internal",
-          ecosystem: "apt",
-          config: {
-            apt: {
-              codename: "noble",
-              components: ["main"],
-              architectures: ["amd64"],
-              signingKeyId: "signing_key_prod",
-            },
-          },
-        }),
-      }),
-      env as unknown as AxisEnv,
-    );
-
-    expect(response.status).toBe(201);
-    expect(namespace.requestedNames).toEqual(["global", "global"]);
-  });
-
-  it("passes admin UI runtime config from Worker env into the Durable Object app", async () => {
-    const object = new AxisAdminDO(fakeDurableObjectState() as unknown as DurableObjectState, axisEnv({
+  it("serves requests from the Cloudflare runtime bindings without an admin Durable Object", async () => {
+    const env = axisEnv({
       ADMIN_UI_API_BASE_URL: "https://admin-api.example/base",
-    }));
-    const namespace = new FakeNamespace(object);
-    const env = {
-      ...axisEnv({
-        ADMIN_UI_API_BASE_URL: "https://admin-api.example/base",
-      }),
-      AXIS_ADMIN: namespace,
-    };
+    });
 
     const root = await worker.fetch(new Request("https://axis.example/"), env as unknown as AxisEnv);
     const response = await worker.fetch(new Request("https://axis.example/ui/"), env as unknown as AxisEnv);
@@ -112,10 +43,9 @@ describe("worker entrypoint", () => {
     expect(root.headers.get("location")).toBe("/ui/");
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain('"apiBaseUrl":"https://admin-api.example/base"');
-    expect(namespace.requestedNames).toEqual(["global", "global"]);
   });
 
-  it("refuses every request when the AxisAdminDO binding is missing", async () => {
+  it("refuses every request when production runtime state bindings are missing", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       for (const request of [
@@ -131,7 +61,10 @@ describe("worker entrypoint", () => {
           body: JSON.stringify({ username: "admin", password: "admin-local-password" }),
         }),
       ]) {
-        const response = await worker.fetch(request, { ADMIN_UI_API_BASE_URL: "" } as unknown as AxisEnv);
+        const response = await worker.fetch(request, {
+          ADMIN_UI_API_BASE_URL: "",
+          AXIS_BACKGROUND_JOBS: new FakeQueue() as unknown as Queue,
+        } as unknown as AxisEnv);
 
         expect(response.status).toBe(503);
         expect(response.headers.get("x-content-type-options")).toBe("nosniff");
@@ -156,9 +89,12 @@ describe("worker entrypoint", () => {
   });
 
   it("requires shared state and queue bindings for scheduled background jobs", async () => {
+    const env = axisEnv();
+    delete env.AXIS_SHARED_STATE;
+
     await expect(worker.scheduled(
       { cron: "*/5 * * * *", scheduledTime: Date.now(), type: "scheduled", noRetry: () => {} } as ScheduledController,
-      axisEnv() as unknown as AxisEnv,
+      env as unknown as AxisEnv,
       {} as ExecutionContext,
     )).rejects.toThrow("AXIS_SHARED_STATE and AXIS_BACKGROUND_JOBS are required for scheduled background jobs");
   });

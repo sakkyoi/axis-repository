@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { AxisAdminDO, axisAdminAlarmPlanAfterBackgroundJobs, createDurableObjectDependencies, type AxisEnv } from "./axis-admin-do";
+import { MemoryStateStore } from "@axis-repository/core";
+import { createCloudflareRuntimeDependencies, createRuntimeDependencies, type AxisEnv } from "./cloudflare-runtime";
+import { createApp } from "./app";
 import { debArchive } from "@axis-repository/plugin-apt/test-support";
-import { FakeDurableObjectStorage, fakeDurableObjectState } from "./durable-object.test-support";
 import { digestHex } from "../storage/digest";
 import { D1RepositoryArtifactStore, createD1StateStore } from "../storage/d1-state";
 import type { BackgroundJobQueueMessage } from "./background-job-queue";
+import { RepositoryWriteLock } from "./repository-write-lock";
 
 class FakeR2Bucket {
   readonly objects = new Map<string, {
@@ -399,7 +401,6 @@ function basicAuth(secret: string, username = "axis"): string {
 }
 
 type TestAxisEnv = {
-  AXIS_ADMIN?: DurableObjectNamespace | undefined;
   AXIS_SHARED_STATE?: D1Database | undefined;
   AXIS_BACKGROUND_JOBS?: Queue | undefined;
   AXIS_OBJECTS?: R2Bucket | undefined;
@@ -419,8 +420,8 @@ type TestAxisEnv = {
   AXIS_ARTIFACT_ORIGIN?: string | undefined;
 };
 
-function createObject(env: TestAxisEnv = {}, storage: FakeDurableObjectStorage = new FakeDurableObjectStorage()) {
-  return new AxisAdminDO(fakeDurableObjectState(storage) as unknown as DurableObjectState, {
+function createRuntime(env: TestAxisEnv = {}, state = new MemoryStateStore()) {
+  const dependencies = createRuntimeDependencies(state, {
     AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
     AXIS_ADMIN_USERNAME: "admin",
     AXIS_ADMIN_PASSWORD: "admin-password",
@@ -432,11 +433,16 @@ function createObject(env: TestAxisEnv = {}, storage: FakeDurableObjectStorage =
     R2_ACCESS_KEY_ID: "access",
     R2_SECRET_ACCESS_KEY: "secret",
     ...env,
-  } as AxisEnv);
+  } as AxisEnv, {}, new RepositoryWriteLock());
+  const app = createApp(dependencies);
+  return {
+    fetch: (request: Request) => app.fetch(request),
+    runBackgroundJobs: () => dependencies.backgroundJobDispatcher.drain({ limit: 10 }),
+  };
 }
 
-async function adminAuthorizationHeader(object: AxisAdminDO): Promise<string> {
-  const response = await object.fetch(
+async function adminAuthorizationHeader(runtime: { fetch(request: Request): Promise<Response> }): Promise<string> {
+  const response = await runtime.fetch(
     new Request("https://axis.example/admin/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -448,9 +454,9 @@ async function adminAuthorizationHeader(object: AxisAdminDO): Promise<string> {
   return `Bearer ${body.accessToken}`;
 }
 
-describe("AxisAdminDO", () => {
+describe("Cloudflare runtime dependencies", () => {
   it("uses the shared D1 index stores when AXIS_SHARED_STATE is bound", () => {
-    const dependencies = createDurableObjectDependencies(new FakeDurableObjectStorage(), {
+    const dependencies = createCloudflareRuntimeDependencies({
       AXIS_SHARED_STATE: {} as D1Database,
       AXIS_BACKGROUND_JOBS: new FakeQueue() as unknown as Queue,
       AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
@@ -468,6 +474,22 @@ describe("AxisAdminDO", () => {
     expect(dependencies.repositoryArtifactStore).toBeInstanceOf(D1RepositoryArtifactStore);
   });
 
+  it("requires a Queue binding when shared production state is configured", () => {
+    expect(() => createCloudflareRuntimeDependencies({
+      AXIS_SHARED_STATE: new FakeD1Database() as unknown as D1Database,
+      AXIS_OBJECTS: new FakeR2Bucket() as unknown as R2Bucket,
+      AXIS_ADMIN_USERNAME: "admin",
+      AXIS_ADMIN_PASSWORD: "admin-password",
+      AXIS_SESSION_SECRET: "test-session-secret",
+      TOKEN_HASH_PEPPER: "pepper",
+      SIGNING_KEY_ENCRYPTION_SECRET: "local-signing-secret",
+      R2_ACCOUNT_ID: "account123",
+      R2_BUCKET_NAME: "axis-repository",
+      R2_ACCESS_KEY_ID: "access",
+      R2_SECRET_ACCESS_KEY: "secret",
+    })).toThrow("AXIS_BACKGROUND_JOBS is required when AXIS_SHARED_STATE is bound");
+  });
+
   it("rejects an AXIS_ARTIFACT_ORIGIN that is not a bare origin", () => {
     for (const value of [
       "cdn.axis.example",
@@ -479,27 +501,27 @@ describe("AxisAdminDO", () => {
     ]) {
       // A path or query here would silently produce broken sources.list lines.
       expect(
-        () => createObject({ AXIS_ARTIFACT_ORIGIN: value }),
+        () => createRuntime({ AXIS_ARTIFACT_ORIGIN: value }),
         value,
       ).toThrow(/AXIS_ARTIFACT_ORIGIN/);
     }
   });
 
   it("accepts a bare artifact origin and normalizes it", () => {
-    expect(() => createObject({ AXIS_ARTIFACT_ORIGIN: "https://cdn.axis.example/" })).not.toThrow();
+    expect(() => createRuntime({ AXIS_ARTIFACT_ORIGIN: "https://cdn.axis.example/" })).not.toThrow();
   });
 
 
   it("allows bootstrap credentials to be removed after the owner user is seeded", async () => {
-    const storage = new FakeDurableObjectStorage();
-    const object = createObject({}, storage);
+    const state = new MemoryStateStore();
+    const object = createRuntime({}, state);
     const adminAuthorization = await adminAuthorizationHeader(object);
 
-    const reseededObject = createObject({
+    const reseededObject = createRuntime({
       AXIS_ADMIN_USERNAME: undefined,
       AXIS_ADMIN_PASSWORD: undefined,
       AXIS_ADMIN_PASSWORD_HASH: undefined,
-    }, storage);
+    }, state);
     const response = await reseededObject.fetch(
       new Request("https://axis.example/admin/users", {
         headers: { authorization: adminAuthorization },
@@ -514,7 +536,7 @@ describe("AxisAdminDO", () => {
   });
 
   it("rejects bootstrap login when no owner user or bootstrap credentials are available", async () => {
-    const object = createObject({
+    const object = createRuntime({
       AXIS_ADMIN_USERNAME: undefined,
       AXIS_ADMIN_PASSWORD: undefined,
       AXIS_ADMIN_PASSWORD_HASH: undefined,
@@ -529,73 +551,73 @@ describe("AxisAdminDO", () => {
   });
 
   it("requires an admin session secret", () => {
-    expect(() => createObject({ AXIS_SESSION_SECRET: undefined })).toThrow(
-      "AXIS_SESSION_SECRET is required for AxisAdminDO",
+    expect(() => createRuntime({ AXIS_SESSION_SECRET: undefined })).toThrow(
+      "AXIS_SESSION_SECRET is required for the Cloudflare runtime",
     );
-    expect(() => createObject({ AXIS_SESSION_SECRET: "" })).toThrow(
-      "AXIS_SESSION_SECRET is required for AxisAdminDO",
+    expect(() => createRuntime({ AXIS_SESSION_SECRET: "" })).toThrow(
+      "AXIS_SESSION_SECRET is required for the Cloudflare runtime",
     );
   });
 
   it("requires a token hash pepper", () => {
-    expect(() => createObject({ TOKEN_HASH_PEPPER: undefined })).toThrow(
-      "TOKEN_HASH_PEPPER is required for AxisAdminDO",
+    expect(() => createRuntime({ TOKEN_HASH_PEPPER: undefined })).toThrow(
+      "TOKEN_HASH_PEPPER is required for the Cloudflare runtime",
     );
-    expect(() => createObject({ TOKEN_HASH_PEPPER: "" })).toThrow(
-      "TOKEN_HASH_PEPPER is required for AxisAdminDO",
+    expect(() => createRuntime({ TOKEN_HASH_PEPPER: "" })).toThrow(
+      "TOKEN_HASH_PEPPER is required for the Cloudflare runtime",
     );
   });
 
   it("requires a signing key encryption secret", () => {
-    expect(() => createObject({ SIGNING_KEY_ENCRYPTION_SECRET: undefined })).toThrow(
-      "SIGNING_KEY_ENCRYPTION_SECRET is required for AxisAdminDO",
+    expect(() => createRuntime({ SIGNING_KEY_ENCRYPTION_SECRET: undefined })).toThrow(
+      "SIGNING_KEY_ENCRYPTION_SECRET is required for the Cloudflare runtime",
     );
-    expect(() => createObject({ SIGNING_KEY_ENCRYPTION_SECRET: "" })).toThrow(
-      "SIGNING_KEY_ENCRYPTION_SECRET is required for AxisAdminDO",
+    expect(() => createRuntime({ SIGNING_KEY_ENCRYPTION_SECRET: "" })).toThrow(
+      "SIGNING_KEY_ENCRYPTION_SECRET is required for the Cloudflare runtime",
     );
   });
 
   it("requires an R2 bucket binding", () => {
-    expect(() => createObject({ AXIS_OBJECTS: undefined })).toThrow(
-      "AXIS_OBJECTS is required for AxisAdminDO",
+    expect(() => createRuntime({ AXIS_OBJECTS: undefined })).toThrow(
+      "AXIS_OBJECTS is required for the Cloudflare runtime",
     );
   });
 
   it("requires R2 signing configuration", () => {
-    expect(() => createObject({ R2_ACCOUNT_ID: undefined })).toThrow(
-      "R2_ACCOUNT_ID is required for AxisAdminDO",
+    expect(() => createRuntime({ R2_ACCOUNT_ID: undefined })).toThrow(
+      "R2_ACCOUNT_ID is required for the Cloudflare runtime",
     );
-    expect(() => createObject({ R2_BUCKET_NAME: undefined })).toThrow(
-      "R2_BUCKET_NAME is required for AxisAdminDO",
+    expect(() => createRuntime({ R2_BUCKET_NAME: undefined })).toThrow(
+      "R2_BUCKET_NAME is required for the Cloudflare runtime",
     );
-    expect(() => createObject({ R2_ACCESS_KEY_ID: undefined })).toThrow(
-      "R2_ACCESS_KEY_ID is required for AxisAdminDO",
+    expect(() => createRuntime({ R2_ACCESS_KEY_ID: undefined })).toThrow(
+      "R2_ACCESS_KEY_ID is required for the Cloudflare runtime",
     );
-    expect(() => createObject({ R2_SECRET_ACCESS_KEY: undefined })).toThrow(
-      "R2_SECRET_ACCESS_KEY is required for AxisAdminDO",
+    expect(() => createRuntime({ R2_SECRET_ACCESS_KEY: undefined })).toThrow(
+      "R2_SECRET_ACCESS_KEY is required for the Cloudflare runtime",
     );
   });
 
   it("uses r2 upload backend by default", () => {
-    expect(() => createObject({ R2_ACCOUNT_ID: undefined })).toThrow(
-      "R2_ACCOUNT_ID is required for AxisAdminDO",
+    expect(() => createRuntime({ R2_ACCOUNT_ID: undefined })).toThrow(
+      "R2_ACCOUNT_ID is required for the Cloudflare runtime",
     );
   });
 
   it("uses r2 upload backend when configured as an empty string", () => {
-    expect(() => createObject({ UPLOAD_BACKEND: "", R2_BUCKET_NAME: undefined })).toThrow(
-      "R2_BUCKET_NAME is required for AxisAdminDO",
+    expect(() => createRuntime({ UPLOAD_BACKEND: "", R2_BUCKET_NAME: undefined })).toThrow(
+      "R2_BUCKET_NAME is required for the Cloudflare runtime",
     );
   });
 
   it("uses r2 upload backend when explicitly configured", () => {
-    expect(() => createObject({ UPLOAD_BACKEND: "r2", R2_ACCESS_KEY_ID: undefined })).toThrow(
-      "R2_ACCESS_KEY_ID is required for AxisAdminDO",
+    expect(() => createRuntime({ UPLOAD_BACKEND: "r2", R2_ACCESS_KEY_ID: undefined })).toThrow(
+      "R2_ACCESS_KEY_ID is required for the Cloudflare runtime",
     );
   });
 
   it("uses memory upload backend without R2 env", async () => {
-    const object = createObject({
+    const object = createRuntime({
       UPLOAD_BACKEND: "memory",
       AXIS_OBJECTS: undefined,
       R2_ACCOUNT_ID: undefined,
@@ -620,7 +642,7 @@ describe("AxisAdminDO", () => {
   });
 
   it("uses local R2 upload backend without R2 signing configuration", async () => {
-    const object = createObject({
+    const object = createRuntime({
       UPLOAD_BACKEND: "local-r2",
       R2_ACCOUNT_ID: undefined,
       R2_BUCKET_NAME: undefined,
@@ -643,7 +665,7 @@ describe("AxisAdminDO", () => {
     expect(response.status).toBe(201);
   });
 
-  it("serves hardened admin APIs through the Durable Object", async () => {
+  it("serves hardened admin APIs through the Cloudflare runtime app", async () => {
     const { generateKey } = await import("openpgp");
     const key = await generateKey({
       type: "ecc",
@@ -651,7 +673,7 @@ describe("AxisAdminDO", () => {
       userIDs: [{ name: "Axis Test", email: "axis@example.test" }],
       passphrase: "correct-passphrase",
     });
-    const object = createObject();
+    const object = createRuntime();
     const adminAuthorization = await adminAuthorizationHeader(object);
 
     const createSigningKey = await object.fetch(
@@ -771,7 +793,7 @@ describe("AxisAdminDO", () => {
     expect(signingKeyDetailBody).not.toHaveProperty("encryptedPassphrase");
   });
 
-  it("finalizes publish sessions through the Durable Object R2 path", async () => {
+  it("finalizes publish sessions through the Cloudflare runtime R2 path", async () => {
     const { generateKey } = await import("openpgp");
     const key = await generateKey({
       type: "ecc",
@@ -784,7 +806,7 @@ describe("AxisAdminDO", () => {
     // Verification hashes what was stored, so the declared digest has to be the
     // one those bytes actually have.
     const debSha256 = await digestHex("SHA-256", debBytes);
-    const object = createObject({
+    const object = createRuntime({
       AXIS_OBJECTS: bucket as unknown as R2Bucket,
     });
     const adminAuthorization = await adminAuthorizationHeader(object);
@@ -925,7 +947,7 @@ describe("AxisAdminDO", () => {
         status: "pending",
       },
     });
-    await object.alarm();
+    await object.runBackgroundJobs();
     const finalized = await object.fetch(
       new Request(`https://axis.example/admin/publish-sessions/${session.id}`, {
         headers: { authorization: adminAuthorization },
@@ -968,8 +990,7 @@ describe("AxisAdminDO", () => {
 
     // Where uploads are presigned, reads are too: the request is answered, the
     // transfer is not. Otherwise every byte a client downloads crosses this
-    // Durable Object, which bills for holding it and is the one place every
-    // download in the deployment passes through.
+    // Worker, which bills for the transfer.
     const read = await object.fetch(
       new Request("https://axis.example/repositories/debian-internal/dists/noble/InRelease", {
         headers: { authorization: `Bearer ${tokenBody.secret}` },
@@ -1017,7 +1038,7 @@ describe("AxisAdminDO", () => {
   });
 
   it("fails closed when finalizing an unregistered ecosystem with memory backend", async () => {
-    const object = createObject({
+    const object = createRuntime({
       UPLOAD_BACKEND: "memory",
       AXIS_OBJECTS: undefined,
       R2_ACCOUNT_ID: undefined,
@@ -1047,31 +1068,31 @@ describe("AxisAdminDO", () => {
   });
 
   it("still allows removed bootstrap credentials for memory backend", () => {
-    expect(() => createObject({
+    expect(() => createRuntime({
       UPLOAD_BACKEND: "memory",
       AXIS_ADMIN_USERNAME: undefined,
       AXIS_ADMIN_PASSWORD: undefined,
       AXIS_ADMIN_PASSWORD_HASH: undefined,
     })).not.toThrow();
-    expect(() => createObject({ UPLOAD_BACKEND: "memory", AXIS_SESSION_SECRET: undefined })).toThrow(
-      "AXIS_SESSION_SECRET is required for AxisAdminDO",
+    expect(() => createRuntime({ UPLOAD_BACKEND: "memory", AXIS_SESSION_SECRET: undefined })).toThrow(
+      "AXIS_SESSION_SECRET is required for the Cloudflare runtime",
     );
   });
 
   it("still requires token hash pepper for memory backend", () => {
-    expect(() => createObject({ UPLOAD_BACKEND: "memory", TOKEN_HASH_PEPPER: undefined })).toThrow(
-      "TOKEN_HASH_PEPPER is required for AxisAdminDO",
+    expect(() => createRuntime({ UPLOAD_BACKEND: "memory", TOKEN_HASH_PEPPER: undefined })).toThrow(
+      "TOKEN_HASH_PEPPER is required for the Cloudflare runtime",
     );
   });
 
   it("rejects invalid upload backend values", () => {
-    expect(() => createObject({ UPLOAD_BACKEND: "disk" })).toThrow(
+    expect(() => createRuntime({ UPLOAD_BACKEND: "disk" })).toThrow(
       "UPLOAD_BACKEND must be one of: r2, local-r2, memory",
     );
   });
 
   it("persists repository state across requests", async () => {
-    const object = createObject();
+    const object = createRuntime();
     const adminAuthorization = await adminAuthorizationHeader(object);
 
     const create = await object.fetch(
@@ -1099,7 +1120,7 @@ describe("AxisAdminDO", () => {
   });
 
   it("creates publish sessions with R2 presigned upload targets", async () => {
-    const object = createObject();
+    const object = createRuntime();
     const adminAuthorization = await adminAuthorizationHeader(object);
 
     const createRepository = await object.fetch(
@@ -1180,7 +1201,7 @@ describe("AxisAdminDO", () => {
 
   it("stores local R2 uploads through same-origin upload targets", async () => {
     const bucket = new FakeR2Bucket();
-    const object = createObject({
+    const object = createRuntime({
       AXIS_OBJECTS: bucket as unknown as R2Bucket,
       UPLOAD_BACKEND: "local-r2",
       R2_ACCOUNT_ID: undefined,
@@ -1312,92 +1333,3 @@ describe("AxisAdminDO", () => {
   });
 });
 
-describe("AxisAdminDO maintenance alarm", () => {
-  it("defers repository maintenance after processing background job work", () => {
-    const now = new Date("2026-08-05T00:00:00.000Z");
-
-    expect(axisAdminAlarmPlanAfterBackgroundJobs({
-      jobs: { processed: 1, failed: 0, remaining: 0 },
-      now,
-    })).toEqual({
-      runMaintenance: false,
-      nextRunAt: new Date("2026-08-05T00:01:00.000Z"),
-    });
-    expect(axisAdminAlarmPlanAfterBackgroundJobs({
-      jobs: { processed: 1, failed: 0, remaining: 1 },
-      now,
-    })).toEqual({
-      runMaintenance: false,
-      nextRunAt: new Date("2026-08-05T00:00:01.000Z"),
-    });
-  });
-
-  it("arms an alarm on construction, so expiring metadata is renewed without traffic", async () => {
-    const storage = new FakeDurableObjectStorage();
-    createObject({}, storage);
-    // The constructor schedules inside blockConcurrencyWhile.
-    await Promise.resolve();
-
-    expect(storage.alarm).not.toBeNull();
-    expect(storage.alarm!).toBeGreaterThan(Date.now());
-  });
-
-  it("leaves an existing alarm alone rather than pushing it back on every wake", async () => {
-    const storage = new FakeDurableObjectStorage();
-    const scheduled = Date.now() + 1_000;
-    await storage.setAlarm(scheduled);
-
-    createObject({}, storage);
-    await Promise.resolve();
-
-    expect(storage.alarm).toBe(scheduled);
-  });
-
-  it("rearms after running, so one pass cannot end the schedule", async () => {
-    const storage = new FakeDurableObjectStorage();
-    const object = createObject({}, storage);
-    await Promise.resolve();
-    await storage.deleteAlarm();
-
-    await object.alarm();
-
-    expect(storage.alarm).not.toBeNull();
-    expect(storage.alarm!).toBeGreaterThan(Date.now());
-  });
-
-  it("wakes the Queue instead of running repository jobs when a Queue binding is configured", async () => {
-    const database = new FakeD1Database();
-    const queue = new FakeQueue();
-    const state = createD1StateStore(database as unknown as D1Database);
-    await state.backgroundJobs.save({
-      id: "repository.index:python-proxy",
-      type: "repository.index.proxy-refresh",
-      status: "pending",
-      subject: { type: "repository", id: "python-proxy", repositoryName: "python-proxy" },
-      repositoryName: "python-proxy",
-      priority: 0,
-      attempts: 0,
-      requestedAt: "2026-08-05T00:00:00.000Z",
-      scheduledAt: "2026-08-05T00:00:00.000Z",
-    });
-    const object = createObject({
-      AXIS_SHARED_STATE: database as unknown as D1Database,
-      AXIS_BACKGROUND_JOBS: queue as unknown as Queue,
-    });
-    await Promise.resolve();
-
-    await object.alarm();
-
-    await expect(state.backgroundJobs.get("repository.index:python-proxy"))
-      .resolves.toMatchObject({ status: "pending", attempts: 0 });
-    expect(database.backgroundJobRecord("repository.maintenance")).toMatchObject({ status: "pending", attempts: 0 });
-    expect(queue.messages).toHaveLength(1);
-  });
-
-  it("requires a Queue binding when shared production state is configured", () => {
-    expect(() => createObject({
-      AXIS_SHARED_STATE: new FakeD1Database() as unknown as D1Database,
-      AXIS_BACKGROUND_JOBS: undefined,
-    })).toThrow("AXIS_BACKGROUND_JOBS is required when AXIS_SHARED_STATE is bound");
-  });
-});

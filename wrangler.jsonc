@@ -57,19 +57,5 @@
     "UPLOAD_BACKEND": "r2",
     "R2_BUCKET_NAME": "",
     "R2_ACCOUNT_ID": ""
-  },
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "AXIS_ADMIN",
-        "class_name": "AxisAdminDO"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "tag": "create-axis-admin-do",
-      "new_sqlite_classes": ["AxisAdminDO"]
-    }
-  ]
+  }
 }

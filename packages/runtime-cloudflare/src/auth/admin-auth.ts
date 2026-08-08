@@ -40,7 +40,7 @@ async function hmacSign(secret: string, payload: string): Promise<string> {
 export class HmacAdminAccessTokenCodec implements AdminAccessTokenCodec {
   constructor(private readonly secret: string, private readonly now: () => Date = () => new Date()) {
     if (!secret) {
-      throw new Error("AXIS_SESSION_SECRET is required for AxisAdminDO");
+      throw new Error("AXIS_SESSION_SECRET is required for the Cloudflare runtime");
     }
   }
 

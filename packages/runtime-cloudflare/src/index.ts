@@ -1,16 +1,10 @@
-import { AxisAdminDO, type AxisEnv } from "./worker/axis-admin-do";
-import { createDurableObjectDependencies } from "./worker/axis-admin-do";
+import { createCloudflareRuntimeDependencies, type AxisEnv } from "./worker/cloudflare-runtime";
+import { createApp } from "./worker/app";
 import { drainBackgroundJobQueue, drainBackgroundJobQueueBatch, type BackgroundJobQueueMessage } from "./worker/background-job-queue";
 import { scheduleBackgroundJobs } from "./worker/background-job-scheduler";
-import type { DurableStorage } from "./storage/durable-state";
 
-export { AxisAdminDO };
-
-// The Durable Object owns all persistent state, auth, and secrets. Without its
-// binding there is no safe way to serve a request, so refuse rather than fall
-// back to an unauthenticated in-memory app.
-function missingAdminBindingResponse(): Response {
-  console.error("AXIS_ADMIN Durable Object binding is not configured; refusing to serve requests");
+function missingRuntimeBindingResponse(message: string): Response {
+  console.error(message);
   return new Response(
     JSON.stringify({
       error: { code: "service_unavailable", message: "Service Unavailable" },
@@ -29,18 +23,26 @@ function missingAdminBindingResponse(): Response {
 }
 
 export default {
-  fetch(request: Request, env?: AxisEnv): Promise<Response> {
-    if (!env?.AXIS_ADMIN) {
-      return Promise.resolve(missingAdminBindingResponse());
+  fetch(request: Request, env?: AxisEnv, ctx?: ExecutionContext): Promise<Response> {
+    if (!env?.AXIS_SHARED_STATE || !env.AXIS_BACKGROUND_JOBS) {
+      return Promise.resolve(missingRuntimeBindingResponse(
+        "AXIS_SHARED_STATE and AXIS_BACKGROUND_JOBS are required for the Cloudflare runtime",
+      ));
     }
-    const id = env.AXIS_ADMIN.idFromName("global");
-    return env.AXIS_ADMIN.get(id).fetch(request);
+    const dependencies = createCloudflareRuntimeDependencies(env, {
+      scheduleBackgroundJobs: () => drainBackgroundJobQueue({
+        dependencies,
+        queue: env.AXIS_BACKGROUND_JOBS!,
+      }),
+      ...(ctx === undefined ? {} : { scheduleBackgroundTask: (task) => ctx.waitUntil(task) }),
+    });
+    return createApp(dependencies).fetch(request);
   },
   async queue(batch: MessageBatch<BackgroundJobQueueMessage>, env: AxisEnv): Promise<void> {
     if (!env.AXIS_SHARED_STATE || !env.AXIS_BACKGROUND_JOBS) {
       throw new Error("AXIS_SHARED_STATE and AXIS_BACKGROUND_JOBS are required for background job queue consumers");
     }
-    const dependencies = createDurableObjectDependencies(unavailableDurableStorage, env, {
+    const dependencies = createCloudflareRuntimeDependencies(env, {
       scheduleBackgroundJobs: () => drainBackgroundJobQueue({
         dependencies,
         queue: env.AXIS_BACKGROUND_JOBS!,
@@ -56,7 +58,7 @@ export default {
     if (!env.AXIS_SHARED_STATE || !env.AXIS_BACKGROUND_JOBS) {
       throw new Error("AXIS_SHARED_STATE and AXIS_BACKGROUND_JOBS are required for scheduled background jobs");
     }
-    const dependencies = createDurableObjectDependencies(unavailableDurableStorage, env, {
+    const dependencies = createCloudflareRuntimeDependencies(env, {
       scheduleBackgroundJobs: () => drainBackgroundJobQueue({
         dependencies,
         queue: env.AXIS_BACKGROUND_JOBS!,
@@ -67,20 +69,5 @@ export default {
       repositoryMaintenanceJobService: dependencies.repositoryMaintenanceJobService,
       wakeBackgroundJobs: () => env.AXIS_BACKGROUND_JOBS!.send({ enqueuedAt: new Date().toISOString() }).then(() => undefined),
     });
-  },
-};
-
-const unavailableDurableStorage: DurableStorage = {
-  get: async () => {
-    throw new Error("Durable Object storage is unavailable in the background job queue consumer");
-  },
-  put: async () => {
-    throw new Error("Durable Object storage is unavailable in the background job queue consumer");
-  },
-  delete: async () => {
-    throw new Error("Durable Object storage is unavailable in the background job queue consumer");
-  },
-  list: async () => {
-    throw new Error("Durable Object storage is unavailable in the background job queue consumer");
   },
 };

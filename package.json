@@ -17,7 +17,7 @@
         "description": "Where published artifacts and the generated indexes are stored. This is the repository: losing the bucket loses everything served from it."
       },
       "AXIS_SHARED_STATE": {
-        "description": "D1 database shared by the admin Durable Object and Queue consumers. Required for queue-based background jobs because job state, repository metadata, sessions, and artifact indexes must be readable without calling back into the admin Durable Object."
+        "description": "D1 production state store for repositories, admin sessions, jobs, runtime settings, plugin policies, and artifact indexes. Required by every Worker request, Queue consumer, and scheduled maintenance run."
       },
       "AXIS_BACKGROUND_JOBS": {
         "description": "Cloudflare Queue used to wake background job consumers. Bind it only with AXIS_SHARED_STATE; messages are wake-ups and all durable job state lives in D1."
@@ -50,7 +50,7 @@
         "description": "Access key ID of an R2 API token with object read and write on this Worker's bucket. Create one under [R2 > Manage API tokens](https://dash.cloudflare.com/?to=/:account/r2/api-tokens). This is not the same thing as the bucket binding: the binding is how the Worker reads objects, this is what lets it hand a client a URL to write one."
       },
       "R2_SECRET_ACCESS_KEY": {
-        "description": "Secret access key of that same R2 API token, shown once when the token is created. Without it, the access key ID, and the account ID, artifact uploads are refused: every request is answered by a single Durable Object, so a Worker that cannot sign upload URLs fails at sign-in rather than at the first publish. Set `UPLOAD_BACKEND=local-r2` to run without any of them."
+        "description": "Secret access key of that same R2 API token, shown once when the token is created. Without it, the access key ID, and the account ID, artifact uploads are refused before publishing starts. Set `UPLOAD_BACKEND=local-r2` to run without any of them."
       },
       "AXIS_PROXY_UPSTREAM_FETCH_TIMEOUT_MS": {
         "description": "Deployment default timeout for proxy repository upstream metadata requests, in milliseconds. Admin runtime settings can override it without redeploying."

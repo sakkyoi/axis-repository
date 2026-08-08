@@ -76,6 +76,13 @@ CREATE INDEX IF NOT EXISTS axis_repository_artifacts_family_idx
   ON axis_repository_artifacts (repository_name, family_key, updated_at DESC, id ASC);
 CREATE INDEX IF NOT EXISTS axis_repository_artifacts_family_listing_idx
   ON axis_repository_artifacts (repository_name, family_key);
+
+CREATE TABLE IF NOT EXISTS axis_repository_write_locks (
+  repository_name TEXT PRIMARY KEY,
+  lease_id TEXT NOT NULL,
+  lease_expires_at TEXT NOT NULL,
+  acquired_at TEXT NOT NULL
+);
 `;
 
 class D1SharedStateSchema {
