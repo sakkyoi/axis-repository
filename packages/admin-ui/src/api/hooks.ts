@@ -168,10 +168,12 @@ export function useDeleteRepository() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => client.deleteRepository(name),
-    onSuccess: () => {
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["repositories"] });
       void queryClient.invalidateQueries({ queryKey: ["publish-tokens"] });
       void queryClient.invalidateQueries({ queryKey: ["publish-sessions"] });
+      void queryClient.invalidateQueries({ queryKey: ["background-job", result.job.id] });
+      void queryClient.invalidateQueries({ queryKey: ["background-jobs"] });
     },
   });
 }

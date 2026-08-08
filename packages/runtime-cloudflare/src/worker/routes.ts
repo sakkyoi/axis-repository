@@ -713,38 +713,6 @@ function repositoryClientHelperAction(
   return helpers.actions.find((helperAction) => helperAction.name === action);
 }
 
-/**
- * Empties a repository, a page of objects per round trip.
- *
- * Deleting them one at a time was a round trip each and the caller waited for
- * all of them: a repository of a few thousand objects took minutes to remove.
- * Storage takes a whole page of keys in one call, so a page is what it is
- * given.
- *
- * Each round lists from the start rather than paging forward, because the
- * objects it just removed are gone from the next listing. A page that comes
- * back naming the same object as the last one is a page nothing removed, and
- * the loop stops rather than asking again forever.
- */
-async function deleteRepositoryObjectPrefix(dependencies: AppDependencies, repositoryName: string): Promise<number> {
-  const prefix = `repositories/${repositoryName}/`;
-  let deleted = 0;
-  let previousFirstKey: string | undefined;
-  for (;;) {
-    const listing = await dependencies.repositoryObjectStore.listObjects({ prefix });
-    const keys = listing.objects.map((object) => object.key);
-    if (keys.length === 0 || keys[0] === previousFirstKey) {
-      return deleted;
-    }
-    await dependencies.repositoryObjectStore.deleteObjects(keys);
-    deleted += keys.length;
-    if (!listing.truncated) {
-      return deleted;
-    }
-    previousFirstKey = keys[0];
-  }
-}
-
 async function ensureRepositoryPluginEnabled(
   dependencies: AppDependencies,
   ecosystem: string,
@@ -1850,10 +1818,9 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       );
     }
     if (request.method === "DELETE") {
-      await dependencies.repositoryService.getByName(adminRepositoryName);
-      await deleteRepositoryObjectPrefix(dependencies, adminRepositoryName);
-      await dependencies.repositoryService.delete(adminRepositoryName);
-      return new Response(null, { status: 204 });
+      const job = await dependencies.repositoryDeleteJobService.request({ repositoryName: adminRepositoryName });
+      await dependencies.scheduleBackgroundJobs?.();
+      return jsonResponse({ job }, { status: 202 });
     }
     throw new NotFoundError();
   }
@@ -2118,6 +2085,20 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const adminResources = plugin?.adminResources;
     if (!adminResources || adminResources.namespace !== adminPluginResourcePath.namespace) {
       throw new NotFoundError();
+    }
+    if (
+      request.method === "POST"
+      && repository?.kind === "proxy"
+      && adminPluginResourcePath.path.length === 2
+      && adminPluginResourcePath.path[0] === "proxy-cache"
+      && adminPluginResourcePath.path[1] === "purge"
+    ) {
+      const job = await dependencies.repositoryProxyCachePurgeJobService.request({
+        repositoryName: repository.name,
+        namespace: adminPluginResourcePath.namespace,
+      });
+      await dependencies.scheduleBackgroundJobs?.();
+      return jsonResponse({ job }, { status: 202 });
     }
     return dispatchRepositoryAdminResource(adminResources, {
       repositoryName: adminPluginResourcePath.repositoryName,

@@ -10,6 +10,8 @@ import type { RepositoryIndexBackgroundJobService } from "./repository-index-bac
 import type { RepositoryMaintenanceJobService } from "./repository-maintenance-job-service";
 import type { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 import type { RepositoryArtifactDeleteJobService } from "./repository-artifact-delete-job-service";
+import type { RepositoryDeleteJobService } from "./repository-delete-job-service";
+import type { RepositoryProxyCachePurgeJobService } from "./repository-proxy-cache-purge-job-service";
 
 export interface BackgroundJobServiceOptions {
   state: StateStore;
@@ -19,6 +21,8 @@ export interface BackgroundJobServiceOptions {
   publishFinalizeJobService?: Pick<PublishFinalizeJobService, "requestAsAdmin">;
   stagingUploadGcJobService?: Pick<StagingUploadGcJobService, "request">;
   repositoryArtifactDeleteJobService?: Pick<RepositoryArtifactDeleteJobService, "request">;
+  repositoryDeleteJobService?: Pick<RepositoryDeleteJobService, "request">;
+  repositoryProxyCachePurgeJobService?: Pick<RepositoryProxyCachePurgeJobService, "request">;
 }
 
 export interface RequestRepositoryIndexBackgroundJobInput {
@@ -71,6 +75,22 @@ export class BackgroundJobService {
       const repositoryName = job.repositoryName ?? job.subject.repositoryName;
       if (!repositoryName) throw new ValidationError(`Background job is missing repository name: ${job.id}`);
       await runner.request({ repositoryName, artifactId: job.subject.id });
+      return this.options.state.backgroundJobs.get(id);
+    }
+    if (job.type === "repository.delete" && job.subject.type === "repository") {
+      const runner = this.options.repositoryDeleteJobService;
+      if (!runner) throw missingRunnerError(job);
+      await runner.request({ repositoryName: job.subject.id });
+      return this.options.state.backgroundJobs.get(id);
+    }
+    if (job.type === "repository.proxy-cache.purge" && job.subject.type === "repository") {
+      const runner = this.options.repositoryProxyCachePurgeJobService;
+      if (!runner) throw missingRunnerError(job);
+      const namespace = job.result?.namespace;
+      if (typeof namespace !== "string" || namespace.length === 0) {
+        throw new ValidationError(`Background job is missing proxy cache namespace: ${job.id}`);
+      }
+      await runner.request({ repositoryName: job.subject.id, namespace });
       return this.options.state.backgroundJobs.get(id);
     }
     if (job.type === "repository.maintenance") {

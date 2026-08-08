@@ -29,6 +29,8 @@ import { BackgroundJobService } from "./background-job-service";
 import { BackgroundJobDispatcher } from "./background-job-dispatcher";
 import { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 import { RepositoryArtifactDeleteJobService } from "./repository-artifact-delete-job-service";
+import { RepositoryDeleteJobService } from "./repository-delete-job-service";
+import { RepositoryProxyCachePurgeJobService } from "./repository-proxy-cache-purge-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import type { RepositoryObjectDownloadSigner } from "../storage/object-download-url";
@@ -48,6 +50,8 @@ export interface AppDependencies {
   backgroundJobDispatcher: BackgroundJobDispatcher;
   stagingUploadGcJobService: StagingUploadGcJobService;
   repositoryArtifactDeleteJobService: RepositoryArtifactDeleteJobService;
+  repositoryDeleteJobService: RepositoryDeleteJobService;
+  repositoryProxyCachePurgeJobService: RepositoryProxyCachePurgeJobService;
   repositoryMaintenanceJobService: RepositoryMaintenanceJobService;
   publishFinalizeJobService: PublishFinalizeJobService;
   repositoryActivityService: RepositoryActivityService;
@@ -248,6 +252,23 @@ export function createDevDependencyHarness(
     repositoryActivityService,
     clock,
   });
+  const pluginRepositoryService = new PluginRepositoryService({
+    repositoryService,
+    plugins: repositoryRuntimePlugins,
+    pluginPolicyService,
+  });
+  const repositoryDeleteJobService = new RepositoryDeleteJobService({
+    state,
+    repositoryService: pluginRepositoryService,
+    repositoryObjectStore: objectStore,
+    clock,
+  });
+  const repositoryProxyCachePurgeJobService = new RepositoryProxyCachePurgeJobService({
+    state,
+    repositoryService: pluginRepositoryService,
+    repositoryObjectStore: objectStore,
+    clock,
+  });
   const stagingUploadGcJobService = new StagingUploadGcJobService({
     state,
     objectStore,
@@ -262,6 +283,8 @@ export function createDevDependencyHarness(
     publishFinalizeJobService,
     stagingUploadGcJobService,
     repositoryArtifactDeleteJobService,
+    repositoryDeleteJobService,
+    repositoryProxyCachePurgeJobService,
   });
   const backgroundJobDispatcher = new BackgroundJobDispatcher({
     state,
@@ -284,6 +307,14 @@ export function createDevDependencyHarness(
         run: (job) => repositoryArtifactDeleteJobService.runBackgroundJob(job),
       },
       {
+        supports: (job) => job.type === "repository.delete",
+        run: (job) => repositoryDeleteJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type === "repository.proxy-cache.purge",
+        run: (job) => repositoryProxyCachePurgeJobService.runBackgroundJob(job),
+      },
+      {
         supports: (job) => job.type === "storage.staging-upload-gc",
         run: async (job) => {
           await stagingUploadGcJobService.runBackgroundJob(job);
@@ -296,17 +327,15 @@ export function createDevDependencyHarness(
     dependencies: {
       adminAuthService,
       adminUiRuntimeConfig,
-      repositoryService: new PluginRepositoryService({
-        repositoryService,
-        plugins: repositoryRuntimePlugins,
-        pluginPolicyService,
-      }),
+      repositoryService: pluginRepositoryService,
       publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
       publishSessionService: pluginPublishSessionService,
       backgroundJobService,
       backgroundJobDispatcher,
       stagingUploadGcJobService,
       repositoryArtifactDeleteJobService,
+      repositoryDeleteJobService,
+      repositoryProxyCachePurgeJobService,
       repositoryMaintenanceJobService,
       publishFinalizeJobService,
       repositoryActivityService,

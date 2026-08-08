@@ -45,14 +45,10 @@ export const REQUEST_TIMEOUT_MS = 15_000;
  * How long to wait on a request whose work scales with what a repository
  * holds.
  *
- * Verifying an upload hashes the whole artifact; publishing writes every index
- * and pool object; deleting a repository deletes every object it has, one
- * round trip each. None of these is bounded by anything the server does -- a
- * Durable Object's wall clock runs for as long as the caller stays connected
- * -- so this timeout is the only limit they meet, and at fifteen seconds it
- * was abandoning work that was going to finish. Waiting is not free either:
- * this is a ceiling on a request that has stopped making progress, not an
- * estimate of how long any of these should take.
+ * Uploading and verifying an artifact can read the whole artifact before a
+ * background job can take over. Waiting is not free either: this is a ceiling
+ * on a request that has stopped making progress, not an estimate of how long
+ * any of these should take.
  */
 export const BULK_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 

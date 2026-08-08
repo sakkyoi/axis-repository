@@ -471,6 +471,10 @@ export const repositoryObjectDeleteResponseSchema = z.object({
   job: backgroundJobSchema,
 });
 
+export const repositoryDeleteResponseSchema = z.object({
+  job: backgroundJobSchema,
+});
+
 export const repositoryArtifactDeleteResponseSchema = z.object({
   job: backgroundJobSchema,
 });

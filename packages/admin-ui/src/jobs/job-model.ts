@@ -5,6 +5,9 @@ const jobTypeLabels: Record<string, string> = {
   "repository.index.hosted-rebuild": "Hosted index rebuild",
   "repository.index.proxy-refresh": "Proxy index refresh",
   "repository.index.group-refresh": "Group index refresh",
+  "repository.delete": "Repository deletion",
+  "repository.proxy-cache.purge": "Proxy byte cache purge",
+  "repository.artifact.delete": "Artifact deletion",
   "storage.staging-upload-gc": "Staging upload cleanup",
 };
 

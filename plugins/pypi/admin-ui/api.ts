@@ -80,9 +80,9 @@ export async function getPypiProxyCache(
 export async function purgePypiProxyCache(
   client: PypiProjectsClient,
   repositoryName: string,
-): Promise<PypiProxyCachePurge["purged"]> {
+): Promise<PypiProxyCachePurge> {
   const response = await client.postRepositoryPluginResource(repositoryName, pypiNamespace, ["proxy-cache", "purge"]);
-  return pypiProxyCachePurgeSchema.parse(response).purged;
+  return pypiProxyCachePurgeSchema.parse(response);
 }
 
 export function usePypiProjectsPage(repositoryName: string | undefined) {
@@ -131,8 +131,9 @@ export function usePurgePypiProxyCache(repositoryName: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => purgePypiProxyCache(client, repositoryName ?? ""),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["pypi-proxy-cache", repositoryName] });
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["background-job", result.job.id] });
+      void queryClient.invalidateQueries({ queryKey: ["background-jobs"] });
       void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
     },
   });

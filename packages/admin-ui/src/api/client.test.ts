@@ -518,15 +518,32 @@ describe("createAxisClient", () => {
     client.http.defaults.adapter = async (config) => {
       requests.push(`${config.method?.toUpperCase()} ${config.url}`);
       return {
-        data: null,
-        status: 204,
-        statusText: "No Content",
+        data: {
+          job: {
+            id: "repository.delete:debian internal",
+            type: "repository.delete",
+            status: "pending",
+            subject: { type: "repository", id: "debian internal", repositoryName: "debian internal" },
+            repositoryName: "debian internal",
+            priority: 10,
+            attempts: 0,
+            requestedAt: "2026-08-05T00:00:00.000Z",
+            scheduledAt: "2026-08-05T00:00:00.000Z",
+          },
+        },
+        status: 202,
+        statusText: "Accepted",
         headers: {},
         config,
       };
     };
 
-    await client.deleteRepository("debian internal");
+    await expect(client.deleteRepository("debian internal")).resolves.toMatchObject({
+      job: {
+        type: "repository.delete",
+        status: "pending",
+      },
+    });
 
     expect(requests).toEqual(["DELETE /admin/repositories/debian%20internal"]);
   });
@@ -1425,10 +1442,7 @@ describe("createAxisClient", () => {
     expect(message).not.toContain("status code 413");
   });
 
-  it("waits longer on requests whose work scales with the repository", async () => {
-    // Nothing on the server side cuts these short, so this timeout is the only
-    // limit they meet, and the default one abandoned publishes that were going
-    // to finish.
+  it("waits longer only on requests that still process artifact bytes", async () => {
     const client = createAxisClient({ baseUrl: "https://axis.example" });
     const timeouts = new Map<string, number | undefined>();
     client.http.defaults.adapter = async (config) => {
@@ -1446,14 +1460,12 @@ describe("createAxisClient", () => {
       client.listRepositoryArtifacts("debian-internal"),
     ]);
 
-    expect(timeouts.get("DELETE /admin/repositories/debian-internal")).toBe(BULK_REQUEST_TIMEOUT_MS);
-    expect(timeouts.get("POST /admin/repositories/debian-internal/artifacts/rebuild-index")).toBe(BULK_REQUEST_TIMEOUT_MS);
-    expect(timeouts.get("DELETE /admin/repositories/debian-internal/artifacts/art_1")).toBe(BULK_REQUEST_TIMEOUT_MS);
-    expect(timeouts.get("DELETE /admin/repositories/debian-internal/objects")).toBe(BULK_REQUEST_TIMEOUT_MS);
     expect(timeouts.get("POST /admin/publish-sessions/pub_1/uploads/upl_1/verify")).toBe(BULK_REQUEST_TIMEOUT_MS);
-    expect(timeouts.get("POST /admin/publish-sessions/pub_1/finalize")).toBe(BULK_REQUEST_TIMEOUT_MS);
-    // Everything else keeps the shorter one, or a dead server looks like a
-    // slow one for five minutes.
+    expect(timeouts.get("DELETE /admin/repositories/debian-internal")).toBe(REQUEST_TIMEOUT_MS);
+    expect(timeouts.get("POST /admin/repositories/debian-internal/artifacts/rebuild-index")).toBe(REQUEST_TIMEOUT_MS);
+    expect(timeouts.get("DELETE /admin/repositories/debian-internal/artifacts/art_1")).toBe(REQUEST_TIMEOUT_MS);
+    expect(timeouts.get("DELETE /admin/repositories/debian-internal/objects")).toBe(REQUEST_TIMEOUT_MS);
+    expect(timeouts.get("POST /admin/publish-sessions/pub_1/finalize")).toBe(REQUEST_TIMEOUT_MS);
     expect(timeouts.get("GET /admin/repositories/debian-internal/artifacts")).toBe(REQUEST_TIMEOUT_MS);
   });
 });

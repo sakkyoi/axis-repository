@@ -259,6 +259,8 @@ export type BackgroundJobType =
   | "repository.index.proxy-refresh"
   | "repository.index.group-refresh"
   | "repository.artifact.delete"
+  | "repository.delete"
+  | "repository.proxy-cache.purge"
   | "repository.maintenance"
   | (string & {});
 

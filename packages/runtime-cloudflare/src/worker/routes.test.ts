@@ -1337,7 +1337,16 @@ describe("Cloudflare runtime routes", () => {
       }),
     );
 
-    expect(deleteResponse.status).toBe(204);
+    expect(deleteResponse.status).toBe(202);
+    await expect(deleteResponse.json()).resolves.toMatchObject({
+      job: {
+        id: "repository.delete:python-internal",
+        type: "repository.delete",
+        status: "pending",
+      },
+    });
+    await expect(harness.repositoryObjectStore.headObject("repositories/python-internal/simple/demo/index.html")).resolves.not.toBeNull();
+    await harness.dependencies.backgroundJobDispatcher.drain({ limit: 10 });
     await expect(harness.repositoryObjectStore.headObject("repositories/python-internal/simple/demo/index.html")).resolves.toBeNull();
     await expect(harness.repositoryObjectStore.headObject("repositories/python-shared/simple/other/index.html")).resolves.not.toBeNull();
     const repositoriesResponse = await app.fetch(
@@ -1362,9 +1371,7 @@ describe("Cloudflare runtime routes", () => {
     ]));
   });
 
-  it("empties a repository a page at a time rather than an object at a time", async () => {
-    // One round trip each and the caller waits for all of them, which on a
-    // repository of a few thousand objects is minutes of it.
+  it("queues repository deletion rather than emptying objects in the request", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
     await createRepository(app, {
@@ -1400,7 +1407,11 @@ describe("Cloudflare runtime routes", () => {
       }),
     );
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(202);
+    expect(batches).toBe(0);
+    expect(singles).toBe(0);
+    expect(store.objects).toHaveLength(3);
+    await harness.dependencies.backgroundJobDispatcher.drain({ limit: 10 });
     expect(batches).toBe(1);
     expect(singles).toBe(0);
     expect(store.objects).toHaveLength(0);
@@ -1443,8 +1454,63 @@ describe("Cloudflare runtime routes", () => {
       }),
     );
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(202);
+    expect(lists).toBe(0);
+    await harness.dependencies.backgroundJobDispatcher.drain({ limit: 10 });
     expect(lists).toBe(2);
+  });
+
+  it("queues PyPI proxy byte cache purge rather than sweeping cache objects in the request", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-proxy",
+      ecosystem: "pypi",
+      kind: "proxy",
+      visibility: "public",
+      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+    });
+    await harness.dependencies.backgroundJobService.cancel("repository.index:python-proxy");
+    await harness.repositoryObjectStore.putBytes(
+      "repositories/python-proxy/_proxy-cache/pypi/files/file-a",
+      new Uint8Array(11),
+      "application/octet-stream",
+    );
+    await harness.repositoryObjectStore.putJson("repositories/python-proxy/_proxy-cache/pypi/files/file-a.json", {
+      upstreamUrl: "https://files.example/a.whl",
+    });
+    await harness.repositoryObjectStore.putJson("repositories/python-proxy/_proxy-cache/pypi/projects.json", {
+      projects: [{ name: "demo", fileCount: 1 }],
+    });
+    const store = harness.repositoryObjectStore;
+    const deleteObjects = store.deleteObjects.bind(store);
+    let batches = 0;
+    store.deleteObjects = async (keys) => {
+      batches += 1;
+      await deleteObjects(keys);
+    };
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-proxy/pypi/proxy-cache/purge", {
+        method: "POST",
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      job: {
+        id: "repository.proxy-cache.purge:python-proxy:pypi",
+        type: "repository.proxy-cache.purge",
+        status: "pending",
+      },
+    });
+    expect(batches).toBe(0);
+    await expect(store.getObject("repositories/python-proxy/_proxy-cache/pypi/files/file-a")).resolves.not.toBeNull();
+    await harness.dependencies.backgroundJobDispatcher.drain({ limit: 10 });
+    expect(batches).toBe(1);
+    await expect(store.getObject("repositories/python-proxy/_proxy-cache/pypi/files/file-a")).resolves.toBeNull();
+    await expect(store.getObject("repositories/python-proxy/_proxy-cache/pypi/projects.json")).resolves.not.toBeNull();
   });
 
   it("rejects admin repository routes without an access token", async () => {

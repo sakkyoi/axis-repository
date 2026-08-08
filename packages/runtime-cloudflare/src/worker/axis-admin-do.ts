@@ -31,6 +31,8 @@ import { BackgroundJobService } from "./background-job-service";
 import { BackgroundJobDispatcher, type DrainBackgroundJobsResult } from "./background-job-dispatcher";
 import { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 import { RepositoryArtifactDeleteJobService } from "./repository-artifact-delete-job-service";
+import { RepositoryDeleteJobService } from "./repository-delete-job-service";
+import { RepositoryProxyCachePurgeJobService } from "./repository-proxy-cache-purge-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import { RepositoryWriteLock } from "./repository-write-lock";
@@ -390,6 +392,11 @@ export function createDurableObjectDependencies(
     repositoryObjectStore: objectStore,
     writeLock,
   });
+  const pluginRepositoryService = new PluginRepositoryService({
+    repositoryService,
+    plugins: repositoryRuntimePlugins,
+    pluginPolicyService,
+  });
   const publishFinalizeJobService = new PublishFinalizeJobService({
     state,
     publishSessionService: pluginPublishSessionService,
@@ -401,6 +408,18 @@ export function createDurableObjectDependencies(
     repositoryArtifactStore: state.repositoryArtifacts,
     repositoryArtifactIndexService,
     repositoryActivityService,
+    clock,
+  });
+  const repositoryDeleteJobService = new RepositoryDeleteJobService({
+    state,
+    repositoryService: pluginRepositoryService,
+    repositoryObjectStore: objectStore,
+    clock,
+  });
+  const repositoryProxyCachePurgeJobService = new RepositoryProxyCachePurgeJobService({
+    state,
+    repositoryService: pluginRepositoryService,
+    repositoryObjectStore: objectStore,
     clock,
   });
   const stagingUploadGcJobService = new StagingUploadGcJobService({
@@ -417,6 +436,8 @@ export function createDurableObjectDependencies(
     publishFinalizeJobService,
     stagingUploadGcJobService,
     repositoryArtifactDeleteJobService,
+    repositoryDeleteJobService,
+    repositoryProxyCachePurgeJobService,
   });
   const backgroundJobDispatcher = new BackgroundJobDispatcher({
     state,
@@ -437,6 +458,14 @@ export function createDurableObjectDependencies(
       {
         supports: (job) => job.type === "repository.artifact.delete",
         run: (job) => repositoryArtifactDeleteJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type === "repository.delete",
+        run: (job) => repositoryDeleteJobService.runBackgroundJob(job),
+      },
+      {
+        supports: (job) => job.type === "repository.proxy-cache.purge",
+        run: (job) => repositoryProxyCachePurgeJobService.runBackgroundJob(job),
       },
       {
         supports: (job) => job.type === "storage.staging-upload-gc",
@@ -460,11 +489,7 @@ export function createDurableObjectDependencies(
         ? { uploadOrigin: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com` }
         : {}),
     },
-    repositoryService: new PluginRepositoryService({
-      repositoryService,
-      plugins: repositoryRuntimePlugins,
-      pluginPolicyService,
-    }),
+    repositoryService: pluginRepositoryService,
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
     publishSessionService: pluginPublishSessionService,
     backgroundJobService,
@@ -473,6 +498,8 @@ export function createDurableObjectDependencies(
     repositoryMaintenanceJobService,
     publishFinalizeJobService,
     repositoryArtifactDeleteJobService,
+    repositoryDeleteJobService,
+    repositoryProxyCachePurgeJobService,
     repositoryActivityService,
     repositoryArtifactStore: state.repositoryArtifacts,
     repositoryArtifactIndexService,

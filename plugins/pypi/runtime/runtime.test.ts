@@ -1233,7 +1233,7 @@ describe("PyPI plugin lifecycle", () => {
     });
   });
 
-  it("purges only PyPI proxy byte cache objects", async () => {
+  it("does not synchronously purge PyPI proxy byte cache objects from plugin resources", async () => {
     const objectStore = new MemoryRepositoryObjectStore();
     await objectStore.putBytes(
       "repositories/python-internal/_proxy-cache/pypi/files/file-a",
@@ -1257,7 +1257,7 @@ describe("PyPI plugin lifecycle", () => {
       config: { pypi: { upstreamUrl: "https://pypi.org/" } },
     };
 
-    const response = await dispatchRepositoryAdminResource(plugin.adminResources!, {
+    await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
       repositoryName: repository.name,
       repository,
       request: new Request("https://axis.example/admin/repositories/python-internal/pypi/proxy-cache/purge", {
@@ -1265,21 +1265,12 @@ describe("PyPI plugin lifecycle", () => {
       }),
       path: ["proxy-cache", "purge"],
       services: { secrets: unusedSecrets() },
-    });
-
-    await expect(response.json()).resolves.toEqual({
-      purged: {
-        objectCount: 2,
-        byteCount: 11,
-      },
-      cache: {
-        fileCount: 0,
-        byteCount: 0,
-      },
-    });
+    })).rejects.toThrow("PyPI proxy byte cache purge must be queued by the runtime");
     await expect(objectStore.listObjects({
       prefix: "repositories/python-internal/_proxy-cache/pypi/files/",
-    })).resolves.toMatchObject({ objects: [] });
+    })).resolves.toMatchObject({ objects: expect.arrayContaining([
+      expect.objectContaining({ key: "repositories/python-internal/_proxy-cache/pypi/files/file-a" }),
+    ]) });
     await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects.json")).resolves.not.toBeNull();
     await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects/demo.json")).resolves.not.toBeNull();
   });

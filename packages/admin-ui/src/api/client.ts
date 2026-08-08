@@ -16,6 +16,7 @@ import {
   repositoryPluginSchema,
   repositoryPluginsResponseSchema,
   repositoryActivitiesResponseSchema,
+  repositoryDeleteResponseSchema,
   repositoryArtifactDeleteResponseSchema,
   repositoryArtifactFamiliesResponseSchema,
   repositoryArtifactsResponseSchema,
@@ -119,7 +120,7 @@ export interface AxisClient {
   createRepository(input: CreateRepositoryInput): Promise<Repository>;
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
-  deleteRepository(name: string): Promise<void>;
+  deleteRepository(name: string): Promise<ReturnType<typeof repositoryDeleteResponseSchema.parse>>;
   listRepositoryObjects(name: string, prefix: string): Promise<ReturnType<typeof repositoryObjectsResponseSchema.parse>>;
   listRepositoryArtifactFamilies(
     name: string,
@@ -321,7 +322,8 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       return repositorySchema.parse(response.data);
     },
     async deleteRepository(name: string) {
-      await http.delete(`/admin/repositories/${encodeURIComponent(name)}`, bulkRequest);
+      const response = await http.delete(`/admin/repositories/${encodeURIComponent(name)}`);
+      return repositoryDeleteResponseSchema.parse(response.data);
     },
     async listRepositoryObjects(name: string, prefix: string) {
       const response = await http.get(
@@ -343,14 +345,12 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.post(
         `/admin/repositories/${encodeURIComponent(name)}/artifacts/rebuild-index`,
         undefined,
-        bulkRequest,
       );
       return repositoryIndexJobResponseSchema.parse(response.data);
     },
     async deleteRepositoryArtifact(name: string, artifactId: string) {
       const response = await http.delete(
         `/admin/repositories/${encodeURIComponent(name)}/artifacts/${encodeURIComponent(artifactId)}`,
-        bulkRequest,
       );
       return repositoryArtifactDeleteResponseSchema.parse(response.data);
     },
@@ -363,7 +363,6 @@ export function createAxisClient(options: HttpOptions): AxisClient {
     async deleteRepositoryObject(name: string, path: string) {
       const response = await http.delete(
         `/admin/repositories/${encodeURIComponent(name)}/objects?path=${encodeURIComponent(path)}`,
-        bulkRequest,
       );
       return repositoryObjectDeleteResponseSchema.parse(response.data).activity;
     },
@@ -446,7 +445,6 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.post(
         `/admin/publish-sessions/${encodeURIComponent(sessionId)}/finalize`,
         undefined,
-        bulkRequest,
       );
       return publishFinalizeResponseSchema.parse(response.data);
     },

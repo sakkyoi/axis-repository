@@ -154,8 +154,18 @@ describe("PyPI project files API adapter", () => {
     const client = recordingClient(
       { cache: { fileCount: 2, byteCount: 18 } },
       {
-        purged: { objectCount: 3, byteCount: 18 },
-        cache: { fileCount: 0, byteCount: 0 },
+        job: {
+          id: "repository.proxy-cache.purge:python-internal:pypi",
+          type: "repository.proxy-cache.purge",
+          status: "pending",
+          subject: { type: "repository", id: "python-internal", repositoryName: "python-internal" },
+          repositoryName: "python-internal",
+          priority: 0,
+          attempts: 0,
+          requestedAt: "2026-08-05T00:00:00.000Z",
+          scheduledAt: "2026-08-05T00:00:00.000Z",
+          result: { namespace: "pypi" },
+        },
       },
     );
 
@@ -165,7 +175,7 @@ describe("PyPI project files API adapter", () => {
 
     client.calls.length = 0;
     await expect(purgePypiProxyCache(client, "python-internal"))
-      .resolves.toEqual({ objectCount: 3, byteCount: 18 });
+      .resolves.toMatchObject({ job: { type: "repository.proxy-cache.purge", status: "pending" } });
     expect(client.calls[0]).toEqual({
       path: ["proxy-cache", "purge"],
       input: undefined,

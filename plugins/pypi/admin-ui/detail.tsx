@@ -90,11 +90,11 @@ export function PypiProxySettingsSection({
 
   function confirmPurgeByteCache() {
     purgeByteCache.mutate(undefined, {
-      onSuccess: (purged) => {
+      onSuccess: (result) => {
         setPurgeDialogOpen(false);
         toast.notify({
-          title: "PyPI proxy byte cache purged",
-          description: `${purged.objectCount} cached objects removed, ${formatBytes(purged.byteCount)} freed.`,
+          title: "PyPI proxy byte cache purge started",
+          description: `Background job ${result.job.id} is purging cached files.`,
         });
       },
     });

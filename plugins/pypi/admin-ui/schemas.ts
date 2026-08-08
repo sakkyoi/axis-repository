@@ -43,12 +43,38 @@ export const pypiProxyCacheSchema = z.object({
   cache: pypiProxyCacheStatsSchema,
 });
 
-export const pypiProxyCachePurgeSchema = z.object({
-  purged: z.object({
-    objectCount: z.number(),
-    byteCount: z.number(),
+export const backgroundJobSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  status: z.enum(["pending", "running", "succeeded", "failed", "canceling", "canceled"]),
+  subject: z.object({
+    type: z.enum(["repository", "publish-session", "upload", "artifact", "system"]),
+    id: z.string(),
+    repositoryName: z.string().optional(),
   }),
-  cache: pypiProxyCacheStatsSchema,
+  repositoryName: z.string().optional(),
+  priority: z.number(),
+  attempts: z.number(),
+  maxAttempts: z.number().optional(),
+  requestedAt: z.string(),
+  scheduledAt: z.string(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional(),
+  progress: z.object({
+    current: z.number().optional(),
+    total: z.number().optional(),
+    message: z.string().optional(),
+  }).optional(),
+  result: z.record(z.string(), z.unknown()).optional(),
+  failure: z.object({
+    message: z.string(),
+    failedAt: z.string(),
+    retryable: z.boolean(),
+  }).optional(),
+});
+
+export const pypiProxyCachePurgeSchema = z.object({
+  job: backgroundJobSchema,
 });
 
 export type PypiProjectFile = z.infer<typeof pypiProjectFileSchema>;

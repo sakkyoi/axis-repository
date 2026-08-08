@@ -172,13 +172,8 @@ export function createPypiAdminResources(input: {
       },
       {
         ...pypiAdminResourceRoute("purge-proxy-cache"),
-        handle: async ({ repositoryName }) => {
-          const objectStore = input.objectStoreFor(repositoryName);
-          const purged = await purgePypiProxyByteCache(objectStore, repositoryName);
-          return pluginJsonResponse({
-            purged,
-            cache: await pypiProxyByteCacheStats(objectStore, repositoryName),
-          });
+        handle: async () => {
+          throw new ValidationError("PyPI proxy byte cache purge must be queued by the runtime");
         },
       },
     ],
@@ -239,21 +234,6 @@ async function pypiProxyByteCacheStats(
   return {
     fileCount: files.length,
     byteCount: files.reduce((sum, object) => sum + (object.contentLength ?? 0), 0),
-  };
-}
-
-async function purgePypiProxyByteCache(
-  objectStore: RepositoryObjectStore,
-  repositoryName: string,
-): Promise<{ objectCount: number; byteCount: number }> {
-  const objects = await listAllObjects(objectStore, pypiProxyByteCachePrefix(repositoryName));
-  const byteCount = objects
-    .filter((object) => !object.key.endsWith(".json"))
-    .reduce((sum, object) => sum + (object.contentLength ?? 0), 0);
-  await objectStore.deleteObjects(objects.map((object) => object.key));
-  return {
-    objectCount: objects.length,
-    byteCount,
   };
 }
 

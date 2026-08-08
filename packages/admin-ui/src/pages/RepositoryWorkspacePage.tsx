@@ -7,6 +7,7 @@ import type { Repository, RepositoryPlugin } from "../api/schemas";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { DestructiveActionDialog } from "../components/ui/destructive-action-dialog";
+import { useToast } from "../components/ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -241,6 +242,7 @@ export function RepositorySettingsPage() {
   const repository = useRepositoryByName(repositories.data, name);
   const pluginMetadata = repositoryPlugins.data?.find((plugin) => plugin.ecosystem === repository?.ecosystem);
   const deleteRepository = useDeleteRepository();
+  const toast = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const deleteDialogContent = repository ? repositoryDeleteDialogContent(repository.name) : undefined;
 
@@ -253,8 +255,12 @@ export function RepositorySettingsPage() {
   function confirmDeleteRepository() {
     if (!repository) return;
     deleteRepository.mutate(repository.name, {
-      onSuccess: () => {
+      onSuccess: (result) => {
         setDeleteDialogOpen(false);
+        toast.notify({
+          title: "Repository deletion started",
+          description: `Background job ${result.job.id} is deleting ${repository.name}.`,
+        });
         void navigate(ADMIN_UI_PATHS.repositories);
       },
     });
