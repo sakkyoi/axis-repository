@@ -155,7 +155,7 @@ describe("renderRepositoryDirectoryHtml", () => {
   it("keeps long file lists scrolling inside the listing panel instead of the page", () => {
     const html = render();
 
-    expect(html).toContain("<div class=\"file-list\">");
+    expect(html).toContain("<div class=\"file-list\"");
     expect(html).toContain("html,\n  body {\n    height: 100%;\n    overflow: hidden;\n  }");
     expect(html).toContain("body {\n    display: grid;");
     expect(html).toContain("grid-template-rows: auto minmax(0, 1fr) 3rem;");

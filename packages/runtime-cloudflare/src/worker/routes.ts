@@ -38,9 +38,9 @@ import {
   compositeRepositoryFaviconSvg,
   directoryNeedsTrailingSlash,
   readRepositoryDirectory,
+  REPOSITORY_BROWSER_PAGE_QUERY_PARAM,
   REPOSITORY_FAVICON_QUERY_PARAM,
   renderRepositoryDirectoryHtml,
-  renderRepositoryDirectoryHtmlStream,
   trailingSlashRedirectLocation,
   type RepositoryDirectoryListing,
 } from "./repository-directory";
@@ -1024,32 +1024,62 @@ async function repositoryDirectoryResponse(input: {
   };
   const body = input.method === "HEAD"
     ? null
-    : listing.entries.length === 0 && !listing.truncated
-      ? renderRepositoryDirectoryHtml(renderInput)
-      : renderRepositoryDirectoryHtmlStream({
-        ...renderInput,
-        listings: virtualListing
-          ? virtualRepositoryDirectoryListingPages({
-            dependencies: input.dependencies,
-            repository: input.repository,
-            prefix: directoryPath,
-            limit: directoryPageLimit,
-            ...(virtualListing.cursor !== undefined ? { cursor: virtualListing.cursor } : {}),
-          })
-          : storedRepositoryDirectoryListingPages({
-            dependencies: input.dependencies,
-            repository: input.repository,
-            relativePath: directoryPath,
-            limit: directoryPageLimit,
-            canServe: (relativePath) => plugin.canServeRepositoryPath({ relativePath }),
-            ...(listing.cursor !== undefined ? { cursor: listing.cursor } : {}),
-          }),
-      });
+    : renderRepositoryDirectoryHtml(renderInput);
   return new Response(body, {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": repositoryCacheControl(input.repository),
     },
+  });
+}
+
+async function repositoryDirectoryPageJsonResponse(input: {
+  dependencies: AppDependencies;
+  repository: Repository;
+  requestUrl: string;
+  relativePath: string;
+  virtual?: boolean;
+}): Promise<Response | null> {
+  const directoryPageLimit = 200;
+  const plugin = input.dependencies.repositoryRuntimePlugins.getPluginForRepository(input.repository);
+  if (!plugin) {
+    return null;
+  }
+  const url = new URL(input.requestUrl);
+  const cursor = url.searchParams.get("cursor") ?? undefined;
+  const isRoot = input.relativePath === "";
+  const directoryPath = isRoot || input.relativePath.endsWith("/")
+    ? input.relativePath
+    : `${input.relativePath}/`;
+  if (!isRoot && !plugin.canServeRepositoryPath({ relativePath: directoryPath })) {
+    return null;
+  }
+
+  const virtualListing = input.virtual
+    ? await plugin.objectBrowser?.listObjects({
+      repository: input.repository,
+      objectStore: input.dependencies.repositoryObjectStore,
+      repositoryArtifactStore: input.dependencies.repositoryArtifactStore,
+      prefix: directoryPath,
+      ...(cursor !== undefined ? { cursor } : {}),
+      limit: directoryPageLimit,
+    })
+    : undefined;
+  const listing = virtualListing
+    ? repositoryObjectBrowserDirectoryListing(virtualListing)
+    : await readRepositoryDirectory({
+      objectStore: input.dependencies.repositoryObjectStore,
+      repositoryName: input.repository.name,
+      relativePath: directoryPath,
+      canServe: (relativePath) => plugin.canServeRepositoryPath({ relativePath }),
+      ...(cursor !== undefined ? { cursor } : {}),
+      limit: directoryPageLimit,
+    });
+  if (!listing) {
+    return null;
+  }
+  return jsonResponse({ listing }, {
+    headers: { "cache-control": repositoryCacheControl(input.repository) },
   });
 }
 
@@ -1074,54 +1104,6 @@ function repositoryFaviconResponse(repository: Repository, url: URL, method: str
 function repositoryPluginIcon(repository: Repository) {
   const catalogEntry = getRepositoryPluginCatalogEntry(repository.ecosystem);
   return catalogEntry?.icon ?? resolvePluginIconAssets(undefined);
-}
-
-async function* virtualRepositoryDirectoryListingPages(input: {
-  dependencies: AppDependencies;
-  repository: Repository;
-  prefix: string;
-  cursor?: string;
-  limit: number;
-}): AsyncIterable<RepositoryDirectoryListing> {
-  let cursor = input.cursor;
-  const plugin = input.dependencies.repositoryRuntimePlugins.getPluginForRepository(input.repository);
-  while (cursor) {
-    const page = await plugin?.objectBrowser?.listObjects({
-      repository: input.repository,
-      objectStore: input.dependencies.repositoryObjectStore,
-      repositoryArtifactStore: input.dependencies.repositoryArtifactStore,
-      prefix: input.prefix,
-      cursor,
-      limit: input.limit,
-    });
-    if (!page) return;
-    yield repositoryObjectBrowserDirectoryListing(page);
-    cursor = page.cursor;
-  }
-}
-
-async function* storedRepositoryDirectoryListingPages(input: {
-  dependencies: AppDependencies;
-  repository: Repository;
-  relativePath: string;
-  cursor?: string;
-  limit: number;
-  canServe: (relativePath: string) => boolean;
-}): AsyncIterable<RepositoryDirectoryListing> {
-  let cursor = input.cursor;
-  while (cursor) {
-    const page = await readRepositoryDirectory({
-      objectStore: input.dependencies.repositoryObjectStore,
-      repositoryName: input.repository.name,
-      relativePath: input.relativePath,
-      canServe: input.canServe,
-      cursor,
-      limit: input.limit,
-    });
-    if (!page) return;
-    yield page;
-    cursor = page.cursor;
-  }
 }
 
 function repositoryObjectBrowserDirectoryListing(listing: RepositoryObjectBrowserListing): RepositoryDirectoryListing {
@@ -2301,6 +2283,19 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       relativePath,
       ...(accept ? { accept } : {}),
     });
+    if (url.searchParams.get(REPOSITORY_BROWSER_PAGE_QUERY_PARAM) === "1") {
+      const listing = await repositoryDirectoryPageJsonResponse({
+        dependencies,
+        repository,
+        requestUrl: request.url,
+        relativePath,
+        virtual: true,
+      });
+      if (listing) {
+        return listing;
+      }
+      throw new NotFoundError();
+    }
     if (isRepositoryBrowserNavigation(request)) {
       const listing = await repositoryDirectoryResponse({
         dependencies,

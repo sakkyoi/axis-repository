@@ -29,6 +29,8 @@ export interface RepositoryDirectoryListing {
   truncated?: boolean;
 }
 
+export const REPOSITORY_BROWSER_PAGE_QUERY_PARAM = "axis-repository-browser-page";
+
 /**
  * Lists one level of the tree.
  *
@@ -408,6 +410,11 @@ const DIRECTORY_STYLES = `
   tbody tr:hover .icon { color: hsl(var(--ink-accent)); transform: scale(1.12); }
   tbody tr:hover .name { text-decoration: underline; text-decoration-color: hsl(var(--primary)); text-underline-offset: 3px; }
   .name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .load-row td {
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+    padding: 0.7rem 1.1rem;
+  }
   /*
    * :link and :visited both, because the browser's own :visited rule outranks
    * a bare selector and would otherwise repaint half the listing purple.
@@ -469,36 +476,6 @@ export function renderRepositoryDirectoryHtml(input: {
   ].join("\n");
 }
 
-export function renderRepositoryDirectoryHtmlStream(input: {
-  repositoryName: string;
-  repositoryEcosystem: string;
-  pluginIcon: ResolvedPluginIconAssets;
-  listing: RepositoryDirectoryListing;
-  listings: AsyncIterable<RepositoryDirectoryListing>;
-}): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream({
-    async start(controller) {
-      let entryCount = 0;
-      const enqueue = (chunk: string) => controller.enqueue(encoder.encode(`${chunk}\n`));
-      enqueue(renderRepositoryDirectoryHtmlHead(input));
-      enqueue(renderRepositoryDirectoryTableOpen(input.listing));
-      for (const entry of input.listing.entries) {
-        entryCount += 1;
-        enqueue(renderRepositoryDirectoryRow(entry));
-      }
-      for await (const listing of input.listings) {
-        for (const entry of listing.entries) {
-          entryCount += 1;
-          enqueue(renderRepositoryDirectoryRow(entry));
-        }
-      }
-      enqueue(renderRepositoryDirectoryHtmlFoot(entryCount, { tableOpen: true }));
-      controller.close();
-    },
-  });
-}
-
 function renderRepositoryDirectoryRow(entry: RepositoryDirectoryEntry): string {
   // Links are relative to the listing, so the same page works whatever
   // origin or prefix the repository is reached through - and prefixed, so a
@@ -558,11 +535,12 @@ function renderRepositoryDirectoryHtmlHead(input: {
 }
 
 function renderRepositoryDirectoryTableOpen(listing: RepositoryDirectoryListing): string {
+  const nextCursor = listing.cursor ?? "";
   return [
-    "        <div class=\"file-list\">",
+    `        <div class="file-list" data-browser-page-param="${REPOSITORY_BROWSER_PAGE_QUERY_PARAM}" data-next-cursor="${escapeHtml(nextCursor)}">`,
     "        <table>",
     "          <thead><tr><th>Name</th><th>Size</th></tr></thead>",
-    "          <tbody>",
+    "          <tbody data-directory-rows>",
     ...(listing.relativePath === ""
       ? []
       : [
@@ -586,6 +564,7 @@ function renderRepositoryDirectoryHtmlFoot(entryCount: number, options: { tableO
   return [
     ...(options.tableOpen
       ? [
+        "          <tr class=\"load-row\" data-load-row hidden><td colspan=\"2\">Loading more...</td></tr>",
         "          </tbody>",
         "        </table>",
         "        </div>",
@@ -593,12 +572,94 @@ function renderRepositoryDirectoryHtmlFoot(entryCount: number, options: { tableO
       : []),
     "      </div>",
     "    </main>",
-    `    <footer><span>${entryCount} ${entryCount === 1 ? "entry" : "entries"}</span><span class="credit">Made by sakkyoi with ${LOVE_ICON}</span></footer>`,
+    `    <footer><span><span data-entry-count>${entryCount}</span> <span data-entry-label>${entryCount === 1 ? "entry" : "entries"}</span></span><span class="credit">Made by sakkyoi with ${LOVE_ICON}</span></footer>`,
+    ...(options.tableOpen ? [`    <script>${DIRECTORY_PAGINATION_SCRIPT}</script>`] : []),
     "  </body>",
     "</html>",
     "",
   ].join("\n");
 }
+
+const DIRECTORY_PAGINATION_SCRIPT = `
+(() => {
+  const root = document.querySelector(".file-list[data-browser-page-param]");
+  const rows = document.querySelector("[data-directory-rows]");
+  const loadRow = document.querySelector("[data-load-row]");
+  const countNode = document.querySelector("[data-entry-count]");
+  const labelNode = document.querySelector("[data-entry-label]");
+  if (!root || !rows) return;
+  let cursor = root.getAttribute("data-next-cursor") || "";
+  let loading = false;
+  let count = Number(countNode?.textContent || "0");
+  const icon = (name) => '<svg class="icon" aria-hidden="true"><use href="#' + name + '"></use></svg>';
+  const iconFor = (entry) => {
+    if (entry.directory) return "i-folder";
+    const name = String(entry.name || "").toLowerCase();
+    if (/\\.(deb|udeb|whl|tar\\.gz|tar\\.xz|tgz|gz|xz|zst|bz2)$/.test(name)) return "i-package";
+    if (/(^|\\/)(inrelease|release)$/.test(name) || /\\.(gpg|asc|sig)$/.test(name)) return "i-shield";
+    return "i-doc";
+  };
+  const formatSize = (size) => {
+    if (typeof size !== "number") return "";
+    if (size < 1024) return String(size) + " B";
+    const units = ["KiB", "MiB", "GiB", "TiB"];
+    let value = size / 1024;
+    let unit = units[0];
+    for (let index = 1; value >= 1024 && index < units.length; index += 1) {
+      value /= 1024;
+      unit = units[index];
+    }
+    return value.toFixed(value >= 10 ? 0 : 1) + " " + unit;
+  };
+  const appendEntry = (entry) => {
+    const tr = document.createElement("tr");
+    if (entry.directory) tr.className = "is-folder";
+    const nameCell = document.createElement("td");
+    const link = document.createElement("a");
+    link.href = "./" + encodeURIComponent(String(entry.name || "").replace(/\\/$/, "")) + (entry.directory ? "/" : "");
+    link.innerHTML = icon(iconFor(entry));
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = entry.name || "";
+    link.append(name);
+    nameCell.append(link);
+    const sizeCell = document.createElement("td");
+    sizeCell.className = "size";
+    sizeCell.textContent = entry.directory ? "" : formatSize(entry.size);
+    tr.append(nameCell, sizeCell);
+    rows.insertBefore(tr, loadRow);
+    count += 1;
+  };
+  const updateCount = () => {
+    if (countNode) countNode.textContent = String(count);
+    if (labelNode) labelNode.textContent = count === 1 ? "entry" : "entries";
+  };
+  const loadMore = async () => {
+    if (!cursor || loading) return;
+    loading = true;
+    if (loadRow) loadRow.hidden = false;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set(root.getAttribute("data-browser-page-param") || "${REPOSITORY_BROWSER_PAGE_QUERY_PARAM}", "1");
+      url.searchParams.set("cursor", cursor);
+      const response = await fetch(url, { headers: { accept: "application/json" } });
+      if (!response.ok) throw new Error("Unable to load repository listing page");
+      const data = await response.json();
+      for (const entry of data.listing?.entries || []) appendEntry(entry);
+      updateCount();
+      cursor = data.listing?.cursor || "";
+      root.setAttribute("data-next-cursor", cursor);
+    } finally {
+      loading = false;
+      if (loadRow) loadRow.hidden = true;
+    }
+  };
+  root.addEventListener("scroll", () => {
+    if (root.scrollTop + root.clientHeight >= root.scrollHeight - 64) void loadMore();
+  });
+  if (root.scrollHeight <= root.clientHeight + 64) void loadMore();
+})();
+`;
 
 export function compositeRepositoryFaviconSvg(logoMarkSvg: string, pluginIcon: ResolvedPluginIconAssets): string {
   const logoMark = normalizeLogoMarkForFavicon(parseSvgRoot(logoMarkSvg));

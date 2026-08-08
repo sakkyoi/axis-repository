@@ -492,6 +492,194 @@ describe("Cloudflare runtime routes", () => {
     await expect(response.text()).resolves.toBe("<html>proxied</html>");
   });
 
+  it("rewrites PyPI proxy Simple file links back through Axis", async () => {
+    vi.stubGlobal("fetch", async (request: Request) => new Response(
+      request.url.endsWith("/simple/demo/")
+        ? [
+          "<!doctype html>",
+          `<a href="https://files.example/packages/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}" data-requires-python="&gt;=3.9">demo-1.0-py3-none-any.whl</a>`,
+        ].join("\n")
+        : "<a href=\"demo/\">demo</a>",
+      { headers: { "content-type": "text/html; charset=utf-8" } },
+    ));
+    const app = createApp(createDevDependencies());
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-proxy",
+          ecosystem: "pypi",
+          kind: "proxy",
+          visibility: "public",
+          config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+        }),
+      }),
+    );
+    expect(createResponse.status).toBe(201);
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-proxy/simple/demo/", {
+        headers: { accept: "text/html" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain(
+      `href="./demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}"`,
+    );
+    expect(html).toContain('data-requires-python="&gt;=3.9"');
+    expect(html).not.toContain("https://files.example");
+  });
+
+  it("rewrites PyPI proxy Simple JSON file links back through Axis", async () => {
+    const upstreamRequests: Request[] = [];
+    vi.stubGlobal("fetch", async (request: Request) => {
+      upstreamRequests.push(request);
+      return new Response(JSON.stringify({
+        meta: { "api-version": "1.0" },
+        name: "demo",
+        files: [{
+          filename: "demo-1.0-py3-none-any.whl",
+          url: "https://files.example/packages/demo-1.0-py3-none-any.whl",
+          hashes: { sha256: "a".repeat(64) },
+          "requires-python": ">=3.9",
+        }],
+      }), {
+        headers: { "content-type": "application/vnd.pypi.simple.v1+json" },
+      });
+    });
+    const app = createApp(createDevDependencies());
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-proxy",
+          ecosystem: "pypi",
+          kind: "proxy",
+          visibility: "public",
+          config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+        }),
+      }),
+    );
+    expect(createResponse.status).toBe(201);
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-proxy/simple/demo/", {
+        headers: {
+          accept: "application/vnd.pypi.simple.v1+json, application/vnd.pypi.simple.v1+html;q=0.2",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/vnd.pypi.simple.v1+json");
+    await expect(response.json()).resolves.toMatchObject({
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "./demo-1.0-py3-none-any.whl",
+        hashes: { sha256: "a".repeat(64) },
+        "requires-python": ">=3.9",
+      }],
+    });
+
+    const fileResponse = await app.fetch(
+      new Request("https://axis.example/repositories/python-proxy/simple/demo/demo-1.0-py3-none-any.whl"),
+    );
+
+    expect(fileResponse.status).toBe(200);
+    expect(upstreamRequests.map((request) => request.url)).toContain("https://files.example/packages/demo-1.0-py3-none-any.whl");
+  });
+
+  it("converts PyPI proxy Simple HTML project pages to JSON when upstream ignores JSON negotiation", async () => {
+    vi.stubGlobal("fetch", async () => new Response([
+      "<!doctype html>",
+      `<a href="https://files.example/packages/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}" data-requires-python="&gt;=3.9">demo-1.0-py3-none-any.whl</a>`,
+    ].join("\n"), {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }));
+    const app = createApp(createDevDependencies());
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-proxy",
+          ecosystem: "pypi",
+          kind: "proxy",
+          visibility: "public",
+          config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+        }),
+      }),
+    );
+    expect(createResponse.status).toBe(201);
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-proxy/simple/demo/", {
+        headers: { accept: "application/vnd.pypi.simple.v1+json" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/vnd.pypi.simple.v1+json");
+    await expect(response.json()).resolves.toMatchObject({
+      name: "demo",
+      files: [{
+        filename: "demo-1.0-py3-none-any.whl",
+        url: "./demo-1.0-py3-none-any.whl",
+        hashes: { sha256: "a".repeat(64) },
+        "requires-python": ">=3.9",
+      }],
+    });
+  });
+
+  it("converts PyPI proxy Simple HTML root pages to JSON when upstream ignores JSON negotiation", async () => {
+    vi.stubGlobal("fetch", async () => new Response("<a href=\"demo/\">demo</a>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }));
+    const app = createApp(createDevDependencies());
+    const createResponse = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-proxy",
+          ecosystem: "pypi",
+          kind: "proxy",
+          visibility: "public",
+          config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+        }),
+      }),
+    );
+    expect(createResponse.status).toBe(201);
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-proxy/simple/", {
+        headers: { accept: "application/vnd.pypi.simple.v1+json" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/vnd.pypi.simple.v1+json");
+    await expect(response.json()).resolves.toMatchObject({
+      projects: [{ name: "demo" }],
+    });
+  });
+
   it("renders PyPI proxy Simple browser navigations with the shared repository directory page", async () => {
     const upstreamFetch = vi.fn(async () => new Response("<html>upstream</html>", {
       headers: { "content-type": "text/html; charset=utf-8" },
@@ -589,16 +777,9 @@ describe("Cloudflare runtime routes", () => {
     expect(upstreamFetch).not.toHaveBeenCalled();
   });
 
-  it("streams browser directory pages from paged virtual repository listings", async () => {
+  it("pages browser directory listings through a client-side JSON endpoint", async () => {
     const harness = createDevDependencyHarness();
-    let releaseSecondPage: (() => void) | undefined;
-    const secondPageReady = new Promise<void>((resolve) => {
-      releaseSecondPage = resolve;
-    });
     const listObjects = vi.fn(async ({ prefix, cursor, limit }: { prefix: string; cursor?: string; limit?: number }) => {
-      if (cursor) {
-        await secondPageReady;
-      }
       return {
         prefix,
         directories: cursor
@@ -672,23 +853,101 @@ describe("Cloudflare runtime routes", () => {
     expect(response).not.toBe("blocked");
     if (response === "blocked") return;
     expect(response.status).toBe(200);
+    const html = await response.text();
     expect(listObjects).toHaveBeenNthCalledWith(1, expect.objectContaining({
       prefix: "simple/",
       limit: 200,
     }));
+    expect(listObjects).toHaveBeenCalledTimes(1);
+    expect(html).toContain("alpha/");
+    expect(html).not.toContain("bravo/");
+    expect(html).toContain("axis-repository-browser-page");
+    expect(html).toContain("data-next-cursor=\"page_2\"");
 
-    const htmlPromise = response.text();
-    releaseSecondPage?.();
-    const html = await htmlPromise;
+    const pageResponse = await app.fetch(new Request(
+      "https://axis.example/repositories/streamed-proxy/simple/?axis-repository-browser-page=1&cursor=page_2",
+      { headers: { accept: "application/json" } },
+    ));
 
+    expect(pageResponse.status).toBe(200);
     expect(listObjects).toHaveBeenCalledTimes(2);
     expect(listObjects).toHaveBeenNthCalledWith(2, expect.objectContaining({
       prefix: "simple/",
       cursor: "page_2",
       limit: 200,
     }));
-    expect(html).toContain("alpha/");
-    expect(html).toContain("bravo/");
+    await expect(pageResponse.json()).resolves.toEqual({
+      listing: {
+        relativePath: "simple/",
+        entries: [{
+          name: "bravo/",
+          relativePath: "simple/bravo/",
+          directory: true,
+        }],
+        truncated: false,
+      },
+    });
+  });
+
+  it("pages stored browser directory listings through the same JSON endpoint", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-internal",
+      ecosystem: "pypi",
+      visibility: "public",
+      config: {},
+    });
+    for (let index = 0; index < 205; index += 1) {
+      const name = `demo-${String(index).padStart(3, "0")}-py3-none-any.whl`;
+      await harness.repositoryObjectStore.putBytes(
+        `repositories/python-internal/packages/demo/${name}`,
+        new Uint8Array([index]),
+        "application/octet-stream",
+      );
+    }
+    const listObjects = harness.repositoryObjectStore.listObjects.bind(harness.repositoryObjectStore);
+    harness.repositoryObjectStore.listObjects = async (input) => {
+      const page = await listObjects(input);
+      const offset = input.cursor ? Number(input.cursor) : 0;
+      const limit = input.limit ?? page.objects.length;
+      const objects = page.objects.slice(offset, offset + limit);
+      const nextOffset = offset + objects.length;
+      const truncated = nextOffset < page.objects.length;
+      return {
+        ...page,
+        objects,
+        ...(truncated ? { cursor: String(nextOffset) } : {}),
+        truncated,
+      };
+    };
+
+    const response = await app.fetch(new Request("https://axis.example/repositories/python-internal/packages/demo/", {
+      headers: {
+        accept: "text/html",
+        "sec-fetch-dest": "document",
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("demo-000-py3-none-any.whl");
+    expect(html).not.toContain("demo-204-py3-none-any.whl");
+    expect(html).toContain("data-next-cursor=");
+
+    const cursor = /data-next-cursor="([^"]+)"/u.exec(html)?.[1];
+    expect(cursor).toBeTruthy();
+    const pageResponse = await app.fetch(new Request(
+      `https://axis.example/repositories/python-internal/packages/demo/?axis-repository-browser-page=1&cursor=${encodeURIComponent(cursor ?? "")}`,
+      { headers: { accept: "application/json" } },
+    ));
+
+    expect(pageResponse.status).toBe(200);
+    const page = await pageResponse.json() as {
+      listing: { entries: Array<{ name: string; directory: boolean; size?: number }>; truncated: boolean };
+    };
+    expect(page.listing.entries.map((entry) => entry.name)).toContain("demo-204-py3-none-any.whl");
+    expect(page.listing.truncated).toBe(false);
   });
 
   it("refreshes a PyPI proxy catalog and lazily reads project details", async () => {
