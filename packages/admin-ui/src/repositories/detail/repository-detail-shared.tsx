@@ -50,7 +50,7 @@ export function RepositoryDetailSections({
   return (
     <>
       {sections.map((section) => (
-        <section key={section.id} className="grid gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
+        <section key={section.id} className="grid gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0 last:pb-4">
           <h3 className="text-sm font-semibold">{section.title}</h3>
           <section.Component
             repository={repository}

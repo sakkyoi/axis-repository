@@ -17,7 +17,7 @@ export function detailPaneFitsBeside(viewportWidth: number): boolean {
 export function listDetailGridClass(beside: boolean): string {
   return beside
     ? "grid h-full min-h-0 min-w-0 gap-5 grid-cols-[minmax(0,1fr)_minmax(360px,420px)]"
-    : "grid h-full min-h-0 min-w-0 gap-5";
+    : "grid h-full min-h-0 min-w-0 gap-5 pb-4";
 }
 
 /**
@@ -48,7 +48,7 @@ export function workspaceAsideGridClass(beside: boolean): string {
 export function workspaceBodyClass(twoColumns: boolean): string {
   return twoColumns
     ? "grid h-full min-h-0 overflow-hidden p-4"
-    : "grid h-full min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden p-4";
+    : "grid h-full min-h-0 content-start gap-4 overflow-y-auto overflow-x-hidden px-4 pb-5 pt-4";
 }
 
 /**

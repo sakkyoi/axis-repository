@@ -25,6 +25,7 @@ const statusVariant: Record<BackgroundJob["status"], "default" | "success" | "wa
 
 const JOB_PAGE_LIMIT = 50;
 type JobStatusFilter = "all" | BackgroundJob["status"];
+const jobsTableColumns = "grid-cols-[minmax(240px,1.25fr)_130px_minmax(240px,1fr)_190px_minmax(260px,1fr)_150px]";
 
 const statusFilters: Array<{ value: JobStatusFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -59,7 +60,10 @@ export function JobsPage() {
       title="Jobs"
       description="Background work running outside request lifetimes."
     >
-      <div className="flex flex-wrap items-center gap-2" aria-label="Job status filters">
+      <div
+        className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 bg-background/95 px-1 py-1 backdrop-blur"
+        aria-label="Job status filters"
+      >
         {statusFilters.map((filter) => (
           <Button
             key={filter.value}
@@ -89,54 +93,58 @@ export function JobsPage() {
       )}
       {jobs.data && jobs.data.jobs.length > 0 && (
         <div className="grid gap-3">
-          <div className="overflow-x-auto rounded-md border border-border">
-            <div className="min-w-[980px]">
-              <div className="grid grid-cols-[minmax(220px,1.2fr)_120px_minmax(220px,1fr)_180px_minmax(220px,1fr)_160px] border-b border-border bg-muted px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
-                <span>Job</span>
-                <span>Status</span>
-                <span>Subject</span>
-                <span>Requested</span>
-                <span>Result</span>
-                <span>Actions</span>
+          <div className="overflow-x-auto rounded-md border border-border" data-testid="jobs-table-scroll-area">
+            <div className="min-w-[82rem]" role="table" aria-label="Background jobs">
+              <div
+                className={`grid ${jobsTableColumns} gap-3 border-b border-border bg-muted px-3 py-2 text-xs font-semibold uppercase text-muted-foreground`}
+                role="row"
+              >
+                <span role="columnheader">Job</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader">Subject</span>
+                <span role="columnheader">Requested</span>
+                <span className="min-w-0" role="columnheader">Result</span>
+                <span className="text-right" role="columnheader">Actions</span>
               </div>
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-border" role="rowgroup">
                 {jobs.data.jobs.map((job) => (
                   <div
                     key={job.id}
-                    className="grid grid-cols-[minmax(220px,1.2fr)_120px_minmax(220px,1fr)_180px_minmax(220px,1fr)_160px] gap-3 px-3 py-3 text-sm"
+                    className={`grid ${jobsTableColumns} gap-3 px-3 py-3 text-sm`}
+                    role="row"
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0" role="cell">
                       <div className="truncate font-medium">{backgroundJobTypeLabel(job)}</div>
                       <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{job.id}</div>
                     </div>
-                    <div>
+                    <div role="cell">
                       <Badge variant={statusVariant[job.status]}>{backgroundJobStatusLabel(job.status)}</Badge>
                       {job.attempts > 0 && (
                         <div className="mt-2 text-xs text-muted-foreground">{job.attempts} attempt{job.attempts === 1 ? "" : "s"}</div>
                       )}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0" role="cell">
                       <div className="truncate">{job.subject.id}</div>
                       <div className="mt-1 text-xs text-muted-foreground">{job.subject.type}</div>
                       {job.repositoryName && (
                         <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{job.repositoryName}</div>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground" role="cell">
                       <div>{new Date(job.requestedAt).toLocaleString()}</div>
                       {job.finishedAt && <div className="mt-1">Done {new Date(job.finishedAt).toLocaleString()}</div>}
                     </div>
-                    <div className="min-w-0 text-xs text-muted-foreground">
+                    <div className="min-w-0 break-words text-xs text-muted-foreground" role="cell">
                       {job.failure ? (
                         <span className="text-destructive">{job.failure.message}</span>
                       ) : (
                         backgroundJobResultLabel(job)
                       )}
                       {backgroundJobDetailLines(job).map((line) => (
-                        <div key={line} className="mt-1 text-[11px] text-muted-foreground">{line}</div>
+                        <div key={line} className="mt-1 break-words text-[11px] text-muted-foreground">{line}</div>
                       ))}
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap justify-end gap-2" role="cell">
                       {(job.status === "pending" || job.status === "running") && (
                         <Button
                           type="button"

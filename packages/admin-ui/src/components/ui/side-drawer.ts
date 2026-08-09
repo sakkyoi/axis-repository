@@ -27,5 +27,5 @@ export function sideDrawerContentClass(widthClass = "sm:w-[min(92vw,560px)]"): s
 }
 
 export function sideDrawerBodyClass(): string {
-  return "min-h-0 overflow-y-auto pr-1";
+  return "min-h-0 overflow-y-auto pb-4 pr-1";
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { DETAIL_PANE_NEEDS_PX, detailPaneFitsBeside, listDetailGridClass } from "./list-detail-model";
+import {
+  DETAIL_PANE_NEEDS_PX,
+  detailPaneFitsBeside,
+  listDetailGridClass,
+  workspaceBodyClass,
+} from "./list-detail-model";
 
 describe("a list and what is selected in it", () => {
   it("puts them side by side only where both fit", () => {
@@ -17,5 +22,10 @@ describe("a list and what is selected in it", () => {
 
   it("lets split panes keep their own scroll areas", () => {
     expect(listDetailGridClass(true)).toContain("min-h-0");
+  });
+
+  it("keeps stacked list/detail pages from sitting flush against the bottom edge", () => {
+    expect(listDetailGridClass(false)).toContain("pb-4");
+    expect(workspaceBodyClass(false)).toContain("pb-5");
   });
 });

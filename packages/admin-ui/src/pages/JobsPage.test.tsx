@@ -99,4 +99,45 @@ describe("JobsPage", () => {
     });
     expect(listBackgroundJobs).toHaveBeenLastCalledWith({ limit: 50, offset: 0, status: "failed" });
   });
+
+  it("keeps result and actions columns inside a stable horizontally scrollable table", async () => {
+    listBackgroundJobs.mockResolvedValueOnce({
+      jobs: [{ ...job("repository.delete:very-long-repository-name"), status: "succeeded" }],
+      total: 1,
+    });
+
+    renderJobsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Showing 1-1 of 1")).toBeTruthy();
+    });
+
+    const scrollArea = screen.getByTestId("jobs-table-scroll-area");
+    const table = screen.getByRole("table", { name: "Background jobs" });
+    const resultHeader = screen.getByRole("columnheader", { name: "Result" });
+    const actionsHeader = screen.getByRole("columnheader", { name: "Actions" });
+
+    expect(scrollArea.className).toContain("overflow-x-auto");
+    expect(table.className).toContain("min-w-[82rem]");
+    expect(resultHeader.className).toContain("min-w-0");
+    expect(actionsHeader.className).toContain("text-right");
+  });
+
+  it("keeps job status filters visible at the top of the scrolling page body", async () => {
+    listBackgroundJobs.mockResolvedValueOnce({
+      jobs: [job("repository.index:python-proxy")],
+      total: 1,
+    });
+
+    renderJobsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Showing 1-1 of 1")).toBeTruthy();
+    });
+
+    const filters = screen.getByLabelText("Job status filters");
+    expect(filters.className).toContain("sticky");
+    expect(filters.className).toContain("top-0");
+    expect(filters.className).toContain("z-10");
+  });
 });

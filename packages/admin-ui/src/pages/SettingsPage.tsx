@@ -18,6 +18,8 @@ import { ErrorState, PageShell } from "./shared";
 import { SkeletonRows } from "../components/ui/skeleton";
 import { useErrorToast, useToast } from "../components/ui/toast";
 
+const repositoryPluginsTableColumns = "grid-cols-[minmax(180px,1fr)_130px_minmax(170px,0.8fr)_minmax(300px,1.3fr)_minmax(220px,1fr)_240px]";
+
 export function SettingsPage() {
   const runtimeConfig = getRuntimeConfig();
   const apiTarget = runtimeConfig.apiBaseUrl || "same-origin";
@@ -76,23 +78,27 @@ export function SettingsPage() {
           </div>
         )}
         {pluginRows.length > 0 && (
-          <div className="overflow-x-auto rounded-md border border-border">
-            <div className="min-w-[980px]">
-              <div className="grid grid-cols-[minmax(140px,1fr)_120px_minmax(150px,0.8fr)_minmax(220px,1.3fr)_minmax(170px,1fr)_220px] border-b border-border bg-muted px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
-                <span>Plugin</span>
-                <span>Status</span>
-                <span>Policy</span>
-                <span>Kinds / capabilities</span>
-                <span>Client helpers</span>
-                <span>Actions</span>
+          <div className="overflow-x-auto rounded-md border border-border" data-testid="repository-plugins-table-scroll-area">
+            <div className="min-w-[84rem]" role="table" aria-label="Repository plugins">
+              <div
+                className={`grid ${repositoryPluginsTableColumns} gap-3 border-b border-border bg-muted px-3 py-2 text-xs font-semibold uppercase text-muted-foreground`}
+                role="row"
+              >
+                <span role="columnheader">Plugin</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader">Policy</span>
+                <span role="columnheader">Kinds / capabilities</span>
+                <span role="columnheader">Client helpers</span>
+                <span className="text-right" role="columnheader">Actions</span>
               </div>
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-border" role="rowgroup">
                 {pluginRows.map((plugin) => (
                   <div
                     key={plugin.ecosystem}
-                    className="grid grid-cols-[minmax(140px,1fr)_120px_minmax(150px,0.8fr)_minmax(220px,1.3fr)_minmax(170px,1fr)_220px] gap-3 px-3 py-3 text-sm"
+                    className={`grid ${repositoryPluginsTableColumns} gap-3 px-3 py-3 text-sm`}
+                    role="row"
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0" role="cell">
                       <div className="font-medium">{plugin.name}</div>
                       <div className="mt-0.5 font-mono text-xs text-muted-foreground">
                         {plugin.ecosystem} / {plugin.version}
@@ -103,16 +109,16 @@ export function SettingsPage() {
                         ))}
                       </div>
                     </div>
-                    <div>
+                    <div role="cell">
                       <Badge variant={plugin.lifecycle.variant}>{plugin.lifecycle.label}</Badge>
                       <p className="mt-2 text-xs text-muted-foreground">{plugin.lifecycle.description}</p>
                     </div>
-                    <div className="min-w-0 text-xs">
+                    <div className="min-w-0 text-xs" role="cell">
                       <div className="font-medium">{plugin.policySummary}</div>
                       <div className="mt-1 text-muted-foreground">{plugin.policySource}</div>
                       <div className="mt-1 text-muted-foreground">{plugin.policyDescription}</div>
                     </div>
-                    <div className="grid min-w-0 content-start gap-2">
+                    <div className="grid min-w-0 content-start gap-2" role="cell">
                       <div className="grid gap-1.5">
                         <span className="text-[11px] font-semibold uppercase text-muted-foreground">Kinds</span>
                         <div className="flex flex-wrap gap-1.5">
@@ -135,8 +141,8 @@ export function SettingsPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="break-words font-mono text-xs text-muted-foreground">{plugin.clientHelperSummary}</div>
-                    <div className="flex flex-wrap items-start gap-2">
+                    <div className="break-words font-mono text-xs text-muted-foreground" role="cell">{plugin.clientHelperSummary}</div>
+                    <div className="flex flex-wrap items-start justify-end gap-2" role="cell">
                       <Button
                         type="button"
                         size="sm"
