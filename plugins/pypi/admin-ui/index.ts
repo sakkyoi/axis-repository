@@ -62,6 +62,20 @@ const pypiProxyRepositoryConfig: PluginRepositoryConfigManifest = {
       placeholder: "https://pypi.org/",
       description: "The PyPI-compatible upstream base URL this proxy reads from.",
     },
+    {
+      name: "upstreamUrlMode",
+      label: "Upstream URL mode",
+      kind: "select",
+      step: "config",
+      required: true,
+      defaultValue: "base-url",
+      placeholder: "base-url",
+      description: "Use base-url for services like pypi.org, or simple-api-root when the URL already serves the Simple API.",
+      options: [
+        { value: "base-url", label: "Base URL" },
+        { value: "simple-api-root", label: "Simple API root" },
+      ],
+    },
   ],
 };
 
@@ -73,7 +87,7 @@ const pypiProxyRepositoryCreatePlugin: ProxyRepositoryCreatePlugin = {
   defaults: {
     name: "",
     visibility: "private",
-    config: { upstreamUrl: "" },
+    config: { upstreamUrl: "", upstreamUrlMode: "base-url" },
     setup: {},
   },
   validateStep: (step, state) => {
@@ -82,6 +96,9 @@ const pypiProxyRepositoryCreatePlugin: ProxyRepositoryCreatePlugin = {
     }
     if (step === "config" && !state.config.upstreamUrl?.trim()) {
       return ["Upstream URL is required"];
+    }
+    if (step === "config" && !isPypiProxyUpstreamUrlMode(state.config.upstreamUrlMode)) {
+      return ["Upstream URL mode is required"];
     }
     return [];
   },
@@ -92,11 +109,20 @@ const pypiProxyRepositoryCreatePlugin: ProxyRepositoryCreatePlugin = {
     visibility: state.visibility,
     config: {
       [pypiPluginManifest.repositoryConfig.namespace]: {
-        upstreamUrl: state.config.upstreamUrl?.trim() ?? "",
+        upstreamUrl: normalizeTrailingSlash(state.config.upstreamUrl?.trim() ?? ""),
+        upstreamUrlMode: state.config.upstreamUrlMode,
       },
     },
   }),
 };
+
+function isPypiProxyUpstreamUrlMode(value: unknown): value is "base-url" | "simple-api-root" {
+  return value === "base-url" || value === "simple-api-root";
+}
+
+function normalizeTrailingSlash(value: string): string {
+  return value && !value.endsWith("/") ? `${value}/` : value;
+}
 
 const pypiGroupRepositoryCreatePlugin: GroupRepositoryCreatePlugin = {
   kind: "group",

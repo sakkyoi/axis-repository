@@ -96,27 +96,42 @@ describe("repository create plugins", () => {
     });
   });
 
-  it("builds a PyPI proxy repository create payload with an upstream URL", () => {
+  it("builds a PyPI proxy repository create payload with an upstream URL mode", () => {
     const plugin = getRepositoryCreatePlugin({ ecosystem: "pypi", kind: "proxy" })!;
 
     expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step, field.required]))
-      .toEqual([["upstreamUrl", "text", "config", true]]);
+      .toEqual([
+        ["upstreamUrl", "text", "config", true],
+        ["upstreamUrlMode", "select", "config", true],
+      ]);
     expect(plugin.repositoryConfig.fields[0]).toMatchObject({
       placeholder: "https://pypi.org/",
     });
-    expect(plugin.repositoryConfig.fields[0]).not.toHaveProperty("defaultValue");
-    expect(plugin.defaults.config).toEqual({ upstreamUrl: "" });
+    expect(plugin.repositoryConfig.fields[1]).toMatchObject({
+      defaultValue: "base-url",
+      options: [
+        { value: "base-url", label: "Base URL" },
+        { value: "simple-api-root", label: "Simple API root" },
+      ],
+    });
+    expect(plugin.defaults.config).toEqual({ upstreamUrl: "", upstreamUrlMode: "base-url" });
     expect(plugin.steps).toEqual(["plugin", "basics", "config", "review"]);
     expect(plugin.validateStep("config", {
       name: "python-proxy",
       visibility: "private",
-      config: { upstreamUrl: "" },
+      config: { upstreamUrl: "", upstreamUrlMode: "base-url" },
       setup: {},
     })).toEqual(["Upstream URL is required"]);
+    expect(plugin.validateStep("config", {
+      name: "python-proxy",
+      visibility: "private",
+      config: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "heuristic" },
+      setup: {},
+    })).toEqual(["Upstream URL mode is required"]);
     expect(plugin.buildCreateInput({
       name: "python-proxy",
       visibility: "public",
-      config: { upstreamUrl: " https://pypi.org/simple/../ " },
+      config: { upstreamUrl: " https://pypi.org/simple ", upstreamUrlMode: "base-url" },
       setup: {},
     })).toEqual({
       name: "python-proxy",
@@ -125,7 +140,8 @@ describe("repository create plugins", () => {
       visibility: "public",
       config: {
         pypi: {
-          upstreamUrl: "https://pypi.org/simple/../",
+          upstreamUrl: "https://pypi.org/simple/",
+          upstreamUrlMode: "base-url",
         },
       },
     });

@@ -196,6 +196,12 @@ function validAptConfig(signingKeyId = "signing_key_prod"): Record<string, unkno
   };
 }
 
+function stubPypiProxyRootProbe() {
+  return vi.stubGlobal("fetch", async () => new Response("<a href=\"demo/\">demo</a>", {
+    headers: { "content-type": "text/html; charset=utf-8" },
+  }));
+}
+
 async function createRepository(app: ReturnType<typeof createApp>, body: Record<string, unknown>) {
   const requestBody = body.ecosystem === "apt" && body.config === undefined
     ? { ...body, config: validAptConfig() }
@@ -448,6 +454,11 @@ describe("Cloudflare runtime routes", () => {
     const upstreamRequests: Request[] = [];
     vi.stubGlobal("fetch", async (request: Request) => {
       upstreamRequests.push(request);
+      if (request.url === "https://pypi.example/root/simple/") {
+        return new Response("<a href=\"demo/\">demo</a>", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
       return new Response("<html>proxied</html>", {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
@@ -469,12 +480,21 @@ describe("Cloudflare runtime routes", () => {
           config: {
             pypi: {
               upstreamUrl: "https://pypi.example/root/",
+              upstreamUrlMode: "base-url",
             },
           },
         }),
       }),
     );
     expect(createResponse.status).toBe(201);
+    await expect(createResponse.clone().json()).resolves.toMatchObject({
+      config: {
+        pypi: {
+          upstreamUrl: "https://pypi.example/root/",
+          upstreamUrlMode: "base-url",
+        },
+      },
+    });
 
     const response = await app.fetch(
       new Request("https://axis.example/repositories/python-proxy/simple/demo/", {
@@ -485,10 +505,52 @@ describe("Cloudflare runtime routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(upstreamRequests.map((request) => request.url)).toEqual([
+      "https://pypi.example/root/simple/",
       "https://pypi.example/root/simple/demo/",
     ]);
-    expect(upstreamRequests[0]?.headers.get("accept")).toBe("text/html");
+    expect(upstreamRequests[1]?.headers.get("accept")).toBe("text/html");
     await expect(response.text()).resolves.toBe("<html>proxied</html>");
+  });
+
+  it("rejects PyPI proxy repository creation when the upstream URL points to a Simple project page", async () => {
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({
+      meta: { "api-version": "1.0" },
+      name: "peppercorn",
+      files: [{ filename: "peppercorn-0.6-py3-none-any.whl", url: "peppercorn-0.6-py3-none-any.whl" }],
+    }), {
+      headers: { "content-type": "application/vnd.pypi.simple.v1+json" },
+    }));
+    const app = createApp(createDevDependencies());
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "python-proxy",
+          ecosystem: "pypi",
+          kind: "proxy",
+          visibility: "public",
+          config: {
+            pypi: {
+              upstreamUrl: "https://pypi.org/simple/peppercorn/",
+              upstreamUrlMode: "simple-api-root",
+            },
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "validation_error",
+        message: "config.pypi.upstreamUrl points to a Simple API project page; use the Simple API root instead",
+      },
+    });
   });
 
   it("rewrites PyPI proxy Simple file links back through Axis", async () => {
@@ -514,7 +576,7 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           kind: "proxy",
           visibility: "public",
-          config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+          config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
         }),
       }),
     );
@@ -539,6 +601,14 @@ describe("Cloudflare runtime routes", () => {
     const upstreamRequests: Request[] = [];
     vi.stubGlobal("fetch", async (request: Request) => {
       upstreamRequests.push(request);
+      if (request.url === "https://pypi.example/root/simple/") {
+        return new Response(JSON.stringify({
+          meta: { "api-version": "1.0" },
+          projects: [{ name: "demo" }],
+        }), {
+          headers: { "content-type": "application/vnd.pypi.simple.v1+json" },
+        });
+      }
       return new Response(JSON.stringify({
         meta: { "api-version": "1.0" },
         name: "demo",
@@ -565,11 +635,12 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           kind: "proxy",
           visibility: "public",
-          config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+          config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
         }),
       }),
     );
     expect(createResponse.status).toBe(201);
+    upstreamRequests.length = 0;
 
     const response = await app.fetch(
       new Request("https://axis.example/repositories/python-proxy/simple/demo/", {
@@ -599,12 +670,19 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("converts PyPI proxy Simple HTML project pages to JSON when upstream ignores JSON negotiation", async () => {
-    vi.stubGlobal("fetch", async () => new Response([
+    vi.stubGlobal("fetch", async (request: Request) => {
+      if (request.url === "https://pypi.example/root/simple/") {
+        return new Response("<a href=\"demo/\">demo</a>", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+      return new Response([
       "<!doctype html>",
       `<a href="https://files.example/packages/demo-1.0-py3-none-any.whl#sha256=${"a".repeat(64)}" data-requires-python="&gt;=3.9">demo-1.0-py3-none-any.whl</a>`,
     ].join("\n"), {
       headers: { "content-type": "text/html; charset=utf-8" },
-    }));
+      });
+    });
     const app = createApp(createDevDependencies());
     const createResponse = await app.fetch(
       new Request("https://axis.example/admin/repositories", {
@@ -618,7 +696,7 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           kind: "proxy",
           visibility: "public",
-          config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+          config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
         }),
       }),
     );
@@ -660,7 +738,7 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           kind: "proxy",
           visibility: "public",
-          config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+          config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
         }),
       }),
     );
@@ -680,9 +758,10 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("renders PyPI proxy Simple browser navigations with the shared repository directory page", async () => {
-    const upstreamFetch = vi.fn(async () => new Response("<html>upstream</html>", {
-      headers: { "content-type": "text/html; charset=utf-8" },
-    }));
+    const upstreamFetch = vi.fn(async (request: Request) => new Response(
+      request.url === "https://pypi.org/simple/" ? "<a href=\"demo/\">demo</a>" : "<html>upstream</html>",
+      { headers: { "content-type": "text/html; charset=utf-8" } },
+    ));
     vi.stubGlobal("fetch", upstreamFetch);
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
@@ -699,11 +778,12 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           kind: "proxy",
           visibility: "public",
-          config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+          config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
         }),
       }),
     );
     expect(createResponse.status).toBe(201);
+    upstreamFetch.mockClear();
     await harness.repositoryObjectStore.putJson("repositories/python-proxy/_proxy-cache/pypi/projects.json", {
       upstreamUrl: "https://pypi.org/",
       refreshedAt: "2026-08-05T00:00:00.000Z",
@@ -730,9 +810,10 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("treats browser HTML requests without Fetch Metadata as virtual repository browsing", async () => {
-    const upstreamFetch = vi.fn(async () => new Response("<html>upstream</html>", {
-      headers: { "content-type": "text/html; charset=utf-8" },
-    }));
+    const upstreamFetch = vi.fn(async (request: Request) => new Response(
+      request.url === "https://pypi.org/simple/" ? "<a href=\"demo/\">demo</a>" : "<html>upstream</html>",
+      { headers: { "content-type": "text/html; charset=utf-8" } },
+    ));
     vi.stubGlobal("fetch", upstreamFetch);
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
@@ -748,11 +829,12 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           kind: "proxy",
           visibility: "public",
-          config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+          config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
         }),
       }),
     );
     expect(createResponse.status).toBe(201);
+    upstreamFetch.mockClear();
     await harness.repositoryObjectStore.putJson("repositories/python-proxy/_proxy-cache/pypi/projects.json", {
       upstreamUrl: "https://pypi.org/",
       refreshedAt: "2026-08-05T00:00:00.000Z",
@@ -1069,7 +1151,7 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           kind: "proxy",
           visibility: "public",
-          config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+          config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
         }),
       }),
     );
@@ -1187,7 +1269,7 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           kind: "proxy",
           visibility: "public",
-          config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+          config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
         }),
       }),
     );
@@ -1255,7 +1337,7 @@ describe("Cloudflare runtime routes", () => {
           ecosystem: "pypi",
           kind: "proxy",
           visibility: "public",
-          config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+          config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
         }),
       }),
     );
@@ -1460,6 +1542,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("queues PyPI proxy byte cache purge rather than sweeping cache objects in the request", async () => {
+    stubPypiProxyRootProbe();
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
     await createRepository(app, {
@@ -1467,7 +1550,7 @@ describe("Cloudflare runtime routes", () => {
       ecosystem: "pypi",
       kind: "proxy",
       visibility: "public",
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     });
     await harness.dependencies.backgroundJobService.cancel("repository.index:python-proxy");
     await harness.repositoryObjectStore.putBytes(
@@ -3896,6 +3979,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("lists and cancels background jobs through admin routes", async () => {
+    stubPypiProxyRootProbe();
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
     await createRepository(app, {
@@ -3903,7 +3987,7 @@ describe("Cloudflare runtime routes", () => {
       ecosystem: "pypi",
       kind: "proxy",
       visibility: "private",
-      config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/simple/", upstreamUrlMode: "simple-api-root" } },
     });
     await harness.dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: "python-proxy" });
 
@@ -3948,6 +4032,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("queues an initial artifact index job when a proxy repository is created", async () => {
+    stubPypiProxyRootProbe();
     const harness = createDevDependencyHarness();
     let scheduledJobs = 0;
     harness.dependencies.scheduleBackgroundJobs = async () => {
@@ -3960,7 +4045,7 @@ describe("Cloudflare runtime routes", () => {
       ecosystem: "pypi",
       kind: "proxy",
       visibility: "private",
-      config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/simple/", upstreamUrlMode: "simple-api-root" } },
     });
 
     await expect(harness.dependencies.backgroundJobService.get("repository.index:python-proxy"))
@@ -3973,6 +4058,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("does not block proxy repository creation on background job scheduling when waitUntil is available", async () => {
+    stubPypiProxyRootProbe();
     const harness = createDevDependencyHarness();
     let resolveScheduledJob!: () => void;
     const scheduledJob = new Promise<void>((resolve) => {
@@ -3998,7 +4084,7 @@ describe("Cloudflare runtime routes", () => {
         ecosystem: "pypi",
         kind: "proxy",
         visibility: "private",
-        config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
+        config: { pypi: { upstreamUrl: "https://pypi.example/simple/", upstreamUrlMode: "simple-api-root" } },
       }),
     }));
 
@@ -4012,6 +4098,7 @@ describe("Cloudflare runtime routes", () => {
   });
 
   it("retries failed background jobs through admin routes", async () => {
+    stubPypiProxyRootProbe();
     const harness = createDevDependencyHarness();
     let scheduledJobs = 0;
     harness.dependencies.scheduleBackgroundJobs = async () => {
@@ -4023,7 +4110,7 @@ describe("Cloudflare runtime routes", () => {
       ecosystem: "pypi",
       kind: "proxy",
       visibility: "private",
-      config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/simple/", upstreamUrlMode: "simple-api-root" } },
     });
     await harness.dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: "python-proxy" });
     await harness.dependencies.backgroundJobService.cancel("repository.index:python-proxy");
@@ -6119,7 +6206,7 @@ describe("Cloudflare runtime routes", () => {
     await expect(createRepository.json()).resolves.toEqual({
       error: {
         code: "validation_error",
-        message: "Artifact repository plugin is not configured for ecosystem: npm",
+        message: "Repository plugin is not configured for repository kind and ecosystem: hosted npm",
       },
     });
   });

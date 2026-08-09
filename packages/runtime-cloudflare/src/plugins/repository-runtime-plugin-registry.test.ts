@@ -405,7 +405,9 @@ describe("RepositoryRuntimePluginRegistry", () => {
       version: "0.0.0",
       capabilities: ["package-index"],
       canServeRepositoryPath: () => false,
-      validateRepositoryConfig: () => calls.push("config"),
+      validateRepositoryConfig: () => {
+        calls.push("config");
+      },
       publish: {
         validateArtifacts: () => calls.push("artifacts"),
         derivePrincipalScope: () => {

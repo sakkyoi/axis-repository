@@ -1038,7 +1038,7 @@ describe("Cloudflare runtime dependencies", () => {
     await expect(createRepository.json()).resolves.toEqual({
       error: {
         code: "validation_error",
-        message: "Artifact repository plugin is not configured for ecosystem: npm",
+        message: "Repository plugin is not configured for repository kind and ecosystem: hosted npm",
       },
     });
   });

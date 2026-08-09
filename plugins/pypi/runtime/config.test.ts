@@ -6,9 +6,23 @@ describe("PyPI repository config", () => {
     expect(parsePypiProxyRepositoryConfig({
       pypi: {
         upstreamUrl: "https://pypi.example/root",
+        upstreamUrlMode: "base-url",
       },
     })).toEqual({
       upstreamUrl: "https://pypi.example/root/",
+      upstreamUrlMode: "base-url",
+    });
+  });
+
+  it("accepts a proxy upstream Simple API root URL mode", () => {
+    expect(parsePypiProxyRepositoryConfig({
+      pypi: {
+        upstreamUrl: "https://pypi.nvidia.com",
+        upstreamUrlMode: "simple-api-root",
+      },
+    })).toEqual({
+      upstreamUrl: "https://pypi.nvidia.com/",
+      upstreamUrlMode: "simple-api-root",
     });
   });
 
@@ -16,6 +30,7 @@ describe("PyPI repository config", () => {
     expect(parsePypiProxyRepositoryConfig({
       pypi: {
         upstreamUrl: "https://pypi.example/root",
+        upstreamUrlMode: "base-url",
         proxyPolicy: {
           upstreamFetchTimeoutMs: 5000,
           fileByteCache: { enabled: false },
@@ -23,6 +38,7 @@ describe("PyPI repository config", () => {
       },
     })).toEqual({
       upstreamUrl: "https://pypi.example/root/",
+      upstreamUrlMode: "base-url",
       proxyPolicy: {
         upstreamFetchTimeoutMs: 5000,
         fileByteCache: { enabled: false },
@@ -39,7 +55,25 @@ describe("PyPI repository config", () => {
     expect(() => parsePypiProxyRepositoryConfig({
       pypi: {
         upstreamUrl: "file:///tmp/simple",
+        upstreamUrlMode: "base-url",
       },
     })).toThrow("config.pypi.upstreamUrl must use http or https");
+  });
+
+  it("requires a proxy upstream URL mode", () => {
+    expect(() => parsePypiProxyRepositoryConfig({
+      pypi: {
+        upstreamUrl: "https://pypi.example/",
+      },
+    })).toThrow("config.pypi.upstreamUrlMode is required");
+  });
+
+  it("rejects unknown proxy upstream URL modes", () => {
+    expect(() => parsePypiProxyRepositoryConfig({
+      pypi: {
+        upstreamUrl: "https://pypi.example/",
+        upstreamUrlMode: "heuristic",
+      },
+    })).toThrow("config.pypi.upstreamUrlMode must be base-url or simple-api-root");
   });
 });

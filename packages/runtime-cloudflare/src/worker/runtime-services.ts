@@ -52,7 +52,13 @@ export class PluginRepositoryService {
     // RepositoryService will reject should not cost that work first.
     assertValidRepositoryName(input.name.trim());
     await this.ensurePluginEnabled(input.ecosystem);
-    const plugin = this.options.plugins.requirePlugin(input.ecosystem);
+    const kind = input.kind ?? "hosted";
+    const plugin = this.options.plugins.getPluginForRepository({ ecosystem: input.ecosystem, kind });
+    if (!plugin) {
+      throw new ValidationError(
+        `Repository plugin is not configured for repository kind and ecosystem: ${kind} ${input.ecosystem}`,
+      );
+    }
     let config = input.config ?? {};
     if (input.provisioning !== undefined) {
       if (!plugin.create) {
@@ -75,7 +81,8 @@ export class PluginRepositoryService {
       const result = await plugin.create.provision(provisioningInput);
       config = mergeConfigPatch(config, result?.configPatch ?? {});
     }
-    plugin.validateRepositoryConfig({
+    config = normalizePluginRepositoryConfig(plugin, input.ecosystem, config);
+    await plugin.validateRepositoryConfig({
       ecosystem: input.ecosystem,
       config,
     });
@@ -97,12 +104,21 @@ export class PluginRepositoryService {
     const current = await this.options.repositoryService.getByName(name);
     await this.ensurePluginEnabled(current.ecosystem);
     const nextConfig = input.config ?? current.config;
-    const plugin = this.options.plugins.requirePlugin(current.ecosystem);
-    plugin.validateRepositoryConfig({
+    const plugin = this.options.plugins.getPluginForRepository(current);
+    if (!plugin) {
+      throw new ValidationError(
+        `Repository plugin is not configured for repository kind and ecosystem: ${current.kind} ${current.ecosystem}`,
+      );
+    }
+    const normalizedConfig = normalizePluginRepositoryConfig(plugin, current.ecosystem, nextConfig);
+    await plugin.validateRepositoryConfig({
       ecosystem: current.ecosystem,
-      config: nextConfig,
+      config: normalizedConfig,
     });
-    return this.options.repositoryService.update(name, input);
+    return this.options.repositoryService.update(name, {
+      ...input,
+      ...(input.config === undefined ? {} : { config: normalizedConfig }),
+    });
   }
 
   async delete(name: string): Promise<void> {
@@ -501,6 +517,14 @@ function mergeConfigPatch(base: Record<string, unknown>, patch: Record<string, u
     }
   }
   return merged;
+}
+
+function normalizePluginRepositoryConfig(
+  plugin: { normalizeRepositoryConfig?: (input: { ecosystem: string; config: Record<string, unknown> }) => Record<string, unknown> },
+  ecosystem: string,
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  return plugin.normalizeRepositoryConfig?.({ ecosystem, config }) ?? config;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

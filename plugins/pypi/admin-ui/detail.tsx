@@ -68,6 +68,15 @@ export function pypiProxyUpstreamUrl(repository: Repository): string {
   return typeof upstreamUrl === "string" ? upstreamUrl : "";
 }
 
+export function pypiProxyUpstreamUrlMode(repository: Repository): string {
+  const pypi = repository.config.pypi;
+  if (!pypi || typeof pypi !== "object" || Array.isArray(pypi)) {
+    return "";
+  }
+  const upstreamUrlMode = (pypi as Record<string, unknown>).upstreamUrlMode;
+  return typeof upstreamUrlMode === "string" ? upstreamUrlMode : "";
+}
+
 export function PypiProxySettingsSection({
   repository,
 }: {
@@ -110,6 +119,10 @@ export function PypiProxySettingsSection({
           code={pypiProxyUpstreamUrl(repository) || "(not configured)"}
           copyable={Boolean(pypiProxyUpstreamUrl(repository))}
         />
+      </div>
+      <div className="grid gap-1">
+        <span className="text-xs font-medium uppercase text-muted-foreground">Upstream URL mode</span>
+        <span className="text-sm">{pypiProxyUpstreamUrlMode(repository) || "(not configured)"}</span>
       </div>
       {indexJobView && (
         <div className={[

@@ -16,7 +16,7 @@ import {
 } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
-import { PluginPublishSessionService, PluginRepositoryArtifactIndexService } from "./runtime-services";
+import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
 import { RepositoryWriteLock } from "./repository-write-lock";
 
 const clock: Clock = {
@@ -85,6 +85,65 @@ function memoryObjectStore(existingKeys: string[] = []): RepositoryObjectStore {
     },
   };
 }
+
+describe("PluginRepositoryService", () => {
+  it("creates proxy repositories through the matching kind plugin", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock, randomId });
+    const plugins = new RepositoryRuntimePluginRegistry();
+    plugins.register({
+      kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
+      ecosystem: "demo",
+      name: "demo-hosted",
+      version: "0.0.0",
+      capabilities: ["hosted"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {
+        throw new ValidationError("hosted config should not validate proxy repositories");
+      },
+      publish: {
+        validateArtifacts: () => {},
+        authorize: () => {},
+        finalize: async () => ({ publishedAt: clock.now().toISOString(), objects: [] }),
+      },
+    });
+    plugins.register({
+      kind: "proxy",
+      repositoryKinds: [{ kind: "proxy", experimental: true }],
+      ecosystem: "demo",
+      name: "demo-proxy",
+      version: "0.0.0",
+      capabilities: ["proxy"],
+      canServeRepositoryPath: () => false,
+      normalizeRepositoryConfig: ({ config }) => {
+        const demo = config.demo as { upstreamUrl?: string };
+        return { demo: { upstreamUrl: `${demo.upstreamUrl}/` } };
+      },
+      validateRepositoryConfig: ({ config }) => {
+        expect(config).toEqual({ demo: { upstreamUrl: "https://upstream.example/" } });
+      },
+    });
+    const service = new PluginRepositoryService({
+      repositoryService,
+      plugins,
+      pluginPolicyService: new PluginPolicyService({ state }),
+    });
+
+    await expect(service.create({
+      name: "demo-proxy",
+      ecosystem: "demo",
+      kind: "proxy",
+      visibility: "public",
+      config: { demo: { upstreamUrl: "https://upstream.example" } },
+    })).resolves.toMatchObject({
+      name: "demo-proxy",
+      ecosystem: "demo",
+      kind: "proxy",
+      config: { demo: { upstreamUrl: "https://upstream.example/" } },
+    });
+  });
+});
 
 describe("PluginPublishSessionService", () => {
   it("authorizes finalize through the repository runtime plugin before publishing", async () => {

@@ -34,7 +34,7 @@ export interface PluginAdminResourcesManifest {
   routes: PluginAdminResourceRouteManifest[];
 }
 
-export type PluginRepositoryConfigFieldKind = "text" | "string-list" | "signing-key" | "signing-key-provisioning";
+export type PluginRepositoryConfigFieldKind = "text" | "select" | "string-list" | "signing-key" | "signing-key-provisioning";
 export type PluginRepositoryConfigDefaultValue = string | string[];
 export type PluginRepositoryConfigFieldStep = "config" | "setup";
 
@@ -46,6 +46,13 @@ export interface PluginRepositoryConfigFieldManifest {
   required: boolean;
   defaultValue?: PluginRepositoryConfigDefaultValue | undefined;
   placeholder?: string | undefined;
+  description?: string | undefined;
+  options?: PluginRepositoryConfigFieldOption[] | undefined;
+}
+
+export interface PluginRepositoryConfigFieldOption {
+  value: string;
+  label: string;
   description?: string | undefined;
 }
 

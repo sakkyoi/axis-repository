@@ -183,19 +183,21 @@ describe("PyPI plugin lifecycle", () => {
   });
 
   it("resolves proxy Simple API paths against the configured upstream", () => {
-    expect(pypiProxyUpstreamUrl("https://pypi.example/root/", "simple/"))
+    expect(pypiProxyUpstreamUrl("https://pypi.example/root/", "base-url", "simple/"))
       .toBe("https://pypi.example/root/simple/");
-    expect(pypiProxyUpstreamUrl("https://pypi.example/root/", "simple/demo/"))
+    expect(pypiProxyUpstreamUrl("https://pypi.example/root/", "base-url", "simple/demo/"))
       .toBe("https://pypi.example/root/simple/demo/");
-    expect(pypiProxyUpstreamUrl("https://pypi.nvidia.com/", "simple/"))
+    expect(pypiProxyUpstreamUrl("https://pypi.nvidia.com/", "simple-api-root", "simple/"))
       .toBe("https://pypi.nvidia.com/");
-    expect(pypiProxyUpstreamUrl("https://pypi.nvidia.com/", "simple/demo/"))
+    expect(pypiProxyUpstreamUrl("https://pypi.nvidia.com/", "simple-api-root", "simple/demo/"))
       .toBe("https://pypi.nvidia.com/demo/");
-    expect(pypiProxyUpstreamUrl("https://pypi.org/", "simple/"))
+    expect(pypiProxyUpstreamUrl("https://pypi.nvidia.com/", "base-url", "simple/demo/"))
+      .toBe("https://pypi.nvidia.com/simple/demo/");
+    expect(pypiProxyUpstreamUrl("https://pypi.org/", "base-url", "simple/"))
       .toBe("https://pypi.org/simple/");
-    expect(pypiProxyUpstreamUrl("https://pypi.org/simple/", "simple/demo/"))
+    expect(pypiProxyUpstreamUrl("https://pypi.org/simple/", "simple-api-root", "simple/demo/"))
       .toBe("https://pypi.org/simple/demo/");
-    expect(pypiProxyUpstreamUrl("https://pypi.example/root/", "packages/demo/demo-1.0.whl"))
+    expect(pypiProxyUpstreamUrl("https://pypi.example/root/", "base-url", "packages/demo/demo-1.0.whl"))
       .toBeNull();
   });
 
@@ -214,7 +216,7 @@ describe("PyPI plugin lifecycle", () => {
       repository: {
         ...repositoryFixture(),
         kind: "proxy",
-        config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+        config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
       },
       request: new Request("https://axis.example/repositories/python-internal/simple/demo/", {
         headers: { accept: "text/html" },
@@ -230,6 +232,55 @@ describe("PyPI plugin lifecycle", () => {
     expect(response?.status).toBe(200);
     expect(response?.headers.get("content-type")).toBe("text/html; charset=utf-8");
     await expect(response?.text()).resolves.toBe("<html>demo</html>");
+  });
+
+  it("accepts PyPI proxy config whose upstream probes as a Simple API root", async () => {
+    const requests: Request[] = [];
+    const plugin = createPypiProxyPlugin({
+      fetch: async (request) => {
+        requests.push(request);
+        return new Response("<a href=\"demo/\">demo</a>", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      },
+    });
+
+    await expect(plugin.validateRepositoryConfig({
+      ecosystem: "pypi",
+      config: { pypi: { upstreamUrl: "https://pypi.example/", upstreamUrlMode: "base-url" } },
+    })).resolves.toBeUndefined();
+    expect(requests.map((request) => request.url)).toEqual(["https://pypi.example/simple/"]);
+  });
+
+  it("rejects PyPI proxy config whose upstream probes as a Simple project HTML page", async () => {
+    const plugin = createPypiProxyPlugin({
+      fetch: async () => new Response([
+        "<html><body>",
+        "<h1>Links for peppercorn</h1>",
+        `<a href="peppercorn-0.6-py3-none-any.whl#sha256=${"a".repeat(64)}">peppercorn-0.6-py3-none-any.whl</a>`,
+        "</body></html>",
+      ].join(""), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      }),
+    });
+
+    await expect(plugin.validateRepositoryConfig({
+      ecosystem: "pypi",
+      config: { pypi: { upstreamUrl: "https://pypi.example/simple/peppercorn/", upstreamUrlMode: "simple-api-root" } },
+    })).rejects.toThrow("config.pypi.upstreamUrl points to a Simple API project page; use the Simple API root instead");
+  });
+
+  it("rejects PyPI proxy config when the upstream root cannot be probed", async () => {
+    const plugin = createPypiProxyPlugin({
+      fetch: async () => {
+        throw new Error("network down");
+      },
+    });
+
+    await expect(plugin.validateRepositoryConfig({
+      ecosystem: "pypi",
+      config: { pypi: { upstreamUrl: "https://pypi.example/", upstreamUrlMode: "base-url" } },
+    })).rejects.toThrow("config.pypi.upstreamUrl could not be verified as a PyPI Simple API root: network down");
   });
 
   it("proxies cached PyPI proxy file paths through Axis repository URLs", async () => {
@@ -256,7 +307,7 @@ describe("PyPI plugin lifecycle", () => {
       repository: {
         ...repositoryFixture(),
         kind: "proxy",
-        config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+        config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
       },
       request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
       relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
@@ -297,7 +348,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
     };
 
     const first = await plugin.serveRepositoryPath?.({
@@ -356,7 +407,7 @@ describe("PyPI plugin lifecycle", () => {
       repository: {
         ...repositoryFixture(),
         kind: "proxy",
-        config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+        config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
       },
       request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
       relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
@@ -422,7 +473,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
     };
 
     const first = plugin.serveRepositoryPath?.({
@@ -486,7 +537,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
     };
 
     await plugin.serveRepositoryPath?.({
@@ -537,7 +588,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
     };
 
     await plugin.serveRepositoryPath?.({
@@ -582,7 +633,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
     };
 
     const first = await plugin.serveRepositoryPath?.({
@@ -629,7 +680,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
     };
 
     await plugin.serveRepositoryPath?.({
@@ -678,6 +729,7 @@ describe("PyPI plugin lifecycle", () => {
       config: {
         pypi: {
           upstreamUrl: "https://pypi.example/root/",
+          upstreamUrlMode: "base-url",
           proxyPolicy: {
             fileByteCache: {
               maxBytes: 512 * 1024 * 1024 + 1,
@@ -731,6 +783,7 @@ describe("PyPI plugin lifecycle", () => {
       config: {
         pypi: {
           upstreamUrl: "https://pypi.example/root/",
+          upstreamUrlMode: "base-url",
           proxyPolicy: { fileByteCache: { ttlSeconds: 1 } },
         },
       },
@@ -780,6 +833,7 @@ describe("PyPI plugin lifecycle", () => {
       config: {
         pypi: {
           upstreamUrl: "https://pypi.example/root/",
+          upstreamUrlMode: "base-url",
           proxyPolicy: { fileByteCache: { maxTotalBytes: 11 } },
         },
       },
@@ -836,7 +890,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
     };
 
     await plugin.serveRepositoryPath?.({
@@ -891,7 +945,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
     };
 
     await plugin.serveRepositoryPath?.({
@@ -947,7 +1001,7 @@ describe("PyPI plugin lifecycle", () => {
       repository: {
         ...repositoryFixture(),
         kind: "proxy",
-        config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+        config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
       },
       request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl", {
         headers: {
@@ -1002,7 +1056,7 @@ describe("PyPI plugin lifecycle", () => {
       repository: {
         ...repositoryFixture(),
         kind: "proxy",
-        config: { pypi: { upstreamUrl: "https://pypi.example/root/" } },
+        config: { pypi: { upstreamUrl: "https://pypi.example/root/", upstreamUrlMode: "base-url" } },
       },
       request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl", {
         method: "HEAD",
@@ -1027,7 +1081,7 @@ describe("PyPI plugin lifecycle", () => {
       repository: {
         ...repositoryFixture(),
         kind: "proxy",
-        config: { pypi: { upstreamUrl: "https://pypi.example/" } },
+        config: { pypi: { upstreamUrl: "https://pypi.example/", upstreamUrlMode: "simple-api-root" } },
       },
       action: "simple-url",
       origin: "https://axis.example",
@@ -1064,7 +1118,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     await expect(plugin.artifacts?.rebuildIndex({
@@ -1155,7 +1209,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     await plugin.artifacts?.rebuildIndex({
@@ -1216,7 +1270,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     const response = await dispatchRepositoryAdminResource(plugin.adminResources!, {
@@ -1256,7 +1310,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
@@ -1301,7 +1355,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     await expect(plugin.artifacts?.rebuildIndex({
@@ -1334,7 +1388,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     const first = await plugin.artifacts?.rebuildIndex({
@@ -1394,7 +1448,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     const catalog = await plugin.artifacts?.rebuildIndex({
@@ -1497,7 +1551,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     await plugin.artifacts?.rebuildIndex({
@@ -1574,7 +1628,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     await plugin.artifacts?.rebuildIndex({
@@ -1622,6 +1676,7 @@ describe("PyPI plugin lifecycle", () => {
       config: {
         pypi: {
           upstreamUrl: "https://pypi.org/",
+          upstreamUrlMode: "base-url",
           proxyPolicy: {
             upstreamRequestRetries: 1,
             upstreamRetryBaseDelayMs: 0,
@@ -1668,7 +1723,7 @@ describe("PyPI plugin lifecycle", () => {
       repository: {
         ...repositoryFixture(),
         kind: "proxy",
-        config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+        config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
       },
       objectStore,
       now: new Date("2026-08-05T00:00:00.000Z"),
@@ -1692,7 +1747,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     const firstPage = await dispatchRepositoryAdminResource(plugin.adminResources!, {
@@ -1753,7 +1808,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     await expect(plugin.objectBrowser?.listObjects({ repository, objectStore, prefix: "" }))
@@ -1809,7 +1864,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     const first = await plugin.objectBrowser?.listObjects({ repository, objectStore, prefix: "simple/", limit: 2 });
@@ -1863,7 +1918,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     await expect(plugin.objectBrowser?.listObjects({
@@ -1900,7 +1955,7 @@ describe("PyPI plugin lifecycle", () => {
     const repository = {
       ...repositoryFixture(),
       kind: "proxy" as const,
-      config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
     };
 
     await expect(plugin.objectBrowser?.listObjects({
@@ -1998,7 +2053,7 @@ describe("PyPI plugin lifecycle", () => {
       repository: {
         ...repositoryFixture(),
         kind: "proxy",
-        config: { pypi: { upstreamUrl: "https://pypi.org/" } },
+        config: { pypi: { upstreamUrl: "https://pypi.org/", upstreamUrlMode: "base-url" } },
       },
       objectStore: new MemoryRepositoryObjectStore(),
       now: new Date("2026-08-05T00:00:00.000Z"),

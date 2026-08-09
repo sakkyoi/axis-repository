@@ -1,5 +1,6 @@
 import type { PluginRepositoryConfigFieldManifest } from "@axis-repository/core/plugin-manifests";
 import { Input } from "../../components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { ErrorState } from "../../pages/shared";
 import type { RepositoryCreateFieldRendererMap } from "../plugins/repository-ui-plugin-types";
 
@@ -38,7 +39,7 @@ export function RepositoryConfigFields({
           );
         }
 
-        if (field.kind !== "text" && field.kind !== "string-list") {
+        if (field.kind !== "text" && field.kind !== "select" && field.kind !== "string-list") {
           return (
             <ErrorState
               key={field.name}
@@ -52,15 +53,38 @@ export function RepositoryConfigFields({
           <label key={field.name} className="grid gap-2">
             <span className="text-sm font-medium">{field.label}</span>
             {field.description && <span className="text-xs text-muted-foreground">{field.description}</span>}
-            <Input
-              value={values[field.name] ?? ""}
-              onChange={(event) => update(field.name, event.target.value)}
-              placeholder={field.placeholder}
-              required={field.required}
-            />
+            {field.kind === "select" ? (
+              <Select
+                value={values[field.name] ?? stringDefaultValue(field.defaultValue) ?? ""}
+                onValueChange={(value) => update(field.name, value)}
+                required={field.required}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={field.placeholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(field.options ?? []).map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                value={values[field.name] ?? ""}
+                onChange={(event) => update(field.name, event.target.value)}
+                placeholder={field.placeholder}
+                required={field.required}
+              />
+            )}
           </label>
         );
       })}
     </div>
   );
+}
+
+function stringDefaultValue(value: PluginRepositoryConfigFieldManifest["defaultValue"]): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }

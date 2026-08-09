@@ -76,6 +76,10 @@ export interface ValidateRepositoryConfigInput {
   config: Record<string, unknown>;
 }
 
+export type ValidateRepositoryConfigResult = void | Promise<void>;
+export type NormalizeRepositoryConfigInput = ValidateRepositoryConfigInput;
+export type RepositoryConfigNormalizer = (input: NormalizeRepositoryConfigInput) => Record<string, unknown>;
+
 export interface ValidateRepositoryCreateProvisioningInput {
   repositoryName: string;
   ecosystem: Ecosystem;
@@ -285,7 +289,8 @@ export interface HostedRepositoryPlugin extends PublisherMetadata {
   resolveRepositoryPath?: RepositoryPathResolver;
   /** An ecosystem-native upload protocol, for clients like `twine`. */
   uploadProtocol?: RepositoryUploadProtocol;
-  validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
+  normalizeRepositoryConfig?: RepositoryConfigNormalizer;
+  validateRepositoryConfig(input: ValidateRepositoryConfigInput): ValidateRepositoryConfigResult;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;
   objectBrowser?: RepositoryObjectBrowser;
@@ -294,11 +299,13 @@ export interface HostedRepositoryPlugin extends PublisherMetadata {
 export interface ProxyRepositoryPlugin extends PublisherMetadata {
   kind: "proxy";
   artifacts?: RepositoryArtifactIndexLifecycle;
+  create?: RepositoryCreateLifecycle;
   canServeRepositoryPath: RepositoryPathServingRule;
   /** Defaults to serving the requested path as the object key once proxy fetching exists. */
   resolveRepositoryPath?: RepositoryPathResolver;
   serveRepositoryPath?: RepositoryPathHandler;
-  validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
+  normalizeRepositoryConfig?: RepositoryConfigNormalizer;
+  validateRepositoryConfig(input: ValidateRepositoryConfigInput): ValidateRepositoryConfigResult;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;
   objectBrowser?: RepositoryObjectBrowser;
@@ -307,10 +314,12 @@ export interface ProxyRepositoryPlugin extends PublisherMetadata {
 export interface GroupRepositoryPlugin extends PublisherMetadata {
   kind: "group";
   artifacts?: RepositoryArtifactIndexLifecycle;
+  create?: RepositoryCreateLifecycle;
   canServeRepositoryPath: RepositoryPathServingRule;
   /** Defaults to serving the requested path as the object key once group resolution exists. */
   resolveRepositoryPath?: RepositoryPathResolver;
-  validateRepositoryConfig(input: ValidateRepositoryConfigInput): void;
+  normalizeRepositoryConfig?: RepositoryConfigNormalizer;
+  validateRepositoryConfig(input: ValidateRepositoryConfigInput): ValidateRepositoryConfigResult;
   clientHelpers?: RepositoryClientHelpers;
   adminResources?: RepositoryAdminResources;
   objectBrowser?: RepositoryObjectBrowser;

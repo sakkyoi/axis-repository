@@ -25,7 +25,7 @@ describe("RepositoryArtifactDeleteJobService", () => {
       name: "python-proxy",
       ecosystem: "pypi",
       kind: "proxy",
-      config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
+      config: { pypi: { upstreamUrl: "https://pypi.example/simple/", upstreamUrlMode: "simple-api-root" } },
     });
     const artifact = repositoryArtifact({ repositoryName: "python-proxy" });
     const artifactStore: RepositoryArtifactStore & {
