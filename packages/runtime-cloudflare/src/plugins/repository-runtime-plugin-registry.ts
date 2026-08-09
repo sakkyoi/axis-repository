@@ -24,7 +24,7 @@ import { publicClientHelperAction } from "./repository-plugin-client-helpers";
 function clonePlugin<T extends RepositoryRuntimePluginDescriptor>(descriptor: T): T {
   return {
     ...descriptor,
-    repositoryKinds: [...(descriptor.repositoryKinds ?? [descriptor.kind])],
+    repositoryKinds: descriptor.repositoryKinds.map((capability) => ({ ...capability })),
     capabilities: [...descriptor.capabilities],
     ...(descriptor.clientHelpers
       ? {
@@ -80,6 +80,17 @@ function validateAdminResourceRoutes(descriptor: RepositoryRuntimePluginDescript
   }
 }
 
+function validateRepositoryKinds(descriptor: RepositoryRuntimePluginDescriptor): void {
+  if (!Array.isArray(descriptor.repositoryKinds) || descriptor.repositoryKinds.length === 0) {
+    throw new ValidationError(`Repository runtime plugin repositoryKinds are required for ecosystem: ${descriptor.ecosystem}`);
+  }
+  if (!descriptor.repositoryKinds.some((capability) => capability.kind === descriptor.kind)) {
+    throw new ValidationError(
+      `Repository runtime plugin kind must be declared in repositoryKinds for ecosystem: ${descriptor.ecosystem}`,
+    );
+  }
+}
+
 export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
   private readonly plugins = new Map<string, RepositoryRuntimePluginDescriptor>();
 
@@ -89,6 +100,7 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
     if (!descriptorKind) {
       throw new ValidationError(`Repository runtime plugin kind is required for ecosystem: ${descriptor.ecosystem}`);
     }
+    validateRepositoryKinds(descriptor);
     const key = pluginKey(descriptor);
     if (this.plugins.has(key)) {
       throw new ValidationError(
@@ -116,7 +128,7 @@ export class RepositoryRuntimePluginRegistry implements ArtifactPublisher {
         ecosystem: descriptor.ecosystem,
         name: descriptor.name,
         version: descriptor.version,
-        repositoryKinds: [...(descriptor.repositoryKinds ?? [descriptor.kind])],
+        repositoryKinds: descriptor.repositoryKinds.map((capability) => ({ ...capability })),
         capabilities: [...descriptor.capabilities],
       };
       if (descriptor.clientHelpers) {

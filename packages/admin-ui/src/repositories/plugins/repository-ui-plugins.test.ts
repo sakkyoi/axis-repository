@@ -75,7 +75,7 @@ describe("repository UI plugin registry", () => {
         runtime: true,
         adminUi: true,
         capabilities: ["signed-release"],
-        repositoryKinds: ["hosted"],
+        repositoryKinds: [{ kind: "hosted", experimental: false }],
       },
       {
         ecosystem: "npm",
@@ -88,7 +88,7 @@ describe("repository UI plugin registry", () => {
         runtime: true,
         adminUi: false,
         capabilities: ["package-index"],
-        repositoryKinds: ["hosted"],
+        repositoryKinds: [{ kind: "hosted", experimental: false }],
       },
     ]);
 
@@ -160,7 +160,11 @@ describe("repository UI plugin registry", () => {
         runtime: true,
         adminUi: true,
         capabilities: ["signed-release"],
-        repositoryKinds: ["hosted", "proxy", "group"],
+        repositoryKinds: [
+          { kind: "hosted", experimental: false },
+          { kind: "proxy", experimental: true },
+          { kind: "group", experimental: false },
+        ],
       },
     ]);
 
@@ -169,11 +173,61 @@ describe("repository UI plugin registry", () => {
       kind: option.kind,
       displayLabel: option.displayLabel,
       supported: option.supported,
+      badges: option.badges,
     }))).toEqual([
-      { ecosystem: "apt", kind: "hosted", displayLabel: "APT / Hosted", supported: true },
-      { ecosystem: "apt", kind: "proxy", displayLabel: "APT / Proxy", supported: true },
-      { ecosystem: "apt", kind: "group", displayLabel: "APT / Group", supported: true },
+      {
+        ecosystem: "apt",
+        kind: "hosted",
+        displayLabel: "APT / Hosted",
+        supported: true,
+        badges: [
+          { label: "Available", variant: "success" },
+          { label: "Runtime", variant: "default" },
+          { label: "Admin UI", variant: "default" },
+        ],
+      },
+      {
+        ecosystem: "apt",
+        kind: "proxy",
+        displayLabel: "APT / Proxy",
+        supported: true,
+        badges: [
+          { label: "Available", variant: "success" },
+          { label: "Experimental", variant: "warning" },
+          { label: "Runtime", variant: "default" },
+          { label: "Admin UI", variant: "default" },
+        ],
+      },
+      {
+        ecosystem: "apt",
+        kind: "group",
+        displayLabel: "APT / Group",
+        supported: true,
+        badges: [
+          { label: "Available", variant: "success" },
+          { label: "Runtime", variant: "default" },
+          { label: "Admin UI", variant: "default" },
+        ],
+      },
     ]);
+  });
+
+  it("does not invent a hosted create option when no repository kind is provided", () => {
+    const options = repositoryCreatePluginOptionsFromUiRegistry([
+      {
+        ecosystem: "npm",
+        name: "npm-registry",
+        version: "0.1.0",
+        enabled: true,
+        experimental: false,
+        runtime: true,
+        adminUi: true,
+        capabilities: ["package-index"],
+        repositoryKinds: [],
+      },
+    ]);
+
+    expect(options).toEqual([]);
   });
 
   it("reports when no create adapter is registered for the plugin repository kinds", () => {
@@ -187,7 +241,7 @@ describe("repository UI plugin registry", () => {
         runtime: true,
         adminUi: true,
         capabilities: ["signed-release"],
-        repositoryKinds: ["proxy"],
+        repositoryKinds: [{ kind: "proxy", experimental: false }],
       },
     ]);
 

@@ -17,7 +17,7 @@ describe("shared plugin manifests", () => {
     expect(coreManifestTypes).not.toContain("pypiPluginManifest");
   });
 
-  it("lets plugin manifests declare hosted repository support", () => {
+  it("lets plugin manifests declare repository kind support metadata", () => {
     const manifest = {
       ecosystem: "example",
       displayName: "Example",
@@ -25,13 +25,19 @@ describe("shared plugin manifests", () => {
       runtimeName: "example-hosted",
       version: "0.1.0",
       capabilities: ["example"],
-      repositoryKinds: ["hosted"],
+      repositoryKinds: [
+        { kind: "hosted", experimental: false },
+        { kind: "proxy", experimental: true },
+      ],
       repositoryConfig: {
         namespace: "example",
         fields: [],
       },
     } satisfies RepositoryPluginManifest;
 
-    expect(manifest.repositoryKinds).toEqual(["hosted"]);
+    expect(manifest.repositoryKinds).toEqual([
+      { kind: "hosted", experimental: false },
+      { kind: "proxy", experimental: true },
+    ]);
   });
 });

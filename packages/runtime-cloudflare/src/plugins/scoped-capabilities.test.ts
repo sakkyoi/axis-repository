@@ -42,6 +42,7 @@ describe("ecosystem ids that namespace ownership depends on", () => {
     const registry = new RepositoryRuntimePluginRegistry();
     const descriptor = {
       kind: "hosted" as const,
+      repositoryKinds: [{ kind: "hosted" as const, experimental: false }],
       ecosystem: "apt.extra",
       name: "apt-extra",
       version: "0.0.0",

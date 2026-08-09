@@ -63,7 +63,7 @@ export function createAptPlugin(input: {
     ecosystem: "apt",
     name: aptPluginManifest.runtimeName,
     version: aptPluginManifest.version,
-    repositoryKinds: ["hosted"],
+    repositoryKinds: [{ kind: "hosted", experimental: false }],
     capabilities: [...aptPluginManifest.capabilities],
     canServeRepositoryPath: createPrefixServingPredicate(["dists", "pool"]),
     validateRepositoryConfig: (configInput) => {
@@ -117,7 +117,7 @@ export function createAptProxyPlugin(): ProxyRepositoryPlugin {
     ecosystem: "apt",
     name: `${aptPluginManifest.runtimeName}-proxy`,
     version: aptPluginManifest.version,
-    repositoryKinds: ["proxy"],
+    repositoryKinds: [{ kind: "proxy", experimental: true }],
     capabilities: ["apt", "proxy"],
     canServeRepositoryPath: () => false,
     validateRepositoryConfig: (configInput) => {
@@ -132,7 +132,7 @@ export function createAptGroupPlugin(): GroupRepositoryPlugin {
     ecosystem: "apt",
     name: `${aptPluginManifest.runtimeName}-group`,
     version: aptPluginManifest.version,
-    repositoryKinds: ["group"],
+    repositoryKinds: [{ kind: "group", experimental: true }],
     capabilities: ["apt", "group"],
     canServeRepositoryPath: () => false,
     validateRepositoryConfig: (configInput) => {

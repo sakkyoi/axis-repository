@@ -116,8 +116,11 @@ export function SettingsPage() {
                       <div className="grid gap-1.5">
                         <span className="text-[11px] font-semibold uppercase text-muted-foreground">Kinds</span>
                         <div className="flex flex-wrap gap-1.5">
-                          {plugin.repositoryKinds.map((kind) => (
-                            <Badge key={kind} variant="default">{repositoryKindLabel(kind)}</Badge>
+                          {plugin.repositoryKinds.map((capability) => (
+                            <Badge key={capability.kind} variant={capability.experimental ? "warning" : "default"}>
+                              {repositoryKindLabel(capability.kind)}
+                              {capability.experimental ? " experimental" : ""}
+                            </Badge>
                           ))}
                         </div>
                       </div>

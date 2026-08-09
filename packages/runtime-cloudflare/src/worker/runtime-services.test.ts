@@ -108,6 +108,7 @@ describe("PluginPublishSessionService", () => {
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -175,6 +176,7 @@ describe("PluginPublishSessionService", () => {
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -242,6 +244,7 @@ describe("PluginPublishSessionService", () => {
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -296,6 +299,7 @@ describe("PluginPublishSessionService", () => {
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -386,6 +390,7 @@ describe("PluginPublishSessionService", () => {
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -470,6 +475,7 @@ describe("PluginRepositoryArtifactIndexService", () => {
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -523,6 +529,7 @@ describe("PluginRepositoryArtifactIndexService", () => {
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "apt",
       name: "apt-test",
       version: "0.0.0",
@@ -603,11 +610,11 @@ describe("PluginRepositoryArtifactIndexService", () => {
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       kind: "proxy",
+      repositoryKinds: [{ kind: "proxy", experimental: true }],
       ecosystem: "pypi",
       name: "pypi-proxy-test",
       version: "0.0.0",
       capabilities: ["proxy"],
-      repositoryKinds: ["proxy"],
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
       artifacts: {
@@ -679,11 +686,11 @@ describe("PluginRepositoryArtifactIndexService", () => {
     const plugins = new RepositoryRuntimePluginRegistry();
     plugins.register({
       kind: "proxy",
+      repositoryKinds: [{ kind: "proxy", experimental: true }],
       ecosystem: "pypi",
       name: "pypi-proxy-test",
       version: "0.0.0",
       capabilities: ["proxy"],
-      repositoryKinds: ["proxy"],
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
       artifacts: {

@@ -143,17 +143,18 @@ function runtimePluginMetadataByEcosystem(registeredPlugins: ReturnType<AppDepen
     if (!existing) {
       metadata.set(plugin.ecosystem, {
         ...plugin,
-        repositoryKinds: [...(plugin.repositoryKinds ?? ["hosted"])],
+        repositoryKinds: plugin.repositoryKinds.map((capability) => ({ ...capability })),
         capabilities: [...plugin.capabilities],
       });
       continue;
     }
+    const repositoryKindsByKind = new Map(existing.repositoryKinds.map((capability) => [capability.kind, capability]));
+    for (const capability of plugin.repositoryKinds) {
+      repositoryKindsByKind.set(capability.kind, { ...capability });
+    }
     metadata.set(plugin.ecosystem, {
       ...existing,
-      repositoryKinds: Array.from(new Set([
-        ...(existing.repositoryKinds ?? ["hosted"]),
-        ...(plugin.repositoryKinds ?? ["hosted"]),
-      ])),
+      repositoryKinds: Array.from(repositoryKindsByKind.values()),
       capabilities: Array.from(new Set([
         ...existing.capabilities,
         ...plugin.capabilities,
@@ -183,7 +184,7 @@ async function repositoryPluginMetadata(dependencies: AppDependencies) {
       version: catalogEntry.manifest.version,
       icon: { ...catalogEntry.icon },
       capabilities: [...catalogEntry.manifest.capabilities],
-      repositoryKinds: [...(catalogEntry.manifest.repositoryKinds ?? ["hosted"])],
+      repositoryKinds: catalogEntry.manifest.repositoryKinds.map((capability) => ({ ...capability })),
       ...(catalogEntry.manifest.clientHelpers
         ? {
             clientHelpers: {

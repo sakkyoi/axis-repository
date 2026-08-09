@@ -2,6 +2,10 @@ export type Ecosystem = "apt" | "pypi" | (string & {});
 
 export type RepositoryVisibility = "private" | "public";
 export type RepositoryKind = "hosted" | "proxy" | "group";
+export interface RepositoryKindCapability {
+  kind: RepositoryKind;
+  experimental?: boolean;
+}
 
 export interface Repository {
   id: string;

@@ -82,7 +82,7 @@ describe("admin API schemas", () => {
       runtime: true,
       adminUi: true,
       capabilities: ["signed-release", "client-helpers"],
-      repositoryKinds: ["hosted"],
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       clientHelpers: {
         namespace: "apt",
         actions: [
@@ -110,8 +110,15 @@ describe("admin API schemas", () => {
       enabled: true,
       catalogEnabled: true,
       enabledOverride: null,
-      repositoryKinds: ["hosted"],
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
     });
+
+    expect(() => repositoryPluginSchema.parse({
+      ecosystem: "npm",
+      name: "npm-registry",
+      version: "0.1.0",
+      capabilities: ["package-index"],
+    })).toThrow();
   });
 
   it("parses repository object browser responses", () => {
@@ -575,6 +582,7 @@ describe("createAxisClient", () => {
                 inlineSvg: "<svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"></svg>",
               },
               capabilities: ["signed-release", "client-helpers"],
+              repositoryKinds: [{ kind: "hosted", experimental: false }],
               clientHelpers: {
                 namespace: "apt",
                 actions: [
@@ -636,6 +644,7 @@ describe("createAxisClient", () => {
           runtime: true,
           adminUi: true,
           capabilities: ["signed-release"],
+          repositoryKinds: [{ kind: "hosted", experimental: false }],
         },
         status: 200,
         statusText: "OK",

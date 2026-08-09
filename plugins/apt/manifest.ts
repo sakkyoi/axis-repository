@@ -8,7 +8,11 @@ export const aptPluginManifest = {
   runtimeName: "apt-signed",
   version: "0.1.0",
   capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
-  repositoryKinds: ["hosted", "proxy", "group"],
+  repositoryKinds: [
+    { kind: "hosted", experimental: false },
+    { kind: "proxy", experimental: true },
+    { kind: "group", experimental: true },
+  ],
   icon: {
     title: "APT",
     accentColor: "#A80030",

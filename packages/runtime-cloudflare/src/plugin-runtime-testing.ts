@@ -26,7 +26,7 @@ export function assertRuntimePluginManifestParity(input: {
   if (plugin.version !== manifest.version) {
     throw new Error(`Runtime plugin version does not match manifest: ${plugin.version}`);
   }
-  if (!(manifest.repositoryKinds ?? ["hosted"]).includes(plugin.kind)) {
+  if (!manifest.repositoryKinds.some((capability) => capability.kind === plugin.kind)) {
     throw new Error(`Runtime plugin kind does not match manifest repository kinds: ${plugin.kind}`);
   }
   assertJsonEqual("Runtime plugin capabilities", plugin.capabilities, manifest.capabilities);

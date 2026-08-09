@@ -73,7 +73,7 @@ export const hostedRepositoryUiPlugins = [aptRepositoryPluginBundle, pypiReposit
 
 export const repositoryUiPluginDescriptors = [aptRepositoryPluginBundle, pypiRepositoryPluginBundle]
   .filter((plugin) => plugin.catalog.enabled && plugin.adminUi)
-  .flatMap((plugin) => (plugin.manifest.repositoryKinds ?? ["hosted"]).map((kind) => {
+  .flatMap((plugin) => plugin.manifest.repositoryKinds.map(({ kind }) => {
     const uiPlugin = bundledAdminUiPlugins[`${kind}:${plugin.manifest.ecosystem}`];
     if (!uiPlugin) {
       throw new Error(`Admin UI plugin is not wired for repository kind and ecosystem: ${kind} ${plugin.manifest.ecosystem}`);
@@ -109,7 +109,7 @@ export function assertRepositoryUiPluginContracts(plugins: readonly RepositoryUi
     if (plugin.kind === "hosted" && plugin.publish && plugin.publish.ecosystem !== ecosystem) {
       throw new Error(`Publish UI plugin ecosystem does not match manifest: ${plugin.publish.ecosystem}`);
     }
-    if (!(plugin.manifest.repositoryKinds ?? ["hosted"]).includes(plugin.kind)) {
+    if (!plugin.manifest.repositoryKinds.some((capability) => capability.kind === plugin.kind)) {
       throw new Error(`UI plugin kind does not match manifest repository kinds for ecosystem ${ecosystem}: ${plugin.kind}`);
     }
     if (plugin.kind === "hosted") {
@@ -198,9 +198,12 @@ export function repositoryCreatePluginOptionsFromUiRegistry(
 ): RepositoryCreatePluginDescriptorOption[] {
   return serverPlugins.flatMap((serverPlugin) => {
     const lifecycle = pluginLifecycleSummary(serverPlugin);
-    const badges = pluginLifecycleBadges(serverPlugin);
-    const supportedKinds = serverPlugin.repositoryKinds.length > 0 ? serverPlugin.repositoryKinds : ["hosted" as const];
-    return supportedKinds.map((kind) => {
+    return serverPlugin.repositoryKinds.map((kindCapability) => {
+      const kind = kindCapability.kind;
+      const badges = pluginLifecycleBadges(serverPlugin);
+      if (kindCapability.experimental && !badges.some((badge) => badge.label === "Experimental")) {
+        badges.splice(1, 0, { label: "Experimental", variant: "warning" });
+      }
       const localPlugin = localPlugins.find((candidate) =>
         candidate.kind === kind && candidate.manifest.ecosystem === serverPlugin.ecosystem,
       );

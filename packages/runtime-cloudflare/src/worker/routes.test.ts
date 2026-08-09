@@ -792,10 +792,10 @@ describe("Cloudflare runtime routes", () => {
     });
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "streamed",
       name: "streamed-hosted",
       version: "0.1.0",
-      repositoryKinds: ["hosted"],
       capabilities: ["hosted"],
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
@@ -807,10 +807,10 @@ describe("Cloudflare runtime routes", () => {
     });
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "proxy",
+      repositoryKinds: [{ kind: "proxy", experimental: true }],
       ecosystem: "streamed",
       name: "streamed-proxy",
       version: "0.1.0",
-      repositoryKinds: ["proxy"],
       capabilities: ["proxy"],
       canServeRepositoryPath: ({ relativePath }) => relativePath === "simple/" || relativePath.startsWith("simple/"),
       validateRepositoryConfig: () => {},
@@ -904,10 +904,10 @@ describe("Cloudflare runtime routes", () => {
     }));
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "streamed",
       name: "streamed-hosted",
       version: "0.1.0",
-      repositoryKinds: ["hosted"],
       capabilities: ["hosted"],
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
@@ -919,10 +919,10 @@ describe("Cloudflare runtime routes", () => {
     });
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "proxy",
+      repositoryKinds: [{ kind: "proxy", experimental: true }],
       ecosystem: "streamed",
       name: "streamed-proxy",
       version: "0.1.0",
-      repositoryKinds: ["proxy"],
       capabilities: ["proxy"],
       canServeRepositoryPath: ({ relativePath }) => relativePath === "simple/" || relativePath.startsWith("simple/"),
       validateRepositoryConfig: () => {},
@@ -1900,7 +1900,11 @@ describe("Cloudflare runtime routes", () => {
           runtime: true,
           adminUi: true,
           capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
-          repositoryKinds: ["hosted", "proxy", "group"],
+          repositoryKinds: [
+            { kind: "hosted", experimental: false },
+            { kind: "proxy", experimental: true },
+            { kind: "group", experimental: true },
+          ],
           icon: expect.objectContaining({
             title: "APT",
             accentColor: "#A80030",
@@ -1944,7 +1948,11 @@ describe("Cloudflare runtime routes", () => {
           runtime: true,
           adminUi: true,
           capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
-          repositoryKinds: ["hosted", "proxy", "group"],
+          repositoryKinds: [
+            { kind: "hosted", experimental: false },
+            { kind: "proxy", experimental: true },
+            { kind: "group", experimental: true },
+          ],
           icon: expect.objectContaining({
             title: "PyPI",
             accentColor: "#3775A9",
@@ -2041,6 +2049,7 @@ describe("Cloudflare runtime routes", () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "demo",
       name: "demo-plugin",
       version: "0.1.0",
@@ -2151,6 +2160,7 @@ describe("Cloudflare runtime routes", () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "demo",
       name: "demo-plugin",
       version: "0.1.0",
@@ -2665,6 +2675,7 @@ describe("Cloudflare runtime routes", () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",
@@ -2696,6 +2707,7 @@ describe("Cloudflare runtime routes", () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",
@@ -2763,6 +2775,7 @@ describe("Cloudflare runtime routes", () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",
@@ -2983,6 +2996,7 @@ describe("Cloudflare runtime routes", () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "gems",
       name: "gems-simple",
       version: "0.1.0",
@@ -3577,10 +3591,10 @@ describe("Cloudflare runtime routes", () => {
     const harness = createDevDependencyHarness();
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "hosted",
+      repositoryKinds: [{ kind: "hosted", experimental: false }],
       ecosystem: "demo",
       name: "demo-hosted",
       version: "0.1.0",
-      repositoryKinds: ["hosted"],
       capabilities: ["hosted"],
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},
@@ -3592,10 +3606,10 @@ describe("Cloudflare runtime routes", () => {
     });
     harness.dependencies.repositoryRuntimePlugins.register({
       kind: "proxy",
+      repositoryKinds: [{ kind: "proxy", experimental: true }],
       ecosystem: "demo",
       name: "demo-proxy",
       version: "0.1.0",
-      repositoryKinds: ["proxy"],
       capabilities: ["proxy"],
       canServeRepositoryPath: () => false,
       validateRepositoryConfig: () => {},

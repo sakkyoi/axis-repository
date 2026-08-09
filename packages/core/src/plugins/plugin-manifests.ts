@@ -1,4 +1,8 @@
 export type PluginRepositoryKind = "hosted" | "proxy" | "group";
+export interface PluginRepositoryKindCapability {
+  kind: PluginRepositoryKind;
+  experimental?: boolean;
+}
 
 export type PluginClientHelperResponseKind = "json" | "shell" | "text";
 
@@ -91,7 +95,7 @@ export interface RepositoryPluginManifest {
   runtimeName: string;
   version: string;
   capabilities: string[];
-  repositoryKinds?: PluginRepositoryKind[] | undefined;
+  repositoryKinds: PluginRepositoryKindCapability[];
   icon?: PluginIconManifest | undefined;
   repositoryConfig: PluginRepositoryConfigManifest;
   clientHelpers?: PluginClientHelpersManifest;

@@ -7,6 +7,7 @@ import type {
   Repository,
   RepositoryArtifactRecord,
   RepositoryArtifactStore,
+  RepositoryKindCapability,
   BackgroundJobProgress,
   RepositoryObjectStore,
   BackgroundTaskScheduler,
@@ -22,7 +23,7 @@ export interface PublisherMetadata {
   ecosystem: Ecosystem;
   name: string;
   version: string;
-  repositoryKinds?: RepositoryKind[];
+  repositoryKinds: RepositoryKindCapability[];
   capabilities: string[];
   clientHelpers?: {
     namespace: string;

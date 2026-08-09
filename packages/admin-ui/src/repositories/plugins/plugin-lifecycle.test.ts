@@ -18,7 +18,7 @@ function plugin(input: Partial<RepositoryPlugin> & Pick<RepositoryPlugin, "ecosy
     runtime: input.runtime,
     adminUi: input.adminUi,
     capabilities: input.capabilities ?? [],
-    repositoryKinds: input.repositoryKinds ?? ["hosted"],
+    repositoryKinds: input.repositoryKinds ?? [{ kind: "hosted", experimental: false }],
     ...(input.clientHelpers ? { clientHelpers: input.clientHelpers } : {}),
   };
 }
@@ -75,7 +75,10 @@ describe("plugin lifecycle UI model", () => {
         runtime: true,
         adminUi: true,
         capabilities: ["signed-release"],
-        repositoryKinds: ["proxy", "group"],
+        repositoryKinds: [
+          { kind: "proxy", experimental: true },
+          { kind: "group", experimental: false },
+        ],
         clientHelpers: {
           namespace: "apt",
           actions: [
@@ -91,7 +94,10 @@ describe("plugin lifecycle UI model", () => {
         name: "apt-signed",
         version: "0.1.0",
         capabilities: ["signed-release"],
-        repositoryKinds: ["proxy", "group"],
+        repositoryKinds: [
+          { kind: "proxy", experimental: true },
+          { kind: "group", experimental: false },
+        ],
         clientHelperSummary: "apt: install",
         lifecycle: {
           availability: "disabled",
