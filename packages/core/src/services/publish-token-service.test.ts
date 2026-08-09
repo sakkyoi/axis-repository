@@ -7,7 +7,6 @@ import {
   UnauthorizedError,
   ValidationError,
   type Clock,
-  type PublishTokenRecord,
   type RandomId,
   type SecretHasher,
 } from "../index";
@@ -53,27 +52,6 @@ describe("PublishTokenService", () => {
     await expect(service.verify(created.secret)).resolves.toMatchObject({ name: "github-actions" });
 
     expect(listSpy).not.toHaveBeenCalled();
-  });
-
-  it("still verifies secrets issued before the id was embedded", async () => {
-    const state = new MemoryStateStore();
-    const service = new PublishTokenService({ state, clock, randomId, hasher });
-    const legacySecret = "axis_publish_tok_legacy";
-    await state.publishTokens.save({
-      id: "ptok_legacy",
-      name: "legacy-actions",
-      tokenHash: await hasher.hash(legacySecret),
-      permissions: ["publish"],
-      repositories: ["debian-internal"],
-      ecosystemScopes: {},
-      signingKeyIds: [],
-      createdAt: "2026-01-01T00:00:00.000Z",
-    });
-
-    await expect(service.verify(legacySecret)).resolves.toMatchObject({
-      tokenId: "ptok_legacy",
-      name: "legacy-actions",
-    });
   });
 
   it("rejects a secret whose embedded id does not match its digest", async () => {
@@ -239,7 +217,7 @@ describe("PublishTokenService", () => {
     await state.publishTokens.save({
       id: "ptok_corrupt",
       name: "github-actions",
-      tokenHash: "hash:axis_publish_corrupt",
+      tokenHash: "hash:axis_publish_ptok_corrupt.corrupt",
       permissions: ["publish"],
       repositories: ["debian-internal"],
       ecosystemScopes: {},
@@ -254,35 +232,8 @@ describe("PublishTokenService", () => {
       hasher,
     });
 
-    await expect(service.verify("axis_publish_corrupt")).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(service.verify("axis_publish_ptok_corrupt.corrupt")).rejects.toBeInstanceOf(ForbiddenError);
   });
-
-  it("treats persisted tokens without signing key scopes as unscoped", async () => {
-    const state = new MemoryStateStore();
-    await state.publishTokens.save({
-      id: "ptok_legacy",
-      name: "legacy-actions",
-      tokenHash: "hash:axis_publish_legacy",
-      permissions: ["publish"],
-      repositories: ["debian-internal"],
-      ecosystemScopes: {},
-      createdAt: "2026-07-13T00:00:00.000Z",
-    } as PublishTokenRecord);
-    const service = new PublishTokenService({
-      state,
-      clock,
-      randomId,
-      hasher,
-    });
-
-    await expect(service.list()).resolves.toMatchObject([
-      { name: "legacy-actions", signingKeyIds: [] },
-    ]);
-    await expect(service.verify("axis_publish_legacy")).resolves.toMatchObject({
-      signingKeyIds: [],
-    });
-  });
-
 
   it("creates and verifies publish tokens with signing key scopes", async () => {
     const service = new PublishTokenService({

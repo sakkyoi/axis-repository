@@ -10,7 +10,6 @@ import type {
   BackgroundJobRecord,
   RepositorySecretRecord,
   RepositoryPluginPolicyRecord,
-  SigningKeyRecord,
   RuntimeSettingsRecord,
 } from "../domain/domain";
 import type { StateStore } from "../ports/ports";
@@ -45,7 +44,7 @@ export class MemoryStateStore implements StateStore {
   private readonly adminUserIdByUsername = new Map<string, string>();
   private readonly adminRefreshSessionById = new Map<string, AdminRefreshSessionRecord>();
   private readonly publishTokenIdByName = new Map<string, string>();
-  private readonly repositorySecretById = new Map<string, RepositorySecretRecord | SigningKeyRecord>();
+  private readonly repositorySecretById = new Map<string, RepositorySecretRecord>();
   private readonly repositorySecretIdByName = new Map<string, string>();
   private readonly repositoryPluginPolicyByEcosystem = new Map<string, RepositoryPluginPolicyRecord>();
   private runtimeSettingsRecord: RuntimeSettingsRecord | null = null;
@@ -196,24 +195,23 @@ export class MemoryStateStore implements StateStore {
   };
 
   readonly repositorySecrets = {
-    getById: async (id: string): Promise<RepositorySecretRecord | SigningKeyRecord | null> => {
+    getById: async (id: string): Promise<RepositorySecretRecord | null> => {
       const record = this.repositorySecretById.get(id);
       return record ? snapshot(record) : null;
     },
     getByName: async (name: string, repositoryName: string, namespace: string): Promise<RepositorySecretRecord | null> => {
       const id = this.repositorySecretIdByName.get(repositorySecretNameIndex(namespace, repositoryName, name));
       const stored = id ? this.repositorySecretById.get(id) : undefined;
-      const record = stored ? snapshot(stored) : null;
-      return record && isRepositorySecretRecord(record) ? record : null;
+      return stored ? snapshot(stored) : null;
     },
-    list: async (): Promise<Array<RepositorySecretRecord | SigningKeyRecord>> => {
+    list: async (): Promise<RepositorySecretRecord[]> => {
       return snapshotAll([...this.repositorySecretById.values()]).sort((left, right) =>
         left.name.localeCompare(right.name),
       );
     },
     save: async (record: RepositorySecretRecord): Promise<void> => {
       const existing = this.repositorySecretById.get(record.id);
-      if (existing && isRepositorySecretRecord(existing)) {
+      if (existing) {
         if (
           existing.name !== record.name
           || existing.repositoryName !== record.repositoryName
@@ -238,11 +236,9 @@ export class MemoryStateStore implements StateStore {
       let deleted = 0;
       for (const record of [...this.repositorySecretById.values()]) {
         if (record.repositoryName !== repositoryName) continue;
-        if (isRepositorySecretRecord(record)) {
-          this.repositorySecretIdByName.delete(
-            repositorySecretNameIndex(record.namespace, record.repositoryName, record.name),
-          );
-        }
+        this.repositorySecretIdByName.delete(
+          repositorySecretNameIndex(record.namespace, record.repositoryName, record.name),
+        );
         if (this.repositorySecretById.delete(record.id)) {
           deleted++;
         }
@@ -522,6 +518,3 @@ function repositorySecretNameIndex(namespace: string, repositoryName: string, na
   return `${namespace}\0${repositoryName}\0${name}`;
 }
 
-function isRepositorySecretRecord(record: RepositorySecretRecord | SigningKeyRecord): record is RepositorySecretRecord {
-  return "namespace" in record;
-}

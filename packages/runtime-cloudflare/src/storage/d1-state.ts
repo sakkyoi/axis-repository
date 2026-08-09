@@ -23,7 +23,6 @@ import type {
   RepositoryStore,
   RuntimeSettingsRecord,
   RuntimeSettingsStore,
-  SigningKeyRecord,
   StateStore,
 } from "@axis-repository/core";
 
@@ -557,7 +556,7 @@ export class D1RepositorySecretStore implements RepositorySecretStore {
     private readonly schema = new D1SharedStateSchema(database),
   ) {}
 
-  async getById(id: string): Promise<RepositorySecretRecord | SigningKeyRecord | null> {
+  async getById(id: string): Promise<RepositorySecretRecord | null> {
     await this.schema.ensure();
     const row = await this.database
       .prepare("SELECT record_json FROM axis_repository_secrets WHERE id = ?")
@@ -578,7 +577,7 @@ export class D1RepositorySecretStore implements RepositorySecretStore {
     return row === null ? null : parseRecord<RepositorySecretRecord>(row.record_json);
   }
 
-  async list(): Promise<Array<RepositorySecretRecord | SigningKeyRecord>> {
+  async list(): Promise<RepositorySecretRecord[]> {
     await this.schema.ensure();
     const rows = await this.database
       .prepare("SELECT record_json FROM axis_repository_secrets ORDER BY name ASC, id ASC")

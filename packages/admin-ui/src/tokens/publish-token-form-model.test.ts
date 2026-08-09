@@ -164,7 +164,7 @@ describe("publish token form model", () => {
 
   it("formats readonly publish token summary items", () => {
     expect(publishTokenSummaryItems(publishToken("github-actions"))).toEqual([
-      ["Owner", "legacy token"],
+      ["Owner", "system"],
       ["Permissions", "publish"],
       ["Repositories", "debian-internal"],
       ["Signing key scopes", "signing_key_prod"],

@@ -87,22 +87,15 @@ export function createDevDependencies(
   adminUsername = "admin",
   adminPassword = "admin-local-password",
 ): AppDependencies {
-  return createDevDependencyHarness(signingKeyEncryptionSecret, adminUiRuntimeConfig, {}, adminUsername, adminPassword).dependencies;
+  return createDevDependencyHarness(signingKeyEncryptionSecret, adminUiRuntimeConfig, adminUsername, adminPassword).dependencies;
 }
 
 export function createDevDependencyHarness(
-  signingKeyEncryptionSecretOrLegacyAdminToken = "dev-signing-key-encryption-secret",
-  adminUiRuntimeConfigOrSigningKeySecret: AdminUiRuntimeConfig | string = {},
-  legacyAdminUiRuntimeConfig: AdminUiRuntimeConfig = {},
+  signingKeyEncryptionSecret = "dev-signing-key-encryption-secret",
+  adminUiRuntimeConfig: AdminUiRuntimeConfig = {},
   adminUsername = "admin",
   adminPassword = "admin-local-password",
 ): DevDependencyHarness {
-  const signingKeyEncryptionSecret = typeof adminUiRuntimeConfigOrSigningKeySecret === "string"
-    ? adminUiRuntimeConfigOrSigningKeySecret
-    : signingKeyEncryptionSecretOrLegacyAdminToken;
-  const adminUiRuntimeConfig = typeof adminUiRuntimeConfigOrSigningKeySecret === "string"
-    ? legacyAdminUiRuntimeConfig
-    : adminUiRuntimeConfigOrSigningKeySecret;
   const state = new MemoryStateStore();
   const clock: Clock = { now: () => new Date() };
   const randomId: RandomId = {

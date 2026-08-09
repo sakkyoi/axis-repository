@@ -7,14 +7,6 @@ import type { Clock, RandomId, SecretHasher, StateStore } from "../ports/ports";
 // can never reach stored state through what they are handed back. Copying again
 // here would be a second, divergent implementation of the same invariant.
 
-/**
- * Fills in fields added after some records were written. Records stored before
- * signing key scopes existed have no signingKeyIds.
- */
-function withScopeDefaults(record: PublishTokenRecord): PublishTokenRecord {
-  return record.signingKeyIds ? record : { ...record, signingKeyIds: [] };
-}
-
 export function principalRefFromAdminPrincipal(principal: AdminPrincipal): PrincipalRef {
   return {
     type: "admin-user",
@@ -96,7 +88,7 @@ export class PublishTokenService {
   }
 
   async list(): Promise<PublishTokenRecord[]> {
-    return (await this.options.state.publishTokens.list()).map(withScopeDefaults);
+    return this.options.state.publishTokens.list();
   }
 
   async getByName(name: string): Promise<PublishTokenRecord> {
@@ -104,7 +96,7 @@ export class PublishTokenService {
     if (!record) {
       throw new NotFoundError(`Publish token not found: ${name}`);
     }
-    return withScopeDefaults(record);
+    return record;
   }
 
   async revoke(name: string): Promise<PublishTokenRecord> {
@@ -113,14 +105,14 @@ export class PublishTokenService {
       throw new NotFoundError(`Publish token not found: ${name}`);
     }
     if (record.revokedAt) {
-      return withScopeDefaults(record);
+      return record;
     }
     const revoked: PublishTokenRecord = {
       ...record,
       revokedAt: this.options.clock.now().toISOString(),
     };
     await this.options.state.publishTokens.save(revoked);
-    return withScopeDefaults(revoked);
+    return revoked;
   }
 
   async rotate(name: string): Promise<RotatePublishTokenResult> {
@@ -138,7 +130,7 @@ export class PublishTokenService {
       rotatedAt: this.options.clock.now().toISOString(),
     };
     await this.options.state.publishTokens.save(rotated);
-    return { record: withScopeDefaults(rotated), secret };
+    return { record: rotated, secret };
   }
 
   async delete(name: string): Promise<void> {
@@ -169,7 +161,7 @@ export class PublishTokenService {
         permissions: record.permissions,
         repositories: record.repositories,
         ecosystemScopes: record.ecosystemScopes,
-        signingKeyIds: record.signingKeyIds ?? [],
+        signingKeyIds: record.signingKeyIds,
         ...(record.owner ? { owner: record.owner } : {}),
       };
     }
@@ -181,13 +173,6 @@ export class PublishTokenService {
     if (tokenId) {
       const record = await this.options.state.publishTokens.getById(tokenId);
       if (record && await this.options.hasher.verify(secret, record.tokenHash)) {
-        return record;
-      }
-      return null;
-    }
-    // Secrets issued before the id was embedded carry no lookup key.
-    for (const record of await this.options.state.publishTokens.list()) {
-      if (await this.options.hasher.verify(secret, record.tokenHash)) {
         return record;
       }
     }

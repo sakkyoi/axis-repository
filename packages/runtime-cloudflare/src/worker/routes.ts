@@ -1470,15 +1470,11 @@ function requireBasicPassword(encodedCredentials: string): string {
 // these checks the URL stays a usable write capability forever, and the body is
 // read into memory before anything compares it to the declared artifact size.
 function ensureUploadTargetIsWritable(session: PublishSession, target: UploadTarget): void {
-  // Legacy sessions persisted "created" for what is now "pending_uploads";
-  // PublishSessionService normalizes the same way.
-  const persistedStatus = session.status as PublishSession["status"] | "created";
-  const status = persistedStatus === "created" ? "pending_uploads" : persistedStatus;
   // Only before verification. Once a session is "ready" its uploads have been
   // checksummed, and finalize trusts those recorded digests rather than
   // re-reading the bytes, so a later write would publish content that does not
   // match the signed index.
-  if (status !== "pending_uploads") {
+  if (session.status !== "pending_uploads") {
     throw new ValidationError(`Publish session is not open: ${session.status}`);
   }
   const now = Date.now();

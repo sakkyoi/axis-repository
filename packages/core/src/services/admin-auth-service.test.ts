@@ -26,8 +26,8 @@ const hasher: SecretHasher = {
 
 const passwordHasher: PasswordHasher = {
   hash: async (password) => `pw:${password}`,
-  verify: async (password, hash) => hash === `pw:${password}` || hash === `legacy:${password}`,
-  needsRehash: (hash) => hash.startsWith("legacy:"),
+  verify: async (password, hash) => hash === `pw:${password}` || hash === `weak:${password}`,
+  needsRehash: (hash) => hash.startsWith("weak:"),
 };
 
 const accessTokens: AdminAccessTokenCodec = {
@@ -201,7 +201,7 @@ describe("AdminAuthService", () => {
       .resolves.toMatchObject({ principal: { username: "admin" } });
   });
 
-  it("prunes revoked and expired sessions so the legacy lookup scan stays bounded", async () => {
+  it("prunes revoked and expired sessions so the active session table stays bounded", async () => {
     let currentTime = new Date("2026-07-26T00:00:00.000Z");
     let sequence = 0;
     const state = new MemoryStateStore();
@@ -217,8 +217,6 @@ describe("AdminAuthService", () => {
     await service.logout(loggedOut.refreshToken);
     currentTime = new Date("2026-07-26T00:05:00.000Z");
 
-    // A refresh token issued before the session id was embedded has no lookup
-    // key, so verifying one scans this table.
     await expect(state.adminRefreshSessions.list()).resolves.toHaveLength(1);
     await service.login({ username: "admin", password: "correct-password" });
     await expect(state.adminRefreshSessions.list()).resolves.toHaveLength(1);
@@ -371,10 +369,10 @@ describe("AdminAuthService", () => {
   it("rewrites password hashes stored under weaker parameters on successful login", async () => {
     const state = new MemoryStateStore();
     await state.adminUsers.save({
-      id: "admin_user_legacy",
+      id: "admin_user_existing",
       username: "admin",
       displayName: "admin",
-      passwordHash: "legacy:correct-password",
+      passwordHash: "weak:correct-password",
       role: "owner",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
@@ -384,12 +382,12 @@ describe("AdminAuthService", () => {
     await expect(service.login({ username: "admin", password: "wrong" }))
       .rejects.toBeInstanceOf(UnauthorizedError);
     await expect(state.adminUsers.getByUsername("admin")).resolves.toMatchObject({
-      passwordHash: "legacy:correct-password",
+      passwordHash: "weak:correct-password",
     });
 
     const login = await service.login({ username: "admin", password: "correct-password" });
 
-    expect(login.principal.subject).toBe("admin_user_legacy");
+    expect(login.principal.subject).toBe("admin_user_existing");
     await expect(state.adminUsers.getByUsername("admin")).resolves.toMatchObject({
       passwordHash: "pw:correct-password",
       updatedAt: "2026-07-26T00:00:00.000Z",

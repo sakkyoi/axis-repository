@@ -288,20 +288,13 @@ export class AdminAuthService {
       if (session && await this.options.hasher.verify(refreshToken, session.tokenHash)) {
         return session;
       }
-      return null;
-    }
-    // Tokens issued before the session id was embedded carry no lookup key.
-    for (const session of await this.options.state.adminRefreshSessions.list()) {
-      if (await this.options.hasher.verify(refreshToken, session.tokenHash)) {
-        return session;
-      }
     }
     return null;
   }
 
   private async revokeRefreshSessionsForSubject(subject: string): Promise<void> {
     // Deleted rather than tombstoned: a revoked record has no further use, and
-    // keeping them makes the legacy lookup scan grow without bound.
+    // keeping them makes session lists grow without bound.
     for (const session of await this.options.state.adminRefreshSessions.list()) {
       if (session.subject !== subject) continue;
       await this.options.state.adminRefreshSessions.delete(session.id);
@@ -311,10 +304,7 @@ export class AdminAuthService {
   /**
    * Drops sessions that can never authenticate again.
    *
-   * A refresh token issued before the session id was embedded has no lookup
-   * key, so verifying one scans every stored session. Pruning on each sign-in
-   * keeps that scan bounded by the number of live sessions rather than by
-   * every session ever created.
+   * Pruning on each sign-in keeps the active session table bounded.
    */
   private async pruneDeadRefreshSessions(): Promise<void> {
     const now = this.options.clock.now().getTime();

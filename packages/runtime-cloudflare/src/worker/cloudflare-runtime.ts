@@ -223,11 +223,8 @@ function bootstrapOwnerFromEnv(env: AxisEnv): { username: string; password?: str
   }
   const username = env.AXIS_ADMIN_USERNAME;
   if (env.AXIS_ADMIN_PASSWORD_HASH !== undefined && env.AXIS_ADMIN_PASSWORD_HASH !== "") {
-    if (
-      !env.AXIS_ADMIN_PASSWORD_HASH.startsWith("sha256:")
-      && !env.AXIS_ADMIN_PASSWORD_HASH.startsWith("pbkdf2-sha256$")
-    ) {
-      throw new Error("AXIS_ADMIN_PASSWORD_HASH must use sha256 or pbkdf2-sha256 format");
+    if (!env.AXIS_ADMIN_PASSWORD_HASH.startsWith("pbkdf2-sha256$")) {
+      throw new Error("AXIS_ADMIN_PASSWORD_HASH must use pbkdf2-sha256 format");
     }
     return { username, passwordHash: env.AXIS_ADMIN_PASSWORD_HASH };
   }

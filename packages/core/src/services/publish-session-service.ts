@@ -82,14 +82,6 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function verifiedUploadsFor(session: PublishSession): VerifiedUpload[] {
-  return session.verifiedUploads ?? [];
-}
-
-function normalizeOpenStatus(status: PublishSession["status"] | "created"): PublishSession["status"] {
-  return status === "created" ? "pending_uploads" : status;
-}
-
 function allUploadsVerified(session: PublishSession, verifiedUploads: VerifiedUpload[]): boolean {
   return session.uploads.every((upload) =>
     verifiedUploads.some((verifiedUpload) => verifiedUpload.uploadId === upload.uploadId),
@@ -202,8 +194,7 @@ export class PublishSessionService {
     }
     this.requirePublishPermission(input.principal);
     this.requireSessionVisibility(input.principal, session, input.sessionId);
-    const openStatus = normalizeOpenStatus(session.status);
-    if (openStatus !== "pending_uploads" && openStatus !== "ready") {
+    if (session.status !== "pending_uploads" && session.status !== "ready") {
       throw new ValidationError(`Publish session is not open: ${session.status}`);
     }
     if (isExpired(session, this.options.clock.now())) {
@@ -228,14 +219,11 @@ export class PublishSessionService {
     };
 
     const updatedSession = await this.options.state.publishSessions.update(session.id, (current) => {
-      const currentOpenStatus = normalizeOpenStatus(
-        current.status as PublishSession["status"] | "created",
-      );
-      if (currentOpenStatus !== "pending_uploads" && currentOpenStatus !== "ready") {
+      if (current.status !== "pending_uploads" && current.status !== "ready") {
         throw new ValidationError(`Publish session is not open: ${current.status}`);
       }
       const verifiedUploads = [
-        ...verifiedUploadsFor(current).filter((verifiedUpload) => verifiedUpload.uploadId !== upload.uploadId),
+        ...current.verifiedUploads.filter((verifiedUpload) => verifiedUpload.uploadId !== upload.uploadId),
         upload,
       ];
       return {
@@ -311,10 +299,9 @@ export class PublishSessionService {
       throw new NotFoundError(`Publish session not found: ${input.sessionId}`);
     }
 
-    const verifiedUploads = verifiedUploadsFor(finalizingSession);
     const artifacts = finalizingSession.uploads.map((upload, index) => {
       const artifact = finalizingSession.artifacts[index];
-      const verifiedUpload = verifiedUploads.find((candidate) => candidate.uploadId === upload.uploadId);
+      const verifiedUpload = finalizingSession.verifiedUploads.find((candidate) => candidate.uploadId === upload.uploadId);
       if (!artifact || !verifiedUpload) {
         throw new ValidationError("All uploads must be verified before finalize");
       }

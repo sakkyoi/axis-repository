@@ -5,7 +5,6 @@ import type {
   AdminRefreshSessionRecord,
   AdminUserRecord,
   RepositorySecretRecord,
-  SigningKeyRecord,
   UploadedObject,
   UploadTarget,
   Repository,
@@ -204,9 +203,9 @@ export interface AdminUserStore {
 }
 
 export interface RepositorySecretStore {
-  getById(id: string): Promise<RepositorySecretRecord | SigningKeyRecord | null>;
+  getById(id: string): Promise<RepositorySecretRecord | null>;
   getByName(name: string, repositoryName: string, namespace: string): Promise<RepositorySecretRecord | null>;
-  list(): Promise<Array<RepositorySecretRecord | SigningKeyRecord>>;
+  list(): Promise<RepositorySecretRecord[]>;
   save(record: RepositorySecretRecord): Promise<void>;
   deleteByRepository(repositoryName: string): Promise<number>;
 }

@@ -240,7 +240,7 @@ describe("package boundaries", () => {
       ...listSourceFiles("packages/runtime-cloudflare/src/worker"),
       ...listSourceFiles("packages/runtime-cloudflare/src/storage"),
     ].filter((filePath) => !filePath.endsWith("package-boundaries.test.ts"));
-    const forbiddenLegacyTerms = [
+    const forbiddenDeprecatedTerms = [
       "RepositoryIndexJobRecord",
       "RepositoryIndexJobStore",
       "repositoryIndexJobs",
@@ -258,8 +258,8 @@ describe("package boundaries", () => {
     for (const filePath of checkedFiles) {
       const source = readFileSync(path.join(rootDir, filePath), "utf8");
 
-      for (const term of forbiddenLegacyTerms) {
-        expect(source, `${filePath} must not use legacy repository index job contract ${term}`).not.toContain(term);
+      for (const term of forbiddenDeprecatedTerms) {
+        expect(source, `${filePath} must not use deprecated repository index job contract ${term}`).not.toContain(term);
       }
     }
   });

@@ -318,7 +318,6 @@ describe("Cloudflare runtime routes", () => {
   it("injects the configured admin UI API base URL into the shell", async () => {
     const app = createApp(
       createDevDependencyHarness(
-        "dev-admin-token",
         "dev-signing-key-encryption-secret",
         { apiBaseUrl: "https://admin-api.example/base" },
       ).dependencies,
@@ -3857,7 +3856,7 @@ describe("Cloudflare runtime routes", () => {
     expect(artifactsBody.indexJob).toBeUndefined();
   });
 
-  it("does not expose the legacy repository artifact index job endpoint", async () => {
+  it("does not expose the deprecated repository artifact index job endpoint", async () => {
     const harness = createDevDependencyHarness();
     const app = createApp(harness.dependencies);
     await createRepository(app, {

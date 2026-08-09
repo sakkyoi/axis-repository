@@ -343,29 +343,6 @@ describe("PublishSessionService", () => {
     });
   });
 
-  it("treats existing sessions without verifiedUploads as pending verification state", async () => {
-    const state = await createStateWithRepository();
-    const service = new PublishSessionService({ state, uploadBroker, clock, randomId });
-    const created = await service.create({
-      repositoryName: "debian-internal",
-      ecosystem: "apt",
-      principal,
-      artifacts: [artifact],
-    });
-    const legacySession = { ...created, status: "created" as never };
-    delete (legacySession as Partial<PublishSession>).verifiedUploads;
-    await state.publishSessions.save(legacySession);
-
-    const result = await service.verifyUpload({
-      sessionId: "pub_fixed",
-      uploadId: "upl_fixed",
-      principal,
-    });
-
-    expect(result.session.status).toBe("ready");
-    expect(result.session.verifiedUploads).toHaveLength(1);
-  });
-
   it("keeps a session pending until every upload is verified", async () => {
     const state = await createStateWithRepository();
     let uploadCount = 0;
@@ -637,26 +614,6 @@ describe("PublishSessionService", () => {
     await expect(state.publishSessions.get("pub_fixed")).resolves.toMatchObject({
       status: "ready",
     });
-  });
-
-  it("rejects finalize for legacy completed sessions", async () => {
-    const state = await createStateWithRepository();
-    const { publisher } = createPublisher();
-    const service = new PublishSessionService({ state, uploadBroker, artifactPublisher: publisher, clock, randomId });
-    const created = await service.create({
-      repositoryName: "debian-internal",
-      ecosystem: "apt",
-      principal,
-      artifacts: [artifact],
-    });
-    await state.publishSessions.save({ ...created, status: "completed" as never });
-
-    await expect(
-      service.finalize({
-        sessionId: "pub_fixed",
-        principal,
-      }),
-    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("queues finalize for a ready session without publishing immediately", async () => {

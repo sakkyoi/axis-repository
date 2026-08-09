@@ -167,7 +167,7 @@ describe("PluginPublishSessionService", () => {
       ecosystem: "apt",
       config: {
         apt: {
-          signingKeyId: "legacy_config_key",
+          signingKeyId: "repository_config_key",
         },
       },
     });
@@ -235,7 +235,7 @@ describe("PluginPublishSessionService", () => {
       ecosystem: "apt",
       config: {
         apt: {
-          signingKeyId: "legacy_config_key",
+          signingKeyId: "repository_config_key",
         },
       },
     });

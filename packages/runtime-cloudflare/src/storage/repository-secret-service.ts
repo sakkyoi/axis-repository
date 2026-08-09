@@ -5,7 +5,6 @@ import {
   type Clock,
   type RandomId,
   type RepositorySecretRecord as StoredRepositorySecretRecord,
-  type SigningKeyRecord as LegacySigningKeyRecord,
   type StateStore,
 } from "@axis-repository/core";
 import type {
@@ -14,8 +13,6 @@ import type {
   RepositorySecretRecord,
 } from "../plugins/repository-plugin-capabilities";
 import type { SecretEncryption } from "./secret-encryption";
-
-const LEGACY_APT_SIGNING_KEY_NAMESPACE = "apt.signing-key";
 
 export class RepositorySecretService implements RepositorySecretCapability {
   constructor(
@@ -102,48 +99,12 @@ export class RepositorySecretService implements RepositorySecretCapability {
     const record = await this.options.state.repositorySecrets.getById(id);
     if (!record) throw new NotFoundError();
     if (record.revokedAt) return this.toSecretRecord(record);
-    if (!isRepositorySecretRecord(record)) {
-      const migrated: StoredRepositorySecretRecord = {
-        id: record.id,
-        namespace: LEGACY_APT_SIGNING_KEY_NAMESPACE,
-        repositoryName: record.repositoryName,
-        name: record.name,
-        publicMetadata: {
-          publicKeyArmored: record.publicKeyArmored,
-          fingerprint: record.fingerprint,
-          keyId: record.keyId,
-        },
-        encryptedSecrets: await this.options.encryption.encrypt(JSON.stringify({
-          privateKeyArmored: await this.options.encryption.decrypt(record.encryptedPrivateKeyArmored),
-          passphrase: await this.options.encryption.decrypt(record.encryptedPassphrase),
-        })),
-        createdAt: record.createdAt,
-        revokedAt: this.options.clock.now().toISOString(),
-      };
-      await this.options.state.repositorySecrets.save(migrated);
-      return this.toSecretRecord(migrated);
-    }
     const revoked: StoredRepositorySecretRecord = { ...record, revokedAt: this.options.clock.now().toISOString() };
     await this.options.state.repositorySecrets.save(revoked);
     return this.toSecretRecord(revoked);
   }
 
-  private toSecretRecord(record: StoredRepositorySecretRecord | LegacySigningKeyRecord): RepositorySecretRecord {
-    if (!isRepositorySecretRecord(record)) {
-      return {
-        id: record.id,
-        namespace: LEGACY_APT_SIGNING_KEY_NAMESPACE,
-        repositoryName: record.repositoryName,
-        name: record.name,
-        publicMetadata: {
-          publicKeyArmored: record.publicKeyArmored,
-          fingerprint: record.fingerprint,
-          keyId: record.keyId,
-        },
-        createdAt: record.createdAt,
-        revokedAt: record.revokedAt ?? null,
-      };
-    }
+  private toSecretRecord(record: StoredRepositorySecretRecord): RepositorySecretRecord {
     return {
       id: record.id,
       namespace: record.namespace,
@@ -155,29 +116,17 @@ export class RepositorySecretService implements RepositorySecretCapability {
     };
   }
 
-  private async decryptSecrets(record: StoredRepositorySecretRecord | LegacySigningKeyRecord): Promise<Record<string, string>> {
-    if (isRepositorySecretRecord(record)) {
-      const decrypted = await this.options.encryption.decrypt(record.encryptedSecrets);
-      const parsed = JSON.parse(decrypted) as unknown;
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new ValidationError("Repository secret payload is invalid");
-      }
-      const secrets = parsed as Record<string, unknown>;
-      return Object.fromEntries(
-        Object.entries(secrets).map(([key, value]) => [key, secretString(value)]),
-      );
+  private async decryptSecrets(record: StoredRepositorySecretRecord): Promise<Record<string, string>> {
+    const decrypted = await this.options.encryption.decrypt(record.encryptedSecrets);
+    const parsed = JSON.parse(decrypted) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new ValidationError("Repository secret payload is invalid");
     }
-    return {
-      privateKeyArmored: await this.options.encryption.decrypt(record.encryptedPrivateKeyArmored),
-      passphrase: await this.options.encryption.decrypt(record.encryptedPassphrase),
-    };
+    const secrets = parsed as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(secrets).map(([key, value]) => [key, secretString(value)]),
+    );
   }
-}
-
-function isRepositorySecretRecord(
-  record: StoredRepositorySecretRecord | LegacySigningKeyRecord,
-): record is StoredRepositorySecretRecord {
-  return "namespace" in record;
 }
 
 function secretString(value: unknown): string {

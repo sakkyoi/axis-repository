@@ -58,21 +58,12 @@ const PBKDF2_KEY_BITS = 256;
  * Hashes are stored as `pbkdf2-sha256$<iterations>$<salt>$<derived key>` so the
  * iteration count travels with the hash and can be raised later without
  * invalidating existing passwords.
- *
- * Deployments seeded before this existed hold `sha256:<hex>` digests produced by
- * {@link Sha256SecretHasher}, and `AXIS_ADMIN_PASSWORD_HASH` still accepts that
- * form. Those verify through the legacy path and are reported by
- * {@link needsRehash} so the caller can upgrade them on next sign-in.
  */
 export class Pbkdf2PasswordHasher implements PasswordHasher {
-  private readonly legacyHasher: Sha256SecretHasher;
-
   constructor(
     private readonly pepper = "",
     private readonly iterations: number = PBKDF2_ITERATIONS,
-  ) {
-    this.legacyHasher = new Sha256SecretHasher(pepper);
-  }
+  ) {}
 
   async hash(password: string): Promise<string> {
     const salt = crypto.getRandomValues(new Uint8Array(PBKDF2_SALT_BYTES));
@@ -82,7 +73,7 @@ export class Pbkdf2PasswordHasher implements PasswordHasher {
 
   async verify(password: string, hash: string): Promise<boolean> {
     if (!hash.startsWith(`${PBKDF2_PREFIX}$`)) {
-      return this.legacyHasher.verify(password, hash);
+      return false;
     }
     const [, iterationsText, saltBase64, expected] = hash.split("$");
     if (!iterationsText || !saltBase64 || !expected) {
@@ -114,7 +105,7 @@ export class Pbkdf2PasswordHasher implements PasswordHasher {
 
   needsRehash(hash: string): boolean {
     if (!hash.startsWith(`${PBKDF2_PREFIX}$`)) {
-      return true;
+      return false;
     }
     const iterations = Number(hash.split("$")[1]);
     return !Number.isSafeInteger(iterations) || iterations < this.iterations;
@@ -122,9 +113,7 @@ export class Pbkdf2PasswordHasher implements PasswordHasher {
 
   private async deriveKey(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
     // The pepper is mixed in as well as the salt, so a copy of stored state
-    // without TOKEN_HASH_PEPPER is not offline-crackable. The previous
-    // SHA-256 scheme was keyed this way and dropping it would have been a
-    // regression hidden inside an improvement.
+    // without TOKEN_HASH_PEPPER is not offline-crackable.
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(`${this.pepper}:${password}`),

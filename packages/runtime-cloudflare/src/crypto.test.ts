@@ -34,13 +34,11 @@ describe("Pbkdf2PasswordHasher", () => {
     await expect(hasher.verify("wrong", first)).resolves.toBe(false);
   });
 
-  it("still verifies legacy sha256 digests and reports them as needing a rehash", async () => {
-    const legacy = await new Sha256SecretHasher("pepper").hash("legacy-password");
+  it("rejects non-PBKDF2 password hashes", async () => {
+    const sha256Hash = await new Sha256SecretHasher("pepper").hash("password");
 
-    await expect(hasher.verify("legacy-password", legacy)).resolves.toBe(true);
-    await expect(hasher.verify("other-password", legacy)).resolves.toBe(false);
-    expect(hasher.needsRehash(legacy)).toBe(true);
-    expect(hasher.needsRehash(await hasher.hash("legacy-password"))).toBe(false);
+    await expect(hasher.verify("password", sha256Hash)).resolves.toBe(false);
+    expect(hasher.needsRehash(sha256Hash)).toBe(false);
   });
 
   it("treats a hash with a weaker work factor as needing a rehash", async () => {

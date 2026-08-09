@@ -46,19 +46,6 @@ export interface EncryptedSecret {
   ciphertext: string;
 }
 
-export interface SigningKeyRecord {
-  id: string;
-  repositoryName: string;
-  name: string;
-  publicKeyArmored: string;
-  encryptedPrivateKeyArmored: EncryptedSecret;
-  encryptedPassphrase: EncryptedSecret;
-  fingerprint: string;
-  keyId: string;
-  createdAt: string;
-  revokedAt?: string;
-}
-
 export interface RepositorySecretRecord {
   id: string;
   namespace: string;

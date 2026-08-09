@@ -25,8 +25,7 @@ export function timingSafeEqualText(left: string, right: string): boolean {
  *
  * Secrets embed the id of the record they authenticate so verification is a
  * single lookup instead of a scan that hashes every stored record. Returns
- * undefined for secrets issued before this format, which still verify through
- * the scanning fallback.
+ * undefined for secrets that are not in the current lookup format.
  */
 export function tokenLookupId(secret: string, prefix: string): string | undefined {
   if (!secret.startsWith(prefix)) {
