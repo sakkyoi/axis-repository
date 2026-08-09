@@ -1,5 +1,4 @@
 export type {
-  ArtifactRepositoryPlugin,
   GroupRepositoryPlugin,
   HostedRepositoryPlugin,
   ProxyRepositoryPlugin,

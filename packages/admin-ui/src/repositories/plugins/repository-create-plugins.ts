@@ -17,8 +17,6 @@ export type {
 } from "./repository-ui-plugin-types";
 
 export const hostedRepositoryCreatePlugins = hostedRepositoryCreatePluginsFromUiRegistry();
-/** @deprecated Use hostedRepositoryCreatePlugins. */
-export const repositoryCreatePlugins = hostedRepositoryCreatePlugins;
 export { repositoryCreateStepsForConfig } from "../create/repository-create-steps";
 
 /**

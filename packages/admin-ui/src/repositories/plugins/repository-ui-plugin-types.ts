@@ -27,9 +27,6 @@ export interface HostedRepositoryCreatePlugin {
   buildCreateInput(state: RepositoryCreateWizardState): CreateRepositoryInput;
 }
 
-/** @deprecated Use HostedRepositoryCreatePlugin. */
-export type RepositoryCreatePlugin = HostedRepositoryCreatePlugin;
-
 export interface ProxyRepositoryCreatePlugin {
   kind: "proxy";
   ecosystem: string;
@@ -83,9 +80,6 @@ export type HostedRepositoryCreatePluginOption =
       disabledReason?: string;
     };
 
-/** @deprecated Use HostedRepositoryCreatePluginOption. */
-export type RepositoryCreatePluginOption = HostedRepositoryCreatePluginOption;
-
 export type RepositoryCreatePluginDescriptorOption =
   | {
       ecosystem: string;
@@ -131,9 +125,6 @@ export interface HostedRepositoryDetailPlugin {
   ecosystem: string;
   sections: RepositoryDetailSection[];
 }
-
-/** @deprecated Use HostedRepositoryDetailPlugin. */
-export type RepositoryDetailPlugin = HostedRepositoryDetailPlugin;
 
 export interface ProxyRepositoryDetailPlugin {
   kind: "proxy";
@@ -200,9 +191,6 @@ export interface HostedRepositoryPublishPlugin {
   artifactSummary(session: PublishSession): string;
 }
 
-/** @deprecated Use HostedRepositoryPublishPlugin. */
-export type RepositoryPublishPlugin = HostedRepositoryPublishPlugin;
-
 export interface HostedRepositoryUiPlugin {
   kind: "hosted";
   manifest: RepositoryPluginManifest;
@@ -231,9 +219,6 @@ export interface GroupRepositoryUiPlugin {
   createFieldRenderers?: RepositoryCreateFieldRendererMap;
   mapCreateServerError?: (message: string) => RepositoryCreateStep | undefined;
 }
-
-/** @deprecated Use HostedRepositoryUiPlugin. */
-export type RepositoryUiPlugin = HostedRepositoryUiPlugin;
 
 export type RepositoryUiPluginKind = RepositoryKind;
 export type RepositoryUiPluginDescriptor =

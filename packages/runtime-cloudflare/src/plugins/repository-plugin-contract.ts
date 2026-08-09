@@ -314,9 +314,6 @@ export interface GroupRepositoryPlugin extends PublisherMetadata {
   objectBrowser?: RepositoryObjectBrowser;
 }
 
-/** @deprecated Use HostedRepositoryPlugin. */
-export type ArtifactRepositoryPlugin = HostedRepositoryPlugin;
-
 export type RepositoryRuntimePluginDescriptor =
   | HostedRepositoryPlugin
   | ProxyRepositoryPlugin

@@ -18,8 +18,6 @@ import {
 export type { HostedRepositoryDetailPlugin, RepositoryDetailSection, RepositoryDetailSectionProps } from "./repository-ui-plugin-types";
 
 export const hostedRepositoryDetailPlugins = hostedRepositoryDetailPluginsFromUiRegistry();
-/** @deprecated Use hostedRepositoryDetailPlugins. */
-export const repositoryDetailPlugins = hostedRepositoryDetailPlugins;
 
 export const genericRepositoryDetailSections: RepositoryDetailSection[] = [
   { id: "settings", title: "Repository settings", placement: "settings", Component: RepositorySettingsSection },

@@ -85,9 +85,6 @@ const repositoryUiPluginByKindAndEcosystem = new Map<string, RepositoryUiPluginD
   repositoryUiPluginDescriptors.map((plugin) => [repositoryUiPluginKey(plugin), plugin]),
 );
 
-/** @deprecated Use hostedRepositoryUiPlugins. */
-export const repositoryUiPlugins = hostedRepositoryUiPlugins;
-
 function assertJsonEqual(label: string, actual: unknown, expected: unknown): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(`${label} does not match the shared plugin manifest`);
@@ -133,11 +130,6 @@ export function assertRepositoryUiPluginContracts(plugins: readonly RepositoryUi
       }
     }
   }
-}
-
-/** @deprecated Use assertRepositoryUiPluginContracts. */
-export function assertHostedRepositoryUiPluginContracts(plugins: readonly HostedRepositoryUiPlugin[]): void {
-  assertRepositoryUiPluginContracts(plugins);
 }
 
 function getHostedRepositoryUiPlugin(ecosystem: string): HostedRepositoryUiPlugin | undefined {
@@ -196,15 +188,9 @@ export function hostedRepositoryCreatePluginsFromUiRegistry(): NonEmptyArray<Hos
   return hostedRepositoryUiPlugins.map((plugin) => plugin.create) as NonEmptyArray<HostedRepositoryCreatePlugin>;
 }
 
-/** @deprecated Use hostedRepositoryCreatePluginsFromUiRegistry. */
-export const repositoryCreatePluginsFromUiRegistry = hostedRepositoryCreatePluginsFromUiRegistry;
-
 export function hostedRepositoryDetailPluginsFromUiRegistry(): HostedRepositoryDetailPlugin[] {
   return hostedRepositoryUiPlugins.map((plugin) => plugin.detail);
 }
-
-/** @deprecated Use hostedRepositoryDetailPluginsFromUiRegistry. */
-export const repositoryDetailPluginsFromUiRegistry = hostedRepositoryDetailPluginsFromUiRegistry;
 
 export function repositoryCreatePluginOptionsFromUiRegistry(
   serverPlugins: RepositoryPlugin[],
