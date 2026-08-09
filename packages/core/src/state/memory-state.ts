@@ -293,6 +293,17 @@ export class MemoryStateStore implements StateStore {
   };
 
   readonly repositoryArtifacts = {
+    getById: async (id: string): Promise<RepositoryArtifactRecord | null> => {
+      const record = this.repositoryArtifactById.get(id);
+      return record ? snapshot(record) : null;
+    },
+    countByRepository: async (repositoryName: string): Promise<number> => {
+      let count = 0;
+      for (const artifact of this.repositoryArtifactById.values()) {
+        if (artifact.repositoryName === repositoryName) count += 1;
+      }
+      return count;
+    },
     listByRepository: async (repositoryName: string): Promise<RepositoryArtifactRecord[]> => {
       return snapshotAll([...this.repositoryArtifactById.values()])
         .filter((artifact) => artifact.repositoryName === repositoryName)

@@ -1,6 +1,12 @@
 import { createCloudflareRuntimeDependencies, type AxisEnv } from "./worker/cloudflare-runtime";
 import { createApp } from "./worker/app";
-import { drainBackgroundJobQueue, drainBackgroundJobQueueBatch, type BackgroundJobQueueMessage } from "./worker/background-job-queue";
+import {
+  CloudflareBackgroundJobWakeQueue,
+  drainBackgroundJobQueue,
+  drainBackgroundJobQueueBatch,
+  enqueueBackgroundJobWakeup,
+  type BackgroundJobQueueMessage,
+} from "./worker/background-job-queue";
 import { scheduleBackgroundJobs } from "./worker/background-job-scheduler";
 
 function missingRuntimeBindingResponse(message: string): Response {
@@ -22,6 +28,10 @@ function missingRuntimeBindingResponse(message: string): Response {
   );
 }
 
+function backgroundJobWakeQueue(env: AxisEnv): CloudflareBackgroundJobWakeQueue {
+  return new CloudflareBackgroundJobWakeQueue(env.AXIS_BACKGROUND_JOBS);
+}
+
 export default {
   fetch(request: Request, env?: AxisEnv, ctx?: ExecutionContext): Promise<Response> {
     if (!env?.AXIS_SHARED_STATE || !env.AXIS_BACKGROUND_JOBS) {
@@ -30,11 +40,8 @@ export default {
       ));
     }
     const dependencies = createCloudflareRuntimeDependencies(env, {
-      scheduleBackgroundJobs: () => drainBackgroundJobQueue({
-        dependencies,
-        queue: env.AXIS_BACKGROUND_JOBS!,
-      }),
-      ...(ctx === undefined ? {} : { scheduleBackgroundTask: (task) => ctx.waitUntil(task) }),
+      scheduleBackgroundJobs: () => enqueueBackgroundJobWakeup(backgroundJobWakeQueue(env)),
+      ...(ctx === undefined ? {} : { backgroundTasks: { waitUntil: (task) => ctx.waitUntil(task) } }),
     });
     return createApp(dependencies).fetch(request);
   },
@@ -43,14 +50,11 @@ export default {
       throw new Error("AXIS_SHARED_STATE and AXIS_BACKGROUND_JOBS are required for background job queue consumers");
     }
     const dependencies = createCloudflareRuntimeDependencies(env, {
-      scheduleBackgroundJobs: () => drainBackgroundJobQueue({
-        dependencies,
-        queue: env.AXIS_BACKGROUND_JOBS!,
-      }),
+      scheduleBackgroundJobs: () => enqueueBackgroundJobWakeup(backgroundJobWakeQueue(env)),
     });
     await drainBackgroundJobQueueBatch({
       dependencies,
-      queue: env.AXIS_BACKGROUND_JOBS,
+      wakeQueue: backgroundJobWakeQueue(env),
       messages: batch.messages.map((message) => message.body),
     });
   },
@@ -59,15 +63,12 @@ export default {
       throw new Error("AXIS_SHARED_STATE and AXIS_BACKGROUND_JOBS are required for scheduled background jobs");
     }
     const dependencies = createCloudflareRuntimeDependencies(env, {
-      scheduleBackgroundJobs: () => drainBackgroundJobQueue({
-        dependencies,
-        queue: env.AXIS_BACKGROUND_JOBS!,
-      }),
+      scheduleBackgroundJobs: () => enqueueBackgroundJobWakeup(backgroundJobWakeQueue(env)),
     });
     await scheduleBackgroundJobs({
       stagingUploadGcJobService: dependencies.stagingUploadGcJobService,
       repositoryMaintenanceJobService: dependencies.repositoryMaintenanceJobService,
-      wakeBackgroundJobs: () => env.AXIS_BACKGROUND_JOBS!.send({ enqueuedAt: new Date().toISOString() }).then(() => undefined),
+      wakeQueue: backgroundJobWakeQueue(env),
     });
   },
 };

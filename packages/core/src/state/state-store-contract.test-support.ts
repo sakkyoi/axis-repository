@@ -421,6 +421,37 @@ export function describeStateStoreContract(
         ]);
       });
 
+      it("looks up repository artifacts by id without listing a repository", async () => {
+        const state = await store();
+        await state.repositoryArtifacts.upsert(repositoryArtifact());
+
+        await expect(state.repositoryArtifacts.getById("artifact_1")).resolves.toMatchObject({
+          id: "artifact_1",
+          repositoryName: "debian-internal",
+        });
+        await expect(state.repositoryArtifacts.getById("artifact_missing")).resolves.toBeNull();
+      });
+
+      it("counts repository artifacts without loading their records", async () => {
+        const state = await store();
+        await state.repositoryArtifacts.upsertMany([
+          repositoryArtifact(),
+          repositoryArtifact({
+            id: "artifact_2",
+            identity: "myapp/2.0.0/amd64",
+          }),
+          repositoryArtifact({
+            id: "artifact_other",
+            repositoryName: "python-internal",
+            identity: "demo/1.0.0",
+          }),
+        ]);
+
+        await expect(state.repositoryArtifacts.countByRepository("debian-internal")).resolves.toBe(2);
+        await expect(state.repositoryArtifacts.countByRepository("python-internal")).resolves.toBe(1);
+        await expect(state.repositoryArtifacts.countByRepository("missing")).resolves.toBe(0);
+      });
+
       it("upserts multiple repository artifacts in one store operation", async () => {
         const state = await store();
         await state.repositoryArtifacts.upsertMany([

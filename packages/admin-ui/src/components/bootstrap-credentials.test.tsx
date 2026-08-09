@@ -15,11 +15,16 @@ import {
 } from "./bootstrap-credentials";
 
 const leftover: Array<{ name: string; sensitive: boolean; removal: string }> = [];
+const capabilities = {
+  provider: { id: "test", name: "Test" },
+  uploads: { strategy: "worker-relay" as const, directObjectStorage: false },
+  backgroundJobs: { executor: "in-process" as const, recurringScheduler: "manual" as const },
+};
 
 vi.mock("../api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/client")>()),
   createAxisClient: () => ({
-    getDeployment: async () => ({ leftoverBootstrapCredentials: leftover }),
+    getDeployment: async () => ({ capabilities, leftoverBootstrapCredentials: leftover }),
   }),
 }));
 

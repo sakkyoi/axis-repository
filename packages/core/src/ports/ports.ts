@@ -27,6 +27,18 @@ export interface RandomId {
   create(prefix: string): string;
 }
 
+export interface BackgroundTaskScheduler {
+  waitUntil(task: Promise<unknown>): void;
+}
+
+export interface BackgroundJobWakeQueue {
+  wake(): Promise<void>;
+}
+
+export interface RepositoryWriteLocker {
+  run<T>(repositoryName: string, work: () => Promise<T>): Promise<T>;
+}
+
 /**
  * Digests high-entropy machine secrets (publish tokens, refresh tokens). A fast
  * digest is appropriate here: the secrets are randomly generated, so there is
@@ -228,6 +240,8 @@ export interface RepositoryActivityStore {
 }
 
 export interface RepositoryArtifactStore {
+  getById(id: string): Promise<RepositoryArtifactRecord | null>;
+  countByRepository(repositoryName: string): Promise<number>;
   listByRepository(repositoryName: string): Promise<RepositoryArtifactRecord[]>;
   listFamiliesByRepositoryPage(
     repositoryName: string,

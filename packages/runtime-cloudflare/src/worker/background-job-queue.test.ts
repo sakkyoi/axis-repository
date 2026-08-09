@@ -8,6 +8,7 @@ import {
   type RandomId,
 } from "@axis-repository/core";
 import {
+  CloudflareBackgroundJobWakeQueue,
   assertBackgroundJobQueueConfiguration,
   drainBackgroundJobQueueBatch,
   drainBackgroundJobQueue,
@@ -40,9 +41,10 @@ describe("background job queue", () => {
   it("enqueues a small wake-up message", async () => {
     const queue = new FakeQueue();
 
-    await enqueueBackgroundJobWakeup({
-      AXIS_BACKGROUND_JOBS: queue as unknown as Queue,
-    }, new Date("2026-08-05T00:00:00.000Z"));
+    await enqueueBackgroundJobWakeup(new CloudflareBackgroundJobWakeQueue(
+      queue as unknown as Queue<BackgroundJobQueueMessage>,
+      () => new Date("2026-08-05T00:00:00.000Z"),
+    ));
 
     expect(queue.messages).toEqual([{ enqueuedAt: "2026-08-05T00:00:00.000Z" }]);
   });
@@ -52,7 +54,7 @@ describe("background job queue", () => {
     const calls: number[] = [];
 
     await drainBackgroundJobQueue({
-      queue: queue as unknown as Queue<BackgroundJobQueueMessage>,
+      wakeQueue: new CloudflareBackgroundJobWakeQueue(queue as unknown as Queue<BackgroundJobQueueMessage>),
       dependencies: {
         backgroundJobDispatcher: {
           drain: async (input) => {
@@ -71,7 +73,7 @@ describe("background job queue", () => {
     const queue = new FakeQueue();
 
     await drainBackgroundJobQueue({
-      queue: queue as unknown as Queue<BackgroundJobQueueMessage>,
+      wakeQueue: new CloudflareBackgroundJobWakeQueue(queue as unknown as Queue<BackgroundJobQueueMessage>),
       dependencies: {
         backgroundJobDispatcher: {
           drain: async () => ({ processed: 1, failed: 0, remaining: 0 }),
@@ -87,7 +89,7 @@ describe("background job queue", () => {
     const calls: number[] = [];
 
     await drainBackgroundJobQueueBatch({
-      queue: queue as unknown as Queue<BackgroundJobQueueMessage>,
+      wakeQueue: new CloudflareBackgroundJobWakeQueue(queue as unknown as Queue<BackgroundJobQueueMessage>),
       messages: [
         { enqueuedAt: "2026-08-05T00:00:00.000Z" },
         { enqueuedAt: "2026-08-05T00:00:01.000Z" },
@@ -148,7 +150,7 @@ describe("background job queue", () => {
     });
 
     await drainBackgroundJobQueue({
-      queue: queue as unknown as Queue<BackgroundJobQueueMessage>,
+      wakeQueue: new CloudflareBackgroundJobWakeQueue(queue as unknown as Queue<BackgroundJobQueueMessage>),
       dependencies: { backgroundJobDispatcher: dispatcher },
     });
 

@@ -3,10 +3,10 @@ import type {
   Clock,
   RepositoryObjectStore,
   RepositoryService,
+  RepositoryWriteLocker,
   StateStore,
 } from "@axis-repository/core";
 import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
-import type { RepositoryWriteLocker } from "./repository-write-lock";
 import { runRepositoryMaintenance } from "./repository-maintenance";
 
 export const REPOSITORY_MAINTENANCE_JOB_ID = "repository.maintenance";

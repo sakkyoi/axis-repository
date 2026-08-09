@@ -14,6 +14,7 @@ import {
   type RepositoryArtifactRecord,
   type RepositoryArtifactStore,
   type RepositoryObjectStore,
+  type RepositoryWriteLocker,
   RepositoryService,
   assertValidRepositoryName,
   type TokenPrincipal,
@@ -32,7 +33,6 @@ import type {
   RebuildRepositoryArtifactIndexResult,
 } from "../plugins/repository-plugin-contract";
 import { scopeObjectStoreToRepository } from "../plugins/scoped-capabilities";
-import type { RepositoryWriteLocker } from "./repository-write-lock";
 
 export interface CreatePluginRepositoryInput extends CreateRepositoryInput {
   provisioning?: Record<string, unknown>;
@@ -388,7 +388,7 @@ export class PluginRepositoryArtifactIndexService {
     }
     const artifactCount = result.complete === false
       ? result.progress?.current ?? result.artifacts.length
-      : (await this.options.repositoryArtifactStore.listByRepository(repository.name)).length;
+      : await this.options.repositoryArtifactStore.countByRepository(repository.name);
     return {
       ...result,
       artifactCount,
@@ -422,9 +422,8 @@ export class PluginRepositoryArtifactIndexService {
         `Artifact index plugin is not configured for repository kind and ecosystem: ${repository.kind} ${repository.ecosystem}`,
       );
     }
-    const artifacts = await this.options.repositoryArtifactStore.listByRepository(repository.name);
-    const artifact = artifacts.find((candidate) => candidate.id === input.artifactId);
-    if (!artifact) {
+    const artifact = await this.options.repositoryArtifactStore.getById(input.artifactId);
+    if (!artifact || artifact.repositoryName !== repository.name) {
       throw new NotFoundError();
     }
     const deleteResult = await plugin.artifacts?.deleteArtifact?.({

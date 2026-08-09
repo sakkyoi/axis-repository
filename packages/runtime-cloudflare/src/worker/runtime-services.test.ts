@@ -654,4 +654,61 @@ describe("PluginRepositoryArtifactIndexService", () => {
     ]);
   });
 
+  it("counts completed rebuild results without loading every stored artifact", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock, randomId });
+    await repositoryService.create({
+      name: "python-proxy",
+      ecosystem: "pypi",
+      kind: "proxy",
+      config: {},
+    });
+    const artifact: RepositoryArtifactRecord = {
+      id: "artifact_first",
+      repositoryName: "python-proxy",
+      ecosystem: "pypi",
+      identity: "pypi:first:first-1.0.0.tar.gz",
+      name: "first",
+      version: "1.0.0",
+      summary: "first 1.0.0",
+      objectKeys: ["https://upstream.example/simple/first/first-1.0.0.tar.gz"],
+      metadata: {},
+      publishedAt: "2026-07-24T00:00:00.000Z",
+      updatedAt: "2026-07-24T00:00:00.000Z",
+    };
+    const plugins = new RepositoryRuntimePluginRegistry();
+    plugins.register({
+      kind: "proxy",
+      ecosystem: "pypi",
+      name: "pypi-proxy-test",
+      version: "0.0.0",
+      capabilities: ["proxy"],
+      repositoryKinds: ["proxy"],
+      canServeRepositoryPath: () => false,
+      validateRepositoryConfig: () => {},
+      artifacts: {
+        rebuildIndex: async () => [artifact],
+      },
+    });
+    const artifactStore = {
+      ...state.repositoryArtifacts,
+      listByRepository: async () => {
+        throw new Error("listByRepository should not be needed to count a completed rebuild");
+      },
+    };
+    const service = new PluginRepositoryArtifactIndexService({
+      writeLock: new RepositoryWriteLock(),
+      repositoryService,
+      plugins,
+      repositoryObjectStore: memoryObjectStore(),
+      repositoryArtifactStore: artifactStore,
+      clock,
+    });
+
+    await expect(service.rebuild({ repositoryName: "python-proxy" })).resolves.toMatchObject({
+      complete: true,
+      artifactCount: 1,
+    });
+  });
+
 });

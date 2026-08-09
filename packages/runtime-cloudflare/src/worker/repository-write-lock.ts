@@ -1,3 +1,5 @@
+import type { RepositoryWriteLocker } from "@axis-repository/core";
+
 /**
  * Runs work touching one repository's published state one job at a time.
  *
@@ -14,10 +16,6 @@
  *
  * Work on different repositories still runs concurrently.
  */
-export interface RepositoryWriteLocker {
-  run<T>(repositoryName: string, work: () => Promise<T>): Promise<T>;
-}
-
 export class RepositoryWriteLock implements RepositoryWriteLocker {
   private readonly chains = new Map<string, Promise<unknown>>();
 

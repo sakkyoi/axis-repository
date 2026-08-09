@@ -1717,7 +1717,11 @@ describe("Cloudflare runtime routes", () => {
     }));
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    await expect(response.json()).resolves.toMatchObject({
+      capabilities: {
+        provider: { id: "development", name: "Development" },
+        backgroundJobs: { executor: "in-process", recurringScheduler: "manual" },
+      },
       leftoverBootstrapCredentials: [
         expect.objectContaining({ name: "AXIS_ADMIN_PASSWORD", sensitive: true }),
         expect.objectContaining({ name: "AXIS_ADMIN_USERNAME", sensitive: false }),
@@ -3952,6 +3956,45 @@ describe("Cloudflare runtime routes", () => {
         status: "pending",
       });
     expect(scheduledJobs).toBe(1);
+  });
+
+  it("does not block proxy repository creation on background job scheduling when waitUntil is available", async () => {
+    const harness = createDevDependencyHarness();
+    let resolveScheduledJob!: () => void;
+    const scheduledJob = new Promise<void>((resolve) => {
+      resolveScheduledJob = resolve;
+    });
+    const scheduledTasks: Promise<unknown>[] = [];
+    harness.dependencies.scheduleBackgroundJobs = () => scheduledJob;
+    harness.dependencies.backgroundTasks = {
+      waitUntil: (task) => {
+        scheduledTasks.push(task);
+      },
+    };
+    const app = createApp(harness.dependencies);
+
+    const response = app.fetch(new Request("https://axis.example/admin/repositories", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "python-proxy",
+        ecosystem: "pypi",
+        kind: "proxy",
+        visibility: "private",
+        config: { pypi: { upstreamUrl: "https://pypi.example/simple/" } },
+      }),
+    }));
+
+    await expect(Promise.race([
+      response.then((result) => result.status),
+      new Promise((resolve) => setTimeout(() => resolve("blocked"), 20)),
+    ])).resolves.toBe(201);
+    expect(scheduledTasks).toHaveLength(1);
+    resolveScheduledJob();
+    await scheduledTasks[0];
   });
 
   it("retries failed background jobs through admin routes", async () => {

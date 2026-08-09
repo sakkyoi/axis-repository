@@ -32,8 +32,10 @@ describe("background job scheduler", () => {
           return job("repository.maintenance");
         },
       },
-      wakeBackgroundJobs: async () => {
-        calls.push("wake");
+      wakeQueue: {
+        wake: async () => {
+          calls.push("wake");
+        },
       },
     });
 
@@ -60,8 +62,10 @@ describe("background job scheduler", () => {
           return job("repository.maintenance", "succeeded");
         },
       },
-      wakeBackgroundJobs: async () => {
-        calls.push("wake");
+      wakeQueue: {
+        wake: async () => {
+          calls.push("wake");
+        },
       },
     });
 

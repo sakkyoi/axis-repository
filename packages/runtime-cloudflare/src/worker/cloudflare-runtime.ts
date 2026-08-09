@@ -6,7 +6,9 @@ import {
   PluginPolicyService,
   RuntimeSettingsService,
   RepositoryService,
+  type BackgroundTaskScheduler,
   type Clock,
+  type RepositoryWriteLocker,
   type RuntimeOperationalPolicySettings,
   type StateStore,
 } from "@axis-repository/core";
@@ -31,7 +33,7 @@ import { RepositoryDeleteJobService } from "./repository-delete-job-service";
 import { RepositoryProxyCachePurgeJobService } from "./repository-proxy-cache-purge-job-service";
 import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
-import { D1RepositoryWriteLock, type RepositoryWriteLocker } from "./repository-write-lock";
+import { D1RepositoryWriteLock } from "./repository-write-lock";
 import { assertBackgroundJobQueueConfiguration } from "./background-job-queue";
 
 export interface AxisEnv {
@@ -241,7 +243,7 @@ export function createCloudflareRuntimeDependencies(
   env: AxisEnv,
   options: {
     scheduleBackgroundJobs?: () => Promise<void>;
-    scheduleBackgroundTask?: (task: Promise<unknown>) => void;
+    backgroundTasks?: BackgroundTaskScheduler;
   } = {},
 ): AppDependencies {
   if (!env.AXIS_SHARED_STATE) {
@@ -260,7 +262,7 @@ export function createRuntimeDependencies(
   env: AxisEnv,
   options: {
     scheduleBackgroundJobs?: () => Promise<void>;
-    scheduleBackgroundTask?: (task: Promise<unknown>) => void;
+    backgroundTasks?: BackgroundTaskScheduler;
   },
   writeLock: RepositoryWriteLocker,
 ): AppDependencies {
@@ -471,6 +473,23 @@ export function createRuntimeDependencies(
         ? { uploadOrigin: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com` }
         : {}),
     },
+    deploymentCapabilities: {
+      provider: { id: "cloudflare", name: "Cloudflare Workers" },
+      uploads: uploadBackend === "r2"
+        ? {
+          strategy: "direct-object-storage",
+          directObjectStorage: true,
+        }
+        : {
+          strategy: "worker-relay",
+          directObjectStorage: false,
+          workerRequestBodyLimitBytes: 100 * 1024 * 1024,
+        },
+      backgroundJobs: {
+        executor: "queue",
+        recurringScheduler: "cron",
+      },
+    },
     repositoryService: pluginRepositoryService,
     publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
     publishSessionService: pluginPublishSessionService,
@@ -494,9 +513,9 @@ export function createRuntimeDependencies(
     repositoryRuntimePlugins,
     repositoryWriteLock: writeLock,
     publishSessionTtlMs: publishSessionService.ttlSeconds * 1000,
-    ...(options.scheduleBackgroundTask === undefined
+    ...(options.backgroundTasks === undefined
       ? {}
-      : { scheduleBackgroundTask: options.scheduleBackgroundTask }),
+      : { backgroundTasks: options.backgroundTasks }),
     ...(options.scheduleBackgroundJobs === undefined
       ? {}
       : { scheduleBackgroundJobs: options.scheduleBackgroundJobs }),

@@ -152,7 +152,7 @@ export function createPypiProxyPlugin(input: {
         proxyPolicy: await pypiProxyPolicyForRepository(input, rebuildInput.repository),
       }),
     },
-    serveRepositoryPath: async ({ repository, request, relativePath, scheduleBackgroundTask }) => {
+    serveRepositoryPath: async ({ repository, request, relativePath, backgroundTasks }) => {
       const upstream = parsePypiProxyRepositoryConfig(repository.config);
       const proxyPolicy = await pypiProxyPolicyForRepository(input, repository);
       const objectStore = input.objectStoreFor?.(repository.name);
@@ -220,7 +220,7 @@ export function createPypiProxyPlugin(input: {
             response: upstreamResponse,
             fileCacheWrites,
             policy: proxyPolicy.fileByteCache,
-            ...(scheduleBackgroundTask ? { scheduleBackgroundTask } : {}),
+            ...(backgroundTasks ? { backgroundTasks } : {}),
           });
         }
         return new Response(upstreamResponse.body, {
@@ -1350,9 +1350,9 @@ async function streamAndCachePypiProxyFileResponse(input: {
   response: Response;
   fileCacheWrites: Map<string, Promise<void>>;
   policy: ProxyFileByteCachePolicy;
-  scheduleBackgroundTask?: (task: Promise<unknown>) => void;
+  backgroundTasks?: { waitUntil(task: Promise<unknown>): void };
 }): Promise<Response> {
-  if (!input.response.body || !input.scheduleBackgroundTask) {
+  if (!input.response.body || !input.backgroundTasks) {
     return cachePypiProxyFileResponse({
       objectStore: input.objectStore,
       repositoryName: input.repositoryName,
@@ -1381,9 +1381,9 @@ async function streamAndCachePypiProxyFileResponse(input: {
     })
     .finally(() => {
       input.fileCacheWrites.delete(leaseKey);
-    });
+  });
   input.fileCacheWrites.set(leaseKey, task);
-  input.scheduleBackgroundTask(task);
+  input.backgroundTasks.waitUntil(task);
   return new Response(clientBody, {
     status: input.response.status,
     statusText: input.response.statusText,

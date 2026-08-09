@@ -1438,7 +1438,8 @@ describe("createAxisClient", () => {
     const message = failure instanceof Error ? failure.message : String(failure);
 
     expect(message).toContain("refused as too large");
-    expect(message).toContain("100 MB on the free plan");
+    expect(message).toContain("platform can cap request bodies");
+    expect(message).toContain("direct object-storage uploads");
     expect(message).not.toContain("status code 413");
   });
 

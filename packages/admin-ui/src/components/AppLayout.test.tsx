@@ -17,7 +17,14 @@ vi.mock("../api/hooks", () => ({
     data: { principal: { username: "admin" } },
   }),
   useDeployment: () => ({
-    data: { leftoverBootstrapCredentials: [] },
+    data: {
+      capabilities: {
+        provider: { id: "test", name: "Test" },
+        uploads: { strategy: "worker-relay", directObjectStorage: false },
+        backgroundJobs: { executor: "in-process", recurringScheduler: "manual" },
+      },
+      leftoverBootstrapCredentials: [],
+    },
   }),
 }));
 

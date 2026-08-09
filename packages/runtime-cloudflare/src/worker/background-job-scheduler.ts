@@ -1,11 +1,11 @@
-import type { BackgroundJobRecord } from "@axis-repository/core";
+import type { BackgroundJobRecord, BackgroundJobWakeQueue } from "@axis-repository/core";
 import type { RepositoryMaintenanceJobService } from "./repository-maintenance-job-service";
 import type { StagingUploadGcJobService } from "./staging-upload-gc-job-service";
 
 export interface BackgroundJobSchedulerInput {
   stagingUploadGcJobService: Pick<StagingUploadGcJobService, "request">;
   repositoryMaintenanceJobService: Pick<RepositoryMaintenanceJobService, "request">;
-  wakeBackgroundJobs: () => Promise<void>;
+  wakeQueue: BackgroundJobWakeQueue;
 }
 
 export interface BackgroundJobSchedulerResult {
@@ -26,7 +26,7 @@ export async function scheduleBackgroundJobs(
     requestedJobIds.push(maintenanceJob.id);
   }
   if (requestedJobIds.length > 0) {
-    await input.wakeBackgroundJobs();
+    await input.wakeQueue.wake();
   }
   return {
     requestedJobIds,

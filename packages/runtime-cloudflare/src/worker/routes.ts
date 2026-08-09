@@ -77,6 +77,18 @@ export function errorResponse(error: unknown): Response {
   );
 }
 
+async function wakeBackgroundJobs(
+  dependencies: Pick<AppDependencies, "scheduleBackgroundJobs" | "backgroundTasks">,
+): Promise<void> {
+  const task = dependencies.scheduleBackgroundJobs?.();
+  if (!task) return;
+  if (dependencies.backgroundTasks) {
+    dependencies.backgroundTasks.waitUntil(task);
+    return;
+  }
+  await task;
+}
+
 function repositoryVisibility(body: Record<string, unknown>): "private" | "public" {
   if (body.visibility === undefined) return "private";
   if (body.visibility === "private" || body.visibility === "public") return body.visibility;
@@ -880,7 +892,7 @@ async function handleProtocolUpload(
     }
 
     await dependencies.publishFinalizeJobService.request({ sessionId: session.id, principal });
-    await dependencies.scheduleBackgroundJobs?.();
+    await wakeBackgroundJobs(dependencies);
   } finally {
     // The staged copy has served its purpose whether or not the publish did.
     for (const upload of uploads) {
@@ -1181,8 +1193,8 @@ async function pluginRepositoryPathResponse(input: {
     request: input.request,
     relativePath: input.relativePath,
     ...(input.accept ? { accept: input.accept } : {}),
-    ...(input.dependencies.scheduleBackgroundTask
-      ? { scheduleBackgroundTask: input.dependencies.scheduleBackgroundTask }
+    ...(input.dependencies.backgroundTasks
+      ? { backgroundTasks: input.dependencies.backgroundTasks }
       : {}),
   });
 }
@@ -1664,6 +1676,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "GET") {
       return jsonResponse({
+        capabilities: dependencies.deploymentCapabilities,
         leftoverBootstrapCredentials: leftoverBootstrapCredentials(
           await dependencies.adminAuthService.unusedBootstrapCredentials(),
         ),
@@ -1729,7 +1742,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     if (request.method === "POST") {
       const job = await dependencies.backgroundJobService.retry(decodeURIComponent(adminRetryJobMatch[1] ?? ""));
       if (!job) throw new NotFoundError();
-      await dependencies.scheduleBackgroundJobs?.();
+      await wakeBackgroundJobs(dependencies);
       return jsonResponse({ job });
     }
     throw new NotFoundError();
@@ -1770,7 +1783,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       });
       if (repository.kind === "proxy") {
         await dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: repository.name });
-        await dependencies.scheduleBackgroundJobs?.();
+        await wakeBackgroundJobs(dependencies);
       }
       return jsonResponse(repository, { status: 201 });
     }
@@ -1815,7 +1828,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     if (request.method === "DELETE") {
       const job = await dependencies.repositoryDeleteJobService.request({ repositoryName: adminRepositoryName });
-      await dependencies.scheduleBackgroundJobs?.();
+      await wakeBackgroundJobs(dependencies);
       return jsonResponse({ job }, { status: 202 });
     }
     throw new NotFoundError();
@@ -1955,7 +1968,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const repository = await dependencies.repositoryService.getByName(adminRepositoryArtifactsRebuildName);
     await ensureRepositoryPluginEnabled(dependencies, repository.ecosystem, () => new NotFoundError());
     const job = await dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: repository.name });
-    await dependencies.scheduleBackgroundJobs?.();
+    await wakeBackgroundJobs(dependencies);
     return jsonResponse({ job }, { status: 202 });
   }
   const adminRepositoryArtifactPath = parseAdminRepositoryArtifactPath(url.pathname);
@@ -1970,7 +1983,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       repositoryName: repository.name,
       artifactId: adminRepositoryArtifactPath.artifactId,
     });
-    await dependencies.scheduleBackgroundJobs?.();
+    await wakeBackgroundJobs(dependencies);
     return jsonResponse({ job }, { status: 202 });
   }
   const adminRepositoryObjectDetailName = adminRepositoryNameFor(url.pathname, ADMIN_REPOSITORY_ROUTES.objectDetail);
@@ -2058,7 +2071,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         ...(metadata.contentLength !== undefined ? { size: metadata.contentLength } : {}),
       });
       const job = await dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: repository.name });
-      await dependencies.scheduleBackgroundJobs?.();
+      await wakeBackgroundJobs(dependencies);
       return jsonResponse({ activity, job }, { status: 202 });
     }
     throw new NotFoundError();
@@ -2093,7 +2106,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         repositoryName: repository.name,
         namespace: adminPluginResourcePath.namespace,
       });
-      await dependencies.scheduleBackgroundJobs?.();
+      await wakeBackgroundJobs(dependencies);
       return jsonResponse({ job }, { status: 202 });
     }
     return dispatchRepositoryAdminResource(adminResources, {
@@ -2192,7 +2205,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     const result = await dependencies.publishFinalizeJobService.requestAsAdmin({
       sessionId,
     });
-    await dependencies.scheduleBackgroundJobs?.();
+    await wakeBackgroundJobs(dependencies);
     return jsonResponse({ ...result, session: readablePublishSession(result.session) }, { status: 202 });
   }
   if (url.pathname === "/api/publish-sessions" && request.method === "GET") {
@@ -2254,7 +2267,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
       sessionId,
       principal,
     });
-    await dependencies.scheduleBackgroundJobs?.();
+    await wakeBackgroundJobs(dependencies);
     return jsonResponse({ ...result, session: readablePublishSession(result.session) }, { status: 202 });
   }
   const clientHelperPath = servesArtifacts ? parseRepositoryClientHelperPath(request.url) : null;

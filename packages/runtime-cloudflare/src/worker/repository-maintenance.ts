@@ -1,7 +1,7 @@
 import type { Clock, Repository, RepositoryObjectStore } from "@axis-repository/core";
 import type { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
 import { scopeObjectStoreToRepository } from "../plugins/scoped-capabilities";
-import type { RepositoryWriteLocker } from "./repository-write-lock";
+import type { RepositoryWriteLocker } from "@axis-repository/core";
 
 /**
  * Runs whatever every repository needs on a timer, and says when to come back.

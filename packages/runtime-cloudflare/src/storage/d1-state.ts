@@ -885,6 +885,23 @@ export class D1RepositoryArtifactStore implements RepositoryArtifactStore {
     private readonly schema = new D1SharedStateSchema(database),
   ) {}
 
+  async getById(id: string): Promise<RepositoryArtifactRecord | null> {
+    await this.schema.ensure();
+    const row = await this.database
+      .prepare("SELECT record_json FROM axis_repository_artifacts WHERE id = ?")
+      .bind(id)
+      .first<{ record_json: string }>();
+    return row === null ? null : parseRecord<RepositoryArtifactRecord>(row.record_json);
+  }
+
+  async countByRepository(repositoryName: string): Promise<number> {
+    await this.schema.ensure();
+    return this.count(
+      "SELECT COUNT(*) AS total FROM axis_repository_artifacts WHERE repository_name = ?",
+      [repositoryName],
+    );
+  }
+
   async listByRepository(repositoryName: string): Promise<RepositoryArtifactRecord[]> {
     await this.schema.ensure();
     const rows = await this.database

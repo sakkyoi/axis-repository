@@ -28,9 +28,8 @@ export class RepositoryArtifactDeleteJobService {
 
   async request(input: RequestRepositoryArtifactDeleteJobInput): Promise<BackgroundJobRecord> {
     const repository = await this.options.repositoryService.getByName(input.repositoryName);
-    const artifact = (await this.options.repositoryArtifactStore.listByRepository(repository.name))
-      .find((candidate) => candidate.id === input.artifactId);
-    if (!artifact) {
+    const artifact = await this.options.repositoryArtifactStore.getById(input.artifactId);
+    if (!artifact || artifact.repositoryName !== repository.name) {
       throw new NotFoundError(`Repository artifact not found: ${input.artifactId}`);
     }
     const id = repositoryArtifactDeleteBackgroundJobId(repository.name, artifact.id);

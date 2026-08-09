@@ -1,12 +1,14 @@
-import { ValidationError } from "@axis-repository/core";
-import type { AxisEnv } from "./cloudflare-runtime";
+import { ValidationError, type BackgroundJobWakeQueue } from "@axis-repository/core";
 import type { BackgroundJobDispatcher } from "./background-job-dispatcher";
 
 export interface BackgroundJobQueueMessage {
   enqueuedAt: string;
 }
 
-export function assertBackgroundJobQueueConfiguration(env: AxisEnv): void {
+export function assertBackgroundJobQueueConfiguration(env: {
+  AXIS_SHARED_STATE?: unknown;
+  AXIS_BACKGROUND_JOBS?: Queue;
+}): void {
   if (env.AXIS_BACKGROUND_JOBS !== undefined && env.AXIS_SHARED_STATE === undefined) {
     throw new Error("AXIS_SHARED_STATE is required when AXIS_BACKGROUND_JOBS is bound");
   }
@@ -15,27 +17,43 @@ export function assertBackgroundJobQueueConfiguration(env: AxisEnv): void {
   }
 }
 
-export async function enqueueBackgroundJobWakeup(env: AxisEnv, now: Date = new Date()): Promise<void> {
-  if (env.AXIS_BACKGROUND_JOBS === undefined) {
+export class CloudflareBackgroundJobWakeQueue implements BackgroundJobWakeQueue {
+  constructor(
+    private readonly queue: Queue<BackgroundJobQueueMessage> | undefined,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+
+  async wake(): Promise<void> {
+    if (this.queue === undefined) {
+      throw new ValidationError("Background job queue is not configured");
+    }
+    await this.queue.send({ enqueuedAt: this.now().toISOString() });
+  }
+}
+
+export async function enqueueBackgroundJobWakeup(
+  wakeQueue: BackgroundJobWakeQueue,
+): Promise<void> {
+  if (wakeQueue === undefined) {
     throw new ValidationError("Background job queue is not configured");
   }
-  await env.AXIS_BACKGROUND_JOBS.send({ enqueuedAt: now.toISOString() } satisfies BackgroundJobQueueMessage);
+  await wakeQueue.wake();
 }
 
 export async function drainBackgroundJobQueue(input: {
   dependencies: { backgroundJobDispatcher: Pick<BackgroundJobDispatcher, "drain"> };
-  queue: Queue<BackgroundJobQueueMessage>;
+  wakeQueue: BackgroundJobWakeQueue;
   limit?: number;
 }): Promise<void> {
   const result = await input.dependencies.backgroundJobDispatcher.drain({ limit: input.limit ?? 1 });
   if (result.remaining > 0) {
-    await input.queue.send({ enqueuedAt: new Date().toISOString() });
+    await input.wakeQueue.wake();
   }
 }
 
 export async function drainBackgroundJobQueueBatch(input: {
   dependencies: { backgroundJobDispatcher: Pick<BackgroundJobDispatcher, "drain"> };
-  queue: Queue<BackgroundJobQueueMessage>;
+  wakeQueue: BackgroundJobWakeQueue;
   messages: readonly BackgroundJobQueueMessage[];
   limit?: number;
 }): Promise<void> {
@@ -44,7 +62,7 @@ export async function drainBackgroundJobQueueBatch(input: {
   }
   await drainBackgroundJobQueue({
     dependencies: input.dependencies,
-    queue: input.queue,
+    wakeQueue: input.wakeQueue,
     ...(input.limit === undefined ? {} : { limit: input.limit }),
   });
 }

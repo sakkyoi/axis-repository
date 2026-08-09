@@ -9,6 +9,7 @@ import type {
   RepositoryArtifactStore,
   BackgroundJobProgress,
   RepositoryObjectStore,
+  BackgroundTaskScheduler,
   TokenPrincipal,
 } from "@axis-repository/core";
 import type { RepositoryAdminResources } from "./repository-plugin-admin-resources";
@@ -64,7 +65,7 @@ export type RepositoryPathResolver = (
 export interface ServeRepositoryPathInput extends RepositoryServingContext {
   repository: Repository;
   request: Request;
-  scheduleBackgroundTask?: (task: Promise<unknown>) => void;
+  backgroundTasks?: BackgroundTaskScheduler;
 }
 
 export type RepositoryPathHandler = (input: ServeRepositoryPathInput) => Promise<Response | null>;

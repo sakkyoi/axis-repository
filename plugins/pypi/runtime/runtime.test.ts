@@ -360,8 +360,10 @@ describe("PyPI plugin lifecycle", () => {
       },
       request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
       relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
-      scheduleBackgroundTask: (task) => {
-        backgroundTasks.push(task);
+      backgroundTasks: {
+        waitUntil: (task) => {
+          backgroundTasks.push(task);
+        },
       },
     });
 
@@ -427,7 +429,7 @@ describe("PyPI plugin lifecycle", () => {
       repository,
       request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
       relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
-      scheduleBackgroundTask: (task) => backgroundTasks.push(task),
+      backgroundTasks: { waitUntil: (task) => backgroundTasks.push(task) },
     });
     const firstBeforeCacheCompletes = await Promise.race([
       first,
@@ -440,7 +442,7 @@ describe("PyPI plugin lifecycle", () => {
       repository,
       request: new Request("https://axis.example/repositories/python-internal/simple/demo/demo-1.0-py3-none-any.whl"),
       relativePath: "simple/demo/demo-1.0-py3-none-any.whl",
-      scheduleBackgroundTask: (task) => backgroundTasks.push(task),
+      backgroundTasks: { waitUntil: (task) => backgroundTasks.push(task) },
     });
     const secondBeforeCacheCompletes = await Promise.race([
       second,

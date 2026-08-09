@@ -223,7 +223,24 @@ export const leftoverBootstrapCredentialSchema = z.object({
   command: z.string(),
 });
 
+export const deploymentCapabilitiesSchema = z.object({
+  provider: z.object({
+    id: z.string(),
+    name: z.string(),
+  }),
+  uploads: z.object({
+    strategy: z.union([z.literal("direct-object-storage"), z.literal("worker-relay")]),
+    directObjectStorage: z.boolean(),
+    workerRequestBodyLimitBytes: z.number().optional(),
+  }),
+  backgroundJobs: z.object({
+    executor: z.union([z.literal("queue"), z.literal("in-process")]),
+    recurringScheduler: z.union([z.literal("cron"), z.literal("manual")]),
+  }),
+});
+
 export const deploymentResponseSchema = z.object({
+  capabilities: deploymentCapabilitiesSchema,
   leftoverBootstrapCredentials: z.array(leftoverBootstrapCredentialSchema),
 });
 

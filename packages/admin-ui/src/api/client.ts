@@ -217,12 +217,11 @@ function backgroundJobsUrl(options: ListBackgroundJobsOptions = {}): string {
 /**
  * Says what a refused upload was refused for, when the deployment cannot.
  *
- * An upload the worker relays meets Cloudflare's limit on a request body
- * before it reaches the worker at all, so it is rejected at the edge and
- * nothing on the server side is in a position to describe it. What gets back
- * here is a bare 413, which as an error message names neither the cause nor
- * anything to do about it -- and the person who picked the file is the one who
- * can act on both.
+ * An upload the worker relays can meet the deployment platform's request body
+ * limit before it reaches the application, so nothing on the server side is in
+ * a position to describe it. What gets back here is a bare 413, which as an
+ * error message names neither the cause nor anything to do about it -- and the
+ * person who picked the file is the one who can act on both.
  *
  * Returns undefined for anything else, which the caller rethrows untouched.
  */
@@ -232,10 +231,10 @@ function uploadTooLargeError(caught: unknown, size: number): Error | undefined {
   }
   return new Error(
     `The upload was refused as too large (${(size / 1024 / 1024).toFixed(0)} MB).`
-    + " This deployment sends uploads through the worker, and Cloudflare caps the"
-    + " size of a request body before one arrives — 100 MB on the free plan, more"
-    + " on the paid ones. Publishing a smaller file works, and so does configuring"
-    + " uploads to be signed straight to R2, which the cap does not apply to.",
+    + " This deployment sends uploads through the application worker, where the"
+    + " platform can cap request bodies before one arrives. Publishing a smaller"
+    + " file works, and so does using a deployment mode with direct object-storage"
+    + " uploads, which avoids the worker request-body path.",
   );
 }
 

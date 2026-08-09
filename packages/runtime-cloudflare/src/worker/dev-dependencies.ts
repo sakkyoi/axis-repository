@@ -8,16 +8,18 @@ import {
   PublishSessionService,
   PublishTokenService,
   RepositoryService,
+  type BackgroundTaskScheduler,
   type Clock,
   type RandomId,
   type RepositoryArtifactStore,
   type RepositoryObjectStore,
   type PasswordHasher,
+  type RepositoryWriteLocker,
   type SecretHasher,
 } from "@axis-repository/core";
 import type { AdminUiRuntimeConfig } from "../admin-ui-assets";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
-import { RepositoryWriteLock, type RepositoryWriteLocker } from "./repository-write-lock";
+import { RepositoryWriteLock } from "./repository-write-lock";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import SameOriginUploadBroker from "../uploads/same-origin-upload-broker";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
@@ -35,9 +37,26 @@ import { SecretEncryption } from "../storage/secret-encryption";
 import { RepositorySecretService } from "../storage/repository-secret-service";
 import type { RepositoryObjectDownloadSigner } from "../storage/object-download-url";
 
+export interface DeploymentCapabilities {
+  provider: {
+    id: string;
+    name: string;
+  };
+  uploads: {
+    strategy: "direct-object-storage" | "worker-relay";
+    directObjectStorage: boolean;
+    workerRequestBodyLimitBytes?: number;
+  };
+  backgroundJobs: {
+    executor: "queue" | "in-process";
+    recurringScheduler: "cron" | "manual";
+  };
+}
+
 export interface AppDependencies {
   adminAuthService: AdminAuthService;
   adminUiRuntimeConfig: AdminUiRuntimeConfig;
+  deploymentCapabilities: DeploymentCapabilities;
   /**
    * Origin repository objects are served from, when that is not the origin the
    * admin UI and API answer on. Unset means one origin serves everything.
@@ -73,7 +92,7 @@ export interface AppDependencies {
   /** How long a publish session lives; what outlives one is nobody's. */
   publishSessionTtlMs: number;
   scheduleBackgroundJobs?: () => Promise<void>;
-  scheduleBackgroundTask?: (task: Promise<unknown>) => void;
+  backgroundTasks?: BackgroundTaskScheduler;
 }
 
 export interface DevDependencyHarness {
@@ -320,6 +339,17 @@ export function createDevDependencyHarness(
     dependencies: {
       adminAuthService,
       adminUiRuntimeConfig,
+      deploymentCapabilities: {
+        provider: { id: "development", name: "Development" },
+        uploads: {
+          strategy: "worker-relay",
+          directObjectStorage: false,
+        },
+        backgroundJobs: {
+          executor: "in-process",
+          recurringScheduler: "manual",
+        },
+      },
       repositoryService: pluginRepositoryService,
       publishTokenService: new PublishTokenService({ state, clock, randomId, hasher }),
       publishSessionService: pluginPublishSessionService,

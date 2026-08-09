@@ -597,6 +597,7 @@ function selectRepositoryArtifacts(
     return [{ total: selectRepositoryArtifacts(table, query.replace("SELECT COUNT(*) AS total", "SELECT record_json"), bindings).length }];
   }
   let rows = [...table.values()];
+  if (query.includes("id = ?")) rows = rows.filter((row) => row.id === bindings[0]);
   if (query.includes("repository_name = ?")) rows = rows.filter((row) => row.repository_name === bindings[0]);
   if (query.includes("family_key = ?")) rows = rows.filter((row) => row.family_key === bindings[1]);
   if (query.includes("WITH family_stats")) {
