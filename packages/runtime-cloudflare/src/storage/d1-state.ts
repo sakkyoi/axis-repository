@@ -1026,6 +1026,9 @@ export class D1RepositoryArtifactStore implements RepositoryArtifactStore {
       .prepare("DELETE FROM axis_repository_artifacts WHERE repository_name = ?")
       .bind(repositoryName)
       .run();
+    if (records.length === 0) {
+      return;
+    }
     await this.database.batch(records.map((record) => this.upsertStatement(record)));
   }
 

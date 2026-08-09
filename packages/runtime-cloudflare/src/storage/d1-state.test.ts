@@ -38,6 +38,9 @@ class FakeD1Database {
 
   async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
     this.batchSizes.push(statements.length);
+    if (statements.length === 0) {
+      throw new Error("D1_ERROR: No SQL statements detected.");
+    }
     const results: D1Result<T>[] = [];
     for (const statement of statements) {
       results.push(await statement.run<T>());
@@ -671,6 +674,16 @@ describe("D1 repository artifact store", () => {
 
     expect(database.batchSizes).toEqual([100, 100, 5]);
     await expect(state.repositoryArtifacts.listByRepository("python-proxy")).resolves.toHaveLength(205);
+  });
+
+  it("replaces a repository artifact index with an empty set without issuing an empty D1 batch", async () => {
+    const database = new FakeD1Database();
+    const state = createD1StateStore(database as unknown as D1Database);
+
+    await expect(state.repositoryArtifacts.replaceByRepository("python-proxy", []))
+      .resolves.toBeUndefined();
+
+    expect(database.batchSizes).toEqual([]);
   });
 });
 
