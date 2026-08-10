@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Package } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
   useCreateRepository,
@@ -35,6 +35,7 @@ import {
   hostedRepositoryCreatePluginsFromUiRegistry,
   repositoryCreatePluginOptionsFromUiRegistry,
 } from "../repositories/plugins/repository-ui-plugins";
+import { RepositoryEcosystemIcon } from "../repositories/plugins/repository-ecosystem-icon";
 import { repositoryConfigFieldsForStep } from "../repositories/create/repository-create-field-model";
 import { RepositoryConfigFields } from "../repositories/create/repository-create-field-renderer";
 import { CodeBlock } from "../components/ui/code-block";
@@ -84,6 +85,7 @@ export function NewRepositoryPage() {
   const summaryCapabilities = selectedOption?.capabilities ?? [];
   const summaryRepositoryKind = selectedOption?.kind;
   const summaryBadges = selectedOption?.badges ?? [];
+  const summaryPluginMetadata = repositoryPlugins.data?.find((candidate) => candidate.ecosystem === plugin.ecosystem);
   const [stepIndex, setStepIndex] = useState(0);
   const [state, setState] = useState<RepositoryCreateWizardState>(plugin.defaults);
   const [error, setError] = useState("");
@@ -223,7 +225,7 @@ export function NewRepositoryPage() {
         </div>
         <aside className="min-h-0 overflow-y-auto rounded-lg border border-border bg-panel p-4">
           <div className="flex items-center gap-2">
-            <Package className="h-4 w-4 text-primary-ink" />
+            <RepositoryEcosystemIcon ecosystem={plugin.ecosystem} plugin={summaryPluginMetadata} />
             <h2 className="text-sm font-semibold">{summaryTitle}</h2>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">{summaryDescription}</p>

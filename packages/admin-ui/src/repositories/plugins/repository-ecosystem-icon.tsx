@@ -21,18 +21,20 @@ export function RepositoryEcosystemLabel({
   );
 }
 
-function RepositoryEcosystemIcon({
+export function RepositoryEcosystemIcon({
   ecosystem,
   plugin,
+  className,
 }: {
   ecosystem: string;
   plugin: RepositoryPlugin | undefined;
+  className?: string;
 }) {
   if (!plugin?.icon) {
     return (
       <span
         aria-hidden="true"
-        className="grid h-5 w-5 shrink-0 place-items-center rounded border border-border text-muted-foreground"
+        className={cn("grid h-5 w-5 shrink-0 place-items-center rounded border border-border text-muted-foreground", className)}
         title={ecosystem}
       >
         <Package className="h-3.5 w-3.5" />
@@ -43,7 +45,7 @@ function RepositoryEcosystemIcon({
   return (
     <span
       aria-hidden="true"
-      className="grid h-5 w-5 shrink-0 place-items-center text-primary [&_svg]:h-4 [&_svg]:w-4"
+      className={cn("grid h-5 w-5 shrink-0 place-items-center text-primary [&_svg]:h-4 [&_svg]:w-4", className)}
       dangerouslySetInnerHTML={{ __html: plugin.icon.inlineSvg }}
     />
   );
