@@ -41,7 +41,7 @@ export function backgroundJobResultLabel(job: BackgroundJob): string {
   }
   const proxyIndex = proxyIndexResult(job.result);
   if (job.status === "succeeded" && proxyIndex.failedProjectCount > 0) {
-    return `Completed with ${proxyIndex.failedProjectCount} cache warning${proxyIndex.failedProjectCount === 1 ? "" : "s"}`;
+    return `Catalog ready with ${proxyIndex.failedProjectCount} project cache warning${proxyIndex.failedProjectCount === 1 ? "" : "s"}`;
   }
   if (job.status === "succeeded") {
     return "Completed";

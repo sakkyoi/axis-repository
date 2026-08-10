@@ -1115,17 +1115,19 @@ async function fetchPypiProxyProjects(
 async function fetchWithTimeout(fetchImpl: FetchLike, request: Request, proxyPolicy: ProxyOperationalPolicy): Promise<Response> {
   const maxAttempts = proxyPolicy.upstreamRequestRetries + 1;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let retryResponse: Response | undefined;
     try {
       const response = await fetchOnceWithTimeout(fetchImpl, request, proxyPolicy.upstreamFetchTimeoutMs);
       if (!pypiProxyResponseStatusIsRetryable(response.status) || attempt >= maxAttempts) {
         return response;
       }
+      retryResponse = response;
     } catch (error) {
       if (attempt >= maxAttempts) {
         throw error;
       }
     }
-    await delay(pypiProxyRetryDelayMs(attempt, proxyPolicy));
+    await delay(pypiProxyRetryDelayMs(attempt, proxyPolicy, retryResponse));
   }
   throw new Error("PyPI proxy upstream retry loop ended unexpectedly");
 }
@@ -1307,11 +1309,32 @@ function pypiProxyResponseStatusIsRetryable(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
-function pypiProxyRetryDelayMs(attempt: number, proxyPolicy: ProxyOperationalPolicy): number {
-  return Math.min(
+export function pypiProxyRetryDelayMs(
+  attempt: number,
+  proxyPolicy: ProxyOperationalPolicy,
+  response: Response | undefined,
+): number {
+  const retryAfterDelayMs = pypiProxyRetryAfterDelayMs(response?.headers.get("retry-after"));
+  const policyDelayMs = Math.min(
     proxyPolicy.upstreamRetryBaseDelayMs * 2 ** Math.max(0, attempt - 1),
     proxyPolicy.upstreamRetryMaxDelayMs,
   );
+  return Math.min(retryAfterDelayMs ?? policyDelayMs, proxyPolicy.upstreamRetryMaxDelayMs);
+}
+
+function pypiProxyRetryAfterDelayMs(value: string | null | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return seconds * 1_000;
+  }
+  const dateMs = Date.parse(value);
+  if (Number.isNaN(dateMs)) {
+    return undefined;
+  }
+  return Math.max(0, dateMs - Date.now());
 }
 
 function delay(ms: number): Promise<void> {

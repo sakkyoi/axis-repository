@@ -109,7 +109,7 @@ const pypiProxyRepositoryCreatePlugin: ProxyRepositoryCreatePlugin = {
     visibility: state.visibility,
     config: {
       [pypiPluginManifest.repositoryConfig.namespace]: {
-        upstreamUrl: normalizeTrailingSlash(state.config.upstreamUrl?.trim() ?? ""),
+        upstreamUrl: normalizePypiProxyUpstreamUrl(state.config.upstreamUrl?.trim() ?? ""),
         upstreamUrlMode: state.config.upstreamUrlMode,
       },
     },
@@ -120,8 +120,12 @@ function isPypiProxyUpstreamUrlMode(value: unknown): value is "base-url" | "simp
   return value === "base-url" || value === "simple-api-root";
 }
 
-function normalizeTrailingSlash(value: string): string {
-  return value && !value.endsWith("/") ? `${value}/` : value;
+function normalizePypiProxyUpstreamUrl(value: string): string {
+  if (!value) {
+    return value;
+  }
+  const withScheme = /^[a-z][a-z\d+.-]*:/iu.test(value) ? value : `https://${value}`;
+  return withScheme.endsWith("/") ? withScheme : `${withScheme}/`;
 }
 
 const pypiGroupRepositoryCreatePlugin: GroupRepositoryCreatePlugin = {

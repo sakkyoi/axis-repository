@@ -14,6 +14,18 @@ describe("PyPI repository config", () => {
     });
   });
 
+  it("defaults schemeless proxy upstream URLs to https", () => {
+    expect(parsePypiProxyRepositoryConfig({
+      pypi: {
+        upstreamUrl: "pypi.example/root",
+        upstreamUrlMode: "base-url",
+      },
+    })).toEqual({
+      upstreamUrl: "https://pypi.example/root/",
+      upstreamUrlMode: "base-url",
+    });
+  });
+
   it("accepts a proxy upstream Simple API root URL mode", () => {
     expect(parsePypiProxyRepositoryConfig({
       pypi: {

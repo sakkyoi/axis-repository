@@ -79,7 +79,7 @@ describe("background job display model", () => {
           failedProjects: [{ project: "broken", message: "upstream returned 503", retryable: true }],
         },
       },
-    })).toBe("Completed with 2 cache warnings");
+    })).toBe("Catalog ready with 2 project cache warnings");
     expect(backgroundJobResultLabel({ ...job, status: "succeeded" })).toBe("Completed");
   });
 

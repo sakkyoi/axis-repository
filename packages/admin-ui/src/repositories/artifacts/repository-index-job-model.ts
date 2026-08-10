@@ -65,10 +65,10 @@ export function repositoryIndexJobStatusView(job: BackgroundJob | null | undefin
   const proxyIndex = proxyIndexResult(job.result);
   if (proxyIndex.failedProjectCount > 0) {
     return {
-      label: "Index refreshed with warnings",
+      label: "Catalog ready with cache warnings",
       description: proxyIndex.failedProjectSample
-        ? `${proxyIndex.failedProjectCount} projects failed to cache. ${proxyIndex.failedProjectSample}`
-        : `${proxyIndex.failedProjectCount} projects failed to cache.`,
+        ? `${proxyIndex.failedProjectCount} project detail caches failed. ${proxyIndex.failedProjectSample}`
+        : `${proxyIndex.failedProjectCount} project detail caches failed.`,
       active: false,
       failed: false,
     };

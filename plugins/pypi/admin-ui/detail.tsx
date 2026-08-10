@@ -163,7 +163,14 @@ export function PypiProxySettingsSection({
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Clears cached upstream file bytes only. Project indexes and artifact metadata are kept.
+          {byteCacheStats?.catalogProjectCount !== undefined
+            ? `${byteCacheStats.catalogProjectCount} catalog projects cached${
+              byteCacheStats.catalogRefreshedAt ? `; refreshed ${formatDate(byteCacheStats.catalogRefreshedAt)}` : ""
+            }.`
+            : "Project index status unavailable."}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Purge clears cached upstream file bytes only. Project indexes and artifact metadata are kept.
         </p>
       </div>
       <DestructiveActionDialog
@@ -196,6 +203,11 @@ function formatBytes(value: number): string {
   }
   const digits = unitIndex === 0 || size >= 10 ? 0 : 1;
   return `${size.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function formatDate(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
 export function pypiUploadUrl(repository: Repository, origin = globalThis.location?.origin): string {

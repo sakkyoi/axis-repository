@@ -28,7 +28,7 @@ export function parsePypiProxyRepositoryConfig(config: Record<string, unknown>):
 
   let url: URL;
   try {
-    url = new URL(upstreamUrl.trim());
+    url = new URL(normalizePypiProxyUpstreamUrlInput(upstreamUrl));
   } catch {
     throw new ValidationError(`config.${namespace}.upstreamUrl must be a valid URL`);
   }
@@ -68,4 +68,9 @@ export function isPypiProxyUpstreamUrlMode(value: unknown): value is PypiProxyUp
 
 export function ensureTrailingSlash(value: string): string {
   return value.endsWith("/") ? value : `${value}/`;
+}
+
+function normalizePypiProxyUpstreamUrlInput(value: string): string {
+  const trimmed = value.trim();
+  return /^[a-z][a-z\d+.-]*:/iu.test(trimmed) ? trimmed : `https://${trimmed}`;
 }

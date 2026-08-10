@@ -130,8 +130,8 @@ describe("repositoryIndexJobStatusView", () => {
         },
       },
     })).toMatchObject({
-      label: "Index refreshed with warnings",
-      description: "2 projects failed to cache. broken: upstream returned 503",
+      label: "Catalog ready with cache warnings",
+      description: "2 project detail caches failed. broken: upstream returned 503",
       active: false,
       failed: false,
     });

@@ -228,12 +228,36 @@ function decodeOffsetCursor(cursor: string): number {
 async function pypiProxyByteCacheStats(
   objectStore: RepositoryObjectStore,
   repositoryName: string,
-): Promise<{ fileCount: number; byteCount: number }> {
+): Promise<{
+  fileCount: number;
+  byteCount: number;
+  catalogProjectCount?: number;
+  catalogRefreshedAt?: string;
+}> {
   const objects = await listAllObjects(objectStore, pypiProxyByteCachePrefix(repositoryName));
   const files = objects.filter((object) => !object.key.endsWith(".json"));
+  const catalog = await pypiProxyCatalogStats(objectStore, repositoryName);
   return {
     fileCount: files.length,
     byteCount: files.reduce((sum, object) => sum + (object.contentLength ?? 0), 0),
+    ...catalog,
+  };
+}
+
+async function pypiProxyCatalogStats(
+  objectStore: RepositoryObjectStore,
+  repositoryName: string,
+): Promise<{ catalogProjectCount?: number; catalogRefreshedAt?: string }> {
+  const object = await objectStore.getObject(`repositories/${repositoryName}/_proxy-cache/pypi/projects.json`);
+  if (!object) {
+    return {};
+  }
+  const raw = JSON.parse(new TextDecoder().decode(await objectBytes(object))) as Record<string, unknown>;
+  const projects = Array.isArray(raw.projects) ? raw.projects : undefined;
+  const refreshedAt = typeof raw.refreshedAt === "string" ? raw.refreshedAt : undefined;
+  return {
+    ...(projects ? { catalogProjectCount: projects.length } : {}),
+    ...(refreshedAt ? { catalogRefreshedAt: refreshedAt } : {}),
   };
 }
 

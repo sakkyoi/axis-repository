@@ -55,8 +55,18 @@ describe("PyPI project file schema", () => {
 describe("PyPI proxy cache schemas", () => {
   it("parses byte cache stats and purge jobs", () => {
     expect(pypiProxyCacheSchema.parse({
-      cache: { fileCount: 2, byteCount: 18 },
-    }).cache).toEqual({ fileCount: 2, byteCount: 18 });
+      cache: {
+        fileCount: 2,
+        byteCount: 18,
+        catalogProjectCount: 1,
+        catalogRefreshedAt: "2026-08-05T00:00:00.000Z",
+      },
+    }).cache).toEqual({
+      fileCount: 2,
+      byteCount: 18,
+      catalogProjectCount: 1,
+      catalogRefreshedAt: "2026-08-05T00:00:00.000Z",
+    });
     expect(pypiProxyCachePurgeSchema.parse({
       job: {
         id: "repository.proxy-cache.purge:python-internal:pypi",

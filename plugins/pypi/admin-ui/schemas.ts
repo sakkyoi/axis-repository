@@ -37,6 +37,8 @@ export const pypiProjectSchema = z.object({
 export const pypiProxyCacheStatsSchema = z.object({
   fileCount: z.number(),
   byteCount: z.number(),
+  catalogProjectCount: z.number().optional(),
+  catalogRefreshedAt: z.string().optional(),
 });
 
 export const pypiProxyCacheSchema = z.object({

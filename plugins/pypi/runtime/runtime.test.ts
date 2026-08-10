@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { RepositoryArtifactStore } from "@axis-repository/core";
 import { dispatchRepositoryAdminResource, dispatchRepositoryClientHelper, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
-import { createPypiPlugin, createPypiProxyPlugin, pypiProxyUpstreamUrl } from "./runtime";
+import { createPypiPlugin, createPypiProxyPlugin, pypiProxyRetryDelayMs, pypiProxyUpstreamUrl } from "./runtime";
 
 function repositoryFixture() {
   return {
@@ -1265,6 +1265,7 @@ describe("PyPI plugin lifecycle", () => {
     );
     await objectStore.putJson("repositories/python-internal/_proxy-cache/pypi/projects.json", {
       projects: [{ name: "demo", fileCount: 1 }],
+      refreshedAt: "2026-08-05T00:00:00.000Z",
     });
     const plugin = createPypiProxyPlugin({ objectStoreFor: () => objectStore });
     const repository = {
@@ -1285,6 +1286,8 @@ describe("PyPI plugin lifecycle", () => {
       cache: {
         fileCount: 2,
         byteCount: 18,
+        catalogProjectCount: 1,
+        catalogRefreshedAt: "2026-08-05T00:00:00.000Z",
       },
     });
   });
@@ -1703,6 +1706,28 @@ describe("PyPI plugin lifecycle", () => {
       phase: "complete",
       failedProjectCount: 0,
     });
+  });
+
+  it("honors Retry-After when calculating retryable proxy upstream delay", () => {
+    expect(pypiProxyRetryDelayMs(1, {
+      upstreamFetchTimeoutMs: 10_000,
+      upstreamRequestRetries: 2,
+      upstreamRetryBaseDelayMs: 250,
+      upstreamRetryMaxDelayMs: 5_000,
+      indexCatalogBatchSize: 100,
+      indexProjectDetailBatchSize: 100,
+      failedProjectSampleLimit: 5,
+      fileByteCache: {
+        enabled: false,
+        maxBytes: 0,
+        maxTotalBytes: 0,
+        ttlSeconds: 0,
+        respectUpstreamCacheControl: true,
+      },
+    }, new Response("", {
+      status: 429,
+      headers: { "retry-after": "2" },
+    }))).toBe(2_000);
   });
 
   it("removes proxy project detail cache when a refreshed catalog no longer lists the project", async () => {

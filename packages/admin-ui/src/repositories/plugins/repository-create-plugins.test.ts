@@ -131,7 +131,7 @@ describe("repository create plugins", () => {
     expect(plugin.buildCreateInput({
       name: "python-proxy",
       visibility: "public",
-      config: { upstreamUrl: " https://pypi.org/simple ", upstreamUrlMode: "base-url" },
+      config: { upstreamUrl: " pypi.org/simple ", upstreamUrlMode: "base-url" },
       setup: {},
     })).toEqual({
       name: "python-proxy",
