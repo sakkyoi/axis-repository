@@ -1,5 +1,5 @@
 export type { CreateRepositoryInput, UpdateRepositoryInput } from "./api/client";
-export { useAxisClient, useRepositories, useRepositoryArtifactIndexJob, useRepositoryArtifacts, useUpdateRepository } from "./api/hooks";
+export { useAxisClient, useRepositories, useRepositorySearch, useRepositoryArtifactIndexJob, useRepositoryArtifacts, useUpdateRepository } from "./api/hooks";
 export {
   repositoryVisibilitySchema,
   signingKeySchema,
@@ -18,6 +18,7 @@ export type { DestructiveActionDialogContent } from "./components/ui/destructive
 export { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./components/ui/dialog";
 export { Input } from "./components/ui/input";
 export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
+export { Skeleton, SkeletonRows } from "./components/ui/skeleton";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 export { Textarea } from "./components/ui/textarea";
 export {

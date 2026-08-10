@@ -270,6 +270,7 @@ describe("repository UI plugin registry", () => {
     expect(getRepositoryCreateFieldRenderers("apt")?.["signing-key"]).toBeUndefined();
     expect(getRepositoryCreateFieldRenderers("apt")?.["signing-key-provisioning"]).toBeTypeOf("function");
     expect(getRepositoryCreateFieldRenderers("pypi")?.["signing-key-provisioning"]).toBeUndefined();
+    expect(getRepositoryCreateFieldRenderers({ ecosystem: "pypi", kind: "group" })?.["pypi-member-select"]).toBeTypeOf("function");
   });
 
   it("lets ecosystem UI plugins provide publish token scope derivation", () => {

@@ -97,6 +97,25 @@ describe("RepositoryService", () => {
     await expect(service.list()).resolves.toEqual([repository]);
   });
 
+  it("filters repository listings for selectors", async () => {
+    const state = new MemoryStateStore();
+    const service = new RepositoryService({ state, clock, randomId });
+    await service.create({ name: "python-alpha", ecosystem: "pypi", kind: "hosted", visibility: "private", config: {} });
+    await service.create({ name: "python-beta", ecosystem: "pypi", kind: "proxy", visibility: "private", config: {} });
+    await service.create({ name: "python-group", ecosystem: "pypi", kind: "group", visibility: "private", config: {} });
+    await service.create({ name: "debian-alpha", ecosystem: "apt", kind: "hosted", visibility: "private", config: {} });
+
+    await expect(service.list({
+      ecosystem: "pypi",
+      kinds: ["hosted", "proxy"],
+      query: "python",
+      excludeNames: ["python-alpha"],
+      limit: 1,
+    })).resolves.toMatchObject([
+      { name: "python-beta", ecosystem: "pypi", kind: "proxy" },
+    ]);
+  });
+
   it("accepts repository kinds that have runtime contracts", async () => {
     const state = new MemoryStateStore();
     const service = new RepositoryService({ state, clock, randomId });

@@ -152,7 +152,7 @@ describe("repository create plugins", () => {
 
     expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step, field.required]))
       .toEqual([
-        ["members", "string-list", "config", true],
+        ["members", "pypi-member-select", "config", true],
       ]);
     expect(plugin.defaults.config).toEqual({ members: "" });
     expect(plugin.steps).toEqual(["plugin", "basics", "config", "review"]);

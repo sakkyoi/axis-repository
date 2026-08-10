@@ -450,6 +450,53 @@ describe("Cloudflare runtime routes", () => {
     });
   });
 
+  it("filters repository listings through admin query parameters", async () => {
+    vi.stubGlobal("fetch", async () => new Response("<a href=\"demo/\">demo</a>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }));
+    const dependencies = createDevDependencies();
+    const app = createApp(dependencies);
+    await dependencies.repositoryService.create({
+      name: "python-alpha",
+      ecosystem: "pypi",
+      kind: "hosted",
+      visibility: "private",
+      config: {},
+    });
+    await dependencies.repositoryService.create({
+      name: "python-beta",
+      ecosystem: "pypi",
+      kind: "proxy",
+      visibility: "private",
+      config: { pypi: { upstreamUrl: "https://pypi.example/", upstreamUrlMode: "simple-api-root" } },
+    });
+    await dependencies.repositoryService.create({
+      name: "python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      visibility: "private",
+      config: { pypi: { members: ["python-alpha"] } },
+    });
+    await dependencies.repositoryService.create({
+      name: "debian-alpha",
+      ecosystem: "apt",
+      kind: "hosted",
+      visibility: "private",
+      config: validAptConfig(),
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories?ecosystem=pypi&kind=hosted&kind=proxy&q=python&exclude=python-alpha&limit=20", {
+        headers: { authorization: "Bearer dev-admin-token" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      repositories: [{ name: "python-beta", ecosystem: "pypi", kind: "proxy" }],
+    });
+  });
+
   it("proxies PyPI Simple API repository paths to the configured upstream", async () => {
     const upstreamRequests: Request[] = [];
     vi.stubGlobal("fetch", async (request: Request) => {

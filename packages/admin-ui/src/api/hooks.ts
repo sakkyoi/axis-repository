@@ -5,6 +5,7 @@ import {
   type CreateAdminPublishSessionInput,
   type CreatePublishTokenInput,
   type ListBackgroundJobsOptions,
+  type ListRepositoriesOptions,
   type RuntimeSettingsOverrides,
   type CreateRepositoryInput,
   type UpdateRepositoryPluginPolicyInput,
@@ -30,6 +31,15 @@ export function useRepositories() {
   return useQuery({
     queryKey: ["repositories"],
     queryFn: () => client.listRepositories(),
+  });
+}
+
+export function useRepositorySearch(options: ListRepositoriesOptions, enabled = true) {
+  const client = useAxisClient();
+  return useQuery({
+    queryKey: ["repositories", "search", options],
+    queryFn: () => client.listRepositories(options),
+    enabled,
   });
 }
 

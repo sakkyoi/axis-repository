@@ -34,7 +34,13 @@ export interface PluginAdminResourcesManifest {
   routes: PluginAdminResourceRouteManifest[];
 }
 
-export type PluginRepositoryConfigFieldKind = "text" | "select" | "string-list" | "signing-key" | "signing-key-provisioning";
+export type PluginRepositoryConfigFieldKind =
+  | "text"
+  | "select"
+  | "string-list"
+  | "signing-key"
+  | "signing-key-provisioning"
+  | "pypi-member-select";
 export type PluginRepositoryConfigDefaultValue = string | string[];
 export type PluginRepositoryConfigFieldStep = "config" | "setup";
 

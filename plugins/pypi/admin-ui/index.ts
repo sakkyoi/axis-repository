@@ -19,6 +19,7 @@ import {
   PypiProjectFilesSection,
   PypiProxySettingsSection,
 } from "./detail";
+import { PypiGroupMemberSelectField } from "./group-member-select";
 import { repositoryCreateStepsForConfig } from "@axis-repository/admin-ui/plugin-ui";
 import { PypiPublishArtifactPreview, PypiPublishSessionDetail, pypiPublishSessionArtifactSummary } from "./publish";
 import { pypiIsAcceptedFile } from "./publish-model";
@@ -138,10 +139,9 @@ const pypiGroupRepositoryCreatePlugin: GroupRepositoryCreatePlugin = {
       {
         name: "members",
         label: "Members",
-        kind: "string-list",
+        kind: "pypi-member-select",
         step: "config",
         required: true,
-        placeholder: "python-hosted, python-proxy",
         description: "PyPI hosted or proxy repositories, in resolution order.",
       },
     ],
@@ -214,4 +214,7 @@ export const pypiGroupRepositoryUiPlugin: GroupRepositoryUiPlugin = {
   manifest: pypiPluginManifest,
   create: pypiGroupRepositoryCreatePlugin,
   detail: pypiGroupRepositoryDetailPlugin,
+  createFieldRenderers: {
+    "pypi-member-select": PypiGroupMemberSelectField,
+  },
 };

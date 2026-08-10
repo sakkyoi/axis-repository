@@ -101,6 +101,30 @@ function repositoryKind(body: Record<string, unknown>): RepositoryKind | undefin
   throw new ValidationError("kind must be hosted, proxy, or group");
 }
 
+function repositoryKindSearchParams(searchParams: URLSearchParams): RepositoryKind[] | undefined {
+  const values = searchParams.getAll("kind");
+  if (values.length === 0) return undefined;
+  const kinds: RepositoryKind[] = [];
+  for (const value of values) {
+    if (value === "hosted" || value === "proxy" || value === "group") {
+      kinds.push(value);
+      continue;
+    }
+    throw new ValidationError("kind must be hosted, proxy, or group");
+  }
+  return kinds;
+}
+
+function repositoryListLimit(searchParams: URLSearchParams): number | undefined {
+  const value = searchParams.get("limit");
+  if (value === null) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new ValidationError("limit must be a positive integer");
+  }
+  return Math.min(parsed, 50);
+}
+
 function repositoryNeedsInitialIndexJob(repository: Repository): boolean {
   return repository.kind === "proxy" || repository.kind === "group";
 }
@@ -1827,7 +1851,19 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
   if (url.pathname === "/admin/repositories") {
     await requireAdmin(request, dependencies.adminAuthService);
     if (request.method === "GET") {
-      return jsonResponse({ repositories: await dependencies.repositoryService.list() });
+      const ecosystem = url.searchParams.get("ecosystem") ?? undefined;
+      const kinds = repositoryKindSearchParams(url.searchParams);
+      const query = url.searchParams.get("q") ?? undefined;
+      const limit = repositoryListLimit(url.searchParams);
+      return jsonResponse({
+        repositories: await dependencies.repositoryService.list({
+          ...(ecosystem === undefined ? {} : { ecosystem }),
+          ...(kinds === undefined ? {} : { kinds }),
+          ...(query === undefined ? {} : { query }),
+          excludeNames: url.searchParams.getAll("exclude"),
+          ...(limit === undefined ? {} : { limit }),
+        }),
+      });
     }
     if (request.method === "POST") {
       const body = await readJsonObject(request);

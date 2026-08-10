@@ -3,6 +3,7 @@ import {
   type CreateRepositoryInput,
   type FinalizePublishSessionInput,
   type FinalizePublishSessionResult,
+  type ListRepositoriesOptions,
   type GetPublishSessionInput,
   type ListPublishSessionsInput,
   NotFoundError,
@@ -94,8 +95,8 @@ export class PluginRepositoryService {
     });
   }
 
-  list(): Promise<Repository[]> {
-    return this.options.repositoryService.list();
+  list(options?: ListRepositoriesOptions): Promise<Repository[]> {
+    return this.options.repositoryService.list(options);
   }
 
   getByName(name: string): Promise<Repository> {

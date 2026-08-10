@@ -125,7 +125,7 @@ export function assertRepositoryUiPluginContracts(plugins: readonly RepositoryUi
     }
 
     for (const fieldKind of Object.keys(plugin.createFieldRenderers ?? {})) {
-      if (!plugin.manifest.repositoryConfig.fields.some((field) => field.kind === fieldKind)) {
+      if (!plugin.create.repositoryConfig.fields.some((field) => field.kind === fieldKind)) {
         throw new Error(`Create field renderer does not match a manifest field kind for ecosystem ${ecosystem}: ${fieldKind}`);
       }
     }
@@ -174,8 +174,13 @@ export function getPublishTokenScopeExtension(ecosystem: string): PublishTokenSc
   return getHostedRepositoryUiPlugin(ecosystem)?.publishTokenScope;
 }
 
-export function getRepositoryCreateFieldRenderers(ecosystem: string): RepositoryCreateFieldRendererMap | undefined {
-  return getHostedRepositoryUiPlugin(ecosystem)?.createFieldRenderers;
+export function getRepositoryCreateFieldRenderers(
+  repository: string | Pick<Repository, "ecosystem" | "kind">,
+): RepositoryCreateFieldRendererMap | undefined {
+  if (typeof repository === "string") {
+    return getHostedRepositoryUiPlugin(repository)?.createFieldRenderers;
+  }
+  return getRepositoryUiPlugin(repository)?.createFieldRenderers;
 }
 
 export function getRepositoryCreateServerErrorMapper(

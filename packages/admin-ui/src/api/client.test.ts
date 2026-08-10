@@ -44,6 +44,47 @@ describe("admin API schemas", () => {
     expect(repository.config.apt).toMatchObject({ codename: "noble" });
   });
 
+  it("passes repository search options as query parameters", async () => {
+    const client = createAxisClient({
+      baseUrl: "https://axis.example/",
+      accessToken: "admin-secret",
+    });
+    const requests: string[] = [];
+    client.http.defaults.adapter = async (config) => {
+      requests.push(`${config.method?.toUpperCase() ?? ""} ${config.url ?? ""}`);
+      return {
+        data: {
+          repositories: [{
+            id: "repo_1",
+            name: "python-proxy",
+            ecosystem: "pypi",
+            kind: "proxy",
+            visibility: "private",
+            config: {},
+            createdAt: "2026-07-22T00:00:00.000Z",
+            updatedAt: "2026-07-22T00:00:00.000Z",
+          }],
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(client.listRepositories({
+      ecosystem: "pypi",
+      kinds: ["hosted", "proxy"],
+      query: "python",
+      excludeNames: ["python-group"],
+      limit: 20,
+    })).resolves.toMatchObject([{ name: "python-proxy" }]);
+
+    expect(requests).toEqual([
+      "GET /admin/repositories?ecosystem=pypi&kind=hosted&kind=proxy&q=python&exclude=python-group&limit=20",
+    ]);
+  });
+
   it("parses one-time publish token secrets only from create responses", () => {
     const response = publishTokenCreateResponseSchema.parse({
       token: {

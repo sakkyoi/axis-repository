@@ -67,6 +67,14 @@ export interface UpdateRepositoryInput {
   config?: Record<string, unknown>;
 }
 
+export interface ListRepositoriesOptions {
+  ecosystem?: string;
+  kinds?: RepositoryKind[];
+  query?: string;
+  excludeNames?: string[];
+  limit?: number;
+}
+
 export interface UpdateRepositoryPluginPolicyInput {
   enabled: boolean | null;
 }
@@ -116,7 +124,7 @@ export interface AxisClient {
   retryBackgroundJob(id: string): Promise<ReturnType<typeof backgroundJobResponseSchema.parse>["job"]>;
   listRepositoryPlugins(): Promise<RepositoryPlugin[]>;
   updateRepositoryPluginPolicy(ecosystem: string, input: UpdateRepositoryPluginPolicyInput): Promise<RepositoryPlugin>;
-  listRepositories(): Promise<Repository[]>;
+  listRepositories(options?: ListRepositoriesOptions): Promise<Repository[]>;
   createRepository(input: CreateRepositoryInput): Promise<Repository>;
   getRepository(name: string): Promise<Repository>;
   updateRepository(name: string, input: UpdateRepositoryInput): Promise<Repository>;
@@ -214,6 +222,21 @@ function backgroundJobsUrl(options: ListBackgroundJobsOptions = {}): string {
   return `/admin/jobs${query ? `?${query}` : ""}`;
 }
 
+function repositoriesUrl(options: ListRepositoriesOptions = {}): string {
+  const searchParams = new URLSearchParams();
+  if (options.ecosystem !== undefined) searchParams.set("ecosystem", options.ecosystem);
+  for (const kind of options.kinds ?? []) {
+    searchParams.append("kind", kind);
+  }
+  if (options.query !== undefined) searchParams.set("q", options.query);
+  for (const name of options.excludeNames ?? []) {
+    searchParams.append("exclude", name);
+  }
+  if (options.limit !== undefined) searchParams.set("limit", String(options.limit));
+  const query = searchParams.toString();
+  return `/admin/repositories${query ? `?${query}` : ""}`;
+}
+
 /**
  * Says what a refused upload was refused for, when the deployment cannot.
  *
@@ -268,8 +291,8 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       const response = await http.get("/admin/users");
       return adminUsersResponseSchema.parse(response.data);
     },
-    async listRepositories() {
-      const response = await http.get("/admin/repositories");
+    async listRepositories(options: ListRepositoriesOptions = {}) {
+      const response = await http.get(repositoriesUrl(options));
       return repositoriesResponseSchema.parse(response.data).repositories;
     },
     async getDeployment() {

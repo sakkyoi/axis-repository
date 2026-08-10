@@ -10,7 +10,6 @@ import {
   useErrorToast,
   useToast,
   Input,
-  useRepositories,
   repositoryIndexJobIsActive,
   repositoryIndexJobStatusView,
   useUpdateRepository,
@@ -27,6 +26,7 @@ import {
   useRefreshPypiProxyCache,
   useSetPypiFileYanked,
 } from "./api";
+import { PypiGroupMemberSelect } from "./group-member-select";
 
 export function pypiSimpleIndexUrl(repository: Repository): string {
   return `/repositories/${repository.name}/simple/`;
@@ -200,24 +200,10 @@ export function PypiGroupSettingsSection({
   repository: Repository;
   pluginMetadata: RepositoryPlugin | undefined;
 }) {
-  const repositories = useRepositories();
   const updateRepository = useUpdateRepository();
   const toast = useToast();
   const [members, setMembers] = useState(() => pypiGroupMembers(repository));
   useErrorToast("PyPI group members not saved", updateRepository.error);
-  const options = (repositories.data ?? [])
-    .filter((candidate) =>
-      candidate.name !== repository.name
-      && candidate.ecosystem === repository.ecosystem
-      && (candidate.kind === "hosted" || candidate.kind === "proxy"))
-    .sort((left, right) => left.name.localeCompare(right.name));
-
-  function toggleMember(name: string) {
-    setMembers((current) =>
-      current.includes(name)
-        ? current.filter((member) => member !== name)
-        : [...current, name]);
-  }
 
   function saveMembers() {
     updateRepository.mutate({
@@ -241,26 +227,11 @@ export function PypiGroupSettingsSection({
 
   return (
     <div className="grid gap-3">
-      <div className="grid gap-1">
-        <span className="text-xs font-medium uppercase text-muted-foreground">Members</span>
-        <p className="text-xs text-muted-foreground">Resolution follows the order shown here.</p>
-      </div>
-      <div className="grid gap-2">
-        {options.map((option) => (
-          <label key={option.name} className="flex items-center gap-2 rounded-md border border-border bg-background/40 px-3 py-2 text-sm">
-            <input
-              type="checkbox"
-              checked={members.includes(option.name)}
-              onChange={() => toggleMember(option.name)}
-            />
-            <span className="font-medium">{option.name}</span>
-            <Badge>{option.kind}</Badge>
-          </label>
-        ))}
-        {!repositories.isLoading && options.length === 0 && (
-          <EmptyState message="Create a PyPI hosted or proxy repository before configuring this group." />
-        )}
-      </div>
+      <PypiGroupMemberSelect
+        repositoryName={repository.name}
+        value={members}
+        onChange={setMembers}
+      />
       <Button type="button" onClick={saveMembers} disabled={updateRepository.isPending || members.length === 0}>
         {updateRepository.isPending ? "Saving..." : "Save members"}
       </Button>

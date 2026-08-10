@@ -194,7 +194,7 @@ export function NewRepositoryPage() {
             <ConfigStep
               plugin={plugin}
               displayName={pluginManifest?.displayName ?? plugin.ecosystem}
-              fieldRenderers={getRepositoryCreateFieldRenderers(plugin.ecosystem)}
+              fieldRenderers={getRepositoryCreateFieldRenderers(plugin)}
               repositoryName={state.name.trim()}
               config={state.config}
               onChange={(config) => updateState({ config })}
@@ -204,7 +204,7 @@ export function NewRepositoryPage() {
             <DependenciesStep
               plugin={plugin}
               displayName={pluginManifest?.displayName ?? plugin.ecosystem}
-              fieldRenderers={getRepositoryCreateFieldRenderers(plugin.ecosystem)}
+              fieldRenderers={getRepositoryCreateFieldRenderers(plugin)}
               repositoryName={state.name.trim()}
               setup={state.setup}
               onChange={(setup) => updateState({ setup })}

@@ -15,6 +15,14 @@ export interface UpdateRepositoryInput {
   config?: Record<string, unknown>;
 }
 
+export interface ListRepositoriesOptions {
+  ecosystem?: string;
+  kinds?: RepositoryKind[];
+  query?: string;
+  excludeNames?: string[];
+  limit?: number;
+}
+
 export interface RepositoryServiceOptions {
   state: StateStore;
   clock: Clock;
@@ -87,8 +95,22 @@ export class RepositoryService {
     return repository;
   }
 
-  async list(): Promise<Repository[]> {
-    return (await this.options.state.repositories.list()).map(normalizeRepository);
+  async list(options: ListRepositoriesOptions = {}): Promise<Repository[]> {
+    const query = options.query?.trim().toLowerCase();
+    const kinds = new Set(options.kinds ?? []);
+    const excludeNames = new Set(options.excludeNames ?? []);
+    const limit = options.limit;
+    const repositories = (await this.options.state.repositories.list())
+      .map(normalizeRepository)
+      .filter((repository) => {
+        if (options.ecosystem !== undefined && repository.ecosystem !== options.ecosystem) return false;
+        if (kinds.size > 0 && !kinds.has(repository.kind)) return false;
+        if (excludeNames.has(repository.name)) return false;
+        if (query && !repository.name.toLowerCase().includes(query)) return false;
+        return true;
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+    return limit === undefined ? repositories : repositories.slice(0, limit);
   }
 
   async getByName(name: string): Promise<Repository> {
