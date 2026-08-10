@@ -6,7 +6,6 @@ import { DestructiveActionDialog } from "../components/ui/destructive-action-dia
 import {
   useDeletePublishToken,
   usePublishTokens,
-  useRepositories,
   useRevokePublishToken,
   useRotatePublishToken,
 } from "../api/hooks";
@@ -39,7 +38,6 @@ import { sideDrawerBodyClass, sideDrawerContentClass } from "../components/ui/si
 
 export function TokensPage() {
   const tokens = usePublishTokens();
-  const repositories = useRepositories();
   const [selectedName, setSelectedName] = useState<string>();
   const beside = detailPaneFitsBeside(useViewportWidth(DETAIL_PANE_NEEDS_PX));
   const [pendingRevokeName, setPendingRevokeName] = useState<string>();
@@ -122,9 +120,8 @@ export function TokensPage() {
       title="Publish Tokens"
       description="Create scoped automation tokens and revoke them when they are no longer needed."
       bodyClassName="min-h-0 content-stretch overflow-hidden"
-      action={<CreateTokenDialog repositories={repositories.data ?? []} repositoriesLoading={repositories.isLoading} />}
+      action={<CreateTokenDialog />}
     >
-      {repositories.isError && <ErrorState title="Repositories unavailable" error={repositories.error} />}
       {tokens.isError && <ErrorState error={tokens.error} />}
       {tokens.isLoading && (
         <div className={listDetailGridClass(beside)}>

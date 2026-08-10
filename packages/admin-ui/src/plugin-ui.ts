@@ -30,6 +30,7 @@ export {
   VisibilitySelect,
 } from "./repositories/detail/repository-detail-shared";
 export { repositoryCreateStepsForConfig } from "./repositories/create/repository-create-steps";
+export { RepositoryMultiSelect, RepositoryMultiSelectView } from "./repositories/repository-multi-select";
 export { sha256Hex } from "./repositories/publish/admin-publish-form-model";
 export { publishSessionArtifactSummary } from "./repositories/publish/repository-publish-sessions-model";
 export { useRepositoryArtifactPublisher } from "./repositories/publish/repository-publish-flow";

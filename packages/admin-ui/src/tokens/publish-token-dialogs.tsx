@@ -14,7 +14,6 @@ import {
   publishTokenSecretRevealItems,
   publishTokenSecretUnsavedDialogClasses,
   publishTokenSecretUnsavedPromptContent,
-  repositoryDisplayLabel,
   shouldBlockTokenSecretRevealClose,
   type PublishTokenExpirationMode,
   type PublishTokenExpirationState,
@@ -23,19 +22,14 @@ import {
 import { getPublishTokenScopeExtension } from "../repositories/plugins/repository-ui-plugins";
 import { ErrorState, formatDate } from "../pages/shared";
 import { useErrorToast } from "../components/ui/toast";
-import { SkeletonRows } from "../components/ui/skeleton";
+import { RepositoryMultiSelect } from "../repositories/repository-multi-select";
 
-export function CreateTokenDialog({
-  repositories,
-  repositoriesLoading,
-}: {
-  repositories: Repository[];
-  repositoriesLoading: boolean;
-}) {
+export function CreateTokenDialog() {
   const [open, setOpen] = useState(false);
   const [createdToken, setCreatedToken] = useState<PublishTokenCreateResponse>();
   const [name, setName] = useState("");
   const [selectedRepositories, setSelectedRepositories] = useState<string[]>([]);
+  const [selectedRepositoryRecords, setSelectedRepositoryRecords] = useState<Repository[]>([]);
   const [permissions, setPermissions] = useState<PublishTokenPermissionState>({ read: false, publish: true });
   const [expiration, setExpiration] = useState<PublishTokenExpirationState>({ mode: "never", customDateTime: "" });
   const [scopeError, setScopeError] = useState("");
@@ -43,26 +37,36 @@ export function CreateTokenDialog({
   useErrorToast("Publish token not created", createToken.error);
   const publishTokenScopeExtensions = [
     ...new Map(
-      repositories
+      selectedRepositoryRecords
         .map((repository) => [repository.ecosystem, getPublishTokenScopeExtension(repository.ecosystem)] as const)
         .filter((entry): entry is readonly [string, NonNullable<ReturnType<typeof getPublishTokenScopeExtension>>] =>
           Boolean(entry[1])),
     ).values(),
   ];
 
-  function toggleRepository(repositoryName: string, selected: boolean) {
-    setSelectedRepositories((current) =>
-      selected
-        ? [...current, repositoryName]
-        : current.filter((name) => name !== repositoryName),
-    );
+  function updateSelectedRepositories(nextRepositories: string[]) {
+    setSelectedRepositories(nextRepositories);
+    setSelectedRepositoryRecords((current) =>
+      current.filter((repository) => nextRepositories.includes(repository.name)));
+  }
+
+  function updateSelectedRepositoryRecord(repository: Repository, selected: boolean) {
+    setSelectedRepositoryRecords((current) => {
+      if (!selected) {
+        return current.filter((candidate) => candidate.name !== repository.name);
+      }
+      if (current.some((candidate) => candidate.name === repository.name)) {
+        return current;
+      }
+      return [...current, repository];
+    });
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const missingScopes = publishTokenScopeExtensions.flatMap((extension) =>
       extension.missingRequiredScopes({
-        repositories,
+        repositories: selectedRepositoryRecords,
         selectedRepositories,
         permissions,
       }),
@@ -86,7 +90,7 @@ export function CreateTokenDialog({
 
     const result = await createToken.mutateAsync(buildCreatePublishTokenInput({
       name,
-      repositories,
+      repositories: selectedRepositoryRecords,
       permissions,
       selectedRepositories,
       expiration,
@@ -124,29 +128,12 @@ export function CreateTokenDialog({
               <span className="text-sm font-medium">Name</span>
               <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="github-actions" required />
             </label>
-            <div className="grid gap-2">
-              <span className="text-sm font-medium">Repositories</span>
-              {repositoriesLoading && <SkeletonRows rows={3} columns={["w-40"]} className="p-0" />}
-              {!repositoriesLoading && repositories.length === 0 && (
-                <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
-                  No repositories are available.
-                </div>
-              )}
-              {repositories.length > 0 && (
-                <div className="grid max-h-48 gap-2 overflow-auto rounded-md border border-border p-2">
-                  {repositories.map((repository) => (
-                    <label key={repository.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
-                      <input
-                        type="checkbox"
-                        checked={selectedRepositories.includes(repository.name)}
-                        onChange={(event) => toggleRepository(repository.name, event.target.checked)}
-                      />
-                      {repositoryDisplayLabel(repository)}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
+            <RepositoryMultiSelect
+              label="Repositories"
+              value={selectedRepositories}
+              onChange={updateSelectedRepositories}
+              onRepositorySelectionChange={updateSelectedRepositoryRecord}
+            />
             <div className="grid gap-2">
               <span className="text-sm font-medium">Permissions</span>
               <label className="flex items-center gap-2 text-sm">
