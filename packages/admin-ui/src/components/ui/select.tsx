@@ -9,7 +9,7 @@ export function SelectTrigger({ className, children, ...props }: SelectPrimitive
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "flex h-9 w-full items-center justify-between rounded-md border border-input bg-panel px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-9 w-full cursor-pointer items-center justify-between rounded-md border border-input bg-panel px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       {...props}
@@ -39,7 +39,7 @@ export function SelectItem({ className, children, ...props }: SelectPrimitive.Se
   return (
     <SelectPrimitive.Item
       className={cn(
-        "relative flex h-8 cursor-default select-none items-center rounded px-8 text-sm outline-none data-[highlighted]:bg-muted data-[highlighted]:text-foreground",
+        "relative flex h-8 cursor-pointer select-none items-center rounded px-8 text-sm outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[highlighted]:bg-muted data-[highlighted]:text-foreground",
         className,
       )}
       {...props}
