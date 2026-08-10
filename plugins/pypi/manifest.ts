@@ -10,7 +10,7 @@ export const pypiPluginManifest = {
   capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
   repositoryKinds: [
     { kind: "hosted", experimental: false },
-    { kind: "proxy", experimental: true },
+    { kind: "proxy", experimental: false },
     { kind: "group", experimental: false },
   ],
   icon: {

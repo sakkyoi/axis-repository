@@ -132,7 +132,7 @@ export function createPypiProxyPlugin(input: {
     ecosystem: "pypi",
     name: `${pypiPluginManifest.runtimeName}-proxy`,
     version: pypiPluginManifest.version,
-    repositoryKinds: [{ kind: "proxy", experimental: true }],
+    repositoryKinds: [{ kind: "proxy", experimental: false }],
     capabilities: ["pypi", "proxy"],
     canServeRepositoryPath: createPrefixServingPredicate([SIMPLE_PREFIX]),
     resolveRepositoryPath: ({ relativePath, accept }) => resolveSimplePath(relativePath, accept),
