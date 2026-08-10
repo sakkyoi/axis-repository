@@ -23,7 +23,7 @@ import {
 } from "../../components/ui/dialog";
 import { ErrorState } from "../../pages/shared";
 import { CodeBlock } from "../../components/ui/code-block";
-import { SkeletonRows } from "../../components/ui/skeleton";
+import { SkeletonRows, SkeletonTableRows } from "../../components/ui/skeleton";
 import { cn } from "../../lib/utils";
 import { moreChoicesLabel, visibleChoices } from "./artifact-choice-model";
 import {
@@ -186,7 +186,14 @@ export function RepositoryArtifactsSection({ repository }: RepositoryDetailSecti
             <span className="ml-2">{indexJobView.description}</span>
           </div>
         )}
-        {familiesQuery.isLoading && <SkeletonRows rows={4} columns={["w-40", "w-14", "w-16", "w-44", "w-20"]} />}
+        {familiesQuery.isLoading && (
+          <SkeletonTableRows
+            rows={4}
+            columns="grid-cols-[40%_14%_16%_22%_4rem]"
+            cells={["w-full", "w-12", "w-16", "w-full", "w-8 justify-self-end"]}
+            minWidth="min-w-[42rem]"
+          />
+        )}
         {familiesQuery.isError && <div className="p-3"><ErrorState title="Repository artifacts unavailable" error={familiesQuery.error} /></div>}
         {!familiesQuery.isLoading && !familiesQuery.isError && families.length === 0 && (
           <div className="grid min-h-64 p-3">

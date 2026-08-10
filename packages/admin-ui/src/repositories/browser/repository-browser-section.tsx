@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { ErrorState } from "../../pages/shared";
-import { SkeletonRows, SkeletonText } from "../../components/ui/skeleton";
+import { SkeletonTableRows, SkeletonText } from "../../components/ui/skeleton";
 import { getRepositoryPublishPlugin } from "../plugins/repository-ui-plugins";
 import type { RepositoryDetailSectionProps } from "../plugins/repository-ui-plugin-types";
 import {
@@ -165,7 +165,14 @@ export function RepositoryBrowserSection({
       )}
 
       <div className={layout.frame}>
-        {objects.isLoading && <SkeletonRows rows={5} columns={["w-44", "w-16", "w-20", "w-32"]} />}
+        {objects.isLoading && (
+          <SkeletonTableRows
+            rows={5}
+            columns="grid-cols-[45%_25%_15%_12%_3rem]"
+            cells={["w-full", "w-full", "w-16", "w-full", "w-7 justify-self-end"]}
+            minWidth="min-w-[40rem]"
+          />
+        )}
         {objects.isError && <div className={layout.error}><ErrorState title="Repository objects unavailable" error={objects.error} /></div>}
         {!objects.isLoading && !objects.isError && rows.length === 0 && (
           <div className={layout.empty}>

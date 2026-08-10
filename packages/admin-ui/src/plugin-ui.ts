@@ -18,7 +18,7 @@ export type { DestructiveActionDialogContent } from "./components/ui/destructive
 export { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./components/ui/dialog";
 export { Input } from "./components/ui/input";
 export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
-export { Skeleton, SkeletonRows } from "./components/ui/skeleton";
+export { Skeleton, SkeletonRows, SkeletonTableRows } from "./components/ui/skeleton";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 export { Textarea } from "./components/ui/textarea";
 export {

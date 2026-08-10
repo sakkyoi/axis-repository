@@ -30,7 +30,7 @@ import {
 } from "../tokens/publish-token-form-model";
 import { CreateTokenDialog, TokenCreatedDialog } from "../tokens/publish-token-dialogs";
 import { asJson, ErrorState, PageShell, formatDate } from "./shared";
-import { SkeletonRows } from "../components/ui/skeleton";
+import { SkeletonTableRows } from "../components/ui/skeleton";
 import { CodeBlock } from "../components/ui/code-block";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { useViewportWidth } from "../components/use-viewport-width";
@@ -127,8 +127,15 @@ export function TokensPage() {
       {repositories.isError && <ErrorState title="Repositories unavailable" error={repositories.error} />}
       {tokens.isError && <ErrorState error={tokens.error} />}
       {tokens.isLoading && (
-        <div className="rounded-lg border border-border bg-panel">
-          <SkeletonRows rows={4} columns={["w-40", "w-28", "w-24", "w-32"]} />
+        <div className={listDetailGridClass(beside)}>
+          <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
+            <SkeletonTableRows
+              rows={4}
+              columns="grid-cols-[minmax(160px,1fr)_minmax(120px,0.8fr)_minmax(180px,1fr)_100px]"
+              cells={["w-40", "w-28", "w-full", "w-20"]}
+            />
+          </div>
+          {beside && <PublishTokenDetailEmptyState />}
         </div>
       )}
       {tokens.data && (

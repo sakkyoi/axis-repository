@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { Skeleton, SkeletonRows, SkeletonText } from "./skeleton";
+import { Skeleton, SkeletonRows, SkeletonTableRows, SkeletonText } from "./skeleton";
 
 describe("skeleton", () => {
   afterEach(cleanup);
@@ -25,6 +25,22 @@ describe("skeleton", () => {
     const status = screen.getByRole("status");
     expect(status.getAttribute("aria-busy")).toBe("true");
     expect(status.getAttribute("aria-label")).toBe("Loading");
+  });
+
+  it("can match horizontally scrolling table rows", () => {
+    const { container } = render(
+      <SkeletonTableRows
+        rows={2}
+        columns="grid-cols-[minmax(180px,1fr)_120px]"
+        cells={["w-full", "w-16"]}
+        minWidth="min-w-[480px]"
+      />,
+    );
+
+    expect(screen.getByRole("status").getAttribute("aria-busy")).toBe("true");
+    expect(container.querySelector(".overflow-x-auto")).toBeTruthy();
+    expect(container.innerHTML).toContain("min-w-[480px]");
+    expect(container.innerHTML).toContain("grid-cols-[minmax(180px,1fr)_120px]");
   });
 
   it("keeps its own blocks out of the reading", () => {

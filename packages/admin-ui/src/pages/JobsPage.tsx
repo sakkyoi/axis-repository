@@ -4,7 +4,7 @@ import { useBackgroundJobs, useCancelBackgroundJob, useRetryBackgroundJob } from
 import type { BackgroundJob } from "../api/schemas";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { SkeletonRows } from "../components/ui/skeleton";
+import { SkeletonTableRows } from "../components/ui/skeleton";
 import { useErrorToast } from "../components/ui/toast";
 import {
   backgroundJobDetailLines,
@@ -82,7 +82,12 @@ export function JobsPage() {
       </div>
       {jobs.isLoading && (
         <div className="rounded-md border border-border">
-          <SkeletonRows rows={5} columns={["w-44", "w-28", "w-52", "w-32", "w-24"]} />
+          <SkeletonTableRows
+            rows={5}
+            columns={jobsTableColumns}
+            cells={["w-full", "w-20", "w-full", "w-32", "w-full", "w-20 justify-self-end"]}
+            minWidth="min-w-[82rem]"
+          />
         </div>
       )}
       {jobs.error && <ErrorState title="Jobs unavailable" error={jobs.error} />}

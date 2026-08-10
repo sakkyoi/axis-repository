@@ -24,7 +24,7 @@ import {
   repositorySummaryItems,
 } from "../repositories/detail/repository-page-model";
 import { ErrorState, PageShell, formatDate } from "./shared";
-import { SkeletonRows } from "../components/ui/skeleton";
+import { SkeletonTableRows } from "../components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { useViewportWidth } from "../components/use-viewport-width";
 import { DETAIL_PANE_NEEDS_PX, detailPaneFitsBeside, listDetailGridClass } from "./list-detail-model";
@@ -61,8 +61,15 @@ export function RepositoriesPage() {
     >
       {repositories.isError && <ErrorState error={repositories.error} />}
       {repositories.isLoading && (
-        <div className="rounded-lg border border-border bg-panel">
-          <SkeletonRows rows={5} columns={repositoryListSkeletonColumns()} />
+        <div className={listDetailGridClass(beside)}>
+          <div className="min-h-0 min-w-0 overflow-auto rounded-lg border border-border bg-panel">
+            <SkeletonTableRows
+              rows={5}
+              columns="grid-cols-[38%_18%_13%_13%_18%]"
+              cells={repositoryListSkeletonColumns()}
+            />
+          </div>
+          {beside && <RepositoryDetailEmptyState />}
         </div>
       )}
       {repositories.data && (

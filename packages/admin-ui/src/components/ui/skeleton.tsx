@@ -54,6 +54,36 @@ export function SkeletonRows({
   );
 }
 
+export function SkeletonTableRows({
+  rows = 3,
+  columns,
+  cells,
+  minWidth,
+  className,
+}: {
+  rows?: number;
+  /** The same grid column class used by the real table rows. */
+  columns: string;
+  /** A width class per cell. Use w-full for cells that should fill their column. */
+  cells: string[];
+  minWidth?: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("overflow-x-auto", className)} role="status" aria-busy="true" aria-label="Loading">
+      <div className={cn(minWidth)}>
+        {Array.from({ length: rows }, (_, row) => (
+          <div key={row} className={cn("grid gap-3 border-t border-border px-3 py-3 first:border-t-0", columns)}>
+            {cells.map((width, cell) => (
+              <Skeleton key={cell} className={cn("h-4 min-w-0", width)} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Lines of prose, the last one short, as a paragraph ends. */
 export function SkeletonText({ lines = 3, className }: { lines?: number; className?: string }) {
   return (

@@ -15,7 +15,7 @@ import { Input } from "../components/ui/input";
 import { repositoryPluginStatusRows } from "../repositories/plugins/plugin-lifecycle";
 import { repositoryKindLabel } from "../repositories/detail/repository-page-model";
 import { ErrorState, PageShell } from "./shared";
-import { SkeletonRows } from "../components/ui/skeleton";
+import { SkeletonRows, SkeletonTableRows } from "../components/ui/skeleton";
 import { useErrorToast, useToast } from "../components/ui/toast";
 
 const repositoryPluginsTableColumns = "grid-cols-[minmax(180px,1fr)_130px_minmax(170px,0.8fr)_minmax(300px,1.3fr)_minmax(220px,1fr)_240px]";
@@ -68,7 +68,12 @@ export function SettingsPage() {
         </div>
         {repositoryPlugins.isLoading && (
           <div className="rounded-md border border-border">
-            <SkeletonRows rows={3} columns={["w-28", "w-44", "w-24"]} />
+            <SkeletonTableRows
+              rows={3}
+              columns={repositoryPluginsTableColumns}
+              cells={["w-full", "w-20", "w-full", "w-full", "w-full", "w-28 justify-self-end"]}
+              minWidth="min-w-[84rem]"
+            />
           </div>
         )}
         {repositoryPlugins.error && <ErrorState title="Repository plugins unavailable" error={repositoryPlugins.error} />}

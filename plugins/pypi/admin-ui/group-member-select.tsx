@@ -3,7 +3,6 @@ import { Check, Search, X } from "lucide-react";
 import {
   Badge,
   EmptyState,
-  SkeletonRows,
   Skeleton,
   useRepositorySearch,
   type Repository,
