@@ -47,7 +47,7 @@ export function useBootstrapCredentialsToast(): void {
       // the one this is about is not the first.
       action: {
         label: "How to remove it",
-        to: { pathname: ADMIN_UI_PATHS.settings, hash: `#${BOOTSTRAP_CREDENTIALS_ANCHOR}` },
+        to: { pathname: ADMIN_UI_PATHS.settings, search: "?tab=environment", hash: `#${BOOTSTRAP_CREDENTIALS_ANCHOR}` },
       },
     });
   }, [message, toast]);

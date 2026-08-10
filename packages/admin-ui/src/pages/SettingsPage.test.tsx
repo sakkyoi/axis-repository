@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -43,10 +44,10 @@ function plugin(input: Partial<RepositoryPlugin> & Pick<RepositoryPlugin, "ecosy
   };
 }
 
-function renderSettingsPage() {
+function renderSettingsPage(initialEntry = "/ui/settings") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <AuthTestProvider value={{ accessToken: "token" }}>
         <QueryClientProvider client={queryClient}>
           <ToastProvider>
@@ -111,6 +112,8 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
+    await userEvent.click(screen.getByRole("tab", { name: "Repository plugins" }));
+
     await waitFor(() => {
       expect(screen.getByText("Python Package Index")).toBeTruthy();
     });
@@ -122,5 +125,125 @@ describe("SettingsPage", () => {
     expect(scrollArea.className).toContain("overflow-x-auto");
     expect(table.className).toContain("min-w-[84rem]");
     expect(actionsHeader.className).toContain("text-right");
+  });
+
+  it("separates settings into runtime policy, repository plugin, and environment tabs", async () => {
+    listRepositoryPlugins.mockResolvedValueOnce([]);
+    getDeployment.mockResolvedValueOnce({ capabilities: {}, leftoverBootstrapCredentials: [] });
+    getRuntimeSettings.mockResolvedValueOnce({
+      settings: {
+        operationalPolicy: {
+          proxy: {
+            upstreamFetchTimeoutMs: 5000,
+            upstreamRequestRetries: 2,
+            upstreamRetryBaseDelayMs: 250,
+            upstreamRetryMaxDelayMs: 1000,
+            indexCatalogBatchSize: 200,
+            indexProjectDetailBatchSize: 50,
+            failedProjectSampleLimit: 20,
+            fileByteCache: {
+              enabled: true,
+              maxBytes: 104857600,
+              maxTotalBytes: 1073741824,
+              ttlSeconds: 86400,
+              respectUpstreamCacheControl: true,
+            },
+          },
+        },
+      },
+      overrides: {},
+    });
+
+    renderSettingsPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Runtime policy" })).toBeTruthy();
+    });
+    expect(screen.getByRole("tab", { name: "Repository plugins" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Environment" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Proxy runtime policy" })).toBeTruthy();
+    expect(screen.queryByText("API target")).toBeNull();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Environment" }));
+
+    expect(screen.getByText("API target")).toBeTruthy();
+    expect(screen.getByText("Config source")).toBeTruthy();
+    expect(screen.queryByText("Auth storage")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Proxy runtime policy" })).toBeNull();
+  });
+
+  it("lays out proxy runtime policy settings as one row per setting", async () => {
+    listRepositoryPlugins.mockResolvedValueOnce([]);
+    getDeployment.mockResolvedValueOnce({ capabilities: {}, leftoverBootstrapCredentials: [] });
+    getRuntimeSettings.mockResolvedValueOnce({
+      settings: {
+        operationalPolicy: {
+          proxy: {
+            upstreamFetchTimeoutMs: 5000,
+            upstreamRequestRetries: 2,
+            upstreamRetryBaseDelayMs: 250,
+            upstreamRetryMaxDelayMs: 1000,
+            indexCatalogBatchSize: 200,
+            indexProjectDetailBatchSize: 50,
+            failedProjectSampleLimit: 20,
+            fileByteCache: {
+              enabled: true,
+              maxBytes: 104857600,
+              maxTotalBytes: 1073741824,
+              ttlSeconds: 86400,
+              respectUpstreamCacheControl: true,
+            },
+          },
+        },
+      },
+      overrides: {},
+    });
+
+    renderSettingsPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Proxy runtime policy" })).toBeTruthy();
+    });
+    const fields = await screen.findByTestId("proxy-runtime-policy-fields");
+    expect(fields.className).toContain("grid-cols-1");
+    expect(fields.className).toContain("divide-y");
+    expect(fields.className).not.toContain("md:grid-cols-2");
+    expect(fields.className).not.toContain("xl:grid-cols-4");
+    expect(screen.getByTestId("runtime-number-field-upstream-timeout").className).toContain("pr-");
+  });
+
+  it("opens the environment tab from the settings tab query", async () => {
+    listRepositoryPlugins.mockResolvedValueOnce([]);
+    getDeployment.mockResolvedValueOnce({ capabilities: {}, leftoverBootstrapCredentials: [] });
+    getRuntimeSettings.mockResolvedValueOnce({
+      settings: {
+        operationalPolicy: {
+          proxy: {
+            upstreamFetchTimeoutMs: 5000,
+            upstreamRequestRetries: 2,
+            upstreamRetryBaseDelayMs: 250,
+            upstreamRetryMaxDelayMs: 1000,
+            indexCatalogBatchSize: 200,
+            indexProjectDetailBatchSize: 50,
+            failedProjectSampleLimit: 20,
+            fileByteCache: {
+              enabled: true,
+              maxBytes: 104857600,
+              maxTotalBytes: 1073741824,
+              ttlSeconds: 86400,
+              respectUpstreamCacheControl: true,
+            },
+          },
+        },
+      },
+      overrides: {},
+    });
+
+    renderSettingsPage("/ui/settings?tab=environment#bootstrap-credentials");
+
+    await waitFor(() => {
+      expect(screen.getByText("API target")).toBeTruthy();
+    });
+    expect(screen.queryByRole("heading", { name: "Proxy runtime policy" })).toBeNull();
   });
 });

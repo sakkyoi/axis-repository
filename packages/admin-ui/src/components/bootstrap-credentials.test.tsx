@@ -93,7 +93,7 @@ describe("the warning about credentials nobody removed", () => {
     await show(<Warned />, [password]);
 
     const link = await screen.findByRole("link", { name: "How to remove it" });
-    expect(link.getAttribute("href")).toBe(`/ui/settings#${BOOTSTRAP_CREDENTIALS_ANCHOR}`);
+    expect(link.getAttribute("href")).toBe(`/ui/settings?tab=environment#${BOOTSTRAP_CREDENTIALS_ANCHOR}`);
   });
 
   it("stays quiet when only the username is left over", async () => {
