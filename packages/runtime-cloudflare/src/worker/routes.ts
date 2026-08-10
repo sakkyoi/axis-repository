@@ -101,6 +101,10 @@ function repositoryKind(body: Record<string, unknown>): RepositoryKind | undefin
   throw new ValidationError("kind must be hosted, proxy, or group");
 }
 
+function repositoryNeedsInitialIndexJob(repository: Repository): boolean {
+  return repository.kind === "proxy" || repository.kind === "group";
+}
+
 function optionalRepositoryVisibility(body: Record<string, unknown>): RepositoryVisibility | undefined {
   if (body.visibility === undefined) return undefined;
   if (body.visibility === "private" || body.visibility === "public") return body.visibility;
@@ -1186,7 +1190,48 @@ async function pluginRepositoryPathResponse(input: {
   accept?: string;
 }): Promise<Response | null> {
   const plugin = input.dependencies.repositoryRuntimePlugins.getPluginForRepository(input.repository);
-  if (plugin?.kind !== "proxy" || !plugin.serveRepositoryPath) {
+  if (plugin?.kind === "hosted") {
+    if (input.request.method !== "GET" && input.request.method !== "HEAD") {
+      return null;
+    }
+    const served = await resolveServedRepositoryPath(input.dependencies, input.repository, {
+      relativePath: input.relativePath,
+      ...(input.accept ? { accept: input.accept } : {}),
+    }).catch((error) => {
+      if (error instanceof NotFoundError) return null;
+      throw error;
+    });
+    if (!served || served.objectPath === "") {
+      return null;
+    }
+    const objectKey = `repositories/${input.repository.name}/${served.objectPath}`;
+    const metadata = await input.dependencies.repositoryObjectStore.headObject(objectKey);
+    if (!metadata) {
+      return null;
+    }
+    const rangeHeader = input.request.method === "GET" ? input.request.headers.get("range") : null;
+    const parsedRange = parseRangeHeader(rangeHeader, metadata.contentLength);
+    if (rangeHeader && !parsedRange) {
+      return rangeNotSatisfiableResponse(metadata, repositoryCacheControl(input.repository));
+    }
+    const object = input.request.method === "HEAD"
+      ? null
+      : await input.dependencies.repositoryObjectStore.getObject(
+        objectKey,
+        parsedRange ? { range: parsedRange.range } : undefined,
+      );
+    if (input.request.method === "GET" && !object) {
+      return null;
+    }
+    return objectResponse({
+      method: input.request.method,
+      object,
+      metadata: served.contentType ? { ...metadata, contentType: served.contentType } : metadata,
+      cacheControl: repositoryCacheControl(input.repository),
+      ...(parsedRange ? { range: parsedRange } : {}),
+    });
+  }
+  if ((plugin?.kind !== "proxy" && plugin?.kind !== "group") || !plugin.serveRepositoryPath) {
     return null;
   }
   return plugin.serveRepositoryPath({
@@ -1197,6 +1242,20 @@ async function pluginRepositoryPathResponse(input: {
     ...(input.dependencies.backgroundTasks
       ? { backgroundTasks: input.dependencies.backgroundTasks }
       : {}),
+    repositories: input.dependencies.repositoryService,
+    repositoryArtifactStore: input.dependencies.repositoryArtifactStore,
+    serveRepositoryPath: (delegateInput: {
+      repository: Repository;
+      request: Request;
+      relativePath: string;
+      accept?: string;
+    }) => pluginRepositoryPathResponse({
+      dependencies: input.dependencies,
+      repository: delegateInput.repository,
+      request: delegateInput.request,
+      relativePath: delegateInput.relativePath,
+      ...(delegateInput.accept ? { accept: delegateInput.accept } : {}),
+    }),
   });
 }
 
@@ -1782,7 +1841,7 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
         config: optionalObjectField(body, "config") ?? {},
         ...(provisioning === undefined ? {} : { provisioning }),
       });
-      if (repository.kind === "proxy") {
+      if (repositoryNeedsInitialIndexJob(repository)) {
         await dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: repository.name });
         await wakeBackgroundJobs(dependencies);
       }
@@ -1823,9 +1882,12 @@ export async function dispatch(request: Request, dependencies: AppDependencies):
     }
     if (request.method === "PATCH") {
       const body = await readJsonObject(request);
-      return jsonResponse(
-        await dependencies.repositoryService.update(adminRepositoryName, parseRepositoryUpdate(body)),
-      );
+      const repository = await dependencies.repositoryService.update(adminRepositoryName, parseRepositoryUpdate(body));
+      if (repositoryNeedsInitialIndexJob(repository) && body.config !== undefined) {
+        await dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: repository.name });
+        await wakeBackgroundJobs(dependencies);
+      }
+      return jsonResponse(repository);
     }
     if (request.method === "DELETE") {
       const job = await dependencies.repositoryDeleteJobService.request({ repositoryName: adminRepositoryName });

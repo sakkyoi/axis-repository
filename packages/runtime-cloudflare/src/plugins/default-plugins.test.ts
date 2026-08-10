@@ -19,7 +19,7 @@ describe("default artifact plugins", () => {
       { ecosystem: aptPluginManifest.ecosystem, repositoryKinds: [{ kind: "group", experimental: true }] },
       { ecosystem: pypiPluginManifest.ecosystem, repositoryKinds: [{ kind: "hosted", experimental: false }] },
       { ecosystem: pypiPluginManifest.ecosystem, repositoryKinds: [{ kind: "proxy", experimental: true }] },
-      { ecosystem: pypiPluginManifest.ecosystem, repositoryKinds: [{ kind: "group", experimental: true }] },
+      { ecosystem: pypiPluginManifest.ecosystem, repositoryKinds: [{ kind: "group", experimental: false }] },
     ]);
   });
 });

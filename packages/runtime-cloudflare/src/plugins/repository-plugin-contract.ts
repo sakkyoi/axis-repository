@@ -67,13 +67,30 @@ export interface ServeRepositoryPathInput extends RepositoryServingContext {
   repository: Repository;
   request: Request;
   backgroundTasks?: BackgroundTaskScheduler;
+  repositories?: RepositoryLookup;
+  repositoryArtifactStore?: RepositoryArtifactStore;
+  serveRepositoryPath?: RepositoryPathDelegate;
 }
 
 export type RepositoryPathHandler = (input: ServeRepositoryPathInput) => Promise<Response | null>;
 
+export interface RepositoryPathDelegateInput extends RepositoryServingContext {
+  repository: Repository;
+  request: Request;
+}
+
+export type RepositoryPathDelegate = (input: RepositoryPathDelegateInput) => Promise<Response | null>;
+
+export interface RepositoryLookup {
+  list(): Promise<Repository[]>;
+  getByName(name: string): Promise<Repository>;
+}
+
 export interface ValidateRepositoryConfigInput {
   ecosystem: Ecosystem;
   config: Record<string, unknown>;
+  repositoryName?: string;
+  repositories?: RepositoryLookup;
 }
 
 export type ValidateRepositoryConfigResult = void | Promise<void>;
@@ -170,6 +187,8 @@ export interface RebuildRepositoryArtifactIndexInput {
   objectStore: RepositoryObjectStore;
   now: Date;
   continuation?: Record<string, unknown>;
+  repositories?: RepositoryLookup;
+  repositoryArtifactStore?: RepositoryArtifactStore;
 }
 
 export interface RebuildRepositoryArtifactIndexResult {
@@ -318,6 +337,7 @@ export interface GroupRepositoryPlugin extends PublisherMetadata {
   canServeRepositoryPath: RepositoryPathServingRule;
   /** Defaults to serving the requested path as the object key once group resolution exists. */
   resolveRepositoryPath?: RepositoryPathResolver;
+  serveRepositoryPath?: RepositoryPathHandler;
   normalizeRepositoryConfig?: RepositoryConfigNormalizer;
   validateRepositoryConfig(input: ValidateRepositoryConfigInput): ValidateRepositoryConfigResult;
   clientHelpers?: RepositoryClientHelpers;

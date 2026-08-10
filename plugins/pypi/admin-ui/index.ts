@@ -14,6 +14,7 @@ import { AdvancedJsonConfigSection, RepositoryClientHelpersSection } from "@axis
 import { pypiHostedRepositoryCreatePlugin } from "./create";
 import {
   PypiInstallHintsSection,
+  PypiGroupSettingsSection,
   PypiUploadHintsSection,
   PypiProjectFilesSection,
   PypiProxySettingsSection,
@@ -133,18 +134,31 @@ const pypiGroupRepositoryCreatePlugin: GroupRepositoryCreatePlugin = {
   ecosystem: pypiPluginManifest.ecosystem,
   repositoryConfig: {
     namespace: pypiPluginManifest.repositoryConfig.namespace,
-    fields: [],
+    fields: [
+      {
+        name: "members",
+        label: "Members",
+        kind: "string-list",
+        step: "config",
+        required: true,
+        placeholder: "python-hosted, python-proxy",
+        description: "PyPI hosted or proxy repositories, in resolution order.",
+      },
+    ],
   },
-  steps: ["plugin", "basics", "review"],
+  steps: ["plugin", "basics", "config", "review"],
   defaults: {
     name: "",
     visibility: "private",
-    config: {},
+    config: { members: "" },
     setup: {},
   },
   validateStep: (step, state) => {
     if (step === "basics") {
       return state.name.trim() ? [] : ["Repository name is required"];
+    }
+    if (step === "config" && parseStringList(state.config.members).length === 0) {
+      return ["At least one member repository is required"];
     }
     return [];
   },
@@ -154,10 +168,19 @@ const pypiGroupRepositoryCreatePlugin: GroupRepositoryCreatePlugin = {
     kind: "group",
     visibility: state.visibility,
     config: {
-      [pypiPluginManifest.repositoryConfig.namespace]: {},
+      [pypiPluginManifest.repositoryConfig.namespace]: {
+        members: parseStringList(state.config.members),
+      },
     },
   }),
 };
+
+function parseStringList(value: string | undefined): string[] {
+  return [...new Set((value ?? "")
+    .split(/[\n,]/u)
+    .map((entry) => entry.trim())
+    .filter(Boolean))];
+}
 
 const pypiProxyRepositoryDetailPlugin: ProxyRepositoryDetailPlugin = {
   kind: "proxy",
@@ -173,6 +196,8 @@ const pypiGroupRepositoryDetailPlugin: GroupRepositoryDetailPlugin = {
   kind: "group",
   ecosystem: pypiPluginManifest.ecosystem,
   sections: [
+    { id: "install-hints", title: "Install hints", placement: "workspace", summary: true, Component: PypiInstallHintsSection },
+    { id: "group-settings", title: "PyPI group members", placement: "settings", Component: PypiGroupSettingsSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],
 };

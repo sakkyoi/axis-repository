@@ -10,8 +10,10 @@ import {
   useErrorToast,
   useToast,
   Input,
+  useRepositories,
   repositoryIndexJobIsActive,
   repositoryIndexJobStatusView,
+  useUpdateRepository,
   useRepositoryArtifactIndexJob,
   type Repository,
   type RepositoryPlugin,
@@ -190,6 +192,90 @@ export function PypiProxySettingsSection({
       />
     </div>
   );
+}
+
+export function PypiGroupSettingsSection({
+  repository,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  const repositories = useRepositories();
+  const updateRepository = useUpdateRepository();
+  const toast = useToast();
+  const [members, setMembers] = useState(() => pypiGroupMembers(repository));
+  useErrorToast("PyPI group members not saved", updateRepository.error);
+  const options = (repositories.data ?? [])
+    .filter((candidate) =>
+      candidate.name !== repository.name
+      && candidate.ecosystem === repository.ecosystem
+      && (candidate.kind === "hosted" || candidate.kind === "proxy"))
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  function toggleMember(name: string) {
+    setMembers((current) =>
+      current.includes(name)
+        ? current.filter((member) => member !== name)
+        : [...current, name]);
+  }
+
+  function saveMembers() {
+    updateRepository.mutate({
+      name: repository.name,
+      input: {
+        config: {
+          ...repository.config,
+          pypi: {
+            ...pypiConfig(repository),
+            members,
+          },
+        },
+      },
+    }, {
+      onSuccess: () => toast.notify({
+        title: "PyPI group members saved",
+        description: `${members.length} member${members.length === 1 ? "" : "s"} configured. Group index rebuild started.`,
+      }),
+    });
+  }
+
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-1">
+        <span className="text-xs font-medium uppercase text-muted-foreground">Members</span>
+        <p className="text-xs text-muted-foreground">Resolution follows the order shown here.</p>
+      </div>
+      <div className="grid gap-2">
+        {options.map((option) => (
+          <label key={option.name} className="flex items-center gap-2 rounded-md border border-border bg-background/40 px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              checked={members.includes(option.name)}
+              onChange={() => toggleMember(option.name)}
+            />
+            <span className="font-medium">{option.name}</span>
+            <Badge>{option.kind}</Badge>
+          </label>
+        ))}
+        {!repositories.isLoading && options.length === 0 && (
+          <EmptyState message="Create a PyPI hosted or proxy repository before configuring this group." />
+        )}
+      </div>
+      <Button type="button" onClick={saveMembers} disabled={updateRepository.isPending || members.length === 0}>
+        {updateRepository.isPending ? "Saving..." : "Save members"}
+      </Button>
+    </div>
+  );
+}
+
+function pypiConfig(repository: Repository): Record<string, unknown> {
+  const pypi = repository.config.pypi;
+  return pypi && typeof pypi === "object" && !Array.isArray(pypi) ? pypi as Record<string, unknown> : {};
+}
+
+function pypiGroupMembers(repository: Repository): string[] {
+  const members = pypiConfig(repository).members;
+  return Array.isArray(members) ? members.filter((member): member is string => typeof member === "string") : [];
 }
 
 function formatBytes(value: number): string {

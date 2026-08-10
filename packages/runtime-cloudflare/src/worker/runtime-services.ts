@@ -85,6 +85,8 @@ export class PluginRepositoryService {
     await plugin.validateRepositoryConfig({
       ecosystem: input.ecosystem,
       config,
+      repositoryName: input.name.trim(),
+      repositories: this.options.repositoryService,
     });
     return this.options.repositoryService.create({
       ...input,
@@ -114,6 +116,8 @@ export class PluginRepositoryService {
     await plugin.validateRepositoryConfig({
       ecosystem: current.ecosystem,
       config: normalizedConfig,
+      repositoryName: current.name,
+      repositories: this.options.repositoryService,
     });
     return this.options.repositoryService.update(name, {
       ...input,
@@ -391,6 +395,8 @@ export class PluginRepositoryArtifactIndexService {
       repository,
       objectStore: scopeObjectStoreToRepository(this.options.repositoryObjectStore, repository.name),
       now: this.options.clock.now(),
+      repositories: this.options.repositoryService,
+      repositoryArtifactStore: this.options.repositoryArtifactStore,
       ...(input.continuation === undefined ? {} : { continuation: input.continuation }),
     }) ?? [];
     const result = normalizeRebuildOutput(artifacts);

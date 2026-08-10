@@ -11,7 +11,7 @@ export const pypiPluginManifest = {
   repositoryKinds: [
     { kind: "hosted", experimental: false },
     { kind: "proxy", experimental: true },
-    { kind: "group", experimental: true },
+    { kind: "group", experimental: false },
   ],
   icon: {
     title: "PyPI",

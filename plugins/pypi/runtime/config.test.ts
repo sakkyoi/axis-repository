@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePypiProxyRepositoryConfig } from "./config";
+import { parsePypiGroupRepositoryConfig, parsePypiProxyRepositoryConfig } from "./config";
 
 describe("PyPI repository config", () => {
   it("parses and normalizes a proxy upstream URL", () => {
@@ -87,5 +87,20 @@ describe("PyPI repository config", () => {
         upstreamUrlMode: "heuristic",
       },
     })).toThrow("config.pypi.upstreamUrlMode must be base-url or simple-api-root");
+  });
+
+  it("parses and normalizes group members in order", () => {
+    expect(parsePypiGroupRepositoryConfig({
+      pypi: { members: [" python-hosted ", "python-proxy", "python-hosted"] },
+    })).toEqual({
+      members: ["python-hosted", "python-proxy"],
+    });
+  });
+
+  it("requires group members", () => {
+    expect(() => parsePypiGroupRepositoryConfig({ pypi: {} }))
+      .toThrow("config.pypi.members is required");
+    expect(() => parsePypiGroupRepositoryConfig({ pypi: { members: [] } }))
+      .toThrow("config.pypi.members must contain at least one repository");
   });
 });

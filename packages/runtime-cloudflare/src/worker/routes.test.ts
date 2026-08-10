@@ -2034,7 +2034,7 @@ describe("Cloudflare runtime routes", () => {
           repositoryKinds: [
             { kind: "hosted", experimental: false },
             { kind: "proxy", experimental: true },
-            { kind: "group", experimental: true },
+            { kind: "group", experimental: false },
           ],
           icon: expect.objectContaining({
             title: "PyPI",
@@ -2483,6 +2483,47 @@ describe("Cloudflare runtime routes", () => {
         },
       },
     });
+  });
+
+  it("queues an artifact index job when group repository config changes", async () => {
+    const harness = createDevDependencyHarness();
+    let scheduledJobs = 0;
+    harness.dependencies.scheduleBackgroundJobs = async () => {
+      scheduledJobs += 1;
+    };
+    const app = createApp(harness.dependencies);
+    await createRepository(app, { name: "python-first", ecosystem: "pypi", kind: "hosted", config: {} });
+    await createRepository(app, { name: "python-second", ecosystem: "pypi", kind: "hosted", config: {} });
+    await createRepository(app, {
+      name: "python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      config: { pypi: { members: ["python-first"] } },
+    });
+    await harness.dependencies.backgroundJobService.cancel("repository.index:python-group");
+    scheduledJobs = 0;
+
+    const response = await app.fetch(
+      new Request("https://axis.example/admin/repositories/python-group", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer dev-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          config: { pypi: { members: ["python-first", "python-second"] } },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(harness.dependencies.backgroundJobService.get("repository.index:python-group"))
+      .resolves.toMatchObject({
+        id: "repository.index:python-group",
+        type: "repository.index.group-refresh",
+        status: "pending",
+      });
+    expect(scheduledJobs).toBe(1);
   });
 
   it("rejects immutable repository fields on admin updates", async () => {
@@ -4057,6 +4098,38 @@ describe("Cloudflare runtime routes", () => {
     expect(scheduledJobs).toBe(1);
   });
 
+  it("queues an initial artifact index job when a group repository is created", async () => {
+    const harness = createDevDependencyHarness();
+    let scheduledJobs = 0;
+    harness.dependencies.scheduleBackgroundJobs = async () => {
+      scheduledJobs += 1;
+    };
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-member",
+      ecosystem: "pypi",
+      kind: "hosted",
+      visibility: "private",
+      config: {},
+    });
+
+    await createRepository(app, {
+      name: "python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      visibility: "private",
+      config: { pypi: { members: ["python-member"] } },
+    });
+
+    await expect(harness.dependencies.backgroundJobService.get("repository.index:python-group"))
+      .resolves.toMatchObject({
+        id: "repository.index:python-group",
+        type: "repository.index.group-refresh",
+        status: "pending",
+      });
+    expect(scheduledJobs).toBe(1);
+  });
+
   it("does not block proxy repository creation on background job scheduling when waitUntil is available", async () => {
     stubPypiProxyRootProbe();
     const harness = createDevDependencyHarness();
@@ -4085,6 +4158,46 @@ describe("Cloudflare runtime routes", () => {
         kind: "proxy",
         visibility: "private",
         config: { pypi: { upstreamUrl: "https://pypi.example/simple/", upstreamUrlMode: "simple-api-root" } },
+      }),
+    }));
+
+    await expect(Promise.race([
+      response.then((result) => result.status),
+      new Promise((resolve) => setTimeout(() => resolve("blocked"), 20)),
+    ])).resolves.toBe(201);
+    expect(scheduledTasks).toHaveLength(1);
+    resolveScheduledJob();
+    await scheduledTasks[0];
+  });
+
+  it("does not block group repository creation on background job scheduling when waitUntil is available", async () => {
+    const harness = createDevDependencyHarness();
+    let resolveScheduledJob!: () => void;
+    const scheduledJob = new Promise<void>((resolve) => {
+      resolveScheduledJob = resolve;
+    });
+    const scheduledTasks: Promise<unknown>[] = [];
+    harness.dependencies.scheduleBackgroundJobs = () => scheduledJob;
+    harness.dependencies.backgroundTasks = {
+      waitUntil: (task) => {
+        scheduledTasks.push(task);
+      },
+    };
+    const app = createApp(harness.dependencies);
+    await createRepository(app, { name: "python-member", ecosystem: "pypi", kind: "hosted", config: {} });
+
+    const response = app.fetch(new Request("https://axis.example/admin/repositories", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "python-group",
+        ecosystem: "pypi",
+        kind: "group",
+        visibility: "private",
+        config: { pypi: { members: ["python-member"] } },
       }),
     }));
 
@@ -7017,6 +7130,157 @@ describe("serving a PyPI Simple index", () => {
     );
 
     expect(response.status).toBe(404);
+  });
+
+  it("serves a PyPI group from member repositories in order", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-member",
+      ecosystem: "pypi",
+      kind: "hosted",
+      visibility: "public",
+      config: {},
+    });
+    await createRepository(app, {
+      name: "python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      visibility: "public",
+      config: { pypi: { members: ["python-member"] } },
+    });
+    await harness.repositoryObjectStore.putText(
+      "repositories/python-member/simple/demo/index.html",
+      "<a href=\"../../packages/demo/demo-1.0-py3-none-any.whl#sha256=abc\">demo</a>",
+      "text/html; charset=utf-8",
+    );
+    await harness.repositoryObjectStore.putBytes(
+      "repositories/python-member/packages/demo/demo-1.0-py3-none-any.whl",
+      new TextEncoder().encode("wheel bytes"),
+      "application/octet-stream",
+    );
+    await harness.dependencies.repositoryArtifactStore.upsert({
+      id: "artifact_demo",
+      repositoryName: "python-member",
+      ecosystem: "pypi",
+      identity: "pypi:demo:demo-1.0-py3-none-any.whl",
+      family: "pypi:demo",
+      name: "demo",
+      version: "1.0",
+      summary: "demo 1.0",
+      primaryObjectKey: "repositories/python-member/packages/demo/demo-1.0-py3-none-any.whl",
+      objectKeys: ["repositories/python-member/packages/demo/demo-1.0-py3-none-any.whl"],
+      metadata: { project: "demo", filename: "demo-1.0-py3-none-any.whl" },
+      publishedAt: "2026-08-10T00:00:00.000Z",
+      updatedAt: "2026-08-10T00:00:00.000Z",
+    });
+
+    const root = await app.fetch(new Request("https://axis.example/repositories/python-group/simple/"));
+    expect(root.status).toBe(200);
+    await expect(root.text()).resolves.toContain("demo/");
+
+    const project = await app.fetch(new Request("https://axis.example/repositories/python-group/simple/demo/"));
+    expect(project.status).toBe(200);
+    await expect(project.text()).resolves.toContain("../../packages/demo/demo-1.0-py3-none-any.whl");
+
+    const file = await app.fetch(new Request("https://axis.example/repositories/python-group/packages/demo/demo-1.0-py3-none-any.whl"));
+    expect(file.status).toBe(200);
+    await expect(file.text()).resolves.toBe("wheel bytes");
+  });
+
+  it("renders PyPI group Simple browser navigations with the shared repository directory page", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-member",
+      ecosystem: "pypi",
+      kind: "hosted",
+      visibility: "public",
+      config: {},
+    });
+    await createRepository(app, {
+      name: "python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      visibility: "public",
+      config: { pypi: { members: ["python-member"] } },
+    });
+    await harness.dependencies.repositoryArtifactStore.upsert({
+      id: "artifact_demo",
+      repositoryName: "python-group",
+      ecosystem: "pypi",
+      identity: "pypi:demo:demo-1.0-py3-none-any.whl",
+      family: "pypi:group-project:demo",
+      name: "demo",
+      version: "1.0",
+      summary: "demo 1.0",
+      primaryObjectKey: "repositories/python-member/packages/demo/demo-1.0-py3-none-any.whl",
+      objectKeys: ["repositories/python-member/packages/demo/demo-1.0-py3-none-any.whl"],
+      metadata: {
+        project: "demo",
+        filename: "demo-1.0-py3-none-any.whl",
+        sourceRepositoryName: "python-member",
+      },
+      publishedAt: "2026-08-10T00:00:00.000Z",
+      updatedAt: "2026-08-10T00:00:00.000Z",
+    });
+
+    const response = await app.fetch(
+      new Request("https://axis.example/repositories/python-group/simple/", {
+        headers: {
+          accept: "text/html",
+          "sec-fetch-dest": "document",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    const html = await response.text();
+    expect(html).toContain("Axis Repository");
+    expect(html).toContain("python-group");
+    expect(html).toContain("demo/");
+  });
+
+  it("rejects PyPI groups with unsupported member repositories", async () => {
+    const harness = createDevDependencyHarness();
+    const app = createApp(harness.dependencies);
+    await createRepository(app, {
+      name: "python-member",
+      ecosystem: "pypi",
+      kind: "hosted",
+      visibility: "public",
+      config: {},
+    });
+    await createRepository(app, {
+      name: "python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      visibility: "public",
+      config: { pypi: { members: ["python-member"] } },
+    });
+
+    const response = await app.fetch(new Request("https://axis.example/admin/repositories", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer dev-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "bad-python-group",
+        ecosystem: "pypi",
+        kind: "group",
+        visibility: "public",
+        config: { pypi: { members: ["python-group"] } },
+      }),
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        message: "config.pypi.members must reference hosted or proxy repositories: python-group",
+      },
+    });
   });
 });
 

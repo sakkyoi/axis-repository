@@ -1,5 +1,5 @@
 export type { CreateRepositoryInput, UpdateRepositoryInput } from "./api/client";
-export { useAxisClient, useRepositoryArtifactIndexJob, useRepositoryArtifacts, useUpdateRepository } from "./api/hooks";
+export { useAxisClient, useRepositories, useRepositoryArtifactIndexJob, useRepositoryArtifacts, useUpdateRepository } from "./api/hooks";
 export {
   repositoryVisibilitySchema,
   signingKeySchema,

@@ -147,6 +147,39 @@ describe("repository create plugins", () => {
     });
   });
 
+  it("builds a PyPI group repository create payload with ordered members", () => {
+    const plugin = getRepositoryCreatePlugin({ ecosystem: "pypi", kind: "group" })!;
+
+    expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step, field.required]))
+      .toEqual([
+        ["members", "string-list", "config", true],
+      ]);
+    expect(plugin.defaults.config).toEqual({ members: "" });
+    expect(plugin.steps).toEqual(["plugin", "basics", "config", "review"]);
+    expect(plugin.validateStep("config", {
+      name: "python-group",
+      visibility: "private",
+      config: { members: "" },
+      setup: {},
+    })).toEqual(["At least one member repository is required"]);
+    expect(plugin.buildCreateInput({
+      name: "python-group",
+      visibility: "public",
+      config: { members: " python-hosted,\npython-proxy,python-hosted " },
+      setup: {},
+    })).toEqual({
+      name: "python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      visibility: "public",
+      config: {
+        pypi: {
+          members: ["python-hosted", "python-proxy"],
+        },
+      },
+    });
+  });
+
   it("maps every server-side repository name rejection back to the basics step", () => {
     const plugin = getHostedRepositoryCreatePlugin("apt")!;
 

@@ -7,6 +7,10 @@ export interface PypiProxyRepositoryConfig {
   proxyPolicy?: ProxyOperationalPolicyOverride;
 }
 
+export interface PypiGroupRepositoryConfig {
+  members: string[];
+}
+
 export type PypiProxyUpstreamUrlMode = "base-url" | "simple-api-root";
 
 export function validatePypiRepositoryConfig(config: Record<string, unknown>): void {
@@ -62,6 +66,33 @@ export function normalizePypiProxyRepositoryConfig(config: Record<string, unknow
   };
 }
 
+export function parsePypiGroupRepositoryConfig(config: Record<string, unknown>): PypiGroupRepositoryConfig {
+  validatePypiRepositoryConfig(config);
+  const namespace = pypiPluginManifest.repositoryConfig.namespace;
+  const pypi = config[namespace] as Record<string, unknown> | undefined;
+  const members = pypi?.members;
+  if (!Array.isArray(members)) {
+    throw new ValidationError(`config.${namespace}.members is required`);
+  }
+  const normalizedMembers = uniqueStrings(members.map((member) => {
+    if (typeof member !== "string" || member.trim() === "") {
+      throw new ValidationError(`config.${namespace}.members must contain repository names`);
+    }
+    return member.trim();
+  }));
+  if (normalizedMembers.length === 0) {
+    throw new ValidationError(`config.${namespace}.members must contain at least one repository`);
+  }
+  return { members: normalizedMembers };
+}
+
+export function normalizePypiGroupRepositoryConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const namespace = pypiPluginManifest.repositoryConfig.namespace;
+  return {
+    [namespace]: parsePypiGroupRepositoryConfig(config),
+  };
+}
+
 export function isPypiProxyUpstreamUrlMode(value: unknown): value is PypiProxyUpstreamUrlMode {
   return value === "base-url" || value === "simple-api-root";
 }
@@ -73,4 +104,8 @@ export function ensureTrailingSlash(value: string): string {
 function normalizePypiProxyUpstreamUrlInput(value: string): string {
   const trimmed = value.trim();
   return /^[a-z][a-z\d+.-]*:/iu.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }

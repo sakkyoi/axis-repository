@@ -123,6 +123,7 @@ describe("repository detail plugins", () => {
     ]);
     expect(repositorySettingsSectionsFor(repository({ ecosystem: "pypi", kind: "group" })).map((section) => section.id)).toEqual([
       "settings",
+      "group-settings",
       "advanced-json",
     ]);
   });
@@ -158,6 +159,17 @@ describe("repository detail plugins", () => {
       "settings",
       "proxy-settings",
       "advanced-json",
+    ]);
+  });
+
+  it("shows PyPI group artifacts, contents, and install hints", () => {
+    expect(repositoryWorkspaceSectionsFor(repository({ ecosystem: "pypi", kind: "group" })).map((section) => section.id)).toEqual([
+      "repository-artifacts",
+      "repository-browser",
+      "install-hints",
+    ]);
+    expect(repositorySummarySectionsFor(repository({ ecosystem: "pypi", kind: "group" })).map((section) => section.id)).toEqual([
+      "install-hints",
     ]);
   });
 

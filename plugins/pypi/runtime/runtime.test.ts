@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { RepositoryArtifactStore } from "@axis-repository/core";
+import type { RepositoryArtifactRecord, RepositoryArtifactStore } from "@axis-repository/core";
 import { dispatchRepositoryAdminResource, dispatchRepositoryClientHelper, objectBytes } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
-import { createPypiPlugin, createPypiProxyPlugin, pypiProxyRetryDelayMs, pypiProxyUpstreamUrl } from "./runtime";
+import { createPypiGroupPlugin, createPypiPlugin, createPypiProxyPlugin, pypiProxyRetryDelayMs, pypiProxyUpstreamUrl } from "./runtime";
 
 function repositoryFixture() {
   return {
@@ -14,6 +14,25 @@ function repositoryFixture() {
     config: {},
     createdAt: "2026-07-18T00:00:00.000Z",
     updatedAt: "2026-07-18T00:00:00.000Z",
+  };
+}
+
+function repositoryArtifact(input: Partial<RepositoryArtifactRecord> & {
+  id: string;
+  repositoryName: string;
+  identity: string;
+  name: string;
+  metadata: Record<string, unknown>;
+}): RepositoryArtifactRecord {
+  return {
+    ecosystem: "pypi",
+    version: "1.0",
+    summary: input.name,
+    primaryObjectKey: `repositories/${input.repositoryName}/packages/${input.name}/${input.id}.whl`,
+    objectKeys: [`repositories/${input.repositoryName}/packages/${input.name}/${input.id}.whl`],
+    publishedAt: "2026-08-10T00:00:00.000Z",
+    updatedAt: "2026-08-10T00:00:00.000Z",
+    ...input,
   };
 }
 
@@ -1756,6 +1775,156 @@ describe("PyPI plugin lifecycle", () => {
 
     await expect(objectStore.getObject("repositories/python-internal/_proxy-cache/pypi/projects/removed.json"))
       .resolves.toBeNull();
+  });
+
+  it("aggregates PyPI group artifacts from the first member that provides each project", async () => {
+    const plugin = createPypiGroupPlugin();
+    const alphaHosted = repositoryArtifact({
+      id: "artifact_alpha_hosted",
+      repositoryName: "python-hosted",
+      identity: "pypi:alpha:alpha-1.0-py3-none-any.whl",
+      family: "pypi:alpha",
+      name: "alpha",
+      metadata: { project: "alpha", filename: "alpha-1.0-py3-none-any.whl" },
+    });
+    const alphaProxy = repositoryArtifact({
+      id: "artifact_alpha_proxy",
+      repositoryName: "python-proxy",
+      identity: "pypi:proxy-file:alpha:alpha-2.0-py3-none-any.whl",
+      family: "pypi:proxy-project:alpha",
+      name: "alpha",
+      metadata: { project: "alpha", filename: "alpha-2.0-py3-none-any.whl" },
+    });
+    const betaProxy = repositoryArtifact({
+      id: "artifact_beta_proxy",
+      repositoryName: "python-proxy",
+      identity: "pypi:proxy-file:beta:beta-1.0-py3-none-any.whl",
+      family: "pypi:proxy-project:beta",
+      name: "beta",
+      metadata: { project: "beta", filename: "beta-1.0-py3-none-any.whl" },
+    });
+    const artifacts = await plugin.artifacts?.rebuildIndex({
+      repository: {
+        ...repositoryFixture(),
+        name: "python-group",
+        kind: "group",
+        config: { pypi: { members: ["python-hosted", "python-proxy"] } },
+      },
+      objectStore: new MemoryRepositoryObjectStore(),
+      now: new Date("2026-08-10T00:00:00.000Z"),
+      repositoryArtifactStore: {
+        countByRepository: async () => 0,
+        listByRepository: async (repositoryName) => ({
+          "python-hosted": [alphaHosted],
+          "python-proxy": [alphaProxy, betaProxy],
+        }[repositoryName] ?? []),
+        getById: async () => null,
+        listFamiliesByRepositoryPage: async () => ({ records: [], totalFamilies: 0, totalArtifacts: 0 }),
+        listByRepositoryPage: async (repositoryName, page) => {
+          const records = {
+            "python-hosted": [alphaHosted],
+            "python-proxy": [alphaProxy, betaProxy],
+          }[repositoryName] ?? [];
+          return {
+            records: records.slice(page.offset, page.offset + page.limit),
+            total: records.length,
+          };
+        },
+        listByRepositoryFamily: async () => [],
+        upsert: async () => {},
+        upsertMany: async () => {},
+        replaceByRepository: async () => {},
+      },
+    });
+
+    expect(Array.isArray(artifacts) ? artifacts.map((artifact) => ({
+      repositoryName: artifact.repositoryName,
+      family: artifact.family,
+      sourceRepositoryName: artifact.metadata?.sourceRepositoryName,
+      sourceArtifactId: artifact.metadata?.sourceArtifactId,
+      filename: artifact.metadata?.filename,
+    })) : []).toEqual([
+      {
+        repositoryName: "python-group",
+        family: "pypi:group-project:alpha",
+        sourceRepositoryName: "python-hosted",
+        sourceArtifactId: "artifact_alpha_hosted",
+        filename: "alpha-1.0-py3-none-any.whl",
+      },
+      {
+        repositoryName: "python-group",
+        family: "pypi:group-project:beta",
+        sourceRepositoryName: "python-proxy",
+        sourceArtifactId: "artifact_beta_proxy",
+        filename: "beta-1.0-py3-none-any.whl",
+      },
+    ]);
+  });
+
+  it("slices PyPI group artifact aggregation across background job continuations", async () => {
+    const plugin = createPypiGroupPlugin();
+    const memberArtifacts = Array.from({ length: 260 }, (_, index) => {
+      const project = `project-${String(index).padStart(3, "0")}`;
+      return repositoryArtifact({
+        id: `artifact_${project}`,
+        repositoryName: "python-proxy",
+        identity: `pypi:proxy-file:${project}:${project}-1.0-py3-none-any.whl`,
+        family: `pypi:proxy-project:${project}`,
+        name: project,
+        metadata: { project, filename: `${project}-1.0-py3-none-any.whl` },
+      });
+    });
+    const artifactStore = {
+      countByRepository: async () => 0,
+      listByRepository: async () => [],
+      getById: async () => null,
+      listFamiliesByRepositoryPage: async () => ({ records: [], totalFamilies: 0, totalArtifacts: 0 }),
+      listByRepositoryPage: async (repositoryName: string, page: { limit: number; offset: number }) => ({
+        records: repositoryName === "python-proxy"
+          ? memberArtifacts.slice(page.offset, page.offset + page.limit)
+          : [],
+        total: repositoryName === "python-proxy" ? memberArtifacts.length : 0,
+      }),
+      listByRepositoryFamily: async () => [],
+      upsert: async () => {},
+      upsertMany: async () => {},
+      replaceByRepository: async () => {},
+    } satisfies RepositoryArtifactStore;
+
+    const first = await plugin.artifacts?.rebuildIndex({
+      repository: {
+        ...repositoryFixture(),
+        name: "python-group",
+        kind: "group",
+        config: { pypi: { members: ["python-proxy"] } },
+      },
+      objectStore: new MemoryRepositoryObjectStore(),
+      now: new Date("2026-08-10T00:00:00.000Z"),
+      repositoryArtifactStore: artifactStore,
+    });
+
+    expect(first).toMatchObject({
+      complete: false,
+      continuation: { memberIndex: 0, memberOffset: 250 },
+      reset: true,
+    });
+    expect(Array.isArray(first) ? first : first?.artifacts).toHaveLength(250);
+
+    const second = await plugin.artifacts?.rebuildIndex({
+      repository: {
+        ...repositoryFixture(),
+        name: "python-group",
+        kind: "group",
+        config: { pypi: { members: ["python-proxy"] } },
+      },
+      objectStore: new MemoryRepositoryObjectStore(),
+      now: new Date("2026-08-10T00:00:00.000Z"),
+      repositoryArtifactStore: artifactStore,
+      ...(Array.isArray(first) || first?.continuation === undefined ? {} : { continuation: first.continuation }),
+    });
+
+    expect(second).toMatchObject({ complete: true });
+    expect(Array.isArray(second) ? second : second?.artifacts).toHaveLength(10);
   });
 
   it("paginates proxy cached projects", async () => {

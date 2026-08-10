@@ -18,6 +18,7 @@ import type {
   DescribePublishedArtifactsInput,
   ProxyRepositoryPlugin,
   RebuildRepositoryArtifactIndexInput,
+  RebuildRepositoryArtifactIndexOutput,
   RepositoryObjectBrowser,
   ValidatePublishArtifactsInput,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
@@ -39,6 +40,8 @@ import {
   ensureTrailingSlash,
   isPypiProxyUpstreamUrlMode,
   normalizePypiProxyRepositoryConfig,
+  normalizePypiGroupRepositoryConfig,
+  parsePypiGroupRepositoryConfig,
   parsePypiProxyRepositoryConfig,
   validatePypiRepositoryConfig,
   type PypiProxyUpstreamUrlMode,
@@ -56,7 +59,7 @@ import {
 } from "./layout";
 import { parseProjectFilesHtml, parseProjectListHtml, readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
 import { parseCoreMetadata, type PypiCoreMetadata } from "../shared/metadata";
-import { escapeHtml, SIMPLE_JSON_CONTENT_TYPE, type SimpleProjectFile } from "./simple-index";
+import { escapeHtml, renderProjectListHtml, renderProjectListJson, SIMPLE_JSON_CONTENT_TYPE, type SimpleProjectFile } from "./simple-index";
 import {
   parseDistributionFilename,
   normalizeProjectName,
@@ -1882,10 +1885,360 @@ export function createPypiGroupPlugin(): GroupRepositoryPlugin {
     ecosystem: "pypi",
     name: `${pypiPluginManifest.runtimeName}-group`,
     version: pypiPluginManifest.version,
-    repositoryKinds: [{ kind: "group", experimental: true }],
+    repositoryKinds: [{ kind: "group", experimental: false }],
     capabilities: ["pypi", "group"],
-    canServeRepositoryPath: () => false,
-    validateRepositoryConfig: ({ config }) => validatePypiRepositoryConfig(config),
+    canServeRepositoryPath: createPrefixServingPredicate([SIMPLE_PREFIX, PACKAGES_PREFIX]),
+    resolveRepositoryPath: ({ relativePath, accept }) => resolveSimplePath(relativePath, accept),
+    normalizeRepositoryConfig: ({ config }) => normalizePypiGroupRepositoryConfig(config),
+    validateRepositoryConfig: validatePypiGroupRepositoryConfig,
+    clientHelpers: createPypiClientHelpers({ includeUpload: false }),
+    objectBrowser: createPypiGroupObjectBrowser(),
+    artifacts: {
+      rebuildIndex: rebuildPypiGroupArtifactIndex,
+    },
+    serveRepositoryPath: servePypiGroupRepositoryPath,
+  };
+}
+
+function createPypiGroupObjectBrowser(): RepositoryObjectBrowser {
+  return {
+    listObjects: async ({ repository, repositoryArtifactStore, prefix, cursor, limit }) => {
+      if (!repositoryArtifactStore) {
+        return null;
+      }
+      if (prefix === "") {
+        return {
+          prefix,
+          directories: [{ name: SIMPLE_PREFIX, path: `${SIMPLE_PREFIX}/` }],
+          objects: [],
+          truncated: false,
+        };
+      }
+      const artifacts = await repositoryArtifactStore.listByRepository(repository.name);
+      if (prefix === `${SIMPLE_PREFIX}/`) {
+        const projects = pypiGroupBrowserPage(pypiGroupArtifactsProjects(artifacts), {
+          ...(cursor !== undefined ? { cursor } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+        });
+        return {
+          prefix,
+          directories: projects.items.map((project) => ({
+            name: project,
+            path: `${SIMPLE_PREFIX}/${project}/`,
+          })),
+          objects: [],
+          ...(projects.cursor ? { cursor: projects.cursor } : {}),
+          truncated: projects.truncated,
+        };
+      }
+      const projectPrefix = /^simple\/([^/]+)\/$/u.exec(prefix);
+      if (!projectPrefix) {
+        return null;
+      }
+      const projectName = normalizeProjectName(projectPrefix[1] ?? "");
+      const files = pypiGroupBrowserPage(
+        artifacts
+          .filter((artifact) => pypiArtifactProjectName(artifact) === projectName)
+          .map((artifact) => pypiGroupBrowserFile(projectName, artifact))
+          .filter((file): file is { name: string; path: string } => Boolean(file)),
+        {
+          ...(cursor !== undefined ? { cursor } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+        },
+      );
+      return {
+        prefix,
+        directories: [],
+        objects: files.items.map((file) => ({
+          name: file.name,
+          path: file.path,
+          contentType: "application/octet-stream",
+        })),
+        ...(files.cursor ? { cursor: files.cursor } : {}),
+        truncated: files.truncated,
+      };
+    },
+    getObjectDetail: async ({ repository, repositoryArtifactStore, path, origin }) => {
+      if (!repositoryArtifactStore) {
+        return null;
+      }
+      const artifacts = await repositoryArtifactStore.listByRepository(repository.name);
+      const artifact = artifacts.find((candidate) => pypiGroupBrowserArtifactPath(candidate) === path);
+      if (!artifact) {
+        return null;
+      }
+      return {
+        name: typeof artifact.metadata.filename === "string" ? artifact.metadata.filename : artifact.name,
+        path,
+        objectKey: artifact.primaryObjectKey ?? artifact.objectKeys[0] ?? `virtual:pypi-group:${path}`,
+        repositoryUrl: `${origin}/repositories/${encodeURIComponent(repository.name)}/${path.split("/").map(encodeURIComponent).join("/")}`,
+        contentType: "application/octet-stream",
+        ...(artifact.primaryObjectKey ? { etag: artifact.primaryObjectKey } : {}),
+      };
+    },
+  };
+}
+
+function pypiGroupArtifactsProjects(artifacts: RepositoryArtifactRecord[]): string[] {
+  return [...new Set(
+    artifacts
+      .map((artifact) => pypiArtifactProjectName(artifact))
+      .filter((project): project is string => Boolean(project)),
+  )].sort((left, right) => left.localeCompare(right));
+}
+
+function pypiGroupBrowserFile(
+  projectName: string,
+  artifact: RepositoryArtifactRecord,
+): { name: string; path: string } | undefined {
+  const filename = typeof artifact.metadata.filename === "string" ? artifact.metadata.filename : undefined;
+  if (!filename) {
+    return undefined;
+  }
+  return {
+    name: filename,
+    path: pypiGroupBrowserArtifactPath(artifact) ?? `${SIMPLE_PREFIX}/${projectName}/${filename}`,
+  };
+}
+
+function pypiGroupBrowserArtifactPath(artifact: RepositoryArtifactRecord): string | undefined {
+  const filename = typeof artifact.metadata.filename === "string" ? artifact.metadata.filename : undefined;
+  const project = pypiArtifactProjectName(artifact);
+  if (!filename || !project) {
+    return undefined;
+  }
+  return `${SIMPLE_PREFIX}/${project}/${filename}`;
+}
+
+function pypiGroupBrowserPage<T>(
+  values: T[],
+  input: { cursor?: string; limit?: number },
+): { items: T[]; cursor?: string; truncated: boolean } {
+  return pypiProxyBrowserPage(values, input);
+}
+
+async function validatePypiGroupRepositoryConfig(input: {
+  config: Record<string, unknown>;
+  repositoryName?: string;
+  repositories?: { getByName(name: string): Promise<Repository> };
+}): Promise<void> {
+  const group = parsePypiGroupRepositoryConfig(input.config);
+  if (!input.repositories) {
+    return;
+  }
+  for (const memberName of group.members) {
+    if (memberName === input.repositoryName) {
+      throw new ValidationError("config.pypi.members cannot include the group repository itself");
+    }
+    const member = await input.repositories.getByName(memberName);
+    if (member.ecosystem !== pypiPluginManifest.ecosystem) {
+      throw new ValidationError(`config.pypi.members must reference PyPI repositories: ${memberName}`);
+    }
+    if (member.kind !== "hosted" && member.kind !== "proxy") {
+      throw new ValidationError(`config.pypi.members must reference hosted or proxy repositories: ${memberName}`);
+    }
+  }
+}
+
+async function rebuildPypiGroupArtifactIndex(
+  input: RebuildRepositoryArtifactIndexInput,
+): Promise<RebuildRepositoryArtifactIndexOutput> {
+  const group = parsePypiGroupRepositoryConfig(input.repository.config);
+  if (!input.repositoryArtifactStore) {
+    return [];
+  }
+  const continuation = pypiGroupContinuation(input.continuation);
+  const claimedSources = { ...continuation.claimedSources };
+  const artifacts: RepositoryArtifactRecord[] = [];
+  let memberIndex = continuation.memberIndex;
+  let memberOffset = continuation.memberOffset;
+  let remaining = PYPI_GROUP_INDEX_SLICE_LIMIT;
+
+  while (memberIndex < group.members.length && remaining > 0) {
+    const memberName = group.members[memberIndex];
+    if (!memberName) {
+      memberIndex += 1;
+      memberOffset = 0;
+      continue;
+    }
+    const page = await input.repositoryArtifactStore.listByRepositoryPage(memberName, {
+      limit: remaining,
+      offset: memberOffset,
+    });
+    for (const artifact of page.records) {
+      const project = pypiArtifactProjectName(artifact);
+      if (!project) {
+        continue;
+      }
+      const claimedSource = claimedSources[project];
+      if (!claimedSource) {
+        claimedSources[project] = memberName;
+      } else if (claimedSource !== memberName) {
+        continue;
+      }
+      const groupFamily = pypiGroupFamily(artifact);
+      if (!groupFamily) {
+        continue;
+      }
+      artifacts.push(pypiGroupArtifactRecord(input.repository, memberName, artifact, groupFamily));
+    }
+    remaining -= page.records.length;
+    memberOffset += page.records.length;
+    if (memberOffset < page.total) {
+      return {
+        artifacts,
+        complete: false,
+        continuation: {
+          memberIndex,
+          memberOffset,
+          claimedSources,
+        },
+        progress: {
+          current: memberOffset,
+          total: page.total,
+          message: `Indexed ${memberOffset} of ${page.total} artifacts from ${memberName}`,
+        },
+        reset: input.continuation === undefined,
+      };
+    }
+    memberIndex += 1;
+    memberOffset = 0;
+  }
+  if (memberIndex < group.members.length) {
+    return {
+      artifacts,
+      complete: false,
+      continuation: {
+        memberIndex,
+        memberOffset,
+        claimedSources,
+      },
+      progress: {
+        current: PYPI_GROUP_INDEX_SLICE_LIMIT,
+        message: `Indexed ${PYPI_GROUP_INDEX_SLICE_LIMIT} group artifact records`,
+      },
+      reset: input.continuation === undefined,
+    };
+  }
+  return input.continuation === undefined
+    ? artifacts
+    : {
+      artifacts,
+      complete: true,
+      reset: false,
+    };
+}
+
+const PYPI_GROUP_INDEX_SLICE_LIMIT = 250;
+
+function pypiGroupContinuation(continuation: Record<string, unknown> | undefined): {
+  memberIndex: number;
+  memberOffset: number;
+  claimedSources: Record<string, string>;
+} {
+  const claimedSources = continuation?.claimedSources;
+  return {
+    memberIndex: nonNegativeInteger(continuation?.memberIndex) ?? 0,
+    memberOffset: nonNegativeInteger(continuation?.memberOffset) ?? 0,
+    claimedSources: claimedSources && typeof claimedSources === "object" && !Array.isArray(claimedSources)
+      ? Object.fromEntries(Object.entries(claimedSources).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+      : {},
+  };
+}
+
+function nonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+async function servePypiGroupRepositoryPath(input: {
+  repository: Repository;
+  request: Request;
+  relativePath: string;
+  accept?: string;
+  repositories?: { getByName(name: string): Promise<Repository> };
+  repositoryArtifactStore?: RepositoryArtifactStore;
+  serveRepositoryPath?: (delegateInput: {
+    repository: Repository;
+    request: Request;
+    relativePath: string;
+    accept?: string;
+  }) => Promise<Response | null>;
+}): Promise<Response | null> {
+  const group = parsePypiGroupRepositoryConfig(input.repository.config);
+  if (!input.repositories || !input.repositoryArtifactStore || !input.serveRepositoryPath) {
+    return null;
+  }
+  if (input.relativePath === `${SIMPLE_PREFIX}/`) {
+    const projects = await pypiGroupProjectNames(group.members, input.repositoryArtifactStore);
+    return new Response(input.request.method === "HEAD" ? null : (
+      prefersPypiSimpleJson(input.accept ?? input.request.headers.get("accept"))
+        ? renderProjectListJson(projects)
+        : renderProjectListHtml(projects)
+    ), {
+      headers: {
+        "content-type": prefersPypiSimpleJson(input.accept ?? input.request.headers.get("accept"))
+          ? `${SIMPLE_JSON_CONTENT_TYPE}; charset=utf-8`
+          : "text/html; charset=utf-8",
+      },
+    });
+  }
+  const members = await Promise.all(group.members.map((name) => input.repositories!.getByName(name)));
+  for (const member of members) {
+    const response = await input.serveRepositoryPath({
+      repository: member,
+      request: input.request,
+      relativePath: input.relativePath,
+      ...(input.accept ? { accept: input.accept } : {}),
+    });
+    if (response && response.status !== 404) {
+      return response;
+    }
+  }
+  return null;
+}
+
+async function pypiGroupProjectNames(
+  members: string[],
+  artifactStore: RepositoryArtifactStore,
+): Promise<string[]> {
+  const projects = new Set<string>();
+  for (const member of members) {
+    for (const artifact of await artifactStore.listByRepository(member)) {
+      const project = pypiArtifactProjectName(artifact);
+      if (project) {
+        projects.add(project);
+      }
+    }
+  }
+  return [...projects];
+}
+
+function pypiGroupFamily(artifact: RepositoryArtifactRecord | undefined): string | undefined {
+  const project = artifact ? pypiArtifactProjectName(artifact) : undefined;
+  return project ? `pypi:group-project:${project}` : undefined;
+}
+
+function pypiArtifactProjectName(artifact: RepositoryArtifactRecord): string | undefined {
+  const project = artifact.metadata?.project;
+  return typeof project === "string" && project.length > 0 ? project : artifact.name || undefined;
+}
+
+function pypiGroupArtifactRecord(
+  repository: Repository,
+  sourceRepositoryName: string,
+  artifact: RepositoryArtifactRecord,
+  family: string,
+): RepositoryArtifactRecord {
+  return {
+    ...artifact,
+    id: `artifact_${repository.name}_group_${sourceRepositoryName}_${artifact.id}`,
+    repositoryName: repository.name,
+    family,
+    metadata: {
+      ...(artifact.metadata ?? {}),
+      sourceRepositoryName,
+      sourceArtifactId: artifact.id,
+    },
   };
 }
 
