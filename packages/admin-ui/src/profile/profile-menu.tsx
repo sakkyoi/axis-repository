@@ -34,7 +34,15 @@ export function ProfileMenu({ collapsed = false }: { collapsed?: boolean }) {
   }
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onFocus={() => setOpen(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setOpen(false);
+        }
+      }}
+    >
       <Button
         type="button"
         variant="outline"
@@ -43,7 +51,7 @@ export function ProfileMenu({ collapsed = false }: { collapsed?: boolean }) {
         aria-expanded={open}
         aria-label={collapsed ? username : undefined}
         {...(collapsed ? { title: username } : {})}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setOpen(true)}
       >
         <UserCircle className="h-4 w-4 shrink-0" />
         {!collapsed && (
