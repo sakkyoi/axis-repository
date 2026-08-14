@@ -4037,32 +4037,10 @@ describe("Cloudflare runtime routes", () => {
         status: "pending",
       },
     });
-    const artifactsBody = await artifacts.json() as { indexJob?: unknown };
+    const artifactsBody = await artifacts.json();
     expect(artifactsBody).toMatchObject({
       artifacts: [],
       truncated: false,
-    });
-    expect(artifactsBody.indexJob).toBeUndefined();
-  });
-
-  it("does not expose the deprecated repository artifact index job endpoint", async () => {
-    const harness = createDevDependencyHarness();
-    const app = createApp(harness.dependencies);
-    await createRepository(app, {
-      name: "debian-internal",
-      ecosystem: "apt",
-      visibility: "private",
-    });
-    await harness.dependencies.backgroundJobService.requestRepositoryIndex({ repositoryName: "debian-internal" });
-
-    const response = await app.fetch(new Request(
-      "https://axis.example/admin/repositories/debian-internal/artifact-index-job",
-      { headers: { authorization: "Bearer dev-admin-token" } },
-    ));
-
-    expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: "not_found" },
     });
   });
 

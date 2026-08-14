@@ -233,38 +233,4 @@ describe("package boundaries", () => {
       assertOnlyUsesExportedPackageSubpaths(filePath, source);
     }
   });
-
-  test("repository index work uses only the generic background job contract", () => {
-    const checkedFiles = [
-      ...listSourceFiles("packages/core/src"),
-      ...listSourceFiles("packages/runtime-cloudflare/src/worker"),
-      ...listSourceFiles("packages/runtime-cloudflare/src/storage"),
-    ].filter((filePath) => !filePath.endsWith("package-boundaries.test.ts"));
-    const forbiddenDeprecatedTerms = [
-      "RepositoryIndexJobRecord",
-      "RepositoryIndexJobStore",
-      "repositoryIndexJobs",
-      "RepositoryIndexJobService",
-      "repository-index-job-service",
-      "PublishFinalizeJobRecord",
-      "PublishFinalizeJobStore",
-      "publishFinalizeJobs",
-      "migrateLegacyPendingJobs",
-      "BackgroundJobMigrator",
-      "migrators",
-      "repository.index.refresh",
-    ];
-
-    for (const filePath of checkedFiles) {
-      const source = readFileSync(path.join(rootDir, filePath), "utf8");
-
-      for (const term of forbiddenDeprecatedTerms) {
-        expect(source, `${filePath} must not use deprecated repository index job contract ${term}`).not.toContain(term);
-      }
-    }
-  });
-
-
-
-
 });

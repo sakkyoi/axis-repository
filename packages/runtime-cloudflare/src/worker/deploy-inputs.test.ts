@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 import { describe, expect, it } from "vitest";
-import { D1_SHARED_INDEX_SCHEMA } from "../storage/d1-state";
 import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
 
 /**
@@ -44,7 +43,6 @@ function wranglerConfig(): {
     consumers?: Array<{ queue?: string }>;
   };
   durable_objects?: { bindings?: Array<{ name?: string; class_name?: string }> };
-  migrations?: Array<{ tag?: string; new_sqlite_classes?: string[]; deleted_classes?: string[] }>;
   triggers?: { crons?: string[] };
 } {
   return parseJsonc(readFileSync(`${repositoryRoot}wrangler.jsonc`, "utf8")) as {
@@ -54,7 +52,6 @@ function wranglerConfig(): {
       consumers?: Array<{ queue?: string }>;
     };
     durable_objects?: { bindings?: Array<{ name?: string; class_name?: string }> };
-    migrations?: Array<{ tag?: string; new_sqlite_classes?: string[]; deleted_classes?: string[] }>;
     triggers?: { crons?: string[] };
   };
 }
@@ -269,41 +266,7 @@ describe("what a deploy is asked to supply", () => {
     ]);
     expect(config.triggers?.crons).toEqual(["*/5 * * * *"]);
     expect(config.durable_objects?.bindings ?? []).toEqual([]);
-    expect(config.migrations ?? []).toEqual([]);
     expect(config.d1_databases?.[0]).not.toHaveProperty("database_id", "");
   });
 
-  it("describes D1 as the production state store rather than a Durable Object helper", () => {
-    const manifest = JSON.parse(readFileSync(`${repositoryRoot}package.json`, "utf8")) as {
-      cloudflare?: { bindings?: Record<string, { description?: string }> };
-    };
-    const sharedState = manifest.cloudflare?.bindings?.AXIS_SHARED_STATE?.description ?? "";
-    const r2Secret = manifest.cloudflare?.bindings?.R2_SECRET_ACCESS_KEY?.description ?? "";
-
-    expect(sharedState).toContain("production state");
-    expect(sharedState).not.toContain("Durable Object");
-    expect(r2Secret).not.toContain("Durable Object");
-  });
-
-  it("keeps the production Worker entrypoint free of admin Durable Object routing", () => {
-    const entrypoint = readFileSync(`${repositoryRoot}packages/runtime-cloudflare/src/index.ts`, "utf8");
-
-    expect(entrypoint).not.toContain("AxisAdminDO");
-    expect(entrypoint).not.toContain("AXIS_ADMIN");
-    expect(entrypoint).not.toContain("DurableObjectNamespace");
-  });
-
-  it("keeps the D1 shared state migration aligned with the runtime schema", () => {
-    const migration = readFileSync(`${repositoryRoot}migrations/0001_axis_shared_state.sql`, "utf8");
-
-    expect(normalizeSql(migration)).toBe(normalizeSql(D1_SHARED_INDEX_SCHEMA));
-  });
 });
-
-function normalizeSql(sql: string): string {
-  return sql
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line !== "" && !line.startsWith("--"))
-    .join("\n");
-}

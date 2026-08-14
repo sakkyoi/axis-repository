@@ -31,7 +31,7 @@ function axisEnv(overrides: Partial<AxisEnv> = {}): AxisEnv {
 }
 
 describe("worker entrypoint", () => {
-  it("serves requests from the Cloudflare runtime bindings without an admin Durable Object", async () => {
+  it("serves requests from the Cloudflare runtime bindings", async () => {
     const env = axisEnv({
       ADMIN_UI_API_BASE_URL: "https://admin-api.example/base",
     });

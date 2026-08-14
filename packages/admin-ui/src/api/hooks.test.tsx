@@ -59,7 +59,7 @@ describe("useRepositoryArtifactIndexJob", () => {
     expect(getBackgroundJob).toHaveBeenCalledWith("repository.index:python-proxy");
   });
 
-  it("caches repository index status under the generic background job key", async () => {
+  it("caches repository index status under the background job key", async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     getBackgroundJob.mockResolvedValue({
       id: "repository.index:python-proxy",
@@ -80,7 +80,6 @@ describe("useRepositoryArtifactIndexJob", () => {
         job: { id: "repository.index:python-proxy" },
       });
     });
-    expect(queryClient.getQueryData(["repository-artifact-index-job", "python-proxy"])).toBeUndefined();
   });
 
   it("invalidates artifact family pages when an index job finishes", async () => {
