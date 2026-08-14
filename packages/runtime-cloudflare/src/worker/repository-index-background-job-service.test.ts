@@ -104,6 +104,71 @@ describe("RepositoryIndexBackgroundJobService", () => {
     ]);
   });
 
+  it("queues group index jobs after a member repository index succeeds", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
+    await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
+    await repositoryService.create({
+      name: "python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      config: { pypi: { members: ["python-proxy"] } },
+    });
+    const service = new RepositoryIndexBackgroundJobService({
+      state,
+      repositoryService,
+      repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
+      groupDependencyResolver: {
+        listGroupsDependingOn: async () => [await repositoryService.getByName("python-group")],
+      },
+      repositoryArtifactIndexService: { rebuild: async () => ({ artifacts: [], complete: true, artifactCount: 0 }) },
+      clock: testClock(),
+    });
+    const job = await service.request({ repositoryName: "python-proxy" });
+
+    await service.runBackgroundJob(job);
+
+    await expect(state.backgroundJobs.get("repository.index:python-group")).resolves.toMatchObject({
+      id: "repository.index:python-group",
+      type: "repository.index.group-refresh",
+      status: "pending",
+      subject: { type: "repository", id: "python-group" },
+    });
+  });
+
+  it("does not queue dependent group jobs until member index work is complete", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });
+    await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
+    await repositoryService.create({
+      name: "python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      config: { pypi: { members: ["python-proxy"] } },
+    });
+    const service = new RepositoryIndexBackgroundJobService({
+      state,
+      repositoryService,
+      repositoryActivityService: new RepositoryActivityService({ state, clock: testClock(), randomId }),
+      groupDependencyResolver: {
+        listGroupsDependingOn: async () => [await repositoryService.getByName("python-group")],
+      },
+      repositoryArtifactIndexService: {
+        rebuild: async () => ({
+          artifacts: [],
+          complete: false,
+          continuation: { projectOffset: 20 },
+        }),
+      },
+      clock: testClock(),
+    });
+    const job = await service.request({ repositoryName: "python-proxy" });
+
+    await service.runBackgroundJob(job);
+
+    await expect(state.backgroundJobs.get("repository.index:python-group")).resolves.toBeNull();
+  });
+
   it("keeps incomplete repository index work pending with continuation", async () => {
     const state = new MemoryStateStore();
     const repositoryService = new RepositoryService({ state, clock: testClock(), randomId });

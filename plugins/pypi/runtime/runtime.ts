@@ -462,7 +462,7 @@ function renderPypiProxyProjectListJson(projects: string[]): string {
 
 function rewritePypiProxyProjectFilesJson(text: string): string | undefined {
   const parsed = parseJsonObject(text);
-  const files = Array.isArray(parsed.files) ? parsed.files : undefined;
+  const files: unknown[] | undefined = Array.isArray(parsed.files) ? parsed.files : undefined;
   if (!files) {
     return undefined;
   }
@@ -1089,7 +1089,7 @@ async function updatePypiProxyProjectSummary(input: {
     return;
   }
   const raw = JSON.parse(new TextDecoder().decode(await objectBytes(stored))) as Record<string, unknown>;
-  const projects = Array.isArray(raw.projects) ? raw.projects : [];
+  const projects: unknown[] = Array.isArray(raw.projects) ? raw.projects : [];
   await input.objectStore.putJson(proxyCacheKey(input.repositoryName), {
     ...raw,
     projects: projects.map((project) => {
@@ -1803,7 +1803,7 @@ async function cachePypiProxyProjectResponse(input: {
 
 function parsePypiProxyProjectFilesJson(text: string): SimpleProjectFile[] {
   const parsed = parseJsonObject(text);
-  const files = Array.isArray(parsed.files) ? parsed.files : [];
+  const files: unknown[] = Array.isArray(parsed.files) ? parsed.files : [];
   return files.flatMap((file): SimpleProjectFile[] => {
     if (!isRecord(file) || typeof file.filename !== "string" || typeof file.url !== "string") {
       return [];
@@ -1816,6 +1816,7 @@ function parsePypiProxyProjectFilesJson(text: string): SimpleProjectFile[] {
     const requiresPython = file["requires-python"];
     const coreMetadata = file["core-metadata"];
     const yanked = file.yanked;
+    const yankedReason = yanked === true ? "" : typeof yanked === "string" ? yanked : undefined;
     return [{
       filename: file.filename,
       url: file.url,
@@ -1824,7 +1825,7 @@ function parsePypiProxyProjectFilesJson(text: string): SimpleProjectFile[] {
       ...(isRecord(coreMetadata) && typeof coreMetadata.sha256 === "string"
         ? { coreMetadataSha256: coreMetadata.sha256 }
         : {}),
-      ...(yanked === undefined ? {} : { yanked: yanked === true ? "" : String(yanked) }),
+      ...(yankedReason === undefined ? {} : { yanked: yankedReason }),
     }];
   });
 }
@@ -1890,6 +1891,7 @@ export function createPypiGroupPlugin(): GroupRepositoryPlugin {
     capabilities: ["pypi", "group"],
     canServeRepositoryPath: createPrefixServingPredicate([SIMPLE_PREFIX, PACKAGES_PREFIX]),
     resolveRepositoryPath: ({ relativePath, accept }) => resolveSimplePath(relativePath, accept),
+    getGroupMembers: ({ repository }) => parsePypiGroupRepositoryConfig(repository.config).members,
     normalizeRepositoryConfig: ({ config }) => normalizePypiGroupRepositoryConfig(config),
     validateRepositoryConfig: validatePypiGroupRepositoryConfig,
     clientHelpers: createPypiClientHelpers({ includeUpload: false }),

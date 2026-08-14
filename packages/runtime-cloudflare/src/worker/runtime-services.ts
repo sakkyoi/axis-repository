@@ -139,6 +139,33 @@ export class PluginRepositoryService {
   }
 }
 
+export class PluginRepositoryGroupDependencyService {
+  constructor(
+    private readonly options: {
+      repositoryService: RepositoryService;
+      plugins: RepositoryRuntimePluginRegistry;
+    },
+  ) {}
+
+  async listGroupsDependingOn(repository: Repository): Promise<Repository[]> {
+    const groups = await this.options.repositoryService.list({
+      ecosystem: repository.ecosystem,
+      kinds: ["group"],
+    });
+    const dependents: Repository[] = [];
+    for (const group of groups) {
+      const plugin = this.options.plugins.getPluginForRepository(group);
+      if (plugin?.kind !== "group") {
+        continue;
+      }
+      if (plugin.getGroupMembers({ repository: group }).includes(repository.name)) {
+        dependents.push(group);
+      }
+    }
+    return dependents;
+  }
+}
+
 export class PluginPublishSessionService {
   constructor(
     private readonly options: {

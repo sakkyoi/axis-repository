@@ -1,6 +1,5 @@
 import type {
   Ecosystem,
-  RepositoryKind,
   PublishArtifactRequest,
   PublishArtifactsInput,
   PublishResult,
@@ -250,6 +249,10 @@ export interface RepositoryMaintenanceLifecycle {
   run(input: RepositoryMaintenanceInput): Promise<RepositoryMaintenanceResult>;
 }
 
+export interface RepositoryGroupMembersInput {
+  repository: Repository;
+}
+
 export interface RepositoryObjectBrowserItem {
   name: string;
   path: string;
@@ -335,6 +338,7 @@ export interface GroupRepositoryPlugin extends PublisherMetadata {
   kind: "group";
   artifacts?: RepositoryArtifactIndexLifecycle;
   create?: RepositoryCreateLifecycle;
+  getGroupMembers(input: RepositoryGroupMembersInput): string[];
   canServeRepositoryPath: RepositoryPathServingRule;
   /** Defaults to serving the requested path as the object key once group resolution exists. */
   resolveRepositoryPath?: RepositoryPathResolver;

@@ -421,7 +421,7 @@ export function createAxisClient(options: HttpOptions): AxisClient {
       return publishSessionsResponseSchema.parse(response.data).sessions;
     },
     async getAdminPublishSession(sessionId: string) {
-      const response = await http.get(`/admin/publish-sessions/${encodeURIComponent(sessionId)}`);
+      const response = await http.get<{ session: unknown }>(`/admin/publish-sessions/${encodeURIComponent(sessionId)}`);
       return publishSessionSchema.parse(response.data.session);
     },
     async createAdminPublishSession(input: CreateAdminPublishSessionInput) {

@@ -216,6 +216,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
       version: "0.0.0",
       capabilities: ["group"],
       canServeRepositoryPath: () => false,
+      getGroupMembers: () => [],
       validateRepositoryConfig: () => {},
     });
 
@@ -429,7 +430,7 @@ describe("RepositoryRuntimePluginRegistry", () => {
     // what sequences them, and runtime-services.test.ts covers that ordering.
     const input = publishInput("apt");
     const plugin = registry.requirePlugin("apt");
-    plugin.validateRepositoryConfig({ ecosystem: "apt", config: {} });
+    await plugin.validateRepositoryConfig({ ecosystem: "apt", config: {} });
     plugin.publish.validateArtifacts({
       repository: input.repository,
       artifacts: input.session.artifacts,

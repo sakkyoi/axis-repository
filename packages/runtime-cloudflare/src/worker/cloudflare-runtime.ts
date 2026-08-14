@@ -21,7 +21,12 @@ import { SameOriginUploadBroker } from "../uploads/same-origin-upload-broker";
 import { R2PresignedUploadBroker } from "../uploads/r2-upload-broker";
 import { R2PresignedDownloadSigner } from "../storage/object-download-url";
 import { MemoryRepositoryObjectStore, R2RepositoryObjectStore } from "../storage/repository-object-store";
-import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
+import {
+  PluginPublishSessionService,
+  PluginRepositoryArtifactIndexService,
+  PluginRepositoryGroupDependencyService,
+  PluginRepositoryService,
+} from "./runtime-services";
 import { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
 import { RepositoryMaintenanceJobService } from "./repository-maintenance-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
@@ -351,10 +356,15 @@ export function createRuntimeDependencies(
     clock,
     writeLock,
   });
+  const repositoryGroupDependencyService = new PluginRepositoryGroupDependencyService({
+    repositoryService,
+    plugins: repositoryRuntimePlugins,
+  });
   const repositoryIndexJobService = new RepositoryIndexBackgroundJobService({
     state,
     repositoryService,
     repositoryActivityService,
+    groupDependencyResolver: repositoryGroupDependencyService,
     repositoryArtifactIndexService,
     clock,
   });

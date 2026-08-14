@@ -187,7 +187,7 @@ describe("renderRepositoryDirectoryHtml", () => {
 
   it("keeps the footer split across the directory content width", () => {
     const html = render();
-    const footerStyles = /footer \{[\s\S]*?\n  \}/.exec(html)?.[0] ?? "";
+    const footerStyles = /footer \{[\s\S]*?\n {2}\}/.exec(html)?.[0] ?? "";
 
     expect(footerStyles).toContain("align-items: center;");
     expect(footerStyles).toContain("justify-content: space-between;");

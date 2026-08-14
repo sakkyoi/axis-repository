@@ -1,26 +1,29 @@
 # Queue-based background jobs
 
-This document defines the target background job architecture for Axis Repository.
-The goal is to stop long-running work from blocking admin API requests while
-keeping job status, retries, and cancellation visible through the existing admin
-UI.
+This document describes the current background job architecture for Axis
+Repository. Long-running work runs outside admin request lifetimes while job
+status, retries, and cancellation remain visible through the admin UI.
 
 ## Problem
 
-The current runtime runs background work from the `AxisAdminDO` alarm. That
-keeps the implementation simple, but it means admin API requests and background
-job execution share the same Durable Object execution queue. Any job slice that
-fetches upstream data, rewrites repository metadata, sweeps storage, or writes
-many artifact records can make unrelated admin APIs wait.
+Earlier runtime versions ran background work from the `AxisAdminDO` alarm. That
+kept the implementation simple, but it meant admin API requests and background
+job execution shared the same Durable Object execution queue. Any job slice that
+fetched upstream data, rewrote repository metadata, swept storage, or wrote many
+artifact records could make unrelated admin APIs wait.
 
 Small slices reduce the duration of each pause, but they do not remove the
 coupling. A production-ready design should treat the admin Durable Object as a
 coordination and API surface, not as the worker that performs heavy background
 execution.
 
-## Target Architecture
+The current Cloudflare runtime no longer routes admin traffic through
+`AxisAdminDO`; production control-plane state is stored in D1 and background
+execution is driven by Cloudflare Queues plus a Cron scheduler.
 
-Cloudflare Queues should become the default background execution mechanism.
+## Architecture
+
+Cloudflare Queues are the default background execution mechanism.
 
 The admin API creates or updates a durable job record, then enqueues a small
 wake-up message. Queue consumers load runnable jobs from shared D1 state,
@@ -49,10 +52,9 @@ Queue consumer
 ## Job Record
 
 `BackgroundJobRecord` remains the durable source of truth for the admin UI and
-API. The existing fields are mostly correct, but queue execution needs explicit
-lease and continuation semantics.
+API. Queue execution uses explicit lease and continuation semantics.
 
-Target fields:
+Fields:
 
 ```ts
 interface BackgroundJobRecord {
@@ -130,7 +132,7 @@ provisioning and GitHub/Dashboard deploys do not start with a missing schema.
 
 ## Executor Contract
 
-The execution contract should be shared by Queue consumers and local tests.
+The execution contract is shared by Queue consumers and local tests.
 
 ```ts
 interface BackgroundJobExecutor {
@@ -150,7 +152,7 @@ interface BackgroundJobExecutionResult {
 }
 ```
 
-Each executor run must be bounded. It should process one chunk, then return. If
+Each executor run must be bounded. It processes one chunk, then returns. If
 more work remains, it returns `pending` with a continuation and the queue adapter
 enqueues another message.
 
@@ -213,8 +215,6 @@ Repository maintenance jobs:
 
 ### `repository.index.*`
 
-First migration target.
-
 Runs repository artifact indexing and proxy refresh work in chunks. For PyPI
 proxy repositories, the root catalog fetch should write a rebuild cache, and
 subsequent chunks should materialize bounded project marker batches from that
@@ -225,27 +225,19 @@ scan all artifacts on each request.
 
 ### `publish.finalize`
 
-Second migration target.
-
 Finalization can parse artifacts, write objects, rebuild metadata, and update
 activity. It should run as a Queue job after upload verification. The API should
 return once the finalize job is accepted, not after finalization completes.
 
 ### `storage.staging-upload-gc`
 
-Low-priority migration target.
-
 This job sweeps expired staging uploads. It can run periodically through a Queue
-message emitted by cron or a lightweight scheduler alarm. It should never run in
-the admin API Durable Object.
+message emitted by Cron. It does not run in the admin API request path.
 
 ### `repository.maintenance`
 
-Low-priority but important migration target.
-
-Maintenance should become explicit jobs, one per repository where possible,
-rather than one alarm pass that loops over every repository inside
-`AxisAdminDO`.
+Maintenance runs as explicit jobs, one per repository where possible, rather
+than one scheduler pass that performs repository work inline.
 
 ## Scheduling
 
@@ -260,8 +252,7 @@ Queue scheduling rules:
 
 Periodic work:
 
-- Cron or a very small Durable Object alarm can enqueue maintenance and cleanup
-  jobs.
+- Cron enqueues maintenance and cleanup jobs.
 - The scheduler must not execute the jobs itself.
 
 ## Local Development
@@ -284,23 +275,22 @@ Adapters:
 The local adapter may run in process, but it should still use the same executor
 and lease code so behavior matches production.
 
-## Migration Plan
+## Implemented Scope
 
-1. Move StateStore production backing to shared D1 when `AXIS_SHARED_STATE` is
-   bound, with indexed job and artifact tables.
-2. Add Queue wake-up messages and runtime Queue binding support.
-3. Declare D1 and Queue bindings in Wrangler using automatic provisioning, and
-   ship the D1 schema as a migration plus runtime bootstrap.
-4. Change job request paths to enqueue messages instead of scheduling the admin
-   DO alarm for job work.
-5. Add a Queue consumer that drains one runnable job slice and re-enqueues when
-   runnable work remains.
-6. Extract a lease-aware `BackgroundJobExecutor` so duplicate Queue deliveries
-   cannot overlap the same job.
-7. Move `publish.finalize` to the Queue consumer.
-8. Move `storage.staging-upload-gc` and `repository.maintenance`.
-9. Remove job execution from `AxisAdminDO.alarm()`. Keep only lightweight
-   scheduling if still needed.
+- Production state is backed by shared D1 when `AXIS_SHARED_STATE` is bound,
+  with indexed job and artifact tables.
+- Wrangler declares D1, Queue, and Cron bindings. The D1 schema is available as
+  a migration and through runtime bootstrap.
+- Admin request paths enqueue background work instead of draining it inline.
+- Queue consumers drain one runnable job slice and re-enqueue when runnable work
+  remains.
+- Lease-aware execution prevents duplicate Queue deliveries from overlapping the
+  same job.
+- Publish finalization, repository indexing, repository deletion, artifact
+  deletion, proxy cache purge, staging upload cleanup, and repository
+  maintenance use the shared background job contract.
+- The production Worker entrypoint no longer depends on `AxisAdminDO` for admin
+  API routing or heavy background execution.
 
 ## Open Design Decisions
 
@@ -308,7 +298,7 @@ and lease code so behavior matches production.
 - Whether to materialize artifact family summaries as their own table after the
   current indexed artifact table is in production.
 
-The chosen direction is shared D1 state plus Queue consumers. Queue execution
+The chosen architecture is shared D1 state plus Queue consumers. Queue execution
 removes API blocking only when consumers use shared storage services directly;
-calling back into the admin Durable Object for the heavy work is not an accepted
-production path.
+calling back into a Durable Object for heavy work is not an accepted production
+path.

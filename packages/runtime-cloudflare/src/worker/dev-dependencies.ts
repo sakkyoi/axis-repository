@@ -23,7 +23,12 @@ import { RepositoryWriteLock } from "./repository-write-lock";
 import { createDefaultArtifactPlugins } from "../plugins/default-plugins";
 import SameOriginUploadBroker from "../uploads/same-origin-upload-broker";
 import { MemoryRepositoryObjectStore } from "../storage/repository-object-store";
-import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
+import {
+  PluginPublishSessionService,
+  PluginRepositoryArtifactIndexService,
+  PluginRepositoryGroupDependencyService,
+  PluginRepositoryService,
+} from "./runtime-services";
 import { RepositoryIndexBackgroundJobService } from "./repository-index-background-job-service";
 import { RepositoryMaintenanceJobService } from "./repository-maintenance-job-service";
 import { PublishFinalizeJobService } from "./publish-finalize-job-service";
@@ -226,10 +231,15 @@ export function createDevDependencyHarness(
     clock,
     writeLock,
   });
+  const repositoryGroupDependencyService = new PluginRepositoryGroupDependencyService({
+    repositoryService,
+    plugins: repositoryRuntimePlugins,
+  });
   const repositoryIndexJobService = new RepositoryIndexBackgroundJobService({
     state,
     repositoryService,
     repositoryActivityService,
+    groupDependencyResolver: repositoryGroupDependencyService,
     repositoryArtifactIndexService,
     clock,
   });

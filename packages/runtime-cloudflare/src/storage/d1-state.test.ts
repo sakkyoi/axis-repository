@@ -51,7 +51,7 @@ class FakeD1Database {
   async exec(query: string): Promise<D1ExecResult> {
     this.execCount += 1;
     for (const statement of query.split(";").map((part) => part.trim()).filter(Boolean)) {
-      this.prepare(statement).run();
+      await this.prepare(statement).run();
     }
     return { count: 0, duration: 0 };
   }

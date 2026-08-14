@@ -63,9 +63,8 @@ yourself.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sakkyoi/axis-repository)
 
-The button creates the Worker, Durable Object, R2 bucket, D1 database, and
-background job Queue, then asks for the values the deployment cannot safely
-invent.
+The button creates the Worker, R2 bucket, D1 database, background job Queue, and
+Cron trigger, then asks for the values the deployment cannot safely invent.
 
 Prepare these before deploying:
 

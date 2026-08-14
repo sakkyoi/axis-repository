@@ -2,7 +2,6 @@ import { createCloudflareRuntimeDependencies, type AxisEnv } from "./worker/clou
 import { createApp } from "./worker/app";
 import {
   CloudflareBackgroundJobWakeQueue,
-  drainBackgroundJobQueue,
   drainBackgroundJobQueueBatch,
   enqueueBackgroundJobWakeup,
   type BackgroundJobQueueMessage,

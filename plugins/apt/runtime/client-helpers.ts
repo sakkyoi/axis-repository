@@ -9,7 +9,6 @@ import {
   buildAptInstallInfo,
   buildAptSourceInfo,
   keyringPathForRepository,
-  sourceListPathForRepository,
   type AptClientRepositoryInfo,
 } from "./client";
 import { parseAptGroupRepositoryConfig, parseAptProxyRepositoryConfig } from "./config";
@@ -192,10 +191,23 @@ function buildAptGroupInstallInfo(input: {
   });
 }
 
+interface AptProxySourceInfo {
+  repository: string;
+  ecosystem: "apt";
+  baseUrl: string;
+  codename: string;
+  suites: string[];
+  components: string[];
+  keyringPath?: string;
+  sourceLine: string;
+  sourceLines: string[];
+  sourcePackageLines: string[];
+}
+
 function buildAptProxySourceInfo(input: {
   origin: string;
   repository: Repository;
-}): Record<string, unknown> {
+}): AptProxySourceInfo {
   const config = parseAptProxyRepositoryConfig(input.repository.config);
   const baseUrl = `${input.origin.replace(/\/+$/g, "")}/repositories/${input.repository.name}`;
   const components = config.components ?? ["main"];

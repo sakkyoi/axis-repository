@@ -15,7 +15,7 @@ export interface PublishFinalizeJobServiceOptions {
   clock: Clock;
 }
 
-export interface RequestPublishFinalizeJobInput extends FinalizePublishSessionInput {}
+export type RequestPublishFinalizeJobInput = FinalizePublishSessionInput;
 
 export interface RequestPublishFinalizeJobResult {
   session: PublishSession;

@@ -159,11 +159,6 @@ function pypiGroupMembers(repository: Repository): string[] {
   return Array.isArray(members) ? members.filter((member): member is string => typeof member === "string") : [];
 }
 
-function formatDate(value: string): string {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
-}
-
 export function pypiUploadUrl(repository: Repository, origin = globalThis.location?.origin): string {
   const path = `/repositories/${repository.name}/legacy/`;
   return origin ? `${origin.replace(/\/+$/g, "")}${path}` : path;

@@ -4,7 +4,7 @@ import { createCloudflareRuntimeDependencies, createRuntimeDependencies, type Ax
 import { createApp } from "./app";
 import { debArchive } from "@axis-repository/plugin-apt/test-support";
 import { digestHex } from "../storage/digest";
-import { D1RepositoryArtifactStore, createD1StateStore } from "../storage/d1-state";
+import { D1RepositoryArtifactStore } from "../storage/d1-state";
 import type { BackgroundJobQueueMessage } from "./background-job-queue";
 import { RepositoryWriteLock } from "./repository-write-lock";
 

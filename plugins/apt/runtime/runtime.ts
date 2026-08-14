@@ -489,7 +489,7 @@ function mergeAptProxyObjectBrowserListings(
   for (const directory of [...stored.directories, ...virtual.directories]) {
     directories.set(directory.path, directory);
   }
-  const objects = new Map<string, typeof stored.objects[number] | typeof virtual.objects[number]>();
+  const objects = new Map<string, typeof stored.objects[number]>();
   for (const object of [...stored.objects, ...virtual.objects]) {
     objects.set(object.path, object);
   }
@@ -1198,6 +1198,7 @@ export function createAptGroupPlugin(input: {
     capabilities: ["apt", "group"],
     canServeRepositoryPath: createPrefixServingPredicate(["dists", "pool"]),
     clientHelpers: createAptGroupClientHelpers({ signingKeys: input.signingKeys }),
+    getGroupMembers: ({ repository }) => parseAptGroupRepositoryConfig(repository.config).members,
     normalizeRepositoryConfig: ({ config }) => normalizeAptGroupRepositoryConfig(config),
     validateRepositoryConfig: validateAptGroupRepositoryConfig,
     create: {

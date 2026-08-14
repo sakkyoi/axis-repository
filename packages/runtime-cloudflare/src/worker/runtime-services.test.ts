@@ -16,7 +16,12 @@ import {
 } from "@axis-repository/core";
 import { describe, expect, it } from "vitest";
 import { RepositoryRuntimePluginRegistry } from "../plugins/repository-runtime-plugin-registry";
-import { PluginPublishSessionService, PluginRepositoryArtifactIndexService, PluginRepositoryService } from "./runtime-services";
+import {
+  PluginPublishSessionService,
+  PluginRepositoryArtifactIndexService,
+  PluginRepositoryGroupDependencyService,
+  PluginRepositoryService,
+} from "./runtime-services";
 import { RepositoryWriteLock } from "./repository-write-lock";
 
 const clock: Clock = {
@@ -142,6 +147,59 @@ describe("PluginRepositoryService", () => {
       kind: "proxy",
       config: { demo: { upstreamUrl: "https://upstream.example/" } },
     });
+  });
+});
+
+describe("PluginRepositoryGroupDependencyService", () => {
+  it("finds group repositories that include the updated repository as a member", async () => {
+    const state = new MemoryStateStore();
+    const repositoryService = new RepositoryService({ state, clock, randomId });
+    await repositoryService.create({ name: "python-proxy", ecosystem: "pypi", kind: "proxy", config: {} });
+    await repositoryService.create({
+      name: "python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      config: { pypi: { members: ["python-proxy"] } },
+    });
+    await repositoryService.create({
+      name: "other-python-group",
+      ecosystem: "pypi",
+      kind: "group",
+      config: { pypi: { members: ["other-python"] } },
+    });
+    await repositoryService.create({
+      name: "apt-group",
+      ecosystem: "apt",
+      kind: "group",
+      config: { apt: { members: ["python-proxy"] } },
+    });
+    const plugins = new RepositoryRuntimePluginRegistry();
+    plugins.register({
+      kind: "group",
+      repositoryKinds: [{ kind: "group", experimental: false }],
+      ecosystem: "pypi",
+      name: "pypi-group",
+      version: "0.0.0",
+      capabilities: ["group"],
+      canServeRepositoryPath: () => false,
+      getGroupMembers: ({ repository }) => (repository.config.pypi as { members: string[] }).members,
+      validateRepositoryConfig: () => {},
+    });
+    plugins.register({
+      kind: "group",
+      repositoryKinds: [{ kind: "group", experimental: false }],
+      ecosystem: "apt",
+      name: "apt-group",
+      version: "0.0.0",
+      capabilities: ["group"],
+      canServeRepositoryPath: () => false,
+      getGroupMembers: ({ repository }) => (repository.config.apt as { members: string[] }).members,
+      validateRepositoryConfig: () => {},
+    });
+    const service = new PluginRepositoryGroupDependencyService({ repositoryService, plugins });
+
+    await expect(service.listGroupsDependingOn(await repositoryService.getByName("python-proxy")))
+      .resolves.toMatchObject([{ name: "python-group" }]);
   });
 });
 

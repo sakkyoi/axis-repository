@@ -25,6 +25,7 @@ export interface RepositoryIndexBackgroundJobServiceOptions {
   state: StateStore;
   repositoryService: RepositoryService;
   repositoryActivityService: RepositoryActivityService;
+  groupDependencyResolver?: RepositoryGroupDependencyResolver;
   repositoryArtifactIndexService: {
     rebuild(input: {
       repositoryName: string;
@@ -32,6 +33,10 @@ export interface RepositoryIndexBackgroundJobServiceOptions {
     }): Promise<RepositoryIndexRebuildRunnerResult>;
   };
   clock: Clock;
+}
+
+export interface RepositoryGroupDependencyResolver {
+  listGroupsDependingOn(repository: Repository): Promise<Repository[]>;
 }
 
 export interface RequestRepositoryIndexBackgroundJobInput {
@@ -103,6 +108,9 @@ export class RepositoryIndexBackgroundJobService {
         repositoryName,
         artifactCount,
       });
+      if (this.options.groupDependencyResolver) {
+        await this.requestDependentGroupIndexes(await this.options.repositoryService.getByName(repositoryName));
+      }
       const { failure: _failure, ...runningWithoutFailure } = running;
       await this.options.state.backgroundJobs.save({
         ...runningWithoutFailure,
@@ -153,6 +161,16 @@ export class RepositoryIndexBackgroundJobService {
           retryable: true,
         },
       });
+    }
+  }
+
+  private async requestDependentGroupIndexes(repository: Repository): Promise<void> {
+    if (repository.kind === "group") {
+      return;
+    }
+    const groups = await this.options.groupDependencyResolver?.listGroupsDependingOn(repository) ?? [];
+    for (const group of groups) {
+      await this.request({ repositoryName: group.name });
     }
   }
 }
