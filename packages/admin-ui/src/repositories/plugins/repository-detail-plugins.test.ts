@@ -205,6 +205,12 @@ describe("repository detail plugins", () => {
     ]);
   });
 
+  it("keeps plugin settings section descriptions in detail metadata", () => {
+    expect(repositorySettingsSectionsFor(repository({ ecosystem: "apt", kind: "group" }))
+      .find((section) => section.id === "group-settings")?.description)
+      .toBe("Configure member repositories, resolution order, and signing policy.");
+  });
+
   it("builds PyPI client setup text from a repository", () => {
     const repository = {
       id: "repo_1",

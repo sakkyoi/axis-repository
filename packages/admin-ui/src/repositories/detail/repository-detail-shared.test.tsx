@@ -22,6 +22,24 @@ describe("RepositoryDetailSections", () => {
 
     expect(screen.getByText("Install hints").closest("section")?.className).toContain("last:pb-4");
   });
+
+  it("renders section descriptions from plugin metadata", () => {
+    render(
+      <RepositoryDetailSections
+        repository={repository()}
+        pluginMetadata={undefined}
+        sections={[{
+          id: "group-settings",
+          title: "PyPI group members",
+          description: "Repositories are searched in resolution order.",
+          placement: "settings",
+          Component: () => <div>Select repositories</div>,
+        }]}
+      />,
+    );
+
+    expect(screen.getByText("Repositories are searched in resolution order.")).toBeTruthy();
+  });
 });
 
 function repository(): Repository {

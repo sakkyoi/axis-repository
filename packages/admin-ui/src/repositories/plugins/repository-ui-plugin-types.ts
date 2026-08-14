@@ -115,6 +115,7 @@ export interface RepositoryDetailSectionProps {
 export interface RepositoryDetailSection {
   id: string;
   title: string;
+  description?: string;
   placement: "workspace" | "settings";
   summary?: boolean;
   shouldRender?: (repository: Repository) => boolean;

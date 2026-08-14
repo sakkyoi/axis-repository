@@ -29,8 +29,8 @@ export const aptHostedRepositoryDetailPlugin: HostedRepositoryDetailPlugin = {
   kind: "hosted",
   ecosystem: aptPluginManifest.ecosystem,
   sections: [
-    { id: "apt-settings", title: "APT settings", placement: "settings", Component: AptSettingsSection },
-    { id: "signing-keys", title: "APT signing keys", placement: "settings", Component: AptSigningKeysSection },
+    { id: "apt-settings", title: "APT settings", description: "Configure repository metadata, publish behavior, and signing policy.", placement: "settings", Component: AptSettingsSection },
+    { id: "signing-keys", title: "APT signing keys", description: "Manage keys used to sign APT Release metadata.", placement: "settings", Component: AptSigningKeysSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
     { id: "client-helpers", title: "APT client setup", placement: "workspace", summary: true, Component: RepositoryClientHelpersSection },
   ],
@@ -348,8 +348,8 @@ const aptProxyRepositoryDetailPlugin: ProxyRepositoryDetailPlugin = {
   ecosystem: aptPluginManifest.ecosystem,
   sections: [
     { id: "client-helpers", title: "APT client setup", placement: "workspace", summary: true, Component: RepositoryClientHelpersSection },
-    { id: "proxy-settings", title: "APT proxy settings", placement: "settings", Component: AptProxySettingsSection },
-    { id: "signing-keys", title: "APT signing keys", placement: "settings", Component: AptSigningKeysSection },
+    { id: "proxy-settings", title: "APT proxy settings", description: "Configure upstream repository access, filters, and signing policy.", placement: "settings", Component: AptProxySettingsSection },
+    { id: "signing-keys", title: "APT signing keys", description: "Manage keys used when this proxy re-signs APT Release metadata.", placement: "settings", Component: AptSigningKeysSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],
 };
@@ -359,8 +359,8 @@ const aptGroupRepositoryDetailPlugin: GroupRepositoryDetailPlugin = {
   ecosystem: aptPluginManifest.ecosystem,
   sections: [
     { id: "client-helpers", title: "APT client setup", placement: "workspace", summary: true, Component: RepositoryClientHelpersSection },
-    { id: "group-settings", title: "APT group members", placement: "settings", Component: AptGroupSettingsSection },
-    { id: "signing-keys", title: "APT signing keys", placement: "settings", shouldRender: shouldRenderAptGroupSigningKeysSection, Component: AptSigningKeysSection },
+    { id: "group-settings", title: "APT group members", description: "Configure member repositories, resolution order, and signing policy.", placement: "settings", Component: AptGroupSettingsSection },
+    { id: "signing-keys", title: "APT signing keys", description: "Manage keys used when this group signs aggregated APT metadata.", placement: "settings", shouldRender: shouldRenderAptGroupSigningKeysSection, Component: AptSigningKeysSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],
 };

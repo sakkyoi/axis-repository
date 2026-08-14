@@ -187,7 +187,7 @@ const pypiProxyRepositoryDetailPlugin: ProxyRepositoryDetailPlugin = {
   ecosystem: pypiPluginManifest.ecosystem,
   sections: [
     { id: "install-hints", title: "Install hints", placement: "workspace", summary: true, Component: PypiInstallHintsSection },
-    { id: "proxy-settings", title: "PyPI proxy settings", placement: "settings", Component: PypiProxySettingsSection },
+    { id: "proxy-settings", title: "PyPI proxy settings", description: "Configure the upstream Simple API source used by this proxy.", placement: "settings", Component: PypiProxySettingsSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],
 };
@@ -197,7 +197,7 @@ const pypiGroupRepositoryDetailPlugin: GroupRepositoryDetailPlugin = {
   ecosystem: pypiPluginManifest.ecosystem,
   sections: [
     { id: "install-hints", title: "Install hints", placement: "workspace", summary: true, Component: PypiInstallHintsSection },
-    { id: "group-settings", title: "PyPI group members", placement: "settings", Component: PypiGroupSettingsSection },
+    { id: "group-settings", title: "PyPI group members", description: "Configure member repositories and resolution order.", placement: "settings", Component: PypiGroupSettingsSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],
 };
