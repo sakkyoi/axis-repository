@@ -47,8 +47,8 @@ describe("repository detail plugins", () => {
       "repository-browser",
       "settings",
       "apt-settings",
-      "advanced-json",
       "signing-keys",
+      "advanced-json",
       "client-helpers",
     ]);
     expect(getHostedRepositoryDetailPlugin("pypi")?.sections.map((section) => section.id)).toEqual([
@@ -96,8 +96,8 @@ describe("repository detail plugins", () => {
     expect(repositorySettingsSectionsFor(repository({ ecosystem: "apt" })).map((section) => section.id)).toEqual([
       "settings",
       "apt-settings",
-      "advanced-json",
       "signing-keys",
+      "advanced-json",
     ]);
     expect(repositoryWorkspaceSectionsFor(repository({ ecosystem: "pypi" })).map((section) => section.id)).toEqual([
       "repository-artifacts",
@@ -116,6 +116,7 @@ describe("repository detail plugins", () => {
     expect(repositorySettingsSectionsFor(repository({ ecosystem: "apt", kind: "proxy" })).map((section) => section.id)).toEqual([
       "settings",
       "proxy-settings",
+      "signing-keys",
       "advanced-json",
     ]);
     expect(repositoryWorkspaceSectionsFor(repository({ ecosystem: "apt", kind: "proxy" })).map((section) => section.id)).toEqual([

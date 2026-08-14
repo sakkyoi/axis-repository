@@ -28,8 +28,8 @@ export const aptHostedRepositoryDetailPlugin: HostedRepositoryDetailPlugin = {
   ecosystem: aptPluginManifest.ecosystem,
   sections: [
     { id: "apt-settings", title: "APT settings", placement: "settings", Component: AptSettingsSection },
-    { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
     { id: "signing-keys", title: "APT signing keys", placement: "settings", Component: AptSigningKeysSection },
+    { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
     { id: "client-helpers", title: "APT client setup", placement: "workspace", summary: true, Component: RepositoryClientHelpersSection },
   ],
 };
@@ -264,6 +264,7 @@ const aptProxyRepositoryDetailPlugin: ProxyRepositoryDetailPlugin = {
   sections: [
     { id: "client-helpers", title: "APT client setup", placement: "workspace", summary: true, Component: RepositoryClientHelpersSection },
     { id: "proxy-settings", title: "APT proxy settings", placement: "settings", Component: AptProxySettingsSection },
+    { id: "signing-keys", title: "APT signing keys", placement: "settings", Component: AptSigningKeysSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],
 };
