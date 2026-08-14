@@ -25,6 +25,7 @@ import { aptSigningKeySettingsState } from "./signing-keys-model";
 import {
   buildAptGroupSettingsValues,
   buildUpdateAptGroupRepositoryInput,
+  shouldLoadAptGroupSigningKeys,
   type AptGroupSettingsValues,
 } from "./group-settings";
 import { AptGroupMemberSelect } from "./group-member-select";
@@ -283,7 +284,8 @@ export function AptGroupSettingsSection({
   const updateRepository = useUpdateRepository();
   const [values, setValues] = useState(() => buildAptGroupSettingsValues(repository));
   const [error, setError] = useState("");
-  const signingKeysQuery = useAptSigningKeys(repository.name, true);
+  const loadSigningKeys = shouldLoadAptGroupSigningKeys(values);
+  const signingKeysQuery = useAptSigningKeys(repository.name, loadSigningKeys);
   const signingKeys = signingKeysQuery.data ?? [];
   const activeKeys = activeSigningKeys(signingKeys);
   const selectedActiveSigningKey = activeKeys.find((key) => key.id === values.signingKeyId);
@@ -397,7 +399,7 @@ export function AptGroupSettingsSection({
       >
         {updateRepository.isPending ? "Saving..." : "Save group settings"}
       </Button>
-      {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
+      {loadSigningKeys && signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
     </div>
   );
 }

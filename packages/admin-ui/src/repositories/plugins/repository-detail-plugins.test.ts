@@ -140,6 +140,15 @@ describe("repository detail plugins", () => {
       "signing-keys",
       "advanced-json",
     ]);
+    expect(repositorySettingsSectionsFor(repository({
+      ecosystem: "apt",
+      kind: "group",
+      config: { apt: { signing: { mode: "unsigned" } } },
+    })).map((section) => section.id)).toEqual([
+      "settings",
+      "group-settings",
+      "advanced-json",
+    ]);
   });
 
   it("lets plugins choose sections for the readonly repository summary", () => {

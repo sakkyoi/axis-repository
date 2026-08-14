@@ -9,6 +9,7 @@ import type {
   ProxyRepositoryCreatePlugin,
   ProxyRepositoryDetailPlugin,
   ProxyRepositoryUiPlugin,
+  Repository,
 } from "@axis-repository/admin-ui/plugin-ui";
 import {
   AdvancedJsonConfigSection,
@@ -359,10 +360,18 @@ const aptGroupRepositoryDetailPlugin: GroupRepositoryDetailPlugin = {
   sections: [
     { id: "client-helpers", title: "APT client setup", placement: "workspace", summary: true, Component: RepositoryClientHelpersSection },
     { id: "group-settings", title: "APT group members", placement: "settings", Component: AptGroupSettingsSection },
-    { id: "signing-keys", title: "APT signing keys", placement: "settings", Component: AptSigningKeysSection },
+    { id: "signing-keys", title: "APT signing keys", placement: "settings", shouldRender: shouldRenderAptGroupSigningKeysSection, Component: AptSigningKeysSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],
 };
+
+function shouldRenderAptGroupSigningKeysSection(repository: Repository): boolean {
+  const apt = repository.config.apt;
+  if (!apt || typeof apt !== "object" || Array.isArray(apt)) return true;
+  const signing = (apt as Record<string, unknown>).signing;
+  if (!signing || typeof signing !== "object" || Array.isArray(signing)) return true;
+  return (signing as Record<string, unknown>).mode !== "unsigned";
+}
 
 export const aptProxyRepositoryUiPlugin: ProxyRepositoryUiPlugin = {
   kind: "proxy",

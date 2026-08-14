@@ -54,6 +54,10 @@ export function buildUpdateAptGroupRepositoryInput(
   };
 }
 
+export function shouldLoadAptGroupSigningKeys(values: AptGroupSettingsValues): boolean {
+  return values.signingMode === "axis";
+}
+
 function aptConfig(repository: Repository): Record<string, unknown> {
   const apt = repository.config.apt;
   return apt && typeof apt === "object" && !Array.isArray(apt) ? apt as Record<string, unknown> : {};

@@ -3,6 +3,7 @@ import type { Repository } from "@axis-repository/admin-ui/plugin-ui";
 import {
   buildAptGroupSettingsValues,
   buildUpdateAptGroupRepositoryInput,
+  shouldLoadAptGroupSigningKeys,
 } from "./group-settings";
 
 describe("APT group settings model", () => {
@@ -67,6 +68,23 @@ describe("APT group settings model", () => {
       signingMode: "unsigned",
       signingKeyId: "",
     });
+  });
+
+  it("only loads signing keys for Axis-signed group settings", () => {
+    expect(shouldLoadAptGroupSigningKeys({
+      codename: "bookworm",
+      components: "main",
+      members: ["debian-hosted"],
+      signingMode: "unsigned",
+      signingKeyId: "",
+    })).toBe(false);
+    expect(shouldLoadAptGroupSigningKeys({
+      codename: "bookworm",
+      components: "main",
+      members: ["debian-hosted"],
+      signingMode: "axis",
+      signingKeyId: "signing_key_group",
+    })).toBe(true);
   });
 });
 

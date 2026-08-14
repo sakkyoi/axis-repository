@@ -35,7 +35,8 @@ export function getHostedRepositoryDetailPlugin(ecosystem: string): HostedReposi
 function repositoryDetailSectionsFor(repository: Repository): RepositoryDetailSection[] {
   const plugin = getRepositoryDetailPlugin(repository);
   const sections = plugin?.sections ?? genericRepositoryDetailSections;
-  return normalizeRepositoryDetailSections(sections);
+  return normalizeRepositoryDetailSections(sections)
+    .filter((section) => section.shouldRender?.(repository) ?? true);
 }
 
 function normalizeHostedRepositoryDetailPlugin(plugin: HostedRepositoryDetailPlugin): HostedRepositoryDetailPlugin {
