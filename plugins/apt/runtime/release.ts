@@ -60,6 +60,7 @@ export async function buildRelease(input: {
     `Label: ${input.config.label ?? input.repositoryName}`,
     `Suite: ${input.config.suite ?? input.suite}`,
     `Codename: ${input.suite}`,
+    ...(input.config.version === undefined ? [] : [`Version: ${input.config.version}`]),
     `Date: ${publishedAt.toUTCString()}`,
     // Without this apt trusts a signed Release forever, so an attacker who can
     // serve stale bytes can hold a client on a known-vulnerable package set.
@@ -67,11 +68,15 @@ export async function buildRelease(input: {
       ? []
       : [`Valid-Until: ${new Date(publishedAt.getTime() + input.config.validityDays * MILLISECONDS_PER_DAY).toUTCString()}`]),
     `Architectures: ${input.config.architectures.join(" ")}`,
+    ...(input.config.noSupportForArchitectureAll === undefined
+      ? []
+      : [`No-Support-for-Architecture-all: ${input.config.noSupportForArchitectureAll.join(" ")}`]),
     `Components: ${input.config.components.join(" ")}`,
     ...(input.config.notAutomatic ? ["NotAutomatic: yes"] : []),
     ...(input.config.butAutomaticUpgrades ? ["ButAutomaticUpgrades: yes"] : []),
     ...(input.config.description === undefined ? [] : [`Description: ${input.config.description}`]),
     `Acquire-By-Hash: ${acquireByHashEnabled(input.config) ? "yes" : "no"}`,
+    ...(input.config.signedBy === undefined ? [] : [`Signed-By: ${input.config.signedBy.join(", ")}`]),
     ...checksumSections,
     "",
   ].join("\n");

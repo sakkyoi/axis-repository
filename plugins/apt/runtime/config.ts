@@ -14,7 +14,10 @@ export interface AptRepositoryConfig {
   label?: string;
   /** `Suite` when it differs from the codename, as in "stable" vs "bookworm". */
   suite?: string;
+  version?: string;
   description?: string;
+  signedBy?: string[];
+  noSupportForArchitectureAll?: string[];
   /** Days a signed `Release` stays valid; omitted means it never expires. */
   validityDays?: number;
   notAutomatic?: boolean;
@@ -85,7 +88,10 @@ export function parseAptRepositoryConfig(repository: Repository): AptRepositoryC
     ...optionalReleaseText(aptConfig, "origin"),
     ...optionalReleaseText(aptConfig, "label"),
     ...suiteOverride(aptConfig, suites ?? [codename]),
+    ...optionalReleaseText(aptConfig, "version"),
     ...optionalReleaseText(aptConfig, "description"),
+    ...optionalSignedBy(aptConfig),
+    ...optionalNoSupportForArchitectureAll(aptConfig),
     ...optionalPositiveInteger(aptConfig, "validityDays"),
     ...(notAutomatic !== undefined ? { notAutomatic } : {}),
     ...(butAutomaticUpgrades !== undefined ? { butAutomaticUpgrades } : {}),
@@ -233,6 +239,29 @@ function optionalReleaseText(config: Record<string, unknown>, field: string): Re
     throw new ValidationError(`${configPath(field)} must not contain control characters`);
   }
   return { [field]: value };
+}
+
+function optionalSignedBy(config: Record<string, unknown>): Record<string, string[]> {
+  const values = optionalConfigStringArray(config, "signedBy");
+  if (!values) {
+    return {};
+  }
+  if (!values.every((value) => /^([A-Fa-f0-9]{40}|[A-Fa-f0-9]{64})!?$/.test(value))) {
+    throw new ValidationError(`${configPath("signedBy")} must contain OpenPGP fingerprints`);
+  }
+  return { signedBy: [...new Set(values)] };
+}
+
+function optionalNoSupportForArchitectureAll(config: Record<string, unknown>): Record<string, string[]> {
+  const values = optionalConfigStringArray(config, "noSupportForArchitectureAll");
+  if (!values) {
+    return {};
+  }
+  return {
+    noSupportForArchitectureAll: [...new Set(values.map((value) =>
+      validatePathSegment(value, configPath("noSupportForArchitectureAll")),
+    ))],
+  };
 }
 
 /**

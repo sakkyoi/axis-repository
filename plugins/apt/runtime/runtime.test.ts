@@ -682,6 +682,58 @@ describe("APT proxy plugin lifecycle", () => {
     });
   });
 
+  it("serves APT proxy signing keys from proxy admin resources", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    const calls: Array<{ method: string; input?: unknown }> = [];
+    const plugin = createAptProxyPlugin({
+      objectStoreFor: () => objectStore,
+      signingKeys: signingKeys({
+        listForRepository: async (repositoryName: string) => {
+          calls.push({ method: "listForRepository", input: repositoryName });
+          return [{ ...defaultSigningKey, repositoryName: "debian-proxy" }];
+        },
+      }),
+    });
+
+    await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
+      repositoryName: "debian-proxy",
+      repository: proxyRepository(),
+      request: new Request("https://axis.example/admin/repositories/debian-proxy/apt/signing-keys"),
+      path: ["signing-keys"],
+      services: {},
+    }).then((response) => response.json())).resolves.toEqual({
+      signingKeys: [{ ...defaultSigningKey, repositoryName: "debian-proxy" }],
+    });
+    await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
+      repositoryName: "debian-proxy",
+      repository: proxyRepository(),
+      request: new Request("https://axis.example/admin/repositories/debian-proxy/apt/proxy-cache"),
+      path: ["proxy-cache"],
+      services: {},
+    }).then((response) => response.json())).resolves.toEqual({
+      cache: { fileCount: 0, byteCount: 0 },
+    });
+    expect(calls).toEqual([{ method: "listForRepository", input: "debian-proxy" }]);
+  });
+
+  it("serves APT proxy signing keys without requiring proxy cache resources", async () => {
+    const plugin = createAptProxyPlugin({
+      signingKeys: signingKeys({
+        listForRepository: async () => [{ ...defaultSigningKey, repositoryName: "debian-proxy" }],
+      }),
+    });
+
+    await expect(dispatchRepositoryAdminResource(plugin.adminResources!, {
+      repositoryName: "debian-proxy",
+      repository: proxyRepository(),
+      request: new Request("https://axis.example/admin/repositories/debian-proxy/apt/signing-keys"),
+      path: ["signing-keys"],
+      services: {},
+    }).then((response) => response.json())).resolves.toEqual({
+      signingKeys: [{ ...defaultSigningKey, repositoryName: "debian-proxy" }],
+    });
+  });
+
   it("renders APT proxy files whose upstream Filename lives outside root pool", async () => {
     const plugin = createAptProxyPlugin();
     const state = new MemoryStateStore();

@@ -84,18 +84,22 @@ export function createAptAdminResources(input: {
 }
 
 export function createAptProxyAdminResources(input: {
-  objectStoreFor: (repositoryName: string) => RepositoryObjectStore;
+  objectStoreFor?: (repositoryName: string) => RepositoryObjectStore;
+  signingKeys?: RepositorySigningKeyCapability;
 }): RepositoryAdminResources {
-  return {
-    namespace: aptPluginManifest.adminResources.namespace,
-    routes: [
+  const routes: RepositoryAdminResources["routes"] = [
+    ...(input.signingKeys ? createAptAdminResources({ signingKeys: input.signingKeys }).routes : []),
+  ];
+  if (input.objectStoreFor) {
+    const objectStoreFor = input.objectStoreFor;
+    routes.push(
       {
         name: "get-proxy-cache",
         method: "GET",
         path: ["proxy-cache"],
         responseKind: "json",
         handle: async ({ repositoryName }) => {
-          return pluginJsonResponse({ cache: await aptProxyByteCacheStats(input.objectStoreFor(repositoryName), repositoryName) });
+          return pluginJsonResponse({ cache: await aptProxyByteCacheStats(objectStoreFor(repositoryName), repositoryName) });
         },
       },
       {
@@ -107,7 +111,12 @@ export function createAptProxyAdminResources(input: {
           throw new ValidationError("APT proxy byte cache purge must be queued by the runtime");
         },
       },
-    ],
+    );
+  }
+
+  return {
+    namespace: aptPluginManifest.adminResources.namespace,
+    routes,
   };
 }
 

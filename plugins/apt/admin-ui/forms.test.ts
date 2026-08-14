@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   activeSigningKeys,
+  applyAptRepositoryFieldChange,
   aptSuitesFor,
   emptyAptSettings,
   buildAptRepositoryFormValues,
@@ -214,11 +215,14 @@ describe("APT settings that describe the Release", () => {
       suites: ["noble", "jammy"],
       origin: "Example Ltd",
       label: "Example packages",
+      version: "24.04",
       description: "Internal builds",
       validityDays: 30,
       notAutomatic: true,
       butAutomaticUpgrades: true,
       acquireByHash: false,
+      signedBy: ["0123456789ABCDEF0123456789ABCDEF01234567", "FEDCBA9876543210FEDCBA9876543210FEDCBA98!"],
+      noSupportForArchitectureAll: ["Packages"],
     });
 
     const values = buildAptRepositoryFormValues(stored);
@@ -226,37 +230,53 @@ describe("APT settings that describe the Release", () => {
       suites: "noble jammy",
       origin: "Example Ltd",
       label: "Example packages",
+      version: "24.04",
       description: "Internal builds",
       validityDays: "30",
       notAutomatic: true,
       butAutomaticUpgrades: true,
       acquireByHash: false,
+      signedBy: "0123456789ABCDEF0123456789ABCDEF01234567 FEDCBA9876543210FEDCBA9876543210FEDCBA98!",
+      noSupportForArchitectureAll: "Packages",
     });
 
     expect(buildUpdateAptRepositoryInput(values, stored).config?.apt).toMatchObject({
       suites: ["noble", "jammy"],
       origin: "Example Ltd",
+      version: "24.04",
       validityDays: 30,
       notAutomatic: true,
       butAutomaticUpgrades: true,
       acquireByHash: false,
+      signedBy: ["0123456789ABCDEF0123456789ABCDEF01234567", "FEDCBA9876543210FEDCBA9876543210FEDCBA98!"],
+      noSupportForArchitectureAll: ["Packages"],
     });
   });
 
   it("drops a setting that has been cleared rather than writing an empty one", () => {
-    const stored = repository({ origin: "Example Ltd", validityDays: 30, notAutomatic: true });
+    const stored = repository({
+      origin: "Example Ltd",
+      validityDays: 30,
+      notAutomatic: true,
+      signedBy: ["0123456789ABCDEF0123456789ABCDEF01234567"],
+      noSupportForArchitectureAll: ["Packages"],
+    });
 
     const input = buildUpdateAptRepositoryInput({
       ...buildAptRepositoryFormValues(stored),
       origin: "",
       validityDays: "",
       notAutomatic: false,
+      signedBy: "",
+      noSupportForArchitectureAll: "",
     }, stored);
 
     const apt = input.config?.apt as Record<string, unknown>;
     expect(apt).not.toHaveProperty("origin");
     expect(apt).not.toHaveProperty("validityDays");
     expect(apt).not.toHaveProperty("notAutomatic");
+    expect(apt).not.toHaveProperty("signedBy");
+    expect(apt).not.toHaveProperty("noSupportForArchitectureAll");
   });
 
   it("stores by-hash only when it is turned off, since it defaults to on", () => {
@@ -270,6 +290,18 @@ describe("APT settings that describe the Release", () => {
       stored,
     );
     expect((off.config?.apt as Record<string, unknown>).acquireByHash).toBe(false);
+  });
+
+  it("clears automatic upgrade pinning when NotAutomatic is turned off", () => {
+    const values = buildAptRepositoryFormValues(repository({
+      notAutomatic: true,
+      butAutomaticUpgrades: true,
+    }));
+
+    expect(applyAptRepositoryFieldChange(values, "notAutomatic", false)).toMatchObject({
+      notAutomatic: false,
+      butAutomaticUpgrades: false,
+    });
   });
 
   it("rejects settings the server would reject, without a round trip", () => {
@@ -288,6 +320,10 @@ describe("APT settings that describe the Release", () => {
       { ...values, suites: "noble jammy", suite: "stable" },
       stored,
     )).toThrow("Suite override cannot be set for a repository publishing more than one suite");
+    expect(() => buildUpdateAptRepositoryInput({ ...values, signedBy: "not-a-fingerprint" }, stored))
+      .toThrow("Signed-By fingerprints must be OpenPGP fingerprints");
+    expect(() => buildUpdateAptRepositoryInput({ ...values, noSupportForArchitectureAll: "Packages/../../bad" }, stored))
+      .toThrow("No support for Architecture: all contains unsafe values");
   });
 });
 

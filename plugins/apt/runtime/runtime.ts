@@ -153,7 +153,14 @@ export function createAptProxyPlugin(input: {
       fetch: fetchImpl,
       ...(input.signingKeys ? { signingKeys: input.signingKeys } : {}),
     }),
-    ...(input.objectStoreFor ? { adminResources: createAptProxyAdminResources({ objectStoreFor: input.objectStoreFor }) } : {}),
+    ...(input.objectStoreFor || input.signingKeys
+      ? {
+        adminResources: createAptProxyAdminResources({
+          ...(input.objectStoreFor ? { objectStoreFor: input.objectStoreFor } : {}),
+          ...(input.signingKeys ? { signingKeys: input.signingKeys } : {}),
+        }),
+      }
+      : {}),
     objectBrowser: createAptProxyObjectBrowser(),
     normalizeRepositoryConfig: ({ config }) => normalizeAptProxyRepositoryConfig(config),
     create: {

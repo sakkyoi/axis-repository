@@ -17,7 +17,10 @@ export interface AptRepositoryFormValues {
   origin: string;
   label: string;
   suite: string;
+  version: string;
   description: string;
+  signedBy: string;
+  noSupportForArchitectureAll: string;
   /** Empty means no `Valid-Until`, so the published metadata never expires. */
   validityDays: string;
   notAutomatic: boolean;
@@ -52,7 +55,10 @@ export const emptyAptSettings = {
   origin: "",
   label: "",
   suite: "",
+  version: "",
   description: "",
+  signedBy: "",
+  noSupportForArchitectureAll: "",
   validityDays: "",
   notAutomatic: false,
   butAutomaticUpgrades: false,
@@ -69,7 +75,16 @@ const aptRepositoryBaseFormSchema = z.object({
   origin: z.string().trim(),
   label: z.string().trim(),
   suite: z.string().trim(),
+  version: z.string().trim(),
   description: z.string().trim(),
+  signedBy: z.string().trim().refine(
+    (value) => value === "" || parseOptionalList(value).every(isOpenPgpFingerprint),
+    "Signed-By fingerprints must be OpenPGP fingerprints",
+  ),
+  noSupportForArchitectureAll: z.string().trim().refine(
+    (value) => parseOptionalList(value).every(isSafeReleaseToken),
+    "No support for Architecture: all contains unsafe values",
+  ),
   validityDays: z.string().trim().refine(
     (value) => value === "" || (/^\d+$/.test(value) && Number(value) > 0),
     "Release validity must be a whole number of days",
@@ -138,6 +153,8 @@ function aptConfig(
   const suites = parseOptionalList(parsed.suites);
   const components = parseOptionalList(parsed.components);
   const architectures = parseOptionalList(parsed.architectures);
+  const signedBy = parseOptionalList(parsed.signedBy);
+  const noSupportForArchitectureAll = parseOptionalList(parsed.noSupportForArchitectureAll);
   const managed = {
     suites: suites.length > 0 ? suites : undefined,
     components: components.length > 0 ? components : undefined,
@@ -145,7 +162,10 @@ function aptConfig(
     origin: parsed.origin || undefined,
     label: parsed.label || undefined,
     suite: parsed.suite || undefined,
+    version: parsed.version || undefined,
     description: parsed.description || undefined,
+    signedBy: signedBy.length > 0 ? signedBy : undefined,
+    noSupportForArchitectureAll: noSupportForArchitectureAll.length > 0 ? noSupportForArchitectureAll : undefined,
     validityDays: parsed.validityDays === "" ? undefined : Number(parsed.validityDays),
     notAutomatic: parsed.notAutomatic ? true : undefined,
     butAutomaticUpgrades: parsed.butAutomaticUpgrades ? true : undefined,
@@ -172,6 +192,14 @@ function parseOptionalList(value: string): string[] {
     .split(/[\s,]+/g)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function isOpenPgpFingerprint(value: string): boolean {
+  return /^([A-Fa-f0-9]{40}|[A-Fa-f0-9]{64})!?$/.test(value);
+}
+
+function isSafeReleaseToken(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._+~-]*$/.test(value) && value !== "." && value !== "..";
 }
 
 export function buildCreateAptRepositoryInput(values: AptRepositoryFormValues): CreateRepositoryInput {
@@ -232,7 +260,12 @@ export function buildAptRepositoryFormValues(repository: Repository): AptReposit
     origin: typeof apt.origin === "string" ? apt.origin : "",
     label: typeof apt.label === "string" ? apt.label : "",
     suite: typeof apt.suite === "string" ? apt.suite : "",
+    version: typeof apt.version === "string" ? apt.version : "",
     description: typeof apt.description === "string" ? apt.description : "",
+    signedBy: Array.isArray(apt.signedBy) ? apt.signedBy.join(" ") : "",
+    noSupportForArchitectureAll: Array.isArray(apt.noSupportForArchitectureAll)
+      ? apt.noSupportForArchitectureAll.join(" ")
+      : "",
     validityDays: typeof apt.validityDays === "number" ? String(apt.validityDays) : "",
     notAutomatic: apt.notAutomatic === true,
     butAutomaticUpgrades: apt.butAutomaticUpgrades === true,
@@ -246,6 +279,18 @@ export function buildAptRepositoryFormValues(repository: Repository): AptReposit
     signingKeyPrivateKeyArmored: "",
     signingKeyPassphrase: "",
     signingKeyExistingId: aptAxisSigningKeyId(apt) ?? "",
+  };
+}
+
+export function applyAptRepositoryFieldChange<K extends keyof AptRepositoryFormValues>(
+  values: AptRepositoryFormValues,
+  field: K,
+  value: AptRepositoryFormValues[K],
+): AptRepositoryFormValues {
+  return {
+    ...values,
+    [field]: value,
+    ...(field === "notAutomatic" && value === false ? { butAutomaticUpgrades: false } : {}),
   };
 }
 

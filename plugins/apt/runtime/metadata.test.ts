@@ -537,11 +537,14 @@ describe("APT metadata", () => {
       origin: "Example Ltd",
       label: "Example internal packages",
       suite: "stable",
+      version: "24.04",
       description: "Internal builds for Example Ltd",
       validityDays: 7,
       notAutomatic: true,
       butAutomaticUpgrades: true,
       acquireByHash: false,
+      signedBy: ["0123456789ABCDEF0123456789ABCDEF01234567"],
+      noSupportForArchitectureAll: ["Packages"],
     });
 
     const metadata = await buildAptRepositoryMetadata(configured);
@@ -550,12 +553,15 @@ describe("APT metadata", () => {
     expect(suite(metadata).release).toContain("Label: Example internal packages\n");
     expect(suite(metadata).release).toContain("Suite: stable\n");
     expect(suite(metadata).release).toContain("Codename: noble\n");
+    expect(suite(metadata).release).toContain("Version: 24.04\n");
     expect(suite(metadata).release).toContain("Description: Internal builds for Example Ltd\n");
     expect(suite(metadata).release).toContain("Date: Sat, 18 Jul 2026 00:10:00 GMT\n");
     expect(suite(metadata).release).toContain("Valid-Until: Sat, 25 Jul 2026 00:10:00 GMT\n");
+    expect(suite(metadata).release).toContain("No-Support-for-Architecture-all: Packages\n");
     expect(suite(metadata).release).toContain("NotAutomatic: yes\n");
     expect(suite(metadata).release).toContain("ButAutomaticUpgrades: yes\n");
     expect(suite(metadata).release).toContain("Acquire-By-Hash: no\n");
+    expect(suite(metadata).release).toContain("Signed-By: 0123456789ABCDEF0123456789ABCDEF01234567\n");
   });
 
   it("rejects Release settings that apt would silently ignore or that could inject a field", () => {
@@ -565,13 +571,27 @@ describe("APT metadata", () => {
       "config.apt.butAutomaticUpgrades requires config.apt.notAutomatic",
     );
 
-    for (const field of ["origin", "label", "suite", "description"] as const) {
+    for (const field of ["origin", "label", "suite", "version", "description"] as const) {
       const injected = input();
       (injected.repository.config.apt as Record<string, unknown>)[field] = "Example\nValid-Until: never";
       expect(() => parseAptRepositoryConfig(injected.repository)).toThrow(
         `config.apt.${field} must not contain control characters`,
       );
     }
+
+    for (const signedBy of [["not-a-fingerprint"], ["0123456789ABCDEF0123456789ABCDEF01234567", "bad"]]) {
+      const invalid = input();
+      (invalid.repository.config.apt as Record<string, unknown>).signedBy = signedBy;
+      expect(() => parseAptRepositoryConfig(invalid.repository)).toThrow(
+        "config.apt.signedBy must contain OpenPGP fingerprints",
+      );
+    }
+
+    const invalidNoSupport = input();
+    (invalidNoSupport.repository.config.apt as Record<string, unknown>).noSupportForArchitectureAll = ["Packages\nInjected: yes"];
+    expect(() => parseAptRepositoryConfig(invalidNoSupport.repository)).toThrow(
+      "config.apt.noSupportForArchitectureAll contains unsafe path characters",
+    );
 
     for (const validityDays of [0, -1, 1.5, "7"]) {
       const invalid = input();
