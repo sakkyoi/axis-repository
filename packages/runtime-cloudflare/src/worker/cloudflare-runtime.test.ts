@@ -367,7 +367,7 @@ function validAptConfig(signingKeyId = "signing_key_prod"): Record<string, unkno
       codename: "noble",
       components: ["main"],
       architectures: ["amd64"],
-      signingKeyId,
+      signing: { mode: "axis", signingKeyId },
     },
   };
 }
@@ -819,7 +819,7 @@ describe("Cloudflare runtime dependencies", () => {
               codename: "noble",
               components: ["main"],
               architectures: ["amd64"],
-              signingKeyId: signingKey.id,
+              signing: { mode: "axis", signingKeyId: signingKey.id },
             },
           },
         }),

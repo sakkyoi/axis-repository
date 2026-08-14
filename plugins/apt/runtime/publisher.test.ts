@@ -74,7 +74,7 @@ function publishInput(signingKeyIds = ["signing_key_prod"]): PublishArtifactsInp
           codename: "noble",
           components: ["main"],
           architectures: ["amd64"],
-          signingKeyId: "signing_key_prod",
+          signing: { mode: "axis", signingKeyId: "signing_key_prod" },
         },
       },
       createdAt: "2026-07-18T00:00:00.000Z",
@@ -314,7 +314,7 @@ describe("AptPublisher", () => {
         codename: "noble",
         components: ["main", "contrib"],
         architectures: ["amd64", "arm64"],
-        signingKeyId: "signing_key_prod",
+        signing: { mode: "axis", signingKeyId: "signing_key_prod" },
       },
     };
     input.artifacts = [

@@ -6,6 +6,7 @@ import {
   repositorySummarySectionsFor,
   repositoryWorkspaceSectionsFor,
   repositoryClientHelperDisplayText,
+  repositoryClientHelperActionsForRepository,
   hostedRepositoryDetailPlugins,
 } from "./repository-detail-plugins";
 import type { Repository } from "../../api/schemas";
@@ -114,7 +115,13 @@ describe("repository detail plugins", () => {
   it("adds shared repository settings for every repository kind", () => {
     expect(repositorySettingsSectionsFor(repository({ ecosystem: "apt", kind: "proxy" })).map((section) => section.id)).toEqual([
       "settings",
+      "proxy-settings",
       "advanced-json",
+    ]);
+    expect(repositoryWorkspaceSectionsFor(repository({ ecosystem: "apt", kind: "proxy" })).map((section) => section.id)).toEqual([
+      "repository-artifacts",
+      "repository-browser",
+      "client-helpers",
     ]);
     expect(repositorySettingsSectionsFor(repository({ ecosystem: "pypi", kind: "proxy" })).map((section) => section.id)).toEqual([
       "settings",
@@ -134,16 +141,17 @@ describe("repository detail plugins", () => {
     expect(repositorySummarySectionsFor(repository({ ecosystem: "unknown" })).map((section) => section.id)).toEqual([]);
   });
 
-  it("uses skeleton detail sections for proxy and group repositories", () => {
+  it("uses kind-scoped detail sections for proxy and group repositories", () => {
     expect(repositoryWorkspaceSectionsFor(repository({ kind: "proxy" })).map((section) => section.id)).toEqual([
       "repository-artifacts",
       "repository-browser",
+      "client-helpers",
     ]);
     expect(repositorySettingsSectionsFor(repository({ kind: "group" })).map((section) => section.id)).toEqual([
       "settings",
       "advanced-json",
     ]);
-    expect(repositorySummarySectionsFor(repository({ kind: "proxy" })).map((section) => section.id)).toEqual([]);
+    expect(repositorySummarySectionsFor(repository({ kind: "proxy" })).map((section) => section.id)).toEqual(["client-helpers"]);
   });
 
   it("shows only PyPI install hints for proxy repositories", () => {
@@ -211,5 +219,29 @@ describe("repository detail plugins", () => {
       { responseKind: "text", displayPath: "simpleUrl" },
       { simpleUrl: "https://axis.example/repositories/python/simple/" },
     )).toBe("https://axis.example/repositories/python/simple/");
+  });
+
+  it("hides unavailable APT key helpers for unsigned repositories", () => {
+    const clientHelpers = {
+      namespace: "apt",
+      actions: [
+        { name: "key.gpg", label: "key.gpg", responseKind: "text" as const, defaultOpen: false, public: true },
+        { name: "install", label: "install", responseKind: "shell" as const, defaultOpen: true, public: true },
+      ],
+    };
+
+    expect(repositoryClientHelperActionsForRepository(repository({
+      config: { apt: { signing: { mode: "unsigned" } } },
+    }), clientHelpers).map((action) => action.name)).toEqual(["install"]);
+
+    expect(repositoryClientHelperActionsForRepository(repository({
+      kind: "proxy",
+      config: { apt: { signing: { mode: "upstream" } } },
+    }), clientHelpers).map((action) => action.name)).toEqual(["install"]);
+
+    expect(repositoryClientHelperActionsForRepository(repository({
+      kind: "proxy",
+      config: { apt: { signing: { mode: "upstream", upstreamKeyUrl: "https://deb.example/key.gpg" } } },
+    }), clientHelpers).map((action) => action.name)).toEqual(["key.gpg", "install"]);
   });
 });

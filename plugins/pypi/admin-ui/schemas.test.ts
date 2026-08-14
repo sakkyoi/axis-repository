@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { pypiClientInfoSchema, pypiProjectSchema, pypiProxyCachePurgeSchema, pypiProxyCacheSchema } from "./schemas";
+import { repositoryProxyCacheStatsSchema } from "@axis-repository/admin-ui/plugin-ui";
+import { pypiClientInfoSchema, pypiProjectSchema } from "./schemas";
 
 describe("PyPI UI plugin schemas", () => {
   it("parses PyPI client helper information", () => {
@@ -52,33 +53,18 @@ describe("PyPI project file schema", () => {
   });
 });
 
-describe("PyPI proxy cache schemas", () => {
-  it("parses byte cache stats and purge jobs", () => {
-    expect(pypiProxyCacheSchema.parse({
-      cache: {
-        fileCount: 2,
-        byteCount: 18,
-        catalogProjectCount: 1,
-        catalogRefreshedAt: "2026-08-05T00:00:00.000Z",
-      },
-    }).cache).toEqual({
+describe("shared proxy cache schema", () => {
+  it("parses byte cache stats", () => {
+    expect(repositoryProxyCacheStatsSchema.parse({
+      fileCount: 2,
+      byteCount: 18,
+      catalogProjectCount: 1,
+      catalogRefreshedAt: "2026-08-05T00:00:00.000Z",
+    })).toEqual({
       fileCount: 2,
       byteCount: 18,
       catalogProjectCount: 1,
       catalogRefreshedAt: "2026-08-05T00:00:00.000Z",
     });
-    expect(pypiProxyCachePurgeSchema.parse({
-      job: {
-        id: "repository.proxy-cache.purge:python-internal:pypi",
-        type: "repository.proxy-cache.purge",
-        status: "pending",
-        subject: { type: "repository", id: "python-internal", repositoryName: "python-internal" },
-        repositoryName: "python-internal",
-        priority: 0,
-        attempts: 0,
-        requestedAt: "2026-08-05T00:00:00.000Z",
-        scheduledAt: "2026-08-05T00:00:00.000Z",
-      },
-    }).job).toMatchObject({ type: "repository.proxy-cache.purge", status: "pending" });
   });
 });

@@ -4,6 +4,7 @@ export interface AptClientRepositoryInfo {
   codename: string;
   suites: string[];
   components: string[];
+  signed?: boolean;
 }
 
 export interface AptSourceInfo {
@@ -14,7 +15,7 @@ export interface AptSourceInfo {
   codename: string;
   suites: string[];
   components: string[];
-  keyringPath: string;
+  keyringPath?: string;
   /** The sources.list line for the default suite. */
   sourceLine: string;
   /** One line per suite, in the order the repository declares them. */
@@ -26,8 +27,8 @@ export interface AptSourceInfo {
 export interface AptInstallInfo {
   repository: string;
   visibility: "private" | "public";
-  keyUrl: string;
-  keyringPath: string;
+  keyUrl?: string;
+  keyringPath?: string;
   sourceListPath: string;
   sourceLine: string;
   sourceLines: string[];
@@ -58,11 +59,12 @@ export function buildAptSourceInfo(input: {
   repository: AptClientRepositoryInfo;
 }): AptSourceInfo {
   const baseUrl = baseRepositoryUrl(input.origin, input.repository.name);
-  const keyringPath = keyringPathForRepository(input.repository.name);
+  const keyringPath = input.repository.signed === false ? undefined : keyringPathForRepository(input.repository.name);
+  const sourceOptions = keyringPath ? ` [signed-by=${keyringPath}]` : input.repository.signed === false ? " [trusted=yes]" : "";
   const components = [...input.repository.components];
   const suites = input.repository.suites.length > 0 ? [...input.repository.suites] : [input.repository.codename];
   const sourceLineFor = (suite: string, kind: "deb" | "deb-src" = "deb") =>
-    `${kind} [signed-by=${keyringPath}] ${baseUrl} ${suite} ${components.join(" ")}`;
+    `${kind}${sourceOptions} ${baseUrl} ${suite} ${components.join(" ")}`;
 
   return {
     repository: input.repository.name,
@@ -71,7 +73,7 @@ export function buildAptSourceInfo(input: {
     codename: input.repository.codename,
     suites,
     components,
-    keyringPath,
+    ...(keyringPath ? { keyringPath } : {}),
     sourceLine: sourceLineFor(input.repository.codename),
     sourceLines: suites.map((suite) => sourceLineFor(suite)),
     sourcePackageLines: suites.map((suite) => sourceLineFor(suite, "deb-src")),
@@ -88,18 +90,20 @@ function buildAptInstallScript(install: Omit<AptInstallInfo, "script">): string 
       "EOF",
     ]);
   }
-  sections.push(
-    [
+  if (install.keyUrl) {
+    sections.push([
       "# Install the repository signing key.",
       install.commands[0]!,
-    ],
+    ]);
+  }
+  sections.push(
     [
       "# Configure APT to use this repository.",
-      install.commands[1]!,
+      install.keyUrl ? install.commands[1]! : install.commands[0]!,
     ],
     [
       "# Refresh package indexes.",
-      install.commands[2]!,
+      install.keyUrl ? install.commands[2]! : install.commands[1]!,
     ],
   );
   return sections.map((section) => section.join("\n")).join("\n\n");
@@ -110,7 +114,7 @@ export function buildAptInstallInfo(input: {
   repository: AptClientRepositoryInfo;
 }): AptInstallInfo {
   const source = buildAptSourceInfo(input);
-  const keyUrl = `${source.baseUrl}/apt/key.gpg`;
+  const keyUrl = source.keyringPath ? `${source.baseUrl}/apt/key.gpg` : undefined;
   const sourceListPath = sourceListPathForRepository(input.repository.name);
   // Every suite goes into the one sources.list file, so a repository that
   // publishes several is configured by a single copy-and-paste.
@@ -118,13 +122,13 @@ export function buildAptInstallInfo(input: {
   const install: Omit<AptInstallInfo, "script"> = {
     repository: input.repository.name,
     visibility: input.repository.visibility,
-    keyUrl,
-    keyringPath: source.keyringPath,
+    ...(keyUrl ? { keyUrl } : {}),
+    ...(source.keyringPath ? { keyringPath: source.keyringPath } : {}),
     sourceListPath,
     sourceLine: source.sourceLine,
     sourceLines: [...source.sourceLines],
     commands: [
-      `curl -fsSL ${keyUrl} | sudo gpg --dearmor -o ${source.keyringPath}`,
+      ...(keyUrl && source.keyringPath ? [`curl -fsSL ${keyUrl} | sudo gpg --dearmor -o ${source.keyringPath}`] : []),
       source.sourceLines.length === 1
         ? `echo '${source.sourceLine}' | sudo tee ${sourceListPath}`
         : `sudo tee ${sourceListPath} <<'EOF'\n${sourceListBody}\nEOF`,

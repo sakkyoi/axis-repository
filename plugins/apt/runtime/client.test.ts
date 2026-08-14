@@ -110,4 +110,30 @@ describe("APT client helpers", () => {
       repository: { ...repository, name: "debian-private", visibility: "private" },
     }))).not.toContain("axis_publish_");
   });
+
+  it("builds unsigned install instructions without a signing key", () => {
+    expect(buildAptInstallInfo({
+      origin: "https://axis.example",
+      repository: { ...repository, name: "debian-unsigned", signed: false },
+    })).toEqual({
+      repository: "debian-unsigned",
+      visibility: "public",
+      sourceListPath: "/etc/apt/sources.list.d/axis-debian-unsigned.list",
+      sourceLine: "deb [trusted=yes] https://axis.example/repositories/debian-unsigned noble main contrib",
+      sourceLines: [
+        "deb [trusted=yes] https://axis.example/repositories/debian-unsigned noble main contrib",
+      ],
+      commands: [
+        "echo 'deb [trusted=yes] https://axis.example/repositories/debian-unsigned noble main contrib' | sudo tee /etc/apt/sources.list.d/axis-debian-unsigned.list",
+        "sudo apt update",
+      ],
+      script: [
+        "# Configure APT to use this repository.",
+        "echo 'deb [trusted=yes] https://axis.example/repositories/debian-unsigned noble main contrib' | sudo tee /etc/apt/sources.list.d/axis-debian-unsigned.list",
+        "",
+        "# Refresh package indexes.",
+        "sudo apt update",
+      ].join("\n"),
+    });
+  });
 });

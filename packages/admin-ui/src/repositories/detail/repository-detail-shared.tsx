@@ -400,19 +400,21 @@ export function repositoryClientHelperDisplayText(
 }
 
 export function RepositoryClientHelperSetup({
-  repositoryName,
+  repository,
   clientHelpers,
 }: {
-  repositoryName: string;
+  repository: Repository;
   clientHelpers: RepositoryPlugin["clientHelpers"];
 }) {
-  if (!clientHelpers || clientHelpers.actions.length === 0) return null;
+  if (!clientHelpers) return null;
+  const actions = repositoryClientHelperActionsForRepository(repository, clientHelpers);
+  if (actions.length === 0) return null;
   return (
     <div className="grid gap-3">
-      {clientHelpers.actions.map((action) => (
+      {actions.map((action) => (
         <RepositoryClientHelperItem
           key={action.name}
-          repositoryName={repositoryName}
+          repositoryName={repository.name}
           namespace={clientHelpers.namespace}
           action={action}
         />
@@ -430,10 +432,44 @@ export function RepositoryClientHelpersSection({
 }) {
   return (
     <RepositoryClientHelperSetup
-      repositoryName={repository.name}
+      repository={repository}
       clientHelpers={pluginMetadata?.clientHelpers}
     />
   );
+}
+
+export function repositoryClientHelperActionsForRepository(
+  repository: Repository,
+  clientHelpers: RepositoryPlugin["clientHelpers"],
+): RepositoryClientHelperAction[] {
+  if (!clientHelpers) return [];
+  return clientHelpers.actions.filter((action) => isRepositoryClientHelperVisible(repository, clientHelpers.namespace, action));
+}
+
+function isRepositoryClientHelperVisible(
+  repository: Repository,
+  namespace: string,
+  action: RepositoryClientHelperAction,
+): boolean {
+  if (namespace !== "apt" || action.name !== "key.gpg") {
+    return true;
+  }
+  const apt = repository.config.apt;
+  if (!apt || typeof apt !== "object" || Array.isArray(apt)) {
+    return true;
+  }
+  const signing = (apt as Record<string, unknown>).signing;
+  if (!signing || typeof signing !== "object" || Array.isArray(signing)) {
+    return true;
+  }
+  const signingRecord = signing as Record<string, unknown>;
+  if (signingRecord.mode === "axis") {
+    return true;
+  }
+  if (signingRecord.mode === "upstream") {
+    return typeof signingRecord.upstreamKeyUrl === "string" && signingRecord.upstreamKeyUrl.trim().length > 0;
+  }
+  return false;
 }
 
 export function RepositoryClientHelperItem({

@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import {
   Button,
+  CodeBlock,
   EmptyState,
   ErrorState,
   useErrorToast,
   Input,
+  RepositoryProxyCachePanel,
+  RepositoryProxyIndexRefreshButton,
   Select,
   SelectContent,
   SelectItem,
@@ -24,6 +27,92 @@ import {
   buildUpdateAptRepositoryInput,
   type AptRepositoryFormValues,
 } from "./forms";
+
+export function AptProxySettingsSection({
+  repository,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-1">
+        <span className="text-xs font-medium uppercase text-muted-foreground">Upstream URL</span>
+        <CodeBlock
+          className="max-w-full whitespace-pre-wrap break-words"
+          language="text"
+          code={aptProxyConfigString(repository, "upstreamUrl") || "(not configured)"}
+          copyable={Boolean(aptProxyConfigString(repository, "upstreamUrl"))}
+        />
+      </div>
+      <div className="grid gap-1">
+        <span className="text-xs font-medium uppercase text-muted-foreground">Codename</span>
+        <span className="text-sm">{aptProxyConfigString(repository, "codename") || "(not configured)"}</span>
+      </div>
+      <div className="grid gap-1">
+        <span className="text-xs font-medium uppercase text-muted-foreground">Signing policy</span>
+        <span className="text-sm">{aptProxySigningPolicyLabel(repository)}</span>
+      </div>
+      {aptProxyUpstreamKeyUrl(repository) && (
+        <div className="grid gap-1">
+          <span className="text-xs font-medium uppercase text-muted-foreground">Upstream key URL</span>
+          <CodeBlock
+            className="max-w-full whitespace-pre-wrap break-words"
+            language="text"
+            code={aptProxyUpstreamKeyUrl(repository)}
+            copyable
+          />
+        </div>
+      )}
+      {aptProxyAxisSigningKeyId(repository) && (
+        <div className="grid gap-1">
+          <span className="text-xs font-medium uppercase text-muted-foreground">Axis signing key</span>
+          <span className="font-mono text-sm">{aptProxyAxisSigningKeyId(repository)}</span>
+        </div>
+      )}
+      <RepositoryProxyIndexRefreshButton
+        repositoryName={repository.name}
+        errorTitle="APT proxy cache refresh failed"
+      />
+      <RepositoryProxyCachePanel repository={repository} namespace="apt" label="APT proxy" />
+    </div>
+  );
+}
+
+function aptProxyConfigString(repository: Repository, field: string): string {
+  const apt = repository.config.apt;
+  if (!apt || typeof apt !== "object" || Array.isArray(apt)) {
+    return "";
+  }
+  const value = (apt as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : "";
+}
+
+function aptProxySigning(repository: Repository): Record<string, unknown> {
+  const apt = repository.config.apt;
+  if (!apt || typeof apt !== "object" || Array.isArray(apt)) {
+    return {};
+  }
+  const signing = (apt as Record<string, unknown>).signing;
+  return signing && typeof signing === "object" && !Array.isArray(signing) ? signing as Record<string, unknown> : {};
+}
+
+function aptProxySigningPolicyLabel(repository: Repository): string {
+  const signing = aptProxySigning(repository);
+  if (signing.mode === "axis") return "Re-sign with Axis";
+  if (signing.mode === "unsigned") return "Unsigned";
+  return "Use upstream";
+}
+
+function aptProxyUpstreamKeyUrl(repository: Repository): string {
+  const value = aptProxySigning(repository).upstreamKeyUrl;
+  return typeof value === "string" ? value : "";
+}
+
+function aptProxyAxisSigningKeyId(repository: Repository): string {
+  const value = aptProxySigning(repository).signingKeyId;
+  return typeof value === "string" ? value : "";
+}
 
 export function AptSettingsSection({
   repository,
@@ -72,7 +161,10 @@ export function AptSettingsSection({
         onChange={updateAptField}
       />
       {aptError && <ErrorState error={aptError} />}
-      <Button onClick={saveAptConfig} disabled={updateRepository.isPending || !selectedActiveSigningKey}>
+      <Button
+        onClick={saveAptConfig}
+        disabled={updateRepository.isPending || (aptValues.signingMode === "axis" && !selectedActiveSigningKey)}
+      >
         <Save className="mr-2 h-4 w-4" />
         Save repository
       </Button>
@@ -152,15 +244,31 @@ function AptRepositoryFields({
       </label>
       <AptReleaseFields values={values} onChange={onChange} />
       <label className="grid gap-2">
-        <span className="text-sm font-medium">Signing key</span>
-        {signingKeyState.currentKeyRevoked && (
+        <span className="text-sm font-medium">Signing policy</span>
+        <Select
+          value={values.signingMode}
+          onValueChange={(value) => onChange("signingMode", value as AptRepositoryFormValues["signingMode"])}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select signing policy" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="axis">Sign with Axis</SelectItem>
+            <SelectItem value="unsigned">Unsigned</SelectItem>
+          </SelectContent>
+        </Select>
+      </label>
+      {values.signingMode === "axis" && (
+        <label className="grid gap-2">
+          <span className="text-sm font-medium">Signing key</span>
+          {signingKeyState.currentKeyRevoked && (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-ink">
             Current signing key has been revoked. Select an active signing key before publishing.
           </div>
-        )}
-        {!signingKeyState.hasActiveKey ? (
+          )}
+          {!signingKeyState.hasActiveKey ? (
           <EmptyState message="No active signing key is available. Generate or import one to enable publishing." />
-        ) : (
+          ) : (
           <Select
             value={selectedActiveSigningKey ? values.signingKeyId ?? "" : ""}
             onValueChange={(value) => onChange("signingKeyId", value)}
@@ -174,8 +282,9 @@ function AptRepositoryFields({
               ))}
             </SelectContent>
           </Select>
-        )}
-      </label>
+          )}
+        </label>
+      )}
     </div>
   );
 }

@@ -31,7 +31,8 @@ import {
   objectStream,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import {
-  createPypiAdminResources,
+  createPypiHostedAdminResources,
+  createPypiProxyAdminResources,
   readPypiProxyCachedProject,
   readPypiProxyCachedProjectSummaries,
 } from "./admin-resources";
@@ -104,7 +105,7 @@ export function createPypiPlugin(input?: {
     },
     clientHelpers: createPypiClientHelpers(),
     ...(input?.objectStoreFor
-      ? { adminResources: createPypiAdminResources({ objectStoreFor: input.objectStoreFor }) }
+      ? { adminResources: createPypiHostedAdminResources({ objectStoreFor: input.objectStoreFor }) }
       : {}),
   };
 }
@@ -140,7 +141,7 @@ export function createPypiProxyPlugin(input: {
     normalizeRepositoryConfig: ({ config }) => normalizePypiProxyRepositoryConfig(config),
     ...(input.objectStoreFor
       ? {
-        adminResources: createPypiAdminResources({
+        adminResources: createPypiProxyAdminResources({
           objectStoreFor: input.objectStoreFor,
           fetchProxyProject: async ({ repository, repositoryName, repositoryEcosystem, repositoryConfig, artifactStore, project, cachedProject }) =>
             fetchAndCachePypiProxyProject({

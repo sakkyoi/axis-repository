@@ -2,6 +2,7 @@ import {
   AdvancedJsonConfigSection,
   GenericRepositoryDetail,
   RepositorySettingsSection,
+  repositoryClientHelperActionsForRepository,
   repositoryClientHelperDisplayText,
 } from "../detail/repository-detail-shared";
 import type { Repository } from "../../api/schemas";
@@ -95,5 +96,6 @@ export function repositorySettingsSectionsFor(repository: Repository): Repositor
 export {
   GenericRepositoryDetail,
   RepositoryPublishSection,
+  repositoryClientHelperActionsForRepository,
   repositoryClientHelperDisplayText,
 };

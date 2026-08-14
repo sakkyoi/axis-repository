@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
-import { createPypiAdminResources } from "./admin-resources";
+import { createPypiHostedAdminResources } from "./admin-resources";
 import { readPublishedProjectFiles, writeSimpleIndexes } from "./index-store";
 import { renderProjectFilesHtml, renderProjectFilesJson } from "./simple-index";
 
@@ -13,7 +13,7 @@ async function harness() {
     repositoryName: "python-internal",
     projects: [{ project: "alpha", files: [FILE, { filename: "alpha-2.0.tar.gz", sha256: "b".repeat(64) }] }],
   });
-  const resources = createPypiAdminResources({ objectStoreFor: () => objectStore });
+  const resources = createPypiHostedAdminResources({ objectStoreFor: () => objectStore });
 
   async function call(action: string, filename: string, body?: unknown) {
     const route = resources.routes.find((candidate) => candidate.name === action)!;

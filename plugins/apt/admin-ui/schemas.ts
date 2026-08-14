@@ -7,15 +7,15 @@ export const aptSourceInfoSchema = z.object({
   baseUrl: z.string(),
   codename: z.string(),
   components: z.array(z.string()),
-  keyringPath: z.string(),
+  keyringPath: z.string().optional(),
   sourceLine: z.string(),
 });
 
 export const installInstructionsSchema = z.object({
   repository: z.string(),
   visibility: repositoryVisibilitySchema,
-  keyUrl: z.string(),
-  keyringPath: z.string(),
+  keyUrl: z.string().optional(),
+  keyringPath: z.string().optional(),
   sourceListPath: z.string(),
   sourceLine: z.string(),
   script: z.string(),

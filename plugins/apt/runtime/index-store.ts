@@ -173,8 +173,10 @@ export async function writeAptRepositoryIndexes(input: {
   objectStore: RepositoryObjectStore;
   repositoryName: string;
   suites: AptIndexMetadata[];
-  signer: AptReleaseSigner;
-  signingKey: { privateKeyArmored: string; passphrase: string };
+  signing?: {
+    signer: AptReleaseSigner;
+    signingKey: { privateKeyArmored: string; passphrase: string };
+  };
   publishedAt: string;
   poolCopies?: AptPoolCopy[];
 }): Promise<WrittenAptIndexes> {
@@ -183,8 +185,7 @@ export async function writeAptRepositoryIndexes(input: {
     objectStore: input.objectStore,
     repositoryName: input.repositoryName,
     metadata,
-    signer: input.signer,
-    signingKey: input.signingKey,
+    ...(input.signing ? { signing: input.signing } : {}),
     publishedAt: input.publishedAt,
   })));
 
@@ -244,27 +245,29 @@ async function prepareSuiteWrite(input: {
   objectStore: RepositoryObjectStore;
   repositoryName: string;
   metadata: AptIndexMetadata;
-  signer: AptReleaseSigner;
-  signingKey: { privateKeyArmored: string; passphrase: string };
+  signing?: {
+    signer: AptReleaseSigner;
+    signingKey: { privateKeyArmored: string; passphrase: string };
+  };
   publishedAt: string;
 }): Promise<PreparedSuiteWrite> {
   const prefix = distsPrefix(input.repositoryName, input.metadata.suite);
   const { indexFiles, release, releasePath } = input.metadata;
   const inReleasePath = `${prefix}InRelease`;
   const releaseGpgPath = `${prefix}Release.gpg`;
-  const signingInput = {
-    text: release,
-    privateKeyArmored: input.signingKey.privateKeyArmored,
-    passphrase: input.signingKey.passphrase,
-    signingDate: new Date(input.publishedAt),
-  };
-  const inRelease = await input.signer.clearSign(signingInput);
-  const releaseGpg = await input.signer.detachSign(signingInput);
+  const signatureObjects = input.signing
+    ? await prepareSignatureObjects({
+      release,
+      inReleasePath,
+      releaseGpgPath,
+      publishedAt: input.publishedAt,
+      signing: input.signing,
+    })
+    : [];
   const indexObjects: PublishedObject[] = [
     ...indexFiles.map((file) => ({ key: `${prefix}${file.relativePath}`, contentType: file.contentType })),
     { key: releasePath, contentType: TEXT_CONTENT_TYPE },
-    { key: inReleasePath, contentType: TEXT_CONTENT_TYPE },
-    { key: releaseGpgPath, contentType: PGP_SIGNATURE_CONTENT_TYPE },
+    ...signatureObjects.map((object) => ({ key: object.key, contentType: object.contentType })),
   ];
 
   const published = await readPublishedRelease(input.objectStore, releasePath);
@@ -314,11 +317,40 @@ async function prepareSuiteWrite(input: {
       // are written every time even when no index moved.
       await Promise.all([
         input.objectStore.putText(releasePath, release, TEXT_CONTENT_TYPE),
-        input.objectStore.putText(inReleasePath, inRelease, TEXT_CONTENT_TYPE),
-        input.objectStore.putText(releaseGpgPath, releaseGpg, PGP_SIGNATURE_CONTENT_TYPE),
+        ...signatureObjects.map((object) => input.objectStore.putText(object.key, object.text, object.contentType)),
       ]);
     },
   };
+}
+
+async function prepareSignatureObjects(input: {
+  release: string;
+  inReleasePath: string;
+  releaseGpgPath: string;
+  publishedAt: string;
+  signing: {
+    signer: AptReleaseSigner;
+    signingKey: { privateKeyArmored: string; passphrase: string };
+  };
+}): Promise<Array<{ key: string; text: string; contentType: string }>> {
+  const signingInput = {
+    text: input.release,
+    privateKeyArmored: input.signing.signingKey.privateKeyArmored,
+    passphrase: input.signing.signingKey.passphrase,
+    signingDate: new Date(input.publishedAt),
+  };
+  return [
+    {
+      key: input.inReleasePath,
+      text: await input.signing.signer.clearSign(signingInput),
+      contentType: TEXT_CONTENT_TYPE,
+    },
+    {
+      key: input.releaseGpgPath,
+      text: await input.signing.signer.detachSign(signingInput),
+      contentType: PGP_SIGNATURE_CONTENT_TYPE,
+    },
+  ];
 }
 
 interface DigestedIndexFile {

@@ -10,7 +10,7 @@ export const aptPluginManifest = {
   capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
   repositoryKinds: [
     { kind: "hosted", experimental: false },
-    { kind: "proxy", experimental: true },
+    { kind: "proxy", experimental: false },
     { kind: "group", experimental: true },
   ],
   icon: {
@@ -51,11 +51,11 @@ export const aptPluginManifest = {
       },
       {
         name: "signingKey",
-        label: "Signing key",
+        label: "Signing policy",
         kind: "signing-key-provisioning",
         step: "setup",
         required: true,
-        description: "OpenPGP key to generate, import, or attach while creating this repository.",
+        description: "Choose whether this repository re-signs Release metadata with Axis or publishes unsigned metadata.",
       },
     ],
   },

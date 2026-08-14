@@ -31,6 +31,9 @@ export async function renewAptReleaseSignatures(input: {
   now: Date;
 }): Promise<{ refreshed: string[]; nextDueAt?: Date }> {
   const parsedConfig = parseAptRepositoryConfig(input.repository);
+  if (parsedConfig.signing.mode !== "axis") {
+    return { refreshed: [] };
+  }
   if (parsedConfig.validityDays === undefined) {
     // Nothing expires, so nothing has to be renewed.
     return { refreshed: [] };
@@ -83,8 +86,10 @@ export async function renewAptReleaseSignatures(input: {
         existingSources: state.sources,
         publishDate: input.now.toISOString(),
       })],
-      signer: input.signer,
-      signingKey: await input.signingKeys.getActivePrivateKey(config.signingKeyId, input.repository.name),
+      signing: {
+        signer: input.signer,
+        signingKey: await input.signingKeys.getActivePrivateKey(parsedConfig.signing.signingKeyId, input.repository.name),
+      },
       publishedAt: input.now.toISOString(),
     });
     refreshed.push(suite);

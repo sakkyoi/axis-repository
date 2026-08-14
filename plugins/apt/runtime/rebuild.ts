@@ -149,8 +149,14 @@ export async function reconcileAptRepository(input: {
     objectStore: input.objectStore,
     repositoryName: input.repository.name,
     suites,
-    signer: input.signer,
-    signingKey: await input.signingKeys.getActivePrivateKey(config.signingKeyId, input.repository.name),
+    ...(config.signing.mode === "axis"
+      ? {
+        signing: {
+          signer: input.signer,
+          signingKey: await input.signingKeys.getActivePrivateKey(config.signing.signingKeyId, input.repository.name),
+        },
+      }
+      : {}),
     publishedAt,
   });
 

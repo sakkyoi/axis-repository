@@ -38,7 +38,7 @@ export class AptPublisher implements ArtifactPublisher {
   async publish(input: PublishArtifactsInput): Promise<PublishResult> {
     const objectStore = this.options.objectStoreFor(input.repository.name);
     const config = parseAptRepositoryConfig(input.repository);
-    if (!input.session.requestedBy.signingKeyIds.includes(config.signingKeyId)) {
+    if (config.signing.mode === "axis" && !input.session.requestedBy.signingKeyIds.includes(config.signing.signingKeyId)) {
       throw new ValidationError("Publish token is not scoped to the repository signing key");
     }
     // Three reads of different things: the uploads being published, the
@@ -60,17 +60,22 @@ export class AptPublisher implements ArtifactPublisher {
       existingSources: suiteSourceIndexes(published),
       poolFilenames: pool,
     });
-    const key = await this.options.signingKeys.getActivePrivateKey(
-      metadata.config.signingKeyId,
-      input.repository.name,
-    );
     const publishedAt = input.session.publishStartedAt ?? input.session.finalizingStartedAt ?? input.session.createdAt;
     const written = await writeAptRepositoryIndexes({
       objectStore,
       repositoryName: input.repository.name,
       suites: metadata.suites,
-      signer: this.options.signer,
-      signingKey: key,
+      ...(metadata.config.signing.mode === "axis"
+        ? {
+          signing: {
+            signer: this.options.signer,
+            signingKey: await this.options.signingKeys.getActivePrivateKey(
+              metadata.config.signing.signingKeyId,
+              input.repository.name,
+            ),
+          },
+        }
+        : {}),
       publishedAt,
       poolCopies: metadata.poolCopies,
     });

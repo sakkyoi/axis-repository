@@ -77,7 +77,7 @@ async function createPublishSession(
             codename: "noble",
             components: ["main"],
             architectures: ["amd64"],
-            signingKeyId: signingKey.id,
+            signing: { mode: "axis", signingKeyId: signingKey.id },
           },
         },
       }),
@@ -191,7 +191,7 @@ function validAptConfig(signingKeyId = "signing_key_prod"): Record<string, unkno
       codename: "noble",
       components: ["main"],
       architectures: ["amd64"],
-      signingKeyId,
+      signing: { mode: "axis", signingKeyId },
     },
   };
 }
@@ -2032,7 +2032,7 @@ describe("Cloudflare runtime routes", () => {
           capabilities: ["apt", "signed-release", "pool-copy", "serve:dists", "serve:pool"],
           repositoryKinds: [
             { kind: "hosted", experimental: false },
-            { kind: "proxy", experimental: true },
+            { kind: "proxy", experimental: false },
             { kind: "group", experimental: true },
           ],
           icon: expect.objectContaining({
@@ -2080,7 +2080,7 @@ describe("Cloudflare runtime routes", () => {
           capabilities: ["pypi", "simple-api", "serve:simple", "client-helpers"],
           repositoryKinds: [
             { kind: "hosted", experimental: false },
-            { kind: "proxy", experimental: true },
+            { kind: "proxy", experimental: false },
             { kind: "group", experimental: false },
           ],
           icon: expect.objectContaining({
@@ -2405,7 +2405,7 @@ describe("Cloudflare runtime routes", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: { code: "validation_error", message: "config.apt.signingKeyId is required" },
+      error: { code: "validation_error", message: "config.apt.signing.mode must be axis or unsigned" },
     });
   });
 
@@ -2442,8 +2442,8 @@ describe("Cloudflare runtime routes", () => {
     );
 
     expect(response.status).toBe(201);
-    const body = await response.json() as { config: { apt: { signingKeyId?: string } } };
-    expect(body.config.apt.signingKeyId).toEqual(expect.stringMatching(/^repository_secret_/));
+    const body = await response.json() as { config: { apt: { signing: { signingKeyId?: string } } } };
+    expect(body.config.apt.signing.signingKeyId).toEqual(expect.stringMatching(/^repository_secret_/));
 
     const keys = await app.fetch(
       new Request("https://axis.example/admin/repositories/debian-internal/apt/signing-keys", {
@@ -2455,7 +2455,7 @@ describe("Cloudflare runtime routes", () => {
         {
           name: "release",
           repositoryName: "debian-internal",
-          id: body.config.apt.signingKeyId,
+          id: body.config.apt.signing.signingKeyId,
         },
       ],
     });
@@ -2509,7 +2509,7 @@ describe("Cloudflare runtime routes", () => {
               codename: "jammy",
               components: ["main", "contrib"],
               architectures: ["amd64"],
-              signingKeyId: signingKey.id,
+              signing: { mode: "axis", signingKeyId: signingKey.id },
             },
           },
         }),
@@ -2526,7 +2526,7 @@ describe("Cloudflare runtime routes", () => {
           codename: "jammy",
           components: ["main", "contrib"],
           architectures: ["amd64"],
-          signingKeyId: signingKey.id,
+          signing: { mode: "axis", signingKeyId: signingKey.id },
         },
       },
     });
@@ -2627,7 +2627,7 @@ describe("Cloudflare runtime routes", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: { code: "validation_error", message: "config.apt.signingKeyId is required" },
+      error: { code: "validation_error", message: "config.apt.signing.mode must be axis or unsigned" },
     });
   });
 
@@ -2750,7 +2750,7 @@ describe("Cloudflare runtime routes", () => {
           suites: ["noble", "jammy"],
           components: ["main", "contrib"],
           architectures: ["amd64"],
-          signingKeyId: signingKey.id,
+          signing: { mode: "axis", signingKeyId: signingKey.id },
         },
       },
     });
@@ -6253,7 +6253,7 @@ describe("Cloudflare runtime routes", () => {
               codename: "noble",
               components: ["main"],
               architectures: ["amd64"],
-              signingKeyId: signingKey.id,
+              signing: { mode: "axis", signingKeyId: signingKey.id },
             },
           },
         }),

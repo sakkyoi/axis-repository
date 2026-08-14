@@ -4,13 +4,9 @@ import {
   pypiClientInfoSchema,
   pypiProjectSchema,
   pypiProjectsSchema,
-  pypiProxyCachePurgeSchema,
-  pypiProxyCacheSchema,
   type PypiClientInfo,
   type PypiProject,
   type PypiProjects,
-  type PypiProxyCachePurge,
-  type PypiProxyCacheStats,
 } from "./schemas";
 
 const pypiNamespace = "pypi";
@@ -69,22 +65,6 @@ export async function getPypiProject(
   return pypiProjectSchema.parse(response).project;
 }
 
-export async function getPypiProxyCache(
-  client: PypiProjectsClient,
-  repositoryName: string,
-): Promise<PypiProxyCacheStats> {
-  const response = await client.getRepositoryPluginResource(repositoryName, pypiNamespace, ["proxy-cache"]);
-  return pypiProxyCacheSchema.parse(response).cache;
-}
-
-export async function purgePypiProxyCache(
-  client: PypiProjectsClient,
-  repositoryName: string,
-): Promise<PypiProxyCachePurge> {
-  const response = await client.postRepositoryPluginResource(repositoryName, pypiNamespace, ["proxy-cache", "purge"]);
-  return pypiProxyCachePurgeSchema.parse(response);
-}
-
 export function usePypiProjectsPage(repositoryName: string | undefined) {
   const client = useAxisClient();
   return useQuery({
@@ -117,28 +97,6 @@ export function usePypiProject(repositoryName: string | undefined, project: stri
   });
 }
 
-export function usePypiProxyCache(repositoryName: string | undefined, enabled: boolean) {
-  const client = useAxisClient();
-  return useQuery({
-    queryKey: ["pypi-proxy-cache", repositoryName],
-    queryFn: () => getPypiProxyCache(client, repositoryName ?? ""),
-    enabled: Boolean(repositoryName) && enabled,
-  });
-}
-
-export function usePurgePypiProxyCache(repositoryName: string | undefined) {
-  const client = useAxisClient();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => purgePypiProxyCache(client, repositoryName ?? ""),
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: ["background-job", result.job.id] });
-      void queryClient.invalidateQueries({ queryKey: ["background-jobs"] });
-      void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
-    },
-  });
-}
-
 export interface SetPypiFileYankedInput {
   repositoryName: string;
   project: string;
@@ -167,20 +125,5 @@ export function useSetPypiFileYanked() {
     mutationFn: (input: SetPypiFileYankedInput) => setPypiFileYanked(client, input),
     onSuccess: (_data, variables) =>
       queryClient.invalidateQueries({ queryKey: [pypiProjectsQueryKey, variables.repositoryName] }),
-  });
-}
-
-export function useRefreshPypiProxyCache(repositoryName: string | undefined) {
-  const client = useAxisClient();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => client.rebuildRepositoryArtifactIndex(repositoryName ?? ""),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["repository-artifact-index-job", repositoryName] });
-      void queryClient.invalidateQueries({ queryKey: [pypiProjectsQueryKey, repositoryName] });
-      void queryClient.invalidateQueries({ queryKey: ["repository-artifacts", repositoryName] });
-      void queryClient.invalidateQueries({ queryKey: ["repository-objects", repositoryName] });
-      void queryClient.invalidateQueries({ queryKey: ["repository-activity", repositoryName] });
-    },
   });
 }

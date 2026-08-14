@@ -10,7 +10,7 @@ const config: AptResolvedRepositoryConfig = {
   suites: ["noble"],
   components: ["main"],
   architectures: ["amd64", "arm64"],
-  signingKeyId: "signing_key_prod",
+  signing: { mode: "axis", signingKeyId: "signing_key_prod" },
 };
 
 function stanza(input: { name: string; architecture: string; description: string }) {

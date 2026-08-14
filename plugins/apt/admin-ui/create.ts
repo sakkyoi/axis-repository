@@ -48,6 +48,7 @@ function aptFormValues(state: RepositoryCreateWizardState): AptRepositoryFormVal
     suites: state.config.suites ?? "",
     components: state.config.components ?? "",
     architectures: state.config.architectures ?? "",
+    signingMode: state.setup.signingMode === "unsigned" ? "unsigned" : "axis",
     signingKeyMode: state.setup.signingKeyMode ?? "generate",
     signingKeyName: state.setup.signingKeyName ?? "",
     signingKeyUserIdName: state.setup.signingKeyUserIdName ?? "",
@@ -70,6 +71,7 @@ export const aptHostedRepositoryCreatePlugin: HostedRepositoryCreatePlugin = {
       codename: stringDefault("codename"),
     },
     setup: {
+      signingMode: "axis",
       signingKeyMode: "generate",
       signingKeyName: "release",
       signingKeyUserIdName: "Axis Repository",

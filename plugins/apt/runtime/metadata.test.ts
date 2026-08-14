@@ -44,7 +44,7 @@ const input = (overrides: Partial<PublishArtifactsInput> = {}): PublishArtifacts
         codename: "noble",
         components: ["main"],
         architectures: ["amd64"],
-        signingKeyId: "signing_key_prod",
+        signing: { mode: "axis", signingKeyId: "signing_key_prod" },
       },
     },
     createdAt: "2026-07-18T00:00:00.000Z",
@@ -132,7 +132,7 @@ describe("APT metadata", () => {
       codename: "noble",
       components: ["main"],
       architectures: ["amd64"],
-      signingKeyId: "signing_key_prod",
+      signing: { mode: "axis", signingKeyId: "signing_key_prod" },
     });
   });
 
@@ -143,7 +143,7 @@ describe("APT metadata", () => {
     expect(parseAptRepositoryConfig(repository)).toEqual({
       codename: "noble",
       components: ["main"],
-      signingKeyId: "signing_key_prod",
+      signing: { mode: "axis", signingKeyId: "signing_key_prod" },
     });
   });
 
@@ -155,7 +155,7 @@ describe("APT metadata", () => {
     expect(parseAptRepositoryConfig(repositoryInput.repository)).toEqual({
       codename: "noble",
       architectures: ["amd64"],
-      signingKeyId: "signing_key_prod",
+      signing: { mode: "axis", signingKeyId: "signing_key_prod" },
     });
 
     const metadata = await buildAptRepositoryMetadata(repositoryInput);
@@ -196,11 +196,18 @@ describe("APT metadata", () => {
   });
 
   it("rejects invalid repository config with exact messages", () => {
-    for (const field of ["codename", "signingKeyId"] as const) {
+    for (const field of ["codename"] as const) {
       const invalid = input();
       delete (invalid.repository.config.apt as Record<string, unknown>)[field];
 
       expect(() => parseAptRepositoryConfig(invalid.repository)).toThrow(`config.apt.${field} is required`);
+    }
+
+    {
+      const invalid = input();
+      delete (invalid.repository.config.apt as Record<string, unknown>).signing;
+
+      expect(() => parseAptRepositoryConfig(invalid.repository)).toThrow("config.apt.signing.mode must be axis or unsigned");
     }
 
     for (const field of ["components"] as const) {
@@ -346,7 +353,7 @@ describe("APT metadata", () => {
         codename: "noble",
         components: ["main", "contrib"],
         architectures: ["amd64", "arm64"],
-        signingKeyId: "signing_key_prod",
+        signing: { mode: "axis", signingKeyId: "signing_key_prod" },
       },
     };
     multi.artifacts = [

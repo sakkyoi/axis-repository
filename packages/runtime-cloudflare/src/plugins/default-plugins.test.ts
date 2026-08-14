@@ -15,7 +15,7 @@ describe("default artifact plugins", () => {
       repositoryKinds: plugin.repositoryKinds,
     }))).toEqual([
       { ecosystem: aptPluginManifest.ecosystem, repositoryKinds: [{ kind: "hosted", experimental: false }] },
-      { ecosystem: aptPluginManifest.ecosystem, repositoryKinds: [{ kind: "proxy", experimental: true }] },
+      { ecosystem: aptPluginManifest.ecosystem, repositoryKinds: [{ kind: "proxy", experimental: false }] },
       { ecosystem: aptPluginManifest.ecosystem, repositoryKinds: [{ kind: "group", experimental: true }] },
       { ecosystem: pypiPluginManifest.ecosystem, repositoryKinds: [{ kind: "hosted", experimental: false }] },
       { ecosystem: pypiPluginManifest.ecosystem, repositoryKinds: [{ kind: "proxy", experimental: false }] },

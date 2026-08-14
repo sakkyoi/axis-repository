@@ -147,6 +147,151 @@ describe("repository create plugins", () => {
     });
   });
 
+  it("builds an APT proxy repository create payload with upstream and codename", () => {
+    const plugin = getRepositoryCreatePlugin({ ecosystem: "apt", kind: "proxy" })!;
+
+    expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step, field.required]))
+      .toEqual([
+        ["upstreamUrl", "text", "config", true],
+        ["codename", "text", "config", true],
+        ["components", "string-list", "config", false],
+        ["architectures", "string-list", "config", false],
+        ["signingPolicy", "signing-key-provisioning", "setup", true],
+      ]);
+    expect(plugin.repositoryConfig.fields[0]).toMatchObject({
+      placeholder: "https://deb.debian.org/debian/",
+    });
+    expect(plugin.defaults.config).toEqual({
+      upstreamUrl: "",
+      codename: "",
+      components: "",
+      architectures: "",
+    });
+    expect(plugin.defaults.setup).toMatchObject({
+      signingMode: "upstream",
+      upstreamKeyUrl: "",
+      signingKeyMode: "generate",
+    });
+    expect(plugin.steps).toEqual(["plugin", "basics", "config", "setup", "review"]);
+    expect(plugin.validateStep("config", {
+      name: "debian-proxy",
+      visibility: "private",
+      config: { upstreamUrl: "", codename: "bookworm", components: "", architectures: "" },
+      setup: {},
+    })).toEqual(["Upstream URL is required"]);
+    expect(plugin.validateStep("config", {
+      name: "debian-proxy",
+      visibility: "private",
+      config: { upstreamUrl: "deb.example/debian", codename: "", components: "", architectures: "" },
+      setup: {},
+    })).toEqual(["Codename is required"]);
+    expect(plugin.buildCreateInput({
+      name: "debian-proxy",
+      visibility: "public",
+      config: {
+        upstreamUrl: " deb.example/debian ",
+        codename: "bookworm",
+        components: "main contrib",
+        architectures: "amd64 arm64",
+      },
+      setup: {
+        signingMode: "upstream",
+        upstreamKeyUrl: " download.example/key.gpg ",
+      },
+    })).toEqual({
+      name: "debian-proxy",
+      ecosystem: "apt",
+      kind: "proxy",
+      visibility: "public",
+      config: {
+        apt: {
+          upstreamUrl: "https://deb.example/debian/",
+          signing: {
+            mode: "upstream",
+            upstreamKeyUrl: "https://download.example/key.gpg",
+          },
+          codename: "bookworm",
+          components: ["main", "contrib"],
+          architectures: ["amd64", "arm64"],
+        },
+      },
+    });
+  });
+
+  it("builds APT proxy signing policy payloads", () => {
+    const plugin = getRepositoryCreatePlugin({ ecosystem: "apt", kind: "proxy" })!;
+    const baseState = {
+      name: "debian-proxy",
+      visibility: "private" as const,
+      config: {
+        upstreamUrl: "deb.example/debian",
+        codename: "bookworm",
+        components: "",
+        architectures: "",
+      },
+    };
+
+    expect(plugin.buildCreateInput({
+      ...baseState,
+      setup: { signingMode: "unsigned" },
+    })).toMatchObject({
+      config: {
+        apt: {
+          signing: { mode: "unsigned" },
+        },
+      },
+    });
+
+    expect(plugin.buildCreateInput({
+      ...baseState,
+      setup: {
+        signingMode: "axis",
+        signingKeyMode: "existing",
+        signingKeyExistingId: "signing_key_prod",
+      },
+    })).toMatchObject({
+      config: {
+        apt: {
+          signing: { mode: "axis" },
+        },
+      },
+      provisioning: {
+        apt: {
+          signingKey: {
+            mode: "existing",
+            signingKeyId: "signing_key_prod",
+          },
+        },
+      },
+    });
+  });
+
+  it("builds an unsigned APT hosted repository create payload", () => {
+    const plugin = getHostedRepositoryCreatePlugin("apt")!;
+
+    expect(plugin.buildCreateInput({
+      name: "debian-unsigned",
+      visibility: "public",
+      config: {
+        codename: "noble",
+      },
+      setup: {
+        signingMode: "unsigned",
+      },
+    })).toEqual({
+      name: "debian-unsigned",
+      ecosystem: "apt",
+      kind: "hosted",
+      visibility: "public",
+      config: {
+        apt: {
+          codename: "noble",
+          signing: { mode: "unsigned" },
+        },
+      },
+    });
+  });
+
   it("builds a PyPI group repository create payload with ordered members", () => {
     const plugin = getRepositoryCreatePlugin({ ecosystem: "pypi", kind: "group" })!;
 

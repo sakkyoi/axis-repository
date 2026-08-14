@@ -23,7 +23,7 @@ describe("publish token form model", () => {
     expect(buildCreatePublishTokenInput({
       name: "github-actions",
       repositories: [
-        repository("debian-internal", "apt", { apt: { signingKeyId: "signing_key_prod" } }),
+        repository("debian-internal", "apt", { apt: { signing: { mode: "axis", signingKeyId: "signing_key_prod" } } }),
         repository("python-internal", "pypi", {}),
       ],
       selectedRepositories: ["debian-internal", "python-internal"],
@@ -34,7 +34,7 @@ describe("publish token form model", () => {
         deriveSigningKeyIds: ({ repositories }) =>
           repositories.flatMap((repository) =>
             repository.ecosystem === "apt" && typeof repository.config.apt === "object"
-              ? [(repository.config.apt as { signingKeyId: string }).signingKeyId]
+              ? [((repository.config.apt as { signing: { signingKeyId: string } }).signing.signingKeyId)]
               : []),
         missingRequiredScopes: () => [],
       }],
@@ -65,8 +65,8 @@ describe("publish token form model", () => {
     expect(buildCreatePublishTokenInput({
       name: "multi-apt",
       repositories: [
-        repository("debian-a", "apt", { apt: { signingKeyId: "signing_key_shared" } }),
-        repository("debian-b", "apt", { apt: { signingKeyId: "signing_key_shared" } }),
+        repository("debian-a", "apt", { apt: { signing: { mode: "axis", signingKeyId: "signing_key_shared" } } }),
+        repository("debian-b", "apt", { apt: { signing: { mode: "axis", signingKeyId: "signing_key_shared" } } }),
       ],
       selectedRepositories: ["debian-a", "debian-b"],
       permissions: { read: false, publish: true },
@@ -76,7 +76,7 @@ describe("publish token form model", () => {
         deriveSigningKeyIds: ({ repositories }) =>
           repositories.flatMap((repository) =>
             repository.ecosystem === "apt" && typeof repository.config.apt === "object"
-              ? [(repository.config.apt as { signingKeyId: string }).signingKeyId]
+              ? [((repository.config.apt as { signing: { signingKeyId: string } }).signing.signingKeyId)]
               : []),
         missingRequiredScopes: () => [],
       }],
@@ -86,7 +86,7 @@ describe("publish token form model", () => {
   it("omits signing key ids when publish permission is disabled", () => {
     expect(buildCreatePublishTokenInput({
       name: "reader",
-      repositories: [repository("debian-internal", "apt", { apt: { signingKeyId: "signing_key_prod" } })],
+      repositories: [repository("debian-internal", "apt", { apt: { signing: { mode: "axis", signingKeyId: "signing_key_prod" } } })],
       selectedRepositories: ["debian-internal"],
       permissions: { read: true, publish: false },
       expiration: { mode: "never", customDateTime: "" },

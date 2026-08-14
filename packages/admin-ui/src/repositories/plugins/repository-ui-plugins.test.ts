@@ -281,7 +281,7 @@ describe("repository UI plugin registry", () => {
         ecosystem: "apt",
         kind: "hosted",
         visibility: "private",
-        config: { apt: { signingKeyId: "signing_key_prod" } },
+        config: { apt: { signing: { mode: "axis", signingKeyId: "signing_key_prod" } } },
         createdAt: "2026-07-23T00:00:00.000Z",
         updatedAt: "2026-07-23T00:00:00.000Z",
       }],

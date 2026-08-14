@@ -49,7 +49,12 @@ const bundledRuntimePluginFactories: Record<string, RuntimePluginFactory> = {
         signingKeys,
         signer: input.aptReleaseSigner,
       }),
-      createAptProxyPlugin(),
+      createAptProxyPlugin({
+        objectStoreFor: input.objectStoreFor,
+        signingKeys,
+        signer: input.aptReleaseSigner,
+        ...(input.proxyPolicyFor === undefined ? {} : { proxyPolicyFor: input.proxyPolicyFor }),
+      }),
       createAptGroupPlugin(),
     ];
   },

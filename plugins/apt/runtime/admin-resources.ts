@@ -1,9 +1,9 @@
-import { NotFoundError } from "@axis-repository/core";
+import { NotFoundError, ValidationError, type RepositoryObjectStore } from "@axis-repository/core";
 import type {
   RepositoryAdminResources,
   RepositorySigningKeyCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
-import { pluginJsonResponse, readJsonObject, stringField } from "@axis-repository/runtime-cloudflare/plugin-runtime";
+import { listAllObjects, pluginJsonResponse, readJsonObject, stringField } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { aptPluginManifest } from "../manifest";
 
 function aptAdminResourceRoute(name: string) {
@@ -80,5 +80,45 @@ export function createAptAdminResources(input: {
         },
       },
     ],
+  };
+}
+
+export function createAptProxyAdminResources(input: {
+  objectStoreFor: (repositoryName: string) => RepositoryObjectStore;
+}): RepositoryAdminResources {
+  return {
+    namespace: aptPluginManifest.adminResources.namespace,
+    routes: [
+      {
+        name: "get-proxy-cache",
+        method: "GET",
+        path: ["proxy-cache"],
+        responseKind: "json",
+        handle: async ({ repositoryName }) => {
+          return pluginJsonResponse({ cache: await aptProxyByteCacheStats(input.objectStoreFor(repositoryName), repositoryName) });
+        },
+      },
+      {
+        name: "purge-proxy-cache",
+        method: "POST",
+        path: ["proxy-cache", "purge"],
+        responseKind: "json",
+        handle: async () => {
+          throw new ValidationError("APT proxy byte cache purge must be queued by the runtime");
+        },
+      },
+    ],
+  };
+}
+
+async function aptProxyByteCacheStats(
+  objectStore: RepositoryObjectStore,
+  repositoryName: string,
+): Promise<{ fileCount: number; byteCount: number }> {
+  const objects = await listAllObjects(objectStore, `repositories/${repositoryName}/_proxy-cache/apt/files/`);
+  const files = objects.filter((object) => !object.key.endsWith(".json"));
+  return {
+    fileCount: files.length,
+    byteCount: files.reduce((sum, object) => sum + (object.contentLength ?? 0), 0),
   };
 }

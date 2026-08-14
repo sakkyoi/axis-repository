@@ -8,7 +8,7 @@ import {
 describe("APT publish token scope", () => {
   it("derives signing key scopes from selected APT repositories when publish is enabled", () => {
     const repositories = [
-      repository("debian-internal", "apt", { apt: { signingKeyId: "signing_key_prod" } }),
+      repository("debian-internal", "apt", { apt: { signing: { mode: "axis", signingKeyId: "signing_key_prod" } } }),
       repository("python-internal", "pypi"),
     ];
 
@@ -27,7 +27,7 @@ describe("APT publish token scope", () => {
 
   it("reports selected APT repositories that still need signing key setup", () => {
     const repositories = [
-      repository("debian-ready", "apt", { apt: { signingKeyId: "signing_key_prod" } }),
+      repository("debian-ready", "apt", { apt: { signing: { mode: "axis", signingKeyId: "signing_key_prod" } } }),
       repository("debian-missing", "apt"),
       repository("python-internal", "pypi"),
     ];

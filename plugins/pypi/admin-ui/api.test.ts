@@ -2,11 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   getPypiClientInfo,
   getPypiProject,
-  getPypiProxyCache,
   listPypiProjects,
-  purgePypiProxyCache,
   setPypiFileYanked,
 } from "./api";
+import { getRepositoryProxyCache, purgeRepositoryProxyCache } from "@axis-repository/admin-ui/plugin-ui";
 
 describe("PyPI UI plugin API adapter", () => {
   it("uses generic repository client helpers for client info", async () => {
@@ -169,12 +168,12 @@ describe("PyPI project files API adapter", () => {
       },
     );
 
-    await expect(getPypiProxyCache(client, "python-internal"))
+    await expect(getRepositoryProxyCache(client, "python-internal", "pypi"))
       .resolves.toEqual({ fileCount: 2, byteCount: 18 });
     expect(client.calls[0]).toMatchObject({ path: ["proxy-cache"] });
 
     client.calls.length = 0;
-    await expect(purgePypiProxyCache(client, "python-internal"))
+    await expect(purgeRepositoryProxyCache(client, "python-internal", "pypi"))
       .resolves.toMatchObject({ job: { type: "repository.proxy-cache.purge", status: "pending" } });
     expect(client.calls[0]).toEqual({
       path: ["proxy-cache", "purge"],

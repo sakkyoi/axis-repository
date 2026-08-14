@@ -1,4 +1,4 @@
-import { ValidationError, type Repository } from "@axis-repository/core";
+import { ValidationError, type ProxyOperationalPolicyOverride, type Repository } from "@axis-repository/core";
 import { aptPluginManifest } from "../manifest";
 
 export interface AptRepositoryConfig {
@@ -8,7 +8,7 @@ export interface AptRepositoryConfig {
   suites?: string[];
   components?: string[];
   architectures?: string[];
-  signingKeyId: string;
+  signing: AptHostedSigningPolicy;
   /** Free-text `Release` identity; both default to the repository name. */
   origin?: string;
   label?: string;
@@ -27,6 +27,24 @@ export interface AptResolvedRepositoryConfig extends AptRepositoryConfig {
   components: string[];
   architectures: string[];
 }
+
+export interface AptProxyRepositoryConfig {
+  upstreamUrl: string;
+  signing: AptProxySigningPolicy;
+  codename: string;
+  components?: string[];
+  architectures?: string[];
+  proxyPolicy?: ProxyOperationalPolicyOverride;
+}
+
+export type AptHostedSigningPolicy =
+  | { mode: "axis"; signingKeyId: string }
+  | { mode: "unsigned" };
+
+export type AptProxySigningPolicy =
+  | { mode: "upstream"; upstreamKeyUrl?: string }
+  | { mode: "axis"; signingKeyId: string }
+  | { mode: "unsigned" };
 
 const safePathSegmentPattern = /^[A-Za-z0-9][A-Za-z0-9._+~-]*$/;
 // A newline in a free-text Release field would start a new field.
@@ -63,10 +81,7 @@ export function parseAptRepositoryConfig(repository: Repository): AptRepositoryC
     ...(architectures
       ? { architectures: architectures.map((architecture) => validatePathSegment(architecture, configPath("architectures"))) }
       : {}),
-    signingKeyId: validatePathSegment(
-      requiredConfigString(aptConfig, "signingKeyId"),
-      configPath("signingKeyId"),
-    ),
+    signing: parseHostedSigningPolicy(aptConfig),
     ...optionalReleaseText(aptConfig, "origin"),
     ...optionalReleaseText(aptConfig, "label"),
     ...suiteOverride(aptConfig, suites ?? [codename]),
@@ -83,6 +98,112 @@ export function validatePathSegment(value: string, label: string): string {
     throw new ValidationError(`${label} contains unsafe path characters`);
   }
   return value;
+}
+
+export function parseAptProxyRepositoryConfig(config: Record<string, unknown>): AptProxyRepositoryConfig {
+  const aptConfig = readRecord(config[aptConfigNamespace]);
+  const upstreamUrl = requiredConfigString(aptConfig, "upstreamUrl");
+  let url: URL;
+  try {
+    url = new URL(normalizeAptProxyUpstreamUrlInput(upstreamUrl));
+  } catch {
+    throw new ValidationError(`${configPath("upstreamUrl")} must be a valid URL`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new ValidationError(`${configPath("upstreamUrl")} must use http or https`);
+  }
+  const signing = parseProxySigningPolicy(aptConfig);
+
+  const codename = validatePathSegment(requiredConfigString(aptConfig, "codename"), configPath("codename"));
+  const components = optionalConfigStringArray(aptConfig, "components")
+    ?.map((component) => validatePathSegment(component, configPath("components")));
+  const architectures = optionalConfigStringArray(aptConfig, "architectures")
+    ?.map((architecture) => validatePathSegment(architecture, configPath("architectures")));
+  const proxyPolicy = aptConfig.proxyPolicy;
+  if (proxyPolicy !== undefined && (!proxyPolicy || typeof proxyPolicy !== "object" || Array.isArray(proxyPolicy))) {
+    throw new ValidationError(`${configPath("proxyPolicy")} must be an object`);
+  }
+
+  return {
+    upstreamUrl: ensureTrailingSlash(url.toString()),
+    signing,
+    codename,
+    ...(components ? { components: [...new Set(components)] } : {}),
+    ...(architectures ? { architectures: [...new Set(architectures)] } : {}),
+    ...(proxyPolicy === undefined ? {} : { proxyPolicy: proxyPolicy as ProxyOperationalPolicyOverride }),
+  };
+}
+
+export function normalizeAptProxyRepositoryConfig(config: Record<string, unknown>): Record<string, unknown> {
+  return {
+    [aptConfigNamespace]: parseAptProxyRepositoryConfig(config),
+  };
+}
+
+function normalizeAptProxyUpstreamUrlInput(value: string): string {
+  const trimmed = value.trim();
+  return /^[a-z][a-z\d+.-]*:/iu.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function optionalHttpUrl(config: Record<string, unknown>, field: string, label = configPath(field)): string | undefined {
+  if (!(field in config) || config[field] === undefined || config[field] === "") {
+    return undefined;
+  }
+  const value = config[field];
+  if (typeof value !== "string") {
+    throw new ValidationError(`${label} must be a valid URL when provided`);
+  }
+  let url: URL;
+  try {
+    url = new URL(normalizeAptProxyUpstreamUrlInput(value));
+  } catch {
+    throw new ValidationError(`${label} must be a valid URL when provided`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new ValidationError(`${label} must use http or https`);
+  }
+  return url.toString();
+}
+
+function parseHostedSigningPolicy(config: Record<string, unknown>): AptHostedSigningPolicy {
+  const signing = readRecord(config.signing);
+  const mode = signing.mode;
+  if (mode === "axis") {
+    return {
+      mode,
+      signingKeyId: validatePathSegment(requiredConfigString(signing, "signingKeyId"), configPath("signing.signingKeyId")),
+    };
+  }
+  if (mode === "unsigned") {
+    return { mode };
+  }
+  throw new ValidationError(`${configPath("signing.mode")} must be axis or unsigned`);
+}
+
+function parseProxySigningPolicy(config: Record<string, unknown>): AptProxySigningPolicy {
+  const signing = readRecord(config.signing);
+  const mode = signing.mode;
+  if (mode === "upstream") {
+    const upstreamKeyUrl = optionalHttpUrl(signing, "upstreamKeyUrl", configPath("signing.upstreamKeyUrl"));
+    return {
+      mode,
+      ...(upstreamKeyUrl ? { upstreamKeyUrl } : {}),
+    };
+  }
+  if (mode === "axis") {
+    return {
+      mode,
+      signingKeyId: validatePathSegment(requiredConfigString(signing, "signingKeyId"), configPath("signing.signingKeyId")),
+    };
+  }
+  if (mode === "unsigned") {
+    return { mode };
+  }
+  throw new ValidationError(`${configPath("signing.mode")} must be upstream, axis, or unsigned`);
+}
+
+function ensureTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value : `${value}/`;
 }
 
 function readRecord(value: unknown): Record<string, unknown> {

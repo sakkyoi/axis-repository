@@ -27,16 +27,11 @@ function pypiAdminResourceRoute(name: string) {
   return { ...route, path: [...route.path] };
 }
 
-/**
- * Yanking, as PEP 592 defines it.
- *
- * A yanked file stays downloadable — anything that already pins it keeps
- * working — but a resolver passes over it unless nothing else satisfies the
- * requirement. That is what makes it the right answer for a broken release,
- * where deleting would break whoever already depends on it.
- */
-export function createPypiAdminResources(input: {
+interface PypiAdminResourceInput {
   objectStoreFor: (repositoryName: string) => RepositoryObjectStore;
+}
+
+interface PypiProxyAdminResourceInput extends PypiAdminResourceInput {
   fetchProxyProject?: (input: {
     repository: Repository;
     repositoryName: string;
@@ -46,7 +41,17 @@ export function createPypiAdminResources(input: {
     project: string;
     cachedProject?: { name: string; files: unknown[] };
   }) => Promise<{ name: string; files: unknown[] } | undefined>;
-}): RepositoryAdminResources {
+}
+
+/**
+ * Yanking, as PEP 592 defines it.
+ *
+ * A yanked file stays downloadable — anything that already pins it keeps
+ * working — but a resolver passes over it unless nothing else satisfies the
+ * requirement. That is what makes it the right answer for a broken release,
+ * where deleting would break whoever already depends on it.
+ */
+export function createPypiHostedAdminResources(input: PypiAdminResourceInput): RepositoryAdminResources {
   async function setYanked(
     repositoryName: string,
     project: string,
@@ -82,17 +87,9 @@ export function createPypiAdminResources(input: {
     routes: [
       {
         ...pypiAdminResourceRoute("list-projects"),
-        handle: async ({ repository, repositoryName, request }) => {
+        handle: async ({ repositoryName, request }) => {
           const objectStore = input.objectStoreFor(repositoryName);
           const pageParams = projectPageParams(new URL(request.url).searchParams);
-          if (repository?.kind === "proxy") {
-            const projects = await readPypiProxyCachedProjectSummaries(objectStore, repositoryName);
-            return pluginJsonResponse({
-              ...projectPage(projects
-                .slice(pageParams.offset, pageParams.offset + pageParams.limit)
-                .map((project) => ({ name: project.name, fileCount: project.fileCount })), projects.length, pageParams),
-            });
-          }
           // Read from the published pages rather than the artifact index, so
           // what an operator sees is what clients are being served, yank state
           // included.
@@ -106,25 +103,9 @@ export function createPypiAdminResources(input: {
       },
       {
         ...pypiAdminResourceRoute("get-project"),
-        handle: async ({ repository, repositoryName, params, services }) => {
+        handle: async ({ repositoryName, params }) => {
           const objectStore = input.objectStoreFor(repositoryName);
           const project = normalizeProjectName(requireParam(params.project));
-          if (repository?.kind === "proxy") {
-            const cached = await readPypiProxyCachedProject(objectStore, repositoryName, project);
-            const synced = await input.fetchProxyProject?.({
-                repository,
-                repositoryName,
-                repositoryEcosystem: repository.ecosystem,
-                repositoryConfig: repository.config,
-                artifactStore: services.repositoryArtifactStore,
-                project,
-                ...(cached === undefined ? {} : { cachedProject: cached }),
-              });
-            if (!synced) {
-              throw new NotFoundError();
-            }
-            return pluginJsonResponse({ project: synced });
-          }
           return pluginJsonResponse({
             project: {
               name: project,
@@ -163,15 +144,66 @@ export function createPypiAdminResources(input: {
           ));
         },
       },
+    ],
+  };
+}
+
+export function createPypiProxyAdminResources(input: PypiProxyAdminResourceInput): RepositoryAdminResources {
+  return {
+    namespace: pypiPluginManifest.adminResources.namespace,
+    routes: [
       {
-        ...pypiAdminResourceRoute("get-proxy-cache"),
+        ...pypiAdminResourceRoute("list-projects"),
+        handle: async ({ repositoryName, request }) => {
+          const objectStore = input.objectStoreFor(repositoryName);
+          const pageParams = projectPageParams(new URL(request.url).searchParams);
+          const projects = await readPypiProxyCachedProjectSummaries(objectStore, repositoryName);
+          return pluginJsonResponse({
+            ...projectPage(projects
+              .slice(pageParams.offset, pageParams.offset + pageParams.limit)
+              .map((project) => ({ name: project.name, fileCount: project.fileCount })), projects.length, pageParams),
+          });
+        },
+      },
+      {
+        ...pypiAdminResourceRoute("get-project"),
+        handle: async ({ repository, repositoryName, params, services }) => {
+          if (!repository) {
+            throw new NotFoundError();
+          }
+          const objectStore = input.objectStoreFor(repositoryName);
+          const project = normalizeProjectName(requireParam(params.project));
+          const cached = await readPypiProxyCachedProject(objectStore, repositoryName, project);
+          const synced = await input.fetchProxyProject?.({
+            repository,
+            repositoryName,
+            repositoryEcosystem: repository.ecosystem,
+            repositoryConfig: repository.config,
+            artifactStore: services.repositoryArtifactStore,
+            project,
+            ...(cached === undefined ? {} : { cachedProject: cached }),
+          });
+          if (!synced) {
+            throw new NotFoundError();
+          }
+          return pluginJsonResponse({ project: synced });
+        },
+      },
+      {
+        name: "get-proxy-cache",
+        method: "GET",
+        path: ["proxy-cache"],
+        responseKind: "json",
         handle: async ({ repositoryName }) => {
           const objectStore = input.objectStoreFor(repositoryName);
           return pluginJsonResponse({ cache: await pypiProxyByteCacheStats(objectStore, repositoryName) });
         },
       },
       {
-        ...pypiAdminResourceRoute("purge-proxy-cache"),
+        name: "purge-proxy-cache",
+        method: "POST",
+        path: ["proxy-cache", "purge"],
+        responseKind: "json",
         handle: async () => {
           throw new ValidationError("PyPI proxy byte cache purge must be queued by the runtime");
         },

@@ -29,6 +29,17 @@ export {
   RepositoryClientHelpersSection,
   VisibilitySelect,
 } from "./repositories/detail/repository-detail-shared";
+export {
+  RepositoryProxyIndexRefreshButton,
+  RepositoryProxyCachePanel,
+  getRepositoryProxyCache,
+  purgeRepositoryProxyCache,
+  repositoryProxyCacheStatsSchema,
+  usePurgeRepositoryProxyCache,
+  useRepositoryProxyCache,
+  type RepositoryProxyCachePurge,
+  type RepositoryProxyCacheStats,
+} from "./repositories/detail/repository-proxy-cache";
 export { repositoryCreateStepsForConfig } from "./repositories/create/repository-create-steps";
 export { RepositoryMultiSelect, RepositoryMultiSelectView } from "./repositories/repository-multi-select";
 export { sha256Hex } from "./repositories/publish/admin-publish-form-model";

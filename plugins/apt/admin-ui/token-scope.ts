@@ -24,6 +24,10 @@ function selectedAptRepositories(input: PublishTokenScopeInput) {
 function aptSigningKeyId(config: Record<string, unknown>): string | undefined {
   const aptConfig = config.apt;
   if (!aptConfig || typeof aptConfig !== "object") return undefined;
-  const signingKeyId = (aptConfig as { signingKeyId?: unknown }).signingKeyId;
-  return typeof signingKeyId === "string" && signingKeyId.trim() ? signingKeyId : undefined;
+  const signing = (aptConfig as { signing?: unknown }).signing;
+  if (!signing || typeof signing !== "object" || Array.isArray(signing)) return undefined;
+  const signingKeyId = (signing as { mode?: unknown; signingKeyId?: unknown }).signingKeyId;
+  return (signing as { mode?: unknown }).mode === "axis" && typeof signingKeyId === "string" && signingKeyId.trim()
+    ? signingKeyId
+    : undefined;
 }

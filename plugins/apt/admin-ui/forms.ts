@@ -23,6 +23,7 @@ export interface AptRepositoryFormValues {
   notAutomatic: boolean;
   butAutomaticUpgrades: boolean;
   acquireByHash: boolean;
+  signingMode: "axis" | "unsigned";
   signingKeyId?: string;
   signingKeyMode?: string;
   signingKeyName?: string;
@@ -96,7 +97,13 @@ const aptRepositoryBaseFormSchema = z.object({
 
 const aptRepositoryUpdateFormSchema = z.intersection(
   aptRepositoryBaseFormSchema,
-  z.object({ signingKeyId: z.string().trim().min(1, "Signing key is required") }),
+  z.object({
+    signingMode: z.enum(["axis", "unsigned"]),
+    signingKeyId: z.string().trim(),
+  }).refine(
+    (values) => values.signingMode === "unsigned" || values.signingKeyId.length > 0,
+    { message: "Signing key is required", path: ["signingKeyId"] },
+  ),
 );
 
 function parseBaseForm(values: AptRepositoryFormValues): z.infer<typeof aptRepositoryBaseFormSchema> {
@@ -125,7 +132,7 @@ function parseUpdateForm(values: AptRepositoryFormValues): z.infer<typeof aptRep
  */
 function aptConfig(
   values: AptRepositoryFormValues,
-  options: { signingKeyId?: string; existing?: Record<string, unknown> } = {},
+  options: { signing?: Record<string, unknown>; existing?: Record<string, unknown> } = {},
 ): Record<string, unknown> {
   const parsed = parseBaseForm(values);
   const suites = parseOptionalList(parsed.suites);
@@ -154,8 +161,8 @@ function aptConfig(
       apt[key] = value;
     }
   }
-  if (options.signingKeyId) {
-    apt.signingKeyId = options.signingKeyId;
+  if (options.signing) {
+    apt.signing = options.signing;
   }
   return { apt };
 }
@@ -173,12 +180,18 @@ export function buildCreateAptRepositoryInput(values: AptRepositoryFormValues): 
     name: parsed.name,
     ecosystem: "apt",
     visibility: parsed.visibility,
-    config: aptConfig(values),
-    provisioning: {
-      apt: {
-        signingKey: signingKeyProvisioning(values),
-      },
-    },
+    config: aptConfig(values, {
+      ...(values.signingMode === "unsigned" ? { signing: { mode: "unsigned" } } : {}),
+    }),
+    ...(values.signingMode === "unsigned"
+      ? {}
+      : {
+        provisioning: {
+          apt: {
+            signingKey: buildAptSigningKeyProvisioning(values),
+          },
+        },
+      }),
   };
 }
 
@@ -192,7 +205,9 @@ export function buildUpdateAptRepositoryInput(
     config: {
       ...repository?.config,
       ...aptConfig(values, {
-        signingKeyId: parsed.signingKeyId,
+        signing: parsed.signingMode === "axis"
+          ? { mode: "axis", signingKeyId: parsed.signingKeyId }
+          : { mode: "unsigned" },
         ...(repository ? { existing: aptConfigOf(repository) } : {}),
       }),
     },
@@ -222,15 +237,30 @@ export function buildAptRepositoryFormValues(repository: Repository): AptReposit
     notAutomatic: apt.notAutomatic === true,
     butAutomaticUpgrades: apt.butAutomaticUpgrades === true,
     acquireByHash: apt.acquireByHash !== false,
-    signingKeyId: typeof apt.signingKeyId === "string" ? apt.signingKeyId : "",
+    signingMode: aptSigningMode(apt),
+    signingKeyId: aptAxisSigningKeyId(apt) ?? "",
     signingKeyMode: "existing",
     signingKeyName: "",
     signingKeyUserIdName: "",
     signingKeyUserIdEmail: "",
     signingKeyPrivateKeyArmored: "",
     signingKeyPassphrase: "",
-    signingKeyExistingId: typeof apt.signingKeyId === "string" ? apt.signingKeyId : "",
+    signingKeyExistingId: aptAxisSigningKeyId(apt) ?? "",
   };
+}
+
+function aptSigningMode(apt: Record<string, unknown>): "axis" | "unsigned" {
+  const signing = apt.signing && typeof apt.signing === "object" && !Array.isArray(apt.signing)
+    ? apt.signing as Record<string, unknown>
+    : {};
+  return signing.mode === "unsigned" ? "unsigned" : "axis";
+}
+
+function aptAxisSigningKeyId(apt: Record<string, unknown>): string | undefined {
+  const signing = apt.signing && typeof apt.signing === "object" && !Array.isArray(apt.signing)
+    ? apt.signing as Record<string, unknown>
+    : {};
+  return signing.mode === "axis" && typeof signing.signingKeyId === "string" ? signing.signingKeyId : undefined;
 }
 
 /**
@@ -251,7 +281,15 @@ export function signingKeySetupPanelClass(): string {
   return "grid gap-4 rounded-lg border border-border bg-background p-4";
 }
 
-function signingKeyProvisioning(values: AptRepositoryFormValues): Record<string, string> {
+export function buildAptSigningKeyProvisioning(values: {
+  signingKeyMode?: string;
+  signingKeyName?: string;
+  signingKeyUserIdName?: string;
+  signingKeyUserIdEmail?: string;
+  signingKeyPrivateKeyArmored?: string;
+  signingKeyPassphrase?: string;
+  signingKeyExistingId?: string;
+}): Record<string, string> {
   const mode = values.signingKeyMode || "generate";
   if (mode === "existing") {
     const signingKeyId = values.signingKeyExistingId?.trim();

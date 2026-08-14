@@ -1311,6 +1311,25 @@ describe("PyPI plugin lifecycle", () => {
     });
   });
 
+  it("keeps hosted and proxy admin resources scoped to their repository kind", () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    const hosted = createPypiPlugin({ objectStoreFor: () => objectStore });
+    const proxy = createPypiProxyPlugin({ objectStoreFor: () => objectStore });
+
+    expect(hosted.adminResources?.routes.map((route) => route.name)).toEqual([
+      "list-projects",
+      "get-project",
+      "yank-file",
+      "unyank-file",
+    ]);
+    expect(proxy.adminResources?.routes.map((route) => route.name)).toEqual([
+      "list-projects",
+      "get-project",
+      "get-proxy-cache",
+      "purge-proxy-cache",
+    ]);
+  });
+
   it("does not synchronously purge PyPI proxy byte cache objects from plugin resources", async () => {
     const objectStore = new MemoryRepositoryObjectStore();
     await objectStore.putBytes(

@@ -51,7 +51,7 @@ function repository(overrides: Record<string, unknown> = {}): Repository {
       apt: {
         codename: "noble",
         components: ["main"],
-        signingKeyId: "signing_key_prod",
+        signing: { mode: "axis", signingKeyId: "signing_key_prod" },
         validityDays: 10,
         ...overrides,
       },

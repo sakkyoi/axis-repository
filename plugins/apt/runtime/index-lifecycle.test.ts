@@ -50,7 +50,7 @@ function repository(overrides: Partial<Record<string, unknown>> = {}): Repositor
       apt: {
         codename: "noble",
         components: ["main"],
-        signingKeyId: "signing_key_prod",
+        signing: { mode: "axis", signingKeyId: "signing_key_prod" },
         ...overrides,
       },
     },
