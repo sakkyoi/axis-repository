@@ -30,6 +30,8 @@ export function AptSigningKeySetupField({
   const activeKeys = activeSigningKeys(signingKeys);
   const policyMode = values.signingMode || (field.name === "signingPolicy" ? "upstream" : "axis");
   const axisLabel = field.name === "signingPolicy" ? "Re-sign with Axis" : "Sign with Axis";
+  const allowedModes = new Set(field.options?.map((option) => option.value));
+  const axisOnly = allowedModes.size > 0 && allowedModes.has("axis") && !allowedModes.has("unsigned") && !allowedModes.has("upstream");
   const mode = values.signingKeyMode || "generate";
 
   function update(patch: Record<string, string>) {
@@ -60,7 +62,7 @@ export function AptSigningKeySetupField({
           <TabsList>
             {field.name === "signingPolicy" && <TabsTrigger value="upstream">Use upstream</TabsTrigger>}
             <TabsTrigger value="axis">{axisLabel}</TabsTrigger>
-            <TabsTrigger value="unsigned">Unsigned</TabsTrigger>
+            {!axisOnly && <TabsTrigger value="unsigned">Unsigned</TabsTrigger>}
           </TabsList>
           {field.name === "signingPolicy" && (
             <TabsContent value="upstream">

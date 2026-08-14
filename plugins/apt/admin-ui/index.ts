@@ -17,8 +17,9 @@ import {
 } from "@axis-repository/admin-ui/plugin-ui";
 import { aptHostedRepositoryCreatePlugin } from "./create";
 import { AptSigningKeySetupField } from "./create-field-renderers";
-import { AptProxySettingsSection, AptSettingsSection, AptSigningKeysSection } from "./detail";
+import { AptGroupSettingsSection, AptProxySettingsSection, AptSettingsSection, AptSigningKeysSection } from "./detail";
 import { buildAptSigningKeyProvisioning } from "./forms";
+import { AptGroupMemberSelectField } from "./group-member-select";
 import { AptPublishArtifactPreview, AptPublishSessionDetail } from "./publish";
 import { aptPublishSessionArtifactSummary } from "./publish-model";
 import { aptPublishTokenMissingRequiredScopes, aptPublishTokenSigningKeyIds } from "./token-scope";
@@ -232,18 +233,87 @@ const aptGroupRepositoryCreatePlugin: GroupRepositoryCreatePlugin = {
   ecosystem: aptPluginManifest.ecosystem,
   repositoryConfig: {
     namespace: aptPluginManifest.repositoryConfig.namespace,
-    fields: [],
+    fields: [
+      {
+        name: "codename",
+        label: "Codename",
+        kind: "text",
+        step: "config",
+        required: true,
+        placeholder: "bookworm",
+        description: "Distribution codename clients request under dists/.",
+      },
+      {
+        name: "components",
+        label: "Components",
+        kind: "string-list",
+        step: "config",
+        required: false,
+        placeholder: "main",
+        description: "Components to put in generated APT source lines.",
+      },
+      {
+        name: "members",
+        label: "Members",
+        kind: "apt-member-select",
+        step: "config",
+        required: true,
+        description: "APT hosted or proxy repositories, in resolution order.",
+      },
+      {
+        name: "signingKey",
+        label: "Signing policy",
+        kind: "signing-key-provisioning",
+        step: "setup",
+        required: true,
+        description: "Choose the Axis key used to sign this group repository metadata.",
+        options: [
+          { value: "axis", label: "Sign with Axis" },
+          { value: "unsigned", label: "Unsigned" },
+        ],
+      },
+    ],
   },
-  steps: ["plugin", "basics", "review"],
+  steps: ["plugin", "basics", "config", "setup", "review"],
   defaults: {
     name: "",
     visibility: "private",
-    config: {},
-    setup: {},
+    config: {
+      codename: "bookworm",
+      components: "main",
+      members: "",
+    },
+    setup: {
+      signingMode: "axis",
+      signingKeyMode: "generate",
+      signingKeyName: "release",
+      signingKeyUserIdName: "Axis Repository",
+      signingKeyUserIdEmail: "",
+      signingKeyPrivateKeyArmored: "",
+      signingKeyPassphrase: "",
+      signingKeyExistingId: "",
+    },
   },
   validateStep: (step, state) => {
     if (step === "basics") {
       return state.name.trim() ? [] : ["Repository name is required"];
+    }
+    if (step === "config" && !state.config.codename?.trim()) {
+      return ["Codename is required"];
+    }
+    if (step === "config" && parseStringList(state.config.members).length === 0) {
+      return ["At least one member repository is required"];
+    }
+    if (step === "setup") {
+      if (state.setup.signingMode === "unsigned") {
+        return [];
+      }
+      try {
+        buildAptSigningKeyProvisioning(state.setup);
+        return [];
+      } catch (error) {
+        return [error instanceof Error ? error.message : "Signing key is required"];
+      }
     }
     return [];
   },
@@ -253,8 +323,22 @@ const aptGroupRepositoryCreatePlugin: GroupRepositoryCreatePlugin = {
     kind: "group",
     visibility: state.visibility,
     config: {
-      [aptPluginManifest.repositoryConfig.namespace]: {},
+      [aptPluginManifest.repositoryConfig.namespace]: {
+        codename: state.config.codename?.trim() ?? "",
+        ...optionalStringList("components", state.config.components),
+        members: parseStringList(state.config.members),
+        signing: state.setup.signingMode === "unsigned" ? { mode: "unsigned" } : { mode: "axis" },
+      },
     },
+    ...(state.setup.signingMode === "unsigned"
+      ? {}
+      : {
+        provisioning: {
+          apt: {
+            signingKey: buildAptSigningKeyProvisioning(state.setup),
+          },
+        },
+      }),
   }),
 };
 
@@ -273,6 +357,9 @@ const aptGroupRepositoryDetailPlugin: GroupRepositoryDetailPlugin = {
   kind: "group",
   ecosystem: aptPluginManifest.ecosystem,
   sections: [
+    { id: "client-helpers", title: "APT client setup", placement: "workspace", summary: true, Component: RepositoryClientHelpersSection },
+    { id: "group-settings", title: "APT group members", placement: "settings", Component: AptGroupSettingsSection },
+    { id: "signing-keys", title: "APT signing keys", placement: "settings", Component: AptSigningKeysSection },
     { id: "advanced-json", title: "Advanced JSON config", placement: "settings", Component: AdvancedJsonConfigSection },
   ],
 };
@@ -292,4 +379,8 @@ export const aptGroupRepositoryUiPlugin: GroupRepositoryUiPlugin = {
   manifest: aptPluginManifest,
   create: aptGroupRepositoryCreatePlugin,
   detail: aptGroupRepositoryDetailPlugin,
+  createFieldRenderers: {
+    "apt-member-select": AptGroupMemberSelectField,
+    "signing-key-provisioning": AptSigningKeySetupField,
+  },
 };

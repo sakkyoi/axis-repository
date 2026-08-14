@@ -55,7 +55,10 @@ const bundledRuntimePluginFactories: Record<string, RuntimePluginFactory> = {
         signer: input.aptReleaseSigner,
         ...(input.proxyPolicyFor === undefined ? {} : { proxyPolicyFor: input.proxyPolicyFor }),
       }),
-      createAptGroupPlugin(),
+      createAptGroupPlugin({
+        signingKeys,
+        signer: input.aptReleaseSigner,
+      }),
     ];
   },
   pypi: (input) => [

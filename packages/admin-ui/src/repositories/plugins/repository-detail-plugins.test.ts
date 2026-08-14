@@ -134,6 +134,12 @@ describe("repository detail plugins", () => {
       "group-settings",
       "advanced-json",
     ]);
+    expect(repositorySettingsSectionsFor(repository({ ecosystem: "apt", kind: "group" })).map((section) => section.id)).toEqual([
+      "settings",
+      "group-settings",
+      "signing-keys",
+      "advanced-json",
+    ]);
   });
 
   it("lets plugins choose sections for the readonly repository summary", () => {
@@ -150,9 +156,17 @@ describe("repository detail plugins", () => {
     ]);
     expect(repositorySettingsSectionsFor(repository({ kind: "group" })).map((section) => section.id)).toEqual([
       "settings",
+      "group-settings",
+      "signing-keys",
       "advanced-json",
     ]);
+    expect(repositoryWorkspaceSectionsFor(repository({ ecosystem: "apt", kind: "group" })).map((section) => section.id)).toEqual([
+      "repository-artifacts",
+      "repository-browser",
+      "client-helpers",
+    ]);
     expect(repositorySummarySectionsFor(repository({ kind: "proxy" })).map((section) => section.id)).toEqual(["client-helpers"]);
+    expect(repositorySummarySectionsFor(repository({ ecosystem: "apt", kind: "group" })).map((section) => section.id)).toEqual(["client-helpers"]);
   });
 
   it("shows only PyPI install hints for proxy repositories", () => {

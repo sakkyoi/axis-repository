@@ -1,13 +1,21 @@
-import { MemoryStateStore, ValidationError, type Repository, type TokenPrincipal } from "@axis-repository/core";
+import {
+  MemoryStateStore,
+  ValidationError,
+  type Repository,
+  type RepositoryArtifactRecord,
+  type RepositoryArtifactStore,
+  type TokenPrincipal,
+} from "@axis-repository/core";
 import {
   dispatchRepositoryAdminResource,
   dispatchRepositoryClientHelper,
+  objectBytes,
   type RepositorySigningKeyCapability,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { assertRuntimePluginManifestParity, MemoryRepositoryObjectStore } from "@axis-repository/runtime-cloudflare/plugin-runtime/testing";
 import { describe, expect, it } from "vitest";
 import { aptPluginManifest } from "../manifest";
-import { createAptPlugin, createAptProxyPlugin } from "./runtime";
+import { createAptGroupPlugin, createAptPlugin, createAptProxyPlugin } from "./runtime";
 
 function repository(config: Record<string, unknown> = {
   apt: {
@@ -43,6 +51,32 @@ function proxyRepository(config: Record<string, unknown> = {
   };
 }
 
+function groupRepository(config: Record<string, unknown> = {
+  apt: {
+    codename: "bookworm",
+    components: ["main"],
+    members: ["debian-internal", "debian-proxy"],
+    signing: { mode: "axis", signingKeyId: "signing_key_group" },
+  },
+}): Repository {
+  return {
+    ...repository(config),
+    name: "debian-group",
+    kind: "group",
+  };
+}
+
+function unsignedGroupRepository(): Repository {
+  return groupRepository({
+    apt: {
+      codename: "bookworm",
+      components: ["main"],
+      members: ["debian-internal", "debian-proxy"],
+      signing: { mode: "unsigned" },
+    },
+  });
+}
+
 const principal: TokenPrincipal = {
   tokenId: "ptok_1",
   name: "ci",
@@ -62,6 +96,31 @@ const defaultSigningKey = {
   createdAt: "2026-07-22T00:00:00.000Z",
   revokedAt: null,
 };
+
+function repositoryArtifact(overrides: Partial<RepositoryArtifactRecord> = {}): RepositoryArtifactRecord {
+  return {
+    id: "artifact_alpha",
+    repositoryName: "debian-internal",
+    ecosystem: "apt",
+    identity: "apt:main:alpha:1.0.0:amd64",
+    family: "apt:main:alpha",
+    name: "alpha",
+    version: "1.0.0",
+    summary: "alpha 1.0.0 amd64",
+    primaryObjectKey: "repositories/debian-internal/pool/main/alpha/alpha_1.0.0_amd64.deb",
+    objectKeys: ["repositories/debian-internal/pool/main/alpha/alpha_1.0.0_amd64.deb"],
+    metadata: {
+      package: "alpha",
+      version: "1.0.0",
+      architecture: "amd64",
+      component: "main",
+      filename: "pool/main/alpha/alpha_1.0.0_amd64.deb",
+    },
+    publishedAt: "2026-08-10T00:00:00.000Z",
+    updatedAt: "2026-08-10T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 function signingKeys(overrides: Partial<RepositorySigningKeyCapability> = {}): RepositorySigningKeyCapability {
   return {
@@ -93,6 +152,16 @@ function createTestAptPlugin(options: Partial<RepositorySigningKeyCapability> = 
   });
 }
 
+function createTestAptGroupPlugin(options: Partial<RepositorySigningKeyCapability> = {}) {
+  return createAptGroupPlugin({
+    signingKeys: signingKeys(options),
+    signer: {
+      clearSign: async () => "-----BEGIN PGP SIGNED MESSAGE-----\n",
+      detachSign: async () => "-----BEGIN PGP SIGNATURE-----\n",
+    },
+  });
+}
+
 function repositoryScopedObjectStore(
   objectStore: MemoryRepositoryObjectStore,
   repositoryName: string,
@@ -107,6 +176,46 @@ function repositoryScopedObjectStore(
       await objectStore.putText(key, value, contentType);
     },
   } as MemoryRepositoryObjectStore;
+}
+
+function repositoryLookup(repositories: Repository[]) {
+  return {
+    list: async () => repositories,
+    getByName: async (name: string) => {
+      const found = repositories.find((repository) => repository.name === name);
+      if (!found) {
+        throw new ValidationError(`Repository not found: ${name}`);
+      }
+      return found;
+    },
+  };
+}
+
+function repositoryArtifactStore(recordsByRepository: Record<string, RepositoryArtifactRecord[]>): RepositoryArtifactStore {
+  return {
+    getById: async (id) =>
+      Object.values(recordsByRepository).flat().find((artifact) => artifact.id === id) ?? null,
+    countByRepository: async (repositoryName) => recordsByRepository[repositoryName]?.length ?? 0,
+    listByRepository: async (repositoryName) => recordsByRepository[repositoryName] ?? [],
+    listFamiliesByRepositoryPage: async () => ({ records: [], totalFamilies: 0, totalArtifacts: 0 }),
+    listByRepositoryPage: async (repositoryName, page) => {
+      const records = recordsByRepository[repositoryName] ?? [];
+      return {
+        records: records.slice(page.offset, page.offset + page.limit),
+        total: records.length,
+      };
+    },
+    listByRepositoryFamily: async (repositoryName, family) =>
+      (recordsByRepository[repositoryName] ?? []).filter((artifact) => artifact.family === family),
+    upsert: async () => {},
+    upsertMany: async () => {},
+    replaceByRepository: async () => {},
+  };
+}
+
+async function storedText(objectStore: MemoryRepositoryObjectStore, key: string): Promise<string | undefined> {
+  const object = await objectStore.getObject(key);
+  return object ? new TextDecoder().decode(await objectBytes(object)) : undefined;
 }
 
 describe("APT plugin lifecycle", () => {
@@ -379,6 +488,298 @@ describe("APT plugin lifecycle", () => {
       manifest: aptPluginManifest,
       plugin: createTestAptPlugin(),
     });
+  });
+});
+
+describe("APT group plugin lifecycle", () => {
+  it("validates APT group members", async () => {
+    const plugin = createTestAptGroupPlugin();
+    const validate = (input: Parameters<typeof plugin.validateRepositoryConfig>[0]) =>
+      Promise.resolve().then(() => plugin.validateRepositoryConfig(input));
+    const lookup = repositoryLookup([
+      repository(),
+      proxyRepository(),
+      groupRepository(),
+    ]);
+
+    await expect(validate({
+      ecosystem: "apt",
+      repositoryName: "debian-group",
+      config: groupRepository().config,
+      repositories: lookup,
+    })).resolves.toBeUndefined();
+
+    await expect(validate({
+      ecosystem: "apt",
+      repositoryName: "debian-group",
+      config: { apt: { codename: "bookworm", members: [], signing: { mode: "axis", signingKeyId: "signing_key_group" } } },
+      repositories: lookup,
+    })).rejects.toThrow("config.apt.members must contain at least one repository");
+
+    await expect(validate({
+      ecosystem: "apt",
+      repositoryName: "debian-group",
+      config: { apt: { codename: "bookworm", members: ["debian-group"], signing: { mode: "axis", signingKeyId: "signing_key_group" } } },
+      repositories: lookup,
+    })).rejects.toThrow("config.apt.members cannot include the group repository itself");
+  });
+
+  it("rejects non-APT or non-hosted/proxy APT group members", async () => {
+    const plugin = createTestAptGroupPlugin();
+    const validate = (input: Parameters<typeof plugin.validateRepositoryConfig>[0]) =>
+      Promise.resolve().then(() => plugin.validateRepositoryConfig(input));
+    const lookup = repositoryLookup([
+      { ...repository(), name: "python-internal", ecosystem: "pypi" },
+      groupRepository({ apt: { codename: "bookworm", members: ["debian-internal"], signing: { mode: "axis", signingKeyId: "signing_key_nested" } } }),
+    ]);
+
+    await expect(validate({
+      ecosystem: "apt",
+      repositoryName: "debian-group",
+      config: { apt: { codename: "bookworm", members: ["python-internal"], signing: { mode: "axis", signingKeyId: "signing_key_group" } } },
+      repositories: lookup,
+    })).rejects.toThrow("config.apt.members must reference APT repositories: python-internal");
+
+    await expect(validate({
+      ecosystem: "apt",
+      repositoryName: "debian-group",
+      config: { apt: { codename: "bookworm", members: ["debian-nested-group"], signing: { mode: "axis", signingKeyId: "signing_key_group" } } },
+      repositories: repositoryLookup([{ ...groupRepository({ apt: { codename: "bookworm", members: ["debian-internal"], signing: { mode: "axis", signingKeyId: "signing_key_nested" } } }), name: "debian-nested-group" }]),
+    })).rejects.toThrow("config.apt.members must reference hosted or proxy repositories: debian-nested-group");
+  });
+
+  it("serves APT group pool paths from the first member that answers", async () => {
+    const plugin = createTestAptGroupPlugin();
+    const calls: string[] = [];
+    const response = await plugin.serveRepositoryPath!({
+      repository: groupRepository(),
+      request: new Request("https://axis.example/repositories/debian-group/pool/main/alpha/alpha_1.0.0_amd64.deb"),
+      relativePath: "pool/main/alpha/alpha_1.0.0_amd64.deb",
+      repositories: repositoryLookup([repository(), proxyRepository()]),
+      serveRepositoryPath: async ({ repository }) => {
+        calls.push(repository.name);
+        return repository.name === "debian-internal"
+          ? new Response("missing", { status: 404 })
+          : new Response("proxy release", { status: 200 });
+      },
+    });
+
+    await expect(response?.text()).resolves.toBe("proxy release");
+    expect(calls).toEqual(["debian-internal", "debian-proxy"]);
+    expect(plugin.canServeRepositoryPath({ relativePath: "dists/noble/Release" })).toBe(true);
+    expect(plugin.canServeRepositoryPath({ relativePath: "pool/main/a/alpha.deb" })).toBe(true);
+  });
+
+  it("serves APT group signed install helpers", async () => {
+    const plugin = createTestAptGroupPlugin({
+      getPublicKey: async () => ({
+        ...defaultSigningKey,
+        repositoryName: "debian-group",
+        publicKeyArmored: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+      }),
+    });
+
+    expect(plugin.clientHelpers?.actions.map((action) => action.name)).toEqual(["key.gpg", "source", "install"]);
+    const keyResponse = await dispatchRepositoryClientHelper(plugin.clientHelpers!, {
+      repository: groupRepository(),
+      action: "key.gpg",
+      origin: "https://axis.example",
+    });
+    const installResponse = await dispatchRepositoryClientHelper(plugin.clientHelpers!, {
+      repository: groupRepository(),
+      action: "install",
+      origin: "https://axis.example",
+    });
+
+    await expect(keyResponse.text()).resolves.toBe("-----BEGIN PGP PUBLIC KEY BLOCK-----");
+    await expect(installResponse.json()).resolves.toMatchObject({
+      keyUrl: "https://axis.example/repositories/debian-group/apt/key.gpg",
+      sourceLine: "deb [signed-by=/usr/share/keyrings/axis-debian-group.gpg] https://axis.example/repositories/debian-group bookworm main",
+    });
+  });
+
+  it("serves APT group unsigned install helpers without a signing key", async () => {
+    const plugin = createTestAptGroupPlugin();
+
+    const installResponse = await dispatchRepositoryClientHelper(plugin.clientHelpers!, {
+      repository: unsignedGroupRepository(),
+      action: "install",
+      origin: "https://axis.example",
+    });
+
+    const install = await installResponse.json() as { keyUrl?: string; keyringPath?: string; sourceLine: string; script: string };
+    expect(install.keyUrl).toBeUndefined();
+    expect(install.keyringPath).toBeUndefined();
+    expect(install.sourceLine).toBe("deb [trusted=yes] https://axis.example/repositories/debian-group bookworm main");
+    expect(install.script).not.toContain("key.gpg");
+  });
+
+  it("aggregates APT group artifacts from the first member that provides each package family", async () => {
+    const plugin = createTestAptGroupPlugin();
+    const alphaHosted = repositoryArtifact({
+      id: "artifact_alpha_hosted",
+      repositoryName: "debian-internal",
+      family: "apt:main:alpha",
+        metadata: {
+          package: "alpha",
+          version: "1.0.0",
+          architecture: "amd64",
+          maintainer: "Alpha Maintainer <alpha@example.test>",
+          description: "Alpha package",
+          component: "main",
+          filename: "pool/main/alpha/alpha_1.0.0_amd64.deb",
+          size: 42,
+          sha256: "a".repeat(64),
+        },
+    });
+    const alphaProxy = repositoryArtifact({
+      id: "artifact_alpha_proxy",
+      repositoryName: "debian-proxy",
+      family: "apt:main:alpha",
+        metadata: {
+          package: "alpha",
+          version: "2.0.0",
+          architecture: "amd64",
+          maintainer: "Alpha Maintainer <alpha@example.test>",
+          description: "Alpha package",
+          component: "main",
+          filename: "pool/main/alpha/alpha_2.0.0_amd64.deb",
+          size: 43,
+          sha256: "b".repeat(64),
+        },
+    });
+    const betaProxy = repositoryArtifact({
+      id: "artifact_beta_proxy",
+      repositoryName: "debian-proxy",
+      family: "apt:main:beta",
+      name: "beta",
+      metadata: {
+        package: "beta",
+        version: "1.0.0",
+        architecture: "amd64",
+        maintainer: "Beta Maintainer <beta@example.test>",
+        description: "Beta package",
+        component: "main",
+        filename: "pool/main/beta/beta_1.0.0_amd64.deb",
+        size: 44,
+        sha256: "c".repeat(64),
+      },
+    });
+    const artifactStore = repositoryArtifactStore({
+      "debian-internal": [alphaHosted],
+      "debian-proxy": [alphaProxy, betaProxy],
+    });
+
+    const artifacts = await plugin.artifacts?.rebuildIndex({
+      repository: groupRepository(),
+      objectStore: new MemoryRepositoryObjectStore(),
+      now: new Date("2026-08-10T00:00:00.000Z"),
+      repositoryArtifactStore: artifactStore,
+    });
+
+    expect(Array.isArray(artifacts) ? artifacts.map((artifact) => ({
+      repositoryName: artifact.repositoryName,
+      family: artifact.family,
+      sourceRepositoryName: artifact.metadata.sourceRepositoryName,
+      sourceArtifactId: artifact.metadata.sourceArtifactId,
+      filename: artifact.metadata.filename,
+    })) : []).toEqual([
+      {
+        repositoryName: "debian-group",
+        family: "apt:group-package:apt:main:alpha",
+        sourceRepositoryName: "debian-internal",
+        sourceArtifactId: "artifact_alpha_hosted",
+        filename: "pool/main/alpha/alpha_1.0.0_amd64.deb",
+      },
+      {
+        repositoryName: "debian-group",
+        family: "apt:group-package:apt:main:beta",
+        sourceRepositoryName: "debian-proxy",
+        sourceArtifactId: "artifact_beta_proxy",
+        filename: "pool/main/beta/beta_1.0.0_amd64.deb",
+      },
+    ]);
+  });
+
+  it("writes signed APT group indexes from the aggregated member artifacts", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    const plugin = createTestAptGroupPlugin({
+      getActivePrivateKey: async (id) => ({
+        id,
+        repositoryName: "debian-group",
+        privateKeyArmored: "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+        passphrase: "passphrase",
+        fingerprint: "FINGERPRINT",
+        keyId: "KEYID",
+      }),
+    });
+    const artifactStore = repositoryArtifactStore({
+      "debian-internal": [
+        repositoryArtifact({
+          metadata: {
+            package: "alpha",
+            version: "1.0.0",
+            architecture: "amd64",
+            maintainer: "Alpha Maintainer <alpha@example.test>",
+            description: "Alpha package",
+            component: "main",
+            filename: "pool/main/alpha/alpha_1.0.0_amd64.deb",
+            size: 42,
+            sha256: "a".repeat(64),
+          },
+        }),
+      ],
+    });
+
+    await plugin.artifacts?.rebuildIndex({
+      repository: groupRepository(),
+      objectStore,
+      now: new Date("2026-08-10T00:00:00.000Z"),
+      repositoryArtifactStore: artifactStore,
+    });
+
+    await expect(storedText(objectStore, "repositories/debian-group/dists/bookworm/main/binary-amd64/Packages"))
+      .resolves.toContain("Filename: pool/main/alpha/alpha_1.0.0_amd64.deb");
+    await expect(storedText(objectStore, "repositories/debian-group/dists/bookworm/Release"))
+      .resolves.toContain("Codename: bookworm");
+    await expect(storedText(objectStore, "repositories/debian-group/dists/bookworm/InRelease"))
+      .resolves.toContain("BEGIN PGP SIGNED MESSAGE");
+    await expect(storedText(objectStore, "repositories/debian-group/dists/bookworm/Release.gpg"))
+      .resolves.toContain("BEGIN PGP SIGNATURE");
+  });
+
+  it("writes unsigned APT group indexes without signature files", async () => {
+    const objectStore = new MemoryRepositoryObjectStore();
+    const plugin = createTestAptGroupPlugin();
+    const artifactStore = repositoryArtifactStore({
+      "debian-internal": [
+        repositoryArtifact({
+          metadata: {
+            package: "alpha",
+            version: "1.0.0",
+            architecture: "amd64",
+            maintainer: "Alpha Maintainer <alpha@example.test>",
+            description: "Alpha package",
+            component: "main",
+            filename: "pool/main/alpha/alpha_1.0.0_amd64.deb",
+            size: 42,
+            sha256: "a".repeat(64),
+          },
+        }),
+      ],
+    });
+
+    await plugin.artifacts?.rebuildIndex({
+      repository: unsignedGroupRepository(),
+      objectStore,
+      now: new Date("2026-08-10T00:00:00.000Z"),
+      repositoryArtifactStore: artifactStore,
+    });
+
+    await expect(storedText(objectStore, "repositories/debian-group/dists/bookworm/Release"))
+      .resolves.toContain("Codename: bookworm");
+    await expect(objectStore.getObject("repositories/debian-group/dists/bookworm/InRelease")).resolves.toBeNull();
+    await expect(objectStore.getObject("repositories/debian-group/dists/bookworm/Release.gpg")).resolves.toBeNull();
   });
 });
 

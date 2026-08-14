@@ -12,7 +12,7 @@ import {
   sourceListPathForRepository,
   type AptClientRepositoryInfo,
 } from "./client";
-import { parseAptProxyRepositoryConfig } from "./config";
+import { parseAptGroupRepositoryConfig, parseAptProxyRepositoryConfig } from "./config";
 import { parseAptRepositoryConfig } from "./metadata";
 
 function aptClientRepositoryInfo(repository: Repository): AptClientRepositoryInfo {
@@ -123,6 +123,73 @@ export function createAptProxyClientHelpers(input: {
       },
     ],
   };
+}
+
+export function createAptGroupClientHelpers(input: {
+  signingKeys: RepositorySigningKeyCapability;
+}): RepositoryClientHelpers {
+  return {
+    namespace: aptPluginManifest.clientHelpers.namespace,
+    actions: [
+      {
+        ...aptClientHelperAction("key.gpg"),
+        handle: async ({ repository }) => {
+          const config = parseAptGroupRepositoryConfig(repository.config);
+          if (config.signing.mode !== "axis") {
+            throw new ValidationError("config.apt.signing.mode must be axis to serve key.gpg");
+          }
+          const key = await input.signingKeys.getPublicKey(config.signing.signingKeyId);
+          return aptPublicKeyResponse(key.publicKeyArmored, repository);
+        },
+      },
+      {
+        ...aptClientHelperAction("source"),
+        handle: async ({ repository, origin }) =>
+          pluginJsonResponse(buildAptGroupSourceInfo({ origin, repository })),
+      },
+      {
+        ...aptClientHelperAction("install"),
+        handle: async ({ repository, origin }) =>
+          pluginJsonResponse(buildAptGroupInstallInfo({ origin, repository })),
+      },
+    ],
+  };
+}
+
+function buildAptGroupSourceInfo(input: {
+  origin: string;
+  repository: Repository;
+}) {
+  const config = parseAptGroupRepositoryConfig(input.repository.config);
+  return buildAptSourceInfo({
+    origin: input.origin,
+    repository: {
+      name: input.repository.name,
+      visibility: input.repository.visibility,
+      codename: config.codename,
+      suites: [config.codename],
+      components: config.components ?? ["main"],
+      signed: config.signing.mode === "axis",
+    },
+  });
+}
+
+function buildAptGroupInstallInfo(input: {
+  origin: string;
+  repository: Repository;
+}) {
+  const config = parseAptGroupRepositoryConfig(input.repository.config);
+  return buildAptInstallInfo({
+    origin: input.origin,
+    repository: {
+      name: input.repository.name,
+      visibility: input.repository.visibility,
+      codename: config.codename,
+      suites: [config.codename],
+      components: config.components ?? ["main"],
+      signed: config.signing.mode === "axis",
+    },
+  });
 }
 
 function buildAptProxySourceInfo(input: {

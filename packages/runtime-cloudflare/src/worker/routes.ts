@@ -33,7 +33,7 @@ import {
 import { dispatchRepositoryAdminResource } from "../plugins/repository-plugin-admin-resources";
 import type { ProtocolUploadSink, RepositoryObjectBrowserListing } from "../plugins/repository-plugin-contract";
 import { createIncrementalDigest } from "../storage/digest";
-import { scopeSecretsToEcosystem } from "../plugins/scoped-capabilities";
+import { scopeObjectStoreToRepository, scopeSecretsToEcosystem } from "../plugins/scoped-capabilities";
 import { dispatchRepositoryClientHelper } from "../plugins/repository-plugin-client-helpers";
 import { adminRefreshCookie, clearAdminRefreshCookie, refreshTokenFromCookie, requestIsSecure } from "../auth/admin-auth";
 import {
@@ -1262,6 +1262,7 @@ async function pluginRepositoryPathResponse(input: {
     repository: input.repository,
     request: input.request,
     relativePath: input.relativePath,
+    objectStore: scopeObjectStoreToRepository(input.dependencies.repositoryObjectStore, input.repository.name),
     ...(input.accept ? { accept: input.accept } : {}),
     ...(input.dependencies.backgroundTasks
       ? { backgroundTasks: input.dependencies.backgroundTasks }

@@ -2033,7 +2033,7 @@ describe("Cloudflare runtime routes", () => {
           repositoryKinds: [
             { kind: "hosted", experimental: false },
             { kind: "proxy", experimental: false },
-            { kind: "group", experimental: true },
+              { kind: "group", experimental: false },
           ],
           icon: expect.objectContaining({
             title: "APT",

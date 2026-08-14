@@ -23,6 +23,12 @@ import { useAptSigningKeys } from "./api";
 import { AptSigningKeyDialog, AptSigningKeyList } from "./signing-keys";
 import { aptSigningKeySettingsState } from "./signing-keys-model";
 import {
+  buildAptGroupSettingsValues,
+  buildUpdateAptGroupRepositoryInput,
+  type AptGroupSettingsValues,
+} from "./group-settings";
+import { AptGroupMemberSelect } from "./group-member-select";
+import {
   buildAptRepositoryFormValues,
   buildUpdateAptRepositoryInput,
   type AptRepositoryFormValues,
@@ -263,6 +269,134 @@ export function AptSigningKeysSection({
         signingKeys={signingKeys}
         currentSigningKeyId={currentSigningKeyId}
       />
+      {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
+    </div>
+  );
+}
+
+export function AptGroupSettingsSection({
+  repository,
+}: {
+  repository: Repository;
+  pluginMetadata: RepositoryPlugin | undefined;
+}) {
+  const updateRepository = useUpdateRepository();
+  const [values, setValues] = useState(() => buildAptGroupSettingsValues(repository));
+  const [error, setError] = useState("");
+  const signingKeysQuery = useAptSigningKeys(repository.name, true);
+  const signingKeys = signingKeysQuery.data ?? [];
+  const activeKeys = activeSigningKeys(signingKeys);
+  const selectedActiveSigningKey = activeKeys.find((key) => key.id === values.signingKeyId);
+  useErrorToast("APT group settings not saved", updateRepository.error);
+
+  useEffect(() => {
+    setValues(buildAptGroupSettingsValues(repository));
+    setError("");
+  }, [repository]);
+
+  function updateField<K extends keyof AptGroupSettingsValues>(field: K, value: AptGroupSettingsValues[K]) {
+    setValues((current) => ({ ...current, [field]: value }));
+  }
+
+  async function saveGroupSettings(nextValues = values) {
+    try {
+      await updateRepository.mutateAsync({
+        name: repository.name,
+        input: buildUpdateAptGroupRepositoryInput(nextValues, repository),
+      });
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Repository could not be saved");
+    }
+  }
+
+  async function setAxisSigningKey(signingKey: SigningKey) {
+    const nextValues = { ...values, signingMode: "axis" as const, signingKeyId: signingKey.id };
+    setValues(nextValues);
+    await saveGroupSettings(nextValues);
+  }
+
+  return (
+    <div className="grid gap-3">
+      <label className="grid gap-2">
+        <span className="text-sm font-medium">Codename</span>
+        <Input
+          value={values.codename}
+          onChange={(event) => updateField("codename", event.target.value)}
+          placeholder="bookworm"
+          required
+        />
+      </label>
+      <label className="grid gap-2">
+        <span className="text-sm font-medium">Components</span>
+        <Input
+          value={values.components}
+          onChange={(event) => updateField("components", event.target.value)}
+          placeholder="main"
+        />
+        <span className="text-xs text-muted-foreground">
+          Components to put in generated APT source lines, space separated.
+        </span>
+      </label>
+      <AptGroupMemberSelect
+        repositoryName={repository.name}
+        value={values.members}
+        onChange={(members) => updateField("members", members)}
+      />
+      <label className="grid gap-2">
+        <span className="text-sm font-medium">Signing policy</span>
+        <Select
+          value={values.signingMode}
+          onValueChange={(value) => updateField("signingMode", value as AptGroupSettingsValues["signingMode"])}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select signing policy" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="axis">Sign with Axis</SelectItem>
+            <SelectItem value="unsigned">Unsigned</SelectItem>
+          </SelectContent>
+        </Select>
+      </label>
+      {values.signingMode === "axis" && (
+        <div className="grid gap-2">
+          <span className="text-sm font-medium">Axis signing key</span>
+          {activeKeys.length === 0 ? (
+            <EmptyState message="No active signing key is available. Generate or import one before signing this group." />
+          ) : (
+            <Select
+              value={selectedActiveSigningKey ? values.signingKeyId : ""}
+              onValueChange={(value) => updateField("signingKeyId", value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select signing key" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeKeys.map((key) => (
+                  <SelectItem key={key.id} value={key.id}>{key.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <AptSigningKeyDialog
+            repositoryName={repository.name}
+            onSetPrimarySigningKey={setAxisSigningKey}
+          />
+        </div>
+      )}
+      {values.signingMode === "unsigned" && (
+        <p className="text-sm text-muted-foreground">
+          APT clients will use trusted=yes, and no key.gpg helper will be exposed.
+        </p>
+      )}
+      {error && <ErrorState error={error} />}
+      <Button
+        type="button"
+        onClick={() => void saveGroupSettings()}
+        disabled={updateRepository.isPending || !values.codename.trim() || values.members.length === 0 || (values.signingMode === "axis" && !selectedActiveSigningKey)}
+      >
+        {updateRepository.isPending ? "Saving..." : "Save group settings"}
+      </Button>
       {signingKeysQuery.isError && <ErrorState title="Signing keys unavailable" error={signingKeysQuery.error} />}
     </div>
   );

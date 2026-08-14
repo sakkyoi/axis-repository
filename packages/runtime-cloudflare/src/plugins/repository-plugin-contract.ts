@@ -66,6 +66,7 @@ export type RepositoryPathResolver = (
 export interface ServeRepositoryPathInput extends RepositoryServingContext {
   repository: Repository;
   request: Request;
+  objectStore?: RepositoryObjectStore;
   backgroundTasks?: BackgroundTaskScheduler;
   repositories?: RepositoryLookup;
   repositoryArtifactStore?: RepositoryArtifactStore;

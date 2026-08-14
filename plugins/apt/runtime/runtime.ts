@@ -6,6 +6,7 @@ import {
   type ProxyOperationalPolicy,
   type Repository,
   type RepositoryArtifactRecord,
+  type RepositoryArtifactStore,
   type RepositoryObjectStore,
   resolveProxyOperationalPolicy,
 } from "@axis-repository/core";
@@ -20,6 +21,7 @@ import type {
   ProxyRepositoryPlugin,
   ProvisionRepositoryCreateInput,
   RebuildRepositoryArtifactIndexInput,
+  RebuildRepositoryArtifactIndexOutput,
   RepositoryObjectBrowser,
   RepositoryObjectBrowserListing,
   RepositoryMaintenanceInput,
@@ -35,8 +37,13 @@ import {
   objectStream,
 } from "@axis-repository/runtime-cloudflare/plugin-runtime";
 import { createAptAdminResources, createAptProxyAdminResources } from "./admin-resources";
-import { createAptClientHelpers, createAptProxyClientHelpers } from "./client-helpers";
-import { normalizeAptProxyRepositoryConfig, parseAptProxyRepositoryConfig } from "./config";
+import { createAptClientHelpers, createAptGroupClientHelpers, createAptProxyClientHelpers } from "./client-helpers";
+import {
+  normalizeAptGroupRepositoryConfig,
+  normalizeAptProxyRepositoryConfig,
+  parseAptGroupRepositoryConfig,
+  parseAptProxyRepositoryConfig,
+} from "./config";
 import { writeAptRepositoryIndexes, type AptReleaseSigner } from "./index-store";
 import {
   buildAptIndexMetadata,
@@ -44,7 +51,7 @@ import {
   validateAptPublishArtifacts,
 } from "./metadata";
 import { renewAptReleaseSignatures } from "./maintenance";
-import { indexKey, packageStanzaMetadata, type AptSuiteIndexes } from "./packages";
+import { buildPackageStanza, indexKey, packageStanzaMetadata, type AptSuiteIndexes } from "./packages";
 import { reconcileAptRepository } from "./rebuild";
 
 export { AptSigningKeyResource } from "./signing-keys";
@@ -1178,19 +1185,313 @@ function parseJsonObject(text: string): Record<string, unknown> {
   }
 }
 
-export function createAptGroupPlugin(): GroupRepositoryPlugin {
+export function createAptGroupPlugin(input: {
+  signingKeys: RepositorySigningKeyCapability;
+  signer: AptReleaseSigner;
+}): GroupRepositoryPlugin {
   return {
     kind: "group",
     ecosystem: "apt",
     name: `${aptPluginManifest.runtimeName}-group`,
     version: aptPluginManifest.version,
-    repositoryKinds: [{ kind: "group", experimental: true }],
+    repositoryKinds: [{ kind: "group", experimental: false }],
     capabilities: ["apt", "group"],
-    canServeRepositoryPath: () => false,
-    validateRepositoryConfig: (configInput) => {
-      void configInput;
+    canServeRepositoryPath: createPrefixServingPredicate(["dists", "pool"]),
+    clientHelpers: createAptGroupClientHelpers({ signingKeys: input.signingKeys }),
+    normalizeRepositoryConfig: ({ config }) => normalizeAptGroupRepositoryConfig(config),
+    validateRepositoryConfig: validateAptGroupRepositoryConfig,
+    create: {
+      validateProvisioning: validateAptCreateProvisioning,
+      provision: (provisionInput) => provisionAptRepository(input.signingKeys, provisionInput),
+    },
+    objectBrowser: createAptGroupObjectBrowser(),
+    artifacts: {
+      rebuildIndex: (rebuildInput) =>
+        rebuildAptGroupArtifactIndex({
+          ...rebuildInput,
+          signingKeys: input.signingKeys,
+          signer: input.signer,
+        }),
+    },
+    serveRepositoryPath: serveAptGroupRepositoryPath,
+  };
+}
+
+function createAptGroupObjectBrowser(): RepositoryObjectBrowser {
+  return {
+    listObjects: async ({ repository, repositoryArtifactStore, prefix, cursor, limit }) => {
+      if (!repositoryArtifactStore) {
+        return null;
+      }
+      if (prefix === "") {
+        return {
+          prefix,
+          directories: [
+            { name: "dists", path: "dists/" },
+            { name: "pool", path: "pool/" },
+          ],
+          objects: [],
+          truncated: false,
+        };
+      }
+      const listing = aptProxyVirtualArtifactBrowserList(
+        await repositoryArtifactStore.listByRepository(repository.name),
+        {
+          prefix,
+          ...(cursor !== undefined ? { cursor } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+        },
+      );
+      return listing.directories.length > 0 || listing.objects.length > 0 || prefix === "pool/" || prefix.startsWith("pool/")
+        ? listing
+        : null;
+    },
+    getObjectDetail: async ({ repository, repositoryArtifactStore, path, origin }) => {
+      if (!repositoryArtifactStore) {
+        return null;
+      }
+      const artifacts = await repositoryArtifactStore.listByRepository(repository.name);
+      const artifact = artifacts.find((candidate) => aptProxyArtifactFilename(candidate) === path);
+      if (!artifact) {
+        return null;
+      }
+      const name = path.split("/").pop() ?? path;
+      const size = metadataNumber(artifact.metadata, "size");
+      return {
+        name,
+        path,
+        objectKey: artifact.primaryObjectKey ?? artifact.objectKeys[0] ?? `virtual:apt-group:${path}`,
+        repositoryUrl: `${origin}/repositories/${encodeURIComponent(repository.name)}/${path.split("/").map(encodeURIComponent).join("/")}`,
+        contentType: "application/vnd.debian.binary-package",
+        ...(size !== undefined ? { size } : {}),
+      };
     },
   };
+}
+
+const APT_GROUP_INDEX_SLICE_LIMIT = 250;
+
+async function rebuildAptGroupArtifactIndex(
+  input: RebuildRepositoryArtifactIndexInput & {
+    signingKeys: RepositorySigningKeyCapability;
+    signer: AptReleaseSigner;
+  },
+): Promise<RebuildRepositoryArtifactIndexOutput> {
+  const group = parseAptGroupRepositoryConfig(input.repository.config);
+  if (!input.repositoryArtifactStore) {
+    return [];
+  }
+  const claimedFamilies: Record<string, string> = {};
+  const artifacts: RepositoryArtifactRecord[] = [];
+
+  for (const memberName of group.members) {
+    let offset = 0;
+    for (;;) {
+      const page = await input.repositoryArtifactStore.listByRepositoryPage(memberName, {
+        limit: APT_GROUP_INDEX_SLICE_LIMIT,
+        offset,
+      });
+      for (const artifact of page.records) {
+        const family = aptGroupSourceFamily(artifact);
+        if (!family) {
+          continue;
+        }
+        const claimedSource = claimedFamilies[family];
+        if (!claimedSource) {
+          claimedFamilies[family] = memberName;
+        } else if (claimedSource !== memberName) {
+          continue;
+        }
+        artifacts.push(aptGroupArtifactRecord(input.repository, memberName, artifact, `apt:group-package:${family}`));
+      }
+      offset += page.records.length;
+      if (offset >= page.total || page.records.length === 0) {
+        break;
+      }
+    }
+  }
+
+  await writeAptGroupIndexes({
+    repository: input.repository,
+    group,
+    artifacts,
+    objectStore: input.objectStore,
+    signingKeys: input.signingKeys,
+    signer: input.signer,
+    publishedAt: input.now.toISOString(),
+  });
+  return artifacts;
+}
+
+async function serveAptGroupRepositoryPath(input: {
+  repository: Repository;
+  request: Request;
+  relativePath: string;
+  accept?: string;
+  objectStore?: RepositoryObjectStore;
+  repositories?: { getByName(name: string): Promise<Repository> };
+  repositoryArtifactStore?: RepositoryArtifactStore;
+  serveRepositoryPath?: (delegateInput: {
+    repository: Repository;
+    request: Request;
+    relativePath: string;
+    accept?: string;
+  }) => Promise<Response | null>;
+}): Promise<Response | null> {
+  const group = parseAptGroupRepositoryConfig(input.repository.config);
+  if (!input.repositories || !input.serveRepositoryPath) {
+    return null;
+  }
+  if (input.relativePath === "dists" || input.relativePath.startsWith("dists/")) {
+    if (!input.objectStore) {
+      return null;
+    }
+    const key = aptRepositoryObjectKey(input.repository.name, input.relativePath);
+    const stored = await input.objectStore.getObject(key);
+    if (!stored) {
+      return null;
+    }
+    return new Response(input.request.method === "HEAD" ? null : objectStream(stored), {
+      headers: aptProxyStoredIndexHeaders(stored.contentType),
+    });
+  }
+  const members = await Promise.all(group.members.map((name) => input.repositories!.getByName(name)));
+  for (const member of members) {
+    const response = await input.serveRepositoryPath({
+      repository: member,
+      request: input.request,
+      relativePath: input.relativePath,
+      ...(input.accept ? { accept: input.accept } : {}),
+    });
+    if (response && response.status !== 404) {
+      return response;
+    }
+  }
+  return null;
+}
+
+async function writeAptGroupIndexes(input: {
+  repository: Repository;
+  group: ReturnType<typeof parseAptGroupRepositoryConfig>;
+  artifacts: RepositoryArtifactRecord[];
+  objectStore: RepositoryObjectStore;
+  signingKeys: RepositorySigningKeyCapability;
+  signer: AptReleaseSigner;
+  publishedAt: string;
+}): Promise<void> {
+  const stanzasByIndex: AptSuiteIndexes = new Map();
+  for (const artifact of input.artifacts) {
+    const stanza = aptGroupPackageStanza(artifact);
+    if (!stanza) {
+      continue;
+    }
+    const component = metadataString(artifact.metadata, "component") ?? "main";
+    const architecture = metadataString(artifact.metadata, "architecture") ?? "all";
+    const key = indexKey(component, architecture);
+    const current = stanzasByIndex.get(key) ?? { component, architecture, stanzas: [] };
+    current.stanzas.push(stanza);
+    stanzasByIndex.set(key, current);
+  }
+  const components = input.group.components ?? uniqueNonEmpty([...stanzasByIndex.values()].map((index) => index.component)) ?? ["main"];
+  const architectures = uniqueNonEmpty([...stanzasByIndex.values()].map((index) => index.architecture).filter((architecture) => architecture !== "all")) ?? ["all"];
+  const suite = await buildAptIndexMetadata({
+    repositoryName: input.repository.name,
+    config: {
+      codename: input.group.codename,
+      suites: [input.group.codename],
+      components,
+      architectures,
+      signing: input.group.signing,
+    },
+    suite: input.group.codename,
+    stanzasByIndex,
+    publishDate: input.publishedAt,
+  });
+  await writeAptRepositoryIndexes({
+    objectStore: input.objectStore,
+    repositoryName: input.repository.name,
+    suites: [suite],
+    ...(input.group.signing.mode === "axis"
+      ? {
+        signing: {
+          signer: input.signer,
+          signingKey: await input.signingKeys.getActivePrivateKey(input.group.signing.signingKeyId, input.repository.name),
+        },
+      }
+      : {}),
+    publishedAt: input.publishedAt,
+  });
+}
+
+function aptGroupPackageStanza(artifact: RepositoryArtifactRecord) {
+  const packageName = metadataString(artifact.metadata, "package") ?? artifact.name;
+  const version = metadataString(artifact.metadata, "version") ?? artifact.version;
+  const architecture = metadataString(artifact.metadata, "architecture");
+  const maintainer = metadataString(artifact.metadata, "maintainer");
+  const description = metadataString(artifact.metadata, "description");
+  const filename = aptProxyArtifactFilename(artifact);
+  const size = metadataNumber(artifact.metadata, "size");
+  const sha256 = metadataString(artifact.metadata, "sha256");
+  if (!packageName || !version || !architecture || !maintainer || !description || !filename || size === undefined || !sha256) {
+    return null;
+  }
+  return buildPackageStanza({
+    metadata: artifact.metadata,
+    packageName,
+    version,
+    architecture,
+    maintainer,
+    description,
+    filename,
+    size,
+    sha256,
+  });
+}
+
+function aptGroupSourceFamily(artifact: RepositoryArtifactRecord): string | undefined {
+  return artifact.family || undefined;
+}
+
+function aptGroupArtifactRecord(
+  repository: Repository,
+  sourceRepositoryName: string,
+  artifact: RepositoryArtifactRecord,
+  family: string,
+): RepositoryArtifactRecord {
+  return {
+    ...artifact,
+    id: `artifact_${repository.name}_group_${sourceRepositoryName}_${artifact.id}`,
+    repositoryName: repository.name,
+    family,
+    metadata: {
+      ...(artifact.metadata ?? {}),
+      sourceRepositoryName,
+      sourceArtifactId: artifact.id,
+    },
+  };
+}
+
+async function validateAptGroupRepositoryConfig(input: {
+  config: Record<string, unknown>;
+  repositoryName?: string;
+  repositories?: { getByName(name: string): Promise<Repository> };
+}): Promise<void> {
+  const group = parseAptGroupRepositoryConfig(input.config);
+  if (!input.repositories) {
+    return;
+  }
+  for (const memberName of group.members) {
+    if (memberName === input.repositoryName) {
+      throw new ValidationError("config.apt.members cannot include the group repository itself");
+    }
+    const member = await input.repositories.getByName(memberName);
+    if (member.ecosystem !== aptPluginManifest.ecosystem) {
+      throw new ValidationError(`config.apt.members must reference APT repositories: ${memberName}`);
+    }
+    if (member.kind !== "hosted" && member.kind !== "proxy") {
+      throw new ValidationError(`config.apt.members must reference hosted or proxy repositories: ${memberName}`);
+    }
+  }
 }
 
 function validateAptCreateProvisioning(input: ValidateRepositoryCreateProvisioningInput): void {

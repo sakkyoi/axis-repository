@@ -11,7 +11,7 @@ export const aptPluginManifest = {
   repositoryKinds: [
     { kind: "hosted", experimental: false },
     { kind: "proxy", experimental: false },
-    { kind: "group", experimental: true },
+    { kind: "group", experimental: false },
   ],
   icon: {
     title: "APT",

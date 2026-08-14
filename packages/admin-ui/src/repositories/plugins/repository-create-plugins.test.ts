@@ -325,6 +325,85 @@ describe("repository create plugins", () => {
     });
   });
 
+  it("builds an APT group repository create payload with ordered members and Axis signing", () => {
+    const plugin = getRepositoryCreatePlugin({ ecosystem: "apt", kind: "group" })!;
+
+    expect(plugin.repositoryConfig.fields.map((field) => [field.name, field.kind, field.step, field.required]))
+      .toEqual([
+        ["codename", "text", "config", true],
+        ["components", "string-list", "config", false],
+        ["members", "apt-member-select", "config", true],
+        ["signingKey", "signing-key-provisioning", "setup", true],
+      ]);
+    expect(plugin.repositoryConfig.fields.find((field) => field.name === "signingKey")?.options?.map((option) => option.value))
+      .toEqual(["axis", "unsigned"]);
+    expect(plugin.steps).toEqual(["plugin", "basics", "config", "setup", "review"]);
+    expect(plugin.buildCreateInput({
+      name: "debian-group",
+      visibility: "public",
+      config: {
+        codename: "bookworm",
+        components: "main",
+        members: " debian-hosted,\ndebian-proxy,debian-hosted ",
+      },
+      setup: {
+        signingMode: "axis",
+        signingKeyMode: "generate",
+        signingKeyName: "release",
+        signingKeyUserIdName: "Axis Repository",
+        signingKeyUserIdEmail: "axis@example.local",
+      },
+    })).toEqual({
+      name: "debian-group",
+      ecosystem: "apt",
+      kind: "group",
+      visibility: "public",
+      config: {
+        apt: {
+          codename: "bookworm",
+          components: ["main"],
+          members: ["debian-hosted", "debian-proxy"],
+          signing: { mode: "axis" },
+        },
+      },
+      provisioning: {
+        apt: {
+          signingKey: {
+            mode: "generate",
+            name: "release",
+            userIdName: "Axis Repository",
+            userIdEmail: "axis@example.local",
+          },
+        },
+      },
+    });
+    expect(plugin.buildCreateInput({
+      name: "debian-group",
+      visibility: "public",
+      config: {
+        codename: "bookworm",
+        components: "main",
+        members: "debian-hosted debian-proxy",
+      },
+      setup: {
+        signingMode: "unsigned",
+      },
+    })).toEqual({
+      name: "debian-group",
+      ecosystem: "apt",
+      kind: "group",
+      visibility: "public",
+      config: {
+        apt: {
+          codename: "bookworm",
+          components: ["main"],
+          members: ["debian-hosted", "debian-proxy"],
+          signing: { mode: "unsigned" },
+        },
+      },
+    });
+  });
+
   it("maps every server-side repository name rejection back to the basics step", () => {
     const plugin = getHostedRepositoryCreatePlugin("apt")!;
 

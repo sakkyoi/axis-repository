@@ -40,12 +40,23 @@ export interface AptProxyRepositoryConfig {
   proxyPolicy?: ProxyOperationalPolicyOverride;
 }
 
+export interface AptGroupRepositoryConfig {
+  codename: string;
+  components?: string[];
+  signing: AptGroupSigningPolicy;
+  members: string[];
+}
+
 export type AptHostedSigningPolicy =
   | { mode: "axis"; signingKeyId: string }
   | { mode: "unsigned" };
 
 export type AptProxySigningPolicy =
   | { mode: "upstream"; upstreamKeyUrl?: string }
+  | { mode: "axis"; signingKeyId: string }
+  | { mode: "unsigned" };
+
+export type AptGroupSigningPolicy =
   | { mode: "axis"; signingKeyId: string }
   | { mode: "unsigned" };
 
@@ -146,6 +157,38 @@ export function normalizeAptProxyRepositoryConfig(config: Record<string, unknown
   };
 }
 
+export function parseAptGroupRepositoryConfig(config: Record<string, unknown>): AptGroupRepositoryConfig {
+  const aptConfig = readRecord(config[aptConfigNamespace]);
+  const members = aptConfig.members;
+  if (!Array.isArray(members)) {
+    throw new ValidationError(`${configPath("members")} is required`);
+  }
+  const normalizedMembers = [...new Set(members.map((member) => {
+    if (typeof member !== "string" || member.trim() === "") {
+      throw new ValidationError(`${configPath("members")} must contain repository names`);
+    }
+    return member.trim();
+  }))];
+  if (normalizedMembers.length === 0) {
+    throw new ValidationError(`${configPath("members")} must contain at least one repository`);
+  }
+  const codename = validatePathSegment(requiredConfigString(aptConfig, "codename"), configPath("codename"));
+  const components = optionalConfigStringArray(aptConfig, "components")
+    ?.map((component) => validatePathSegment(component, configPath("components")));
+  return {
+    codename,
+    ...(components ? { components: [...new Set(components)] } : {}),
+    signing: parseGroupSigningPolicy(aptConfig),
+    members: normalizedMembers,
+  };
+}
+
+export function normalizeAptGroupRepositoryConfig(config: Record<string, unknown>): Record<string, unknown> {
+  return {
+    [aptConfigNamespace]: parseAptGroupRepositoryConfig(config),
+  };
+}
+
 function normalizeAptProxyUpstreamUrlInput(value: string): string {
   const trimmed = value.trim();
   return /^[a-z][a-z\d+.-]*:/iu.test(trimmed) ? trimmed : `https://${trimmed}`;
@@ -206,6 +249,20 @@ function parseProxySigningPolicy(config: Record<string, unknown>): AptProxySigni
     return { mode };
   }
   throw new ValidationError(`${configPath("signing.mode")} must be upstream, axis, or unsigned`);
+}
+
+function parseGroupSigningPolicy(config: Record<string, unknown>): AptGroupSigningPolicy {
+  const signing = readRecord(config.signing);
+  if (signing.mode === "unsigned") {
+    return { mode: "unsigned" };
+  }
+  if (signing.mode !== "axis") {
+    throw new ValidationError(`${configPath("signing.mode")} must be axis or unsigned`);
+  }
+  return {
+    mode: "axis",
+    signingKeyId: validatePathSegment(requiredConfigString(signing, "signingKeyId"), configPath("signing.signingKeyId")),
+  };
 }
 
 function ensureTrailingSlash(value: string): string {

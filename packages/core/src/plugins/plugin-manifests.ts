@@ -40,6 +40,7 @@ export type PluginRepositoryConfigFieldKind =
   | "string-list"
   | "signing-key"
   | "signing-key-provisioning"
+  | "apt-member-select"
   | "pypi-member-select";
 export type PluginRepositoryConfigDefaultValue = string | string[];
 export type PluginRepositoryConfigFieldStep = "config" | "setup";
