@@ -15,7 +15,7 @@
   "dependencies": {
     "@axis-repository/core": "workspace:*",
     "@web3-storage/multipart-parser": "^1.0.0",
-    "react": "^19.2.8",
-    "zod": "^4.4.3"
+    "react": "^19.3.0",
+    "zod": "^4.6.5"
   }
 }
