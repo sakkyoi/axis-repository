@@ -16,8 +16,8 @@
     "@axis-repository/core": "workspace:*",
     "fzstd": "^0.1.1",
     "openpgp": "^6.3.1",
-    "react": "^19.2.8",
+    "react": "^19.3.0",
     "xz-decompress": "^0.2.3",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   }
 }
